@@ -5,18 +5,18 @@ import { openDatabase } from "../src/db/client.js";
 import { createCredentialStore } from "../src/db/credentials.js";
 import { evaluationCredentialOrg } from "../src/evaluation/execution.js";
 import { billedTrialCost } from "../src/evaluation/gateway-cost.js";
-import { OPENROUTER_BILLING } from "../src/evaluation/jev-cost.js";
+import { OPENROUTER_BILLING } from "../src/gateways/openrouter/billing.js";
 import { evaluationPrefix, getEvaluation, saveEvaluation } from "../src/evaluation/store.js";
 import { storedHarborFiles } from "./recompute-cost.js";
 
 /** Exact complete records only. Dry runs never write artifacts or evaluation snapshots. */
-export async function repriceJevRouter(
+export async function repriceOpenRouter(
   store: ArtifactStore, repoId: number, id: string,
-  key: string, managementKey: string, apply: boolean,
+  key: string, managementKey: string | undefined, apply: boolean,
 ) {
   const run = await getEvaluation(store, repoId, id);
-  if (!run || run.modelName !== "openrouter/typesafe/jev-router" || run.credentials?.provider !== "openrouter")
-    throw new Error("Jev router evaluation not found");
+  if (!run || run.credentials?.provider !== "openrouter")
+    throw new Error("OpenRouter evaluation not found");
   if (run.status === "running" || run.status === "queued") throw new Error("Evaluation is still in progress");
   const trials = [];
   for (const [index, trial] of run.trials.entries()) {
@@ -44,7 +44,7 @@ export async function repriceJevRouter(
 
 export async function main() {
   const [repo, id] = process.argv.slice(2).filter((arg) => !arg.startsWith("--"));
-  if (!repo || !/^\d+$/.test(repo) || !id) throw new Error("Usage: reprice-jev-router.js <repoId> <evaluationId> [--apply]");
+  if (!repo || !/^\d+$/.test(repo) || !id) throw new Error("Usage: reprice-openrouter.js <repoId> <evaluationId> [--apply]");
   const store = createArtifactStore(loadConfig().artifact);
   const run = await getEvaluation(store, Number(repo), id);
   const url = process.env.SELFBENCH_DATABASE_URL;
@@ -55,7 +55,7 @@ export async function main() {
   try {
     const credentials = createCredentialStore(db.db, encryptionKey);
     const secret = await credentials.secret(orgId, run.credentials.modelCredentialId);
-    if (!secret?.value || !secret.managementKey) throw new Error("Owner's OpenRouter inference and management keys required");
-    console.log(JSON.stringify(await repriceJevRouter(store, Number(repo), id, secret.value, secret.managementKey, process.argv.includes("--apply")), null, 2));
+    if (!secret?.value) throw new Error("Owner's OpenRouter inference key required");
+    console.log(JSON.stringify(await repriceOpenRouter(store, Number(repo), id, secret.value, secret.managementKey, process.argv.includes("--apply")), null, 2));
   } finally { await db.close(); }
 }

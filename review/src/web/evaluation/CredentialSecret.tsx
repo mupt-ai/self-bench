@@ -113,9 +113,9 @@ export function CredentialSecret({
             }
           />
           <span className="text-xs font-normal leading-5 text-muted-foreground">
-            From the same OpenRouter account. Enables Jev nested-call pricing through read-only
-            analytics. Kept encrypted on the server, never sent to a solver. Without it, Jev costs
-            stay unknown.
+            From the same OpenRouter account. Enables routed-request billing through read-only
+            analytics. Kept encrypted on the server, never sent to a solver. Routed costs stay
+            unknown without this access.
           </span>
         </label>
       )}

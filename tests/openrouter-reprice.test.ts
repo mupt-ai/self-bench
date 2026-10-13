@@ -2,35 +2,34 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { repriceJevRouter } from "../maintenance/reprice-jev-router.js";
+import { repriceOpenRouter } from "../maintenance/reprice-openrouter.js";
 import { LocalArtifactStore } from "../src/artifacts/index.js";
-import { OPENROUTER_GENERATIONS } from "../src/evaluation/gateway-cost.js";
-import { OPENROUTER_BILLING } from "../src/evaluation/jev-cost.js";
 import {
   evaluationPrefix,
   getEvaluation,
   initialEvaluation,
   saveEvaluation,
 } from "../src/evaluation/store.js";
+import { OPENROUTER_BILLING, OPENROUTER_GENERATIONS } from "../src/gateways/openrouter/billing.js";
 import { evaluationInput } from "./support/evaluation-fixture.js";
 
 // Provider-free integration: only synthetic accounting; neither dry run nor apply invokes a model.
-test("Jev recovery dry run is read-only; apply writes evidence and only complete prices", async () => {
-  const root = await mkdtemp(join(tmpdir(), "jev-reprice-"));
+test("OpenRouter recovery dry run is read-only; apply writes evidence and only complete prices", async () => {
+  const root = await mkdtemp(join(tmpdir(), "openrouter-reprice-"));
   const originalFetch = globalThis.fetch;
   const originalTimeout = globalThis.setTimeout;
   const store = new LocalArtifactStore(root);
   const run = initialEvaluation(
     {
       ...evaluationInput(),
-      modelName: "openrouter/typesafe/jev-router",
+      modelName: "openrouter/example/router",
       credentials: {
         modelCredentialId: "model",
         sandboxCredentialId: "sandbox",
         provider: "openrouter",
       },
     },
-    "Jev",
+    "Router",
   );
   run.status = "completed";
   const trial = run.trials[0];
@@ -66,7 +65,7 @@ test("Jev recovery dry run is read-only; apply writes evidence and only complete
     request_id: "req-root",
     session_id: "session",
     created_at: "2026-01-01T00:00:00Z",
-    router: "typesafe/jev-router",
+    router: "example/router",
     total_cost: 0,
     upstream_inference_cost: 0,
     is_byok: false,
@@ -103,18 +102,18 @@ test("Jev recovery dry run is read-only; apply writes evidence and only complete
   }) as unknown as typeof setTimeout;
   try {
     const before = await getEvaluation(store, run.repoId, run.id);
-    const dry = await repriceJevRouter(store, run.repoId, run.id, "inference", "billing", false);
+    const dry = await repriceOpenRouter(store, run.repoId, run.id, "inference", "billing", false);
     expect(dry.applied).toBe(false);
     expect(dry.trials[0]?.after.apiCostUsd).toBeCloseTo(0.12345678, 10);
     expect(await getEvaluation(store, run.repoId, run.id)).toEqual(before);
     expect(await store.getByKey(`${prefix}0/${OPENROUTER_BILLING}`)).toBeUndefined();
     truncated = true;
     expect(
-      (await repriceJevRouter(store, run.repoId, run.id, "inference", "billing", true)).applied,
+      (await repriceOpenRouter(store, run.repoId, run.id, "inference", "billing", true)).applied,
     ).toBe(false);
     truncated = false;
     expect(
-      (await repriceJevRouter(store, run.repoId, run.id, "inference", "billing", true)).applied,
+      (await repriceOpenRouter(store, run.repoId, run.id, "inference", "billing", true)).applied,
     ).toBe(true);
     expect((await getEvaluation(store, run.repoId, run.id))?.trials[0]?.apiCostUsd).toBeCloseTo(
       0.12345678,

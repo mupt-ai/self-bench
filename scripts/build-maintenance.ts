@@ -9,7 +9,7 @@ const result = await Bun.build({
     "recompute-cost",
     "reprice-vendor-rates",
     "reprice-dari-router",
-    "reprice-jev-router",
+    "reprice-openrouter",
     "backfill-agent-timeouts",
     "records-migration",
   ].map((name) => join(root, "maintenance/bin", `${name}.ts`)),

@@ -230,6 +230,10 @@ export async function recomputeEvaluationCost(
     const after = trialCost(run, trial.harness, files, parsed, auth);
     // The runner reads transcripts whole; stored ones can be cut too far to count again.
     if (before.tokenUsage && !after.tokenUsage) {
+      if (run.credentials?.provider === "openrouter") {
+        report.trials.push({ index, before, changed: false });
+        continue;
+      }
       const reported =
         trial.harness === "claude-code" ? await claudeCodeCost(store, run, trial) : undefined;
       const recorded =

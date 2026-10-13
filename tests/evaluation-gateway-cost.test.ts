@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
-import { billedTrialCost, gatewayCost, generationIds } from "../src/evaluation/gateway-cost.js";
+import { billedTrialCost, gatewayCost } from "../src/evaluation/gateway-cost.js";
 import { initialEvaluation } from "../src/evaluation/store.js";
+import { generationIds } from "../src/gateways/usage.js";
 import { evaluationInput } from "./support/evaluation-fixture.js";
 
 const files = new Map([
@@ -47,7 +48,7 @@ test("BYOK generations count the provider's charge, which the gateway leaves out
   expect(await gatewayCost("vercel-ai-gateway", "key", "pi", files, unbilled)).toBeUndefined();
 });
 
-test("OpenRouter retries delayed generations but never accepts a Jev leaf subtotal without billing access", async () => {
+test("OpenRouter retries delayed generations but never accepts a routed leaf subtotal without billing access", async () => {
   let attempts = 0;
   let waitMs = 0;
   const originalSetTimeout = globalThis.setTimeout;
@@ -66,7 +67,7 @@ test("OpenRouter retries delayed generations but never accepts a Jev leaf subtot
       ? Response.json({ error: { message: "Generation not found" } }, { status: 404 })
       : Response.json({
           data: {
-            router: "typesafe/jev-router",
+            router: "example/router",
             model: "openai/gpt-6-luna",
             total_cost: 0,
             upstream_inference_cost: 0.0000039,
@@ -80,7 +81,7 @@ test("OpenRouter retries delayed generations but never accepts a Jev leaf subtot
         "solver/trial/agent/pi.txt",
         JSON.stringify({
           type: "message_end",
-          message: { role: "assistant", responseId: "gen-1791843781-jevtest" },
+          message: { role: "assistant", responseId: "gen-1791843781-routertest" },
         }),
       ],
     ]);
@@ -92,7 +93,7 @@ test("OpenRouter retries delayed generations but never accepts a Jev leaf subtot
   }
 });
 
-test("Jev zero-token billing placeholders cannot price token-bearing replies as free", async () => {
+test("OpenRouter zero-token billing placeholders cannot price token-bearing replies as free", async () => {
   const message = {
     role: "assistant",
     responseId: "gen-1791855534-NslUwCGGykHhJuQnwkrz",
@@ -101,7 +102,7 @@ test("Jev zero-token billing placeholders cannot price token-bearing replies as 
   const placeholder = (async () =>
     Response.json({
       data: {
-        router: "typesafe/jev-router",
+        router: "example/router",
         total_cost: 0,
         upstream_inference_cost: 0,
         is_byok: false,

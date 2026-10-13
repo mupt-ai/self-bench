@@ -7,14 +7,14 @@ import { trialTimeouts } from "../contracts/agent-limit.js";
 import type { TaskImages } from "../contracts/task.js";
 import type { CredentialInfo } from "../db/credentials.js";
 import type { Vault } from "../db/vault.js";
+import { OPENROUTER_BILLING, openRouterManifest } from "../gateways/openrouter/billing.js";
 import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
 import type { HarborOutputGuard } from "../harnesses/harbor/output-guard.js";
 import { runCommand } from "../lib/process.js";
 import { claimTrial, WorkerStoppingError } from "./claim.js";
 import { trialCost } from "./cost.js";
 import { DARI_REQUEST_IDS, dariRequestManifest, dariTrialCost, isDariRun } from "./dari-cost.js";
-import { billedTrialCost, gatewayManifest } from "./gateway-cost.js";
-import { OPENROUTER_BILLING } from "./jev-cost.js";
+import { billedTrialCost } from "./gateway-cost.js";
 import {
   agentTimedOut,
   collectOutput,
@@ -178,7 +178,7 @@ async function runTrial(context: {
         if (manifest) clean.set(DARI_REQUEST_IDS, JSON.stringify(manifest));
       }
       if (run.credentials?.provider === "openrouter" && records)
-        gatewayManifest(trial.harness, records, clean);
+        openRouterManifest(trial.harness, records, clean);
       for (const [name, text] of clean) {
         const artifactName = `${index}/${name}`;
         await store.put(
