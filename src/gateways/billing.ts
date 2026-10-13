@@ -10,7 +10,16 @@ const charge = (value: unknown): number | undefined =>
 export function generationCharge(data: Record<string, unknown>): number | undefined {
   const total = charge(data.total_cost);
   const upstream = data.is_byok === true ? charge(data.upstream_inference_cost) : 0;
-  return total === undefined || upstream === undefined ? undefined : total + upstream;
+  if (total === undefined || upstream === undefined) return undefined;
+  const cost = total + upstream;
+  if (
+    cost === 0 &&
+    ![data.native_tokens_prompt, data.native_tokens_completion].every(
+      (tokens) => typeof tokens === "number" && Number.isSafeInteger(tokens) && tokens >= 0,
+    )
+  )
+    return undefined;
+  return cost;
 }
 
 export function generationLookup(base: string, key: string, fetcher: typeof fetch, pause: Pause) {

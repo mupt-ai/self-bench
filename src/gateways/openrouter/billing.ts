@@ -207,7 +207,8 @@ async function discover(
       const ids = rows.map((row) => row.generation_id);
       if (
         !ids.every(
-          (id): id is string => typeof id === "string" && /^gen-[A-Za-z0-9-]+$/.test(id),
+          (id): id is string =>
+            typeof id === "string" && /^(gen_[A-Za-z0-9]+|gen-[A-Za-z0-9-]+)$/.test(id),
         ) ||
         new Set(ids).size !== ids.length ||
         rows.some((row) => !sessions.includes(row.session_id))
