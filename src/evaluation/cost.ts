@@ -109,14 +109,14 @@ export function trialCost(
     const stopped = agentTimedOut(result);
     const messages = piAssistantMessages(text, stopped);
     if (!messages) return {};
-    // Harbor's Pi names a compatible endpoint harbor-endpoint, after the models.json it writes.
-    const endpointModel = compatibleEndpoint(run.credentials?.provider, harness)
-      ? `harbor-endpoint/${model}`
-      : run.modelName;
+    // Pi can report either its configured custom provider or the OpenAI-compatible protocol name.
+    const endpointModels = compatibleEndpoint(run.credentials?.provider, harness)
+      ? [`harbor-endpoint/${model}`, `openai/${model}`]
+      : [];
     verified =
       messages.length > 0 &&
       messages.every((message) =>
-        [run.modelName, endpointModel].includes(`${message.provider}/${message.model}`),
+        [run.modelName, ...endpointModels].includes(`${message.provider}/${message.model}`),
       );
     const replies: TokenUsage[] = [];
     for (const message of messages) {
