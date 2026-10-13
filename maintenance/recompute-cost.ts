@@ -75,7 +75,7 @@ export async function storedHarborFiles(
 ): Promise<{ files: Map<string, string>; result: string | undefined }> {
   const files = new Map<string, string>();
   for (const name of trial.artifacts) {
-    if (!/\/(trajectory\.json|pi\.txt|result\.json|dari-request-ids\.json)$/.test(name)) continue;
+    if (!/\/(trajectory\.json|pi\.txt|result\.json|dari-request-ids\.json|openrouter-generation-ids\.json)$/.test(name)) continue;
     const bytes = await store.getByKey(`${evaluationPrefix(run.repoId, run.id)}artifacts/${name}`);
     if (bytes) files.set(name.slice(name.indexOf("/") + 1), Buffer.from(bytes).toString("utf8"));
   }

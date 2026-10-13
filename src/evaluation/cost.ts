@@ -222,6 +222,9 @@ export function trialCost(
     ...(cacheWritesInferred ? { cacheWritesInferred: true } : {}),
   };
   if (!verified || !usage) return measured;
+  // Jev may run nested workers/advisors invisible to harness usage. Only its linked ledger can
+  // supply a whole-trial price; Harbor and a selected model's list rates cannot.
+  if (run.modelName === "openrouter/typesafe/jev-router") return measured;
   const reported =
     reportedCost === undefined
       ? measured

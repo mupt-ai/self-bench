@@ -4,21 +4,17 @@ import { join } from "node:path";
 import { ApplicationFailure } from "@temporalio/common";
 import type { ArtifactStore } from "../artifacts/index.js";
 import { trialTimeouts } from "../contracts/agent-limit.js";
-import type { HarborEnvironment } from "../contracts/config/providers.js";
-import type { ThinkingLevel } from "../contracts/models.js";
 import type { TaskImages } from "../contracts/task.js";
 import type { CredentialInfo } from "../db/credentials.js";
 import type { Vault } from "../db/vault.js";
 import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
-import { harborRunArguments } from "../harnesses/harbor/command.js";
 import type { HarborOutputGuard } from "../harnesses/harbor/output-guard.js";
-import { pinnedImageKwargs } from "../harnesses/harbor/pinned-images.js";
 import { runCommand } from "../lib/process.js";
 import { claimTrial, WorkerStoppingError } from "./claim.js";
 import { trialCost } from "./cost.js";
 import { DARI_REQUEST_IDS, dariRequestManifest, dariTrialCost, isDariRun } from "./dari-cost.js";
-import { solverAgent, solverAgentArguments } from "./execution.js";
-import { billedTrialCost } from "./gateway-cost.js";
+import { billedTrialCost, gatewayManifest } from "./gateway-cost.js";
+import { OPENROUTER_BILLING } from "./jev-cost.js";
 import {
   agentTimedOut,
   collectOutput,
@@ -30,34 +26,11 @@ import {
   verifierRewards,
   wholeTranscripts,
 } from "./output.js";
+import { solverArguments } from "./solver-arguments.js";
 import { evaluationPrefix, RepeatSpendError } from "./store.js";
 import { transcriptSteps } from "./transcript.js";
 import { setUpTrial } from "./trial-setup.js";
-import type { EvaluationInput, EvaluationRun, EvaluationTrial, Harness } from "./types.js";
-
-export function solverArguments(
-  taskPath: string,
-  jobs: string,
-  harness: Harness,
-  model: string,
-  sandbox: HarborEnvironment,
-  thinking?: ThinkingLevel,
-  extraAllowedHosts: readonly string[] = [],
-  images?: TaskImages,
-  provider?: string,
-): string[] {
-  return harborRunArguments({
-    taskPath,
-    jobsPath: jobs,
-    jobName: "solver",
-    agent: solverAgent(harness, provider),
-    environment: sandbox,
-    solver: { model, agentArguments: solverAgentArguments(harness, provider, model, thinking) },
-    extraAllowedHosts,
-    // Pinned images are Modal image IDs; every other backend builds the task's Dockerfiles.
-    ...(sandbox === "modal" ? { environmentKwargs: pinnedImageKwargs(images) } : {}),
-  });
-}
+import type { EvaluationInput, EvaluationRun, EvaluationTrial } from "./types.js";
 export interface RunnerOptions {
   command?: typeof runCommand;
   env?: NodeJS.ProcessEnv;
@@ -167,6 +140,7 @@ async function runTrial(context: {
   guard: HarborOutputGuard;
   model: string;
   modelAuth: CredentialInfo["auth"];
+  billingKey?: string;
   child: NodeJS.ProcessEnv;
   extraAllowedHosts?: readonly string[];
   images?: TaskImages;
@@ -203,6 +177,8 @@ async function runTrial(context: {
         const manifest = dariRequestManifest(records);
         if (manifest) clean.set(DARI_REQUEST_IDS, JSON.stringify(manifest));
       }
+      if (run.credentials?.provider === "openrouter" && records)
+        gatewayManifest(trial.harness, records, clean);
       for (const [name, text] of clean) {
         const artifactName = `${index}/${name}`;
         await store.put(
@@ -217,7 +193,17 @@ async function runTrial(context: {
       const parsed = record(JSON.parse(result[1]));
       if (!records) throw new Error("Harbor's transcripts were not read");
       Object.assign(trial, trialCost(run, trial.harness, records, parsed, context.modelAuth));
-      Object.assign(trial, await billedTrialCost(run, trial, child, records));
+      Object.assign(trial, await billedTrialCost(run, trial, child, records, context.billingKey));
+      const billing = records.get(OPENROUTER_BILLING);
+      if (billing) {
+        const name = `${index}/${OPENROUTER_BILLING}`;
+        await store.put(
+          `${evaluationPrefix(run.repoId, run.id)}artifacts/${name}`,
+          Buffer.from(redact(billing)),
+          "application/json",
+        );
+        trial.artifacts.push(name);
+      }
       trial.rewards = verifierRewards(parsed);
       // The time limit is part of the task: a stopped agent is scored on what it left, if scored.
       const timedOut = agentTimedOut(parsed) && Object.keys(trial.rewards).length > 0;

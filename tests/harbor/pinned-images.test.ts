@@ -7,7 +7,7 @@ import { LocalArtifactStore } from "../../src/artifacts/local.js";
 import { AGENT_MINUTES, trialTimeouts } from "../../src/contracts/agent-limit.js";
 import { withExecutionEnvironment } from "../../src/contracts/config/execution-environment.js";
 import type { AuthoredTask } from "../../src/contracts/index.js";
-import { solverArguments } from "../../src/evaluation/runner.js";
+import { solverArguments } from "../../src/evaluation/solver-arguments.js";
 import { unpackTrialTask } from "../../src/evaluation/task-bundle.js";
 import { runHarborGates } from "../../src/generation/pipeline/harbor-gates.js";
 import { runCommand } from "../../src/lib/process.js";

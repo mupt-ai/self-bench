@@ -1,31 +1,70 @@
 import { gateways } from "../gateways/index.js";
+import { gatewayUsage, readGatewayManifest } from "./gateway-usage.js";
+import { generationCharge, jevCost, OPENROUTER_BILLING } from "./jev-cost.js";
 import { record, TRUNCATED_OUTPUT } from "./output.js";
 import type { EvaluationRun, EvaluationTrial, Harness } from "./types.js";
 
 type BilledGateway = "openrouter" | "vercel-ai-gateway";
+export const OPENROUTER_GENERATIONS = "solver/openrouter-generation-ids.json";
+
+/** Preserve accounting IDs before the archived transcript is shortened. */
+export function gatewayManifest(
+  harness: Harness,
+  records: Map<string, string>,
+  clean: Map<string, string>,
+): void {
+  if (
+    [...records].some(
+      ([name, text]) => name.endsWith("/pi.txt") && text.startsWith(TRUNCATED_OUTPUT),
+    )
+  )
+    return;
+  const ids = generationIds(harness, records);
+  if (!ids) return;
+  const usage = gatewayUsage(records);
+  const manifest = JSON.stringify({
+    generationIds: ids,
+    usage: [...usage].map(([id, tokens]) => ({ id, ...tokens })),
+  });
+  clean.set(OPENROUTER_GENERATIONS, manifest);
+  records.set(OPENROUTER_GENERATIONS, manifest);
+}
 
 /**
- * What the gateway charged for the whole trial, when every request's bill is available. It is
- * kept beside the trial's cost rather than replacing it: costs are priced at the vendor's list
- * rates (runPricing), and a gateway's charge reflects its routing and any discount. It stands in
- * only for a cost those rates cannot give, as for a request past their long-context bound.
+ * What the gateway charged for the trial, when every request's bill is available. Jev uses the
+ * reconciled full gateway + nested BYOK total as authoritative; other gateways retain it as
+ * supporting billing evidence while list pricing remains primary.
  */
 export async function billedTrialCost(
   run: EvaluationRun,
   trial: EvaluationTrial,
   env: NodeJS.ProcessEnv,
   files: Map<string, string>,
+  billingKey?: string,
 ): Promise<Pick<EvaluationTrial, "billedCostUsd" | "apiCostUsd" | "costSource">> {
   const provider = run.credentials?.provider;
   if (!trial.modelVerified || (provider !== "openrouter" && provider !== "vercel-ai-gateway"))
     return {};
+  const isJev = provider === "openrouter" && run.modelName === "openrouter/typesafe/jev-router";
+  if (
+    isJev &&
+    (!billingKey ||
+      (!files.has(OPENROUTER_GENERATIONS) &&
+        [...files].some(
+          ([name, text]) => name.endsWith("/pi.txt") && text.startsWith(TRUNCATED_OUTPUT),
+        )))
+  )
+    return {};
+  if (isJev) files.delete(OPENROUTER_BILLING);
   const cost = await gatewayCost(
     provider,
     env[gateways[provider].keyVariable],
     trial.harness,
     files,
+    fetch,
+    billingKey,
   );
-  if (cost === undefined) return {};
+  if (cost === undefined || (isJev && !files.has(OPENROUTER_BILLING))) return {};
   return trial.apiCostUsd === undefined
     ? { billedCostUsd: cost, apiCostUsd: cost, costSource: "gateway" }
     : { billedCostUsd: cost };
@@ -34,6 +73,8 @@ export async function billedTrialCost(
 /** Only completed Pi replies have a generation ID we can match to a gateway bill. */
 export function generationIds(harness: Harness, files: Map<string, string>): string[] | undefined {
   if (harness !== "pi") return undefined;
+  const manifest = files.get(OPENROUTER_GENERATIONS);
+  if (manifest) return readGatewayManifest(manifest)?.generationIds;
   const text = [...files].find(([name]) => name.endsWith("/pi.txt"))?.[1];
   if (!text) return undefined;
   const ids: string[] = [];
@@ -97,7 +138,10 @@ export async function gatewayCost(
   harness: Harness,
   files: Map<string, string>,
   fetcher: typeof fetch = fetch,
+  billingKey?: string,
+  pause: () => Promise<void> = () => new Promise((resolve) => setTimeout(resolve, 5000)),
 ): Promise<number | undefined> {
+  files.delete(OPENROUTER_BILLING);
   const ids = generationIds(harness, files);
   if (!key || !ids) return undefined;
   const tokenBearingIds = generationsWithUsage(files);
@@ -105,12 +149,15 @@ export async function gatewayCost(
     provider === "openrouter"
       ? "https://openrouter.ai/api/v1/generation?id="
       : "https://ai-gateway.vercel.sh/v1/generation?id=";
-  const lookup = async (id: string): Promise<number | undefined> => {
+  const lookup = async (
+    id: string,
+  ): Promise<(Record<string, unknown> & { id: string }) | undefined> => {
     try {
       // OpenRouter's generation record can take ~10 seconds to appear, especially for router
       // models. Keep 404 distinct from other failures, but retry long enough for normal indexing.
       for (let attempt = 0; attempt < 7; attempt++) {
         const response = await fetcher(base + encodeURIComponent(id), {
+          redirect: "error",
           headers: { Authorization: `Bearer ${key}` },
           signal: AbortSignal.timeout(5000),
         });
@@ -118,36 +165,56 @@ export async function gatewayCost(
           // Both gateways leave a BYOK request's provider charge out of total_cost, which then
           // holds only the gateway's own fee, and report it as upstream_inference_cost instead.
           const data = record((await response.json()).data);
-          const total = charge(data.total_cost);
-          const upstream = data.is_byok === true ? charge(data.upstream_inference_cost) : 0;
-          if (total === undefined || upstream === undefined) return undefined;
-          // Jev can return a successful generation lookup with every billing/usage field zero,
-          // even though Pi received a token-bearing reply. That is missing accounting, not a
-          // free request: accepting it would publish a partial whole-trial bill.
-          if (
-            total + upstream === 0 &&
-            data.native_tokens_prompt === 0 &&
-            data.native_tokens_completion === 0 &&
-            tokenBearingIds.has(id)
-          )
-            return undefined;
-          return total + upstream;
+          if (data.id !== undefined && data.id !== id) return undefined;
+          return { ...data, id };
         }
         if (response.status !== 404) return undefined;
-        if (attempt < 6) await new Promise((resolve) => setTimeout(resolve, 5000));
+        if (attempt < 6) await pause();
       }
     } catch {
       // A lookup failure is not a zero-cost request.
     }
     return undefined;
   };
-  let total = 0;
+  const generations: (Record<string, unknown> & { id: string })[] = [];
   for (let index = 0; index < ids.length; index += 10) {
-    const costs = await Promise.all(ids.slice(index, index + 10).map(lookup));
-    if (costs.some((cost) => cost === undefined)) return undefined;
-    total += (costs as number[]).reduce((sum, cost) => sum + cost, 0);
+    const batch = await Promise.all(ids.slice(index, index + 10).map(lookup));
+    if (batch.some((row) => !row)) return undefined;
+    generations.push(...(batch as (Record<string, unknown> & { id: string })[]));
   }
-  return total;
+  if (
+    provider === "openrouter" &&
+    generations.some((row) => row.router === "typesafe/jev-router")
+  ) {
+    if (
+      !files.has(OPENROUTER_GENERATIONS) &&
+      [...files].some(
+        ([name, text]) => name.endsWith("/pi.txt") && text.startsWith(TRUNCATED_OUTPUT),
+      )
+    )
+      return undefined;
+    const saved = files.get(OPENROUTER_GENERATIONS);
+    const usage = saved ? readGatewayManifest(saved)?.usage : gatewayUsage(files);
+    if (!usage) return undefined;
+    const bill = await jevCost(generations, billingKey, lookup, usage, fetcher, pause);
+    if (!bill) return undefined;
+    files.set(OPENROUTER_BILLING, JSON.stringify(bill));
+    return bill.cost;
+  }
+  let total = 0;
+  for (const data of generations) {
+    const cost = generationCharge(data);
+    if (
+      cost === undefined ||
+      (cost === 0 &&
+        data.native_tokens_prompt === 0 &&
+        data.native_tokens_completion === 0 &&
+        tokenBearingIds.has(data.id))
+    )
+      return undefined;
+    total += cost;
+  }
+  return Number.isFinite(total) ? total : undefined;
 }
 
 function generationsWithUsage(files: Map<string, string>): Set<string> {
@@ -179,8 +246,4 @@ function generationsWithUsage(files: Map<string, string>): Set<string> {
     }
   }
   return ids;
-}
-
-function charge(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
 }

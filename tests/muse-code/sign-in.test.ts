@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { credentialSchema } from "../../src/db/credentials.js";
 import { credentialExecution, gatewayTrial } from "../../src/evaluation/execution.js";
-import { solverArguments } from "../../src/evaluation/runner.js";
+import { solverArguments } from "../../src/evaluation/solver-arguments.js";
 import { createMuseLogins, museAuthFile } from "../../src/harnesses/muse-code/login.js";
 import { evaluationServer } from "../support/evaluation-fixture.js";
 import { memoryVault } from "../support/evaluation-vault.js";

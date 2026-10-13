@@ -84,6 +84,7 @@ export async function setUpTrial(
     ...(task.images ? { images: task.images } : {}),
     ...gateway,
     modelAuth: execution.auth,
+    ...(execution.billingKey ? { billingKey: execution.billingKey } : {}),
     child: { ...prepared.env, ...pull },
     guard: prepared.guard,
   };

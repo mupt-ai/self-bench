@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parse } from "smol-toml";
 import { gatewayTrial } from "../src/evaluation/execution.js";
-import { solverArguments } from "../src/evaluation/runner.js";
+import { solverArguments } from "../src/evaluation/solver-arguments.js";
 import { getEvaluation } from "../src/evaluation/store.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";
 import { HARBOR_VERSION } from "../src/harnesses/harbor/command.js";

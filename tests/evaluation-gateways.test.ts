@@ -4,7 +4,7 @@ import { credentialSchema } from "../src/db/credentials.js";
 import { catalog } from "../src/evaluation/catalog.js";
 import { gatewayModel, gatewayTrial, solverAgent } from "../src/evaluation/execution.js";
 import { harnessIds, modelRoutes, openHarnesses, routeFor } from "../src/evaluation/models.js";
-import { solverArguments } from "../src/evaluation/runner.js";
+import { solverArguments } from "../src/evaluation/solver-arguments.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";
 import { gatewayIds, gateways, isGateway } from "../src/gateways/index.js";
 import { runCommand } from "../src/lib/process.js";

@@ -47,7 +47,7 @@ test("BYOK generations count the provider's charge, which the gateway leaves out
   expect(await gatewayCost("vercel-ai-gateway", "key", "pi", files, unbilled)).toBeUndefined();
 });
 
-test("OpenRouter Jev generations become available after delayed indexing", async () => {
+test("OpenRouter retries delayed generations but never accepts a Jev leaf subtotal without billing access", async () => {
   let attempts = 0;
   let waitMs = 0;
   const originalSetTimeout = globalThis.setTimeout;
@@ -84,7 +84,7 @@ test("OpenRouter Jev generations become available after delayed indexing", async
         }),
       ],
     ]);
-    expect(await gatewayCost("openrouter", "key", "pi", single, delayed)).toBeCloseTo(0.0000039);
+    expect(await gatewayCost("openrouter", "key", "pi", single, delayed)).toBeUndefined();
     expect(attempts).toBe(3);
     expect(waitMs).toBe(10_000);
   } finally {
