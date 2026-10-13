@@ -44,7 +44,7 @@ test("credentials are sealed per row, org-scoped, idempotent by ID and soft-dele
   }
 });
 
-test("a sandbox credential keeps its limit on sandboxes running at once", async () => {
+test("sandbox and model credentials keep their limit on sandboxes using them at once", async () => {
   const database = await testDatabase();
   try {
     const { credentials: store } = createVault(database.db, key);
@@ -68,17 +68,12 @@ test("a sandbox credential keeps its limit on sandboxes running at once", async 
     await expect(store.limit(2, sandbox.id, 8)).rejects.toThrow("not found");
     const model = await store.create(
       1,
-      { name: "Model", kind: "openai", auth: "api-key", value: "k" } as const,
+      { name: "Model", kind: "openai", auth: "api-key", value: "k", maxSandboxes: 8 } as const,
       {},
     );
-    await expect(store.limit(1, model.id, 8)).rejects.toThrow("Only sandbox credentials");
-    await expect(
-      store.create(
-        1,
-        { name: "Model", kind: "openai", auth: "api-key", value: "k", maxSandboxes: 8 } as const,
-        {},
-      ),
-    ).rejects.toThrow("Only sandbox credentials");
+    expect(model.maxSandboxes).toBe(8);
+    await store.limit(1, model.id, 4);
+    expect((await store.find(1, model.id))?.maxSandboxes).toBe(4);
   } finally {
     await database.close();
   }

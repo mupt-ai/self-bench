@@ -233,12 +233,11 @@ export function CredentialEditor({
                     />
                   </label>
                 ))}
-              {sandbox && (
-                <SandboxLimitField
-                  value={draft.maxSandboxes}
-                  onChange={(maxSandboxes) => setDraft({ ...draft, maxSandboxes })}
-                />
-              )}
+              <SandboxLimitField
+                sandbox={sandbox}
+                value={draft.maxSandboxes}
+                onChange={(maxSandboxes) => setDraft({ ...draft, maxSandboxes })}
+              />
               <CredentialSecret
                 draft={draft}
                 setDraft={setDraft}

@@ -107,6 +107,7 @@ function CredentialsContent({ org }: { org: string }) {
             {...groupProps}
             title="Model Providers"
             credentials={credentials.filter((entry) => !isSandbox(entry.kind))}
+            onLimit={setLimiting}
             onAdd={() => setEditing({})}
           />
           <CredentialGroup
@@ -135,7 +136,7 @@ function CredentialsContent({ org }: { org: string }) {
           onSave={async (maxSandboxes) => {
             await evaluationRequest(`${url}/${limiting.id}/limit`, { maxSandboxes });
             setLimiting(undefined);
-            setNotice("Sandbox limit saved.");
+            setNotice("Concurrency limit saved.");
             await refresh();
           }}
         />

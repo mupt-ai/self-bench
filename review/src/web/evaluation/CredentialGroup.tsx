@@ -22,7 +22,7 @@ export function CredentialGroup({
   canManage: boolean;
   sandbox?: boolean;
   onAdd(): void;
-  /** Sandbox credentials' limit on sandboxes running at once. */
+  /** A credential's limit on sandboxes using it at once. */
   onLimit?(credential: CredentialInfo): void;
   onReplace(credential: CredentialInfo): void;
   onDelete(credential: CredentialInfo): void;

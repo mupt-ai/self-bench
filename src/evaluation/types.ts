@@ -32,8 +32,8 @@ export interface EvaluationInput {
    */
   agentMinutes?: number;
   /**
-   * At most this many of the evaluation's trials run at once: its share of the sandbox
-   * credential's limit (maxSandboxes) when it started. A trial holds one sandbox at a time.
+   * At most this many of the evaluation's trials run at once: its share of the sandbox and model
+   * credentials' limits (maxSandboxes) when it started. A trial holds one sandbox at a time.
    */
   maxTrials?: number;
   pricing?: ModelPricing;

@@ -5,20 +5,19 @@ import { memoryVault } from "./support/evaluation-vault.js";
 const credentialsUrl = "/api/orgs/avyay/credentials";
 const post = (value: unknown): RequestInit => ({ method: "POST", body: JSON.stringify(value) });
 
-test("a sandbox credential's limit caps its evaluations' trials, split across a comparison", async () => {
+test("sandbox and model credential limits cap their evaluations' trials, split across a comparison", async () => {
   const fixture = await evaluationServer(memoryVault());
   try {
     const create = async (body: Record<string, unknown>) =>
       await fixture.request(credentialsUrl, post({ name: "Key", value: "secret", ...body }));
     const modelKey = (await (await create({ kind: "openai" })).json()).id as string;
-    expect((await create({ kind: "openai", maxSandboxes: 4 })).status).toBe(400);
+    expect((await (await create({ kind: "meta", maxSandboxes: 4 })).json()).maxSandboxes).toBe(4);
     const created = await create({ kind: "e2b", maxSandboxes: 20 });
     const sandbox = await created.json();
     expect(sandbox.maxSandboxes).toBe(20);
     const limit = (id: string, maxSandboxes: unknown) =>
       fixture.request(`${credentialsUrl}/${id}/limit`, post({ maxSandboxes }));
     expect((await limit(sandbox.id, 0)).status).toBe(400);
-    expect((await limit(modelKey, 4)).status).toBe(400);
     expect((await (await limit(sandbox.id, 7)).json()).maxSandboxes).toBe(7);
     const compare = () =>
       fixture.request(
@@ -37,9 +36,16 @@ test("a sandbox credential's limit caps its evaluations' trials, split across a 
     // The comparison's two evaluations start together, so each gets half of the seven.
     expect((await compare()).status).toBe(202);
     expect(fixture.starts.map((input) => input.maxTrials)).toEqual([3, 3]);
+    // Both evaluations call one model key, so they also split its four.
+    expect((await (await limit(modelKey, 4)).json()).maxSandboxes).toBe(4);
+    expect((await compare()).status).toBe(202);
+    expect(fixture.starts.slice(2).map((input) => input.maxTrials)).toEqual([2, 2]);
     expect((await (await limit(sandbox.id, null)).json()).maxSandboxes).toBeUndefined();
     expect((await compare()).status).toBe(202);
-    expect(fixture.starts.slice(2).map((input) => input.maxTrials)).toEqual([undefined, undefined]);
+    expect(fixture.starts.slice(4).map((input) => input.maxTrials)).toEqual([2, 2]);
+    expect((await (await limit(modelKey, null)).json()).maxSandboxes).toBeUndefined();
+    expect((await compare()).status).toBe(202);
+    expect(fixture.starts.slice(6).map((input) => input.maxTrials)).toEqual([undefined, undefined]);
   } finally {
     await fixture.close();
   }
