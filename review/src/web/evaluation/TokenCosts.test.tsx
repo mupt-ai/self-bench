@@ -14,6 +14,21 @@ test("token usage without pricing explains why the cost is missing", () => {
   expect(html).not.toContain("Inferred");
 });
 
+test("Dari pricing is a selected-model reference estimate, not a subscription bill", () => {
+  const html = renderToStaticMarkup(
+    <TokenCosts
+      trial={{
+        tokenUsage: { input: 1, output: 2, cacheRead: 3, cacheWrite: 4 },
+        apiCostUsd: 0.12,
+        costSource: "router-reference-rates",
+      }}
+    />,
+  );
+  expect(html).toContain("Dari-reported per-request reference-rate estimate");
+  expect(html).toContain("Not an invoice or subscription charge");
+  expect(html).not.toContain("Billed by Gateway");
+});
+
 test("inferred sign-in cache writes are labeled as inferred", () => {
   const run = initialEvaluation(evaluationInput(), "GPT-6 Luna");
   const trial = run.trials[0];

@@ -16,6 +16,7 @@ import { pinnedImageKwargs } from "../harnesses/harbor/pinned-images.js";
 import { runCommand } from "../lib/process.js";
 import { claimTrial, WorkerStoppingError } from "./claim.js";
 import { trialCost } from "./cost.js";
+import { DARI_REQUEST_IDS, dariRequestManifest, dariTrialCost, isDariRun } from "./dari-cost.js";
 import { solverAgent, solverAgentArguments } from "./execution.js";
 import { billedTrialCost } from "./gateway-cost.js";
 import {
@@ -198,6 +199,10 @@ async function runTrial(context: {
     outputs = clean;
     trial.log = trialLog(redact(archive ? stdout : completeLines(stdout)), clean);
     if (archive) {
+      if (isDariRun(run) && trial.harness === "pi" && records) {
+        const manifest = dariRequestManifest(records);
+        if (manifest) clean.set(DARI_REQUEST_IDS, JSON.stringify(manifest));
+      }
       for (const [name, text] of clean) {
         const artifactName = `${index}/${name}`;
         await store.put(
@@ -226,6 +231,7 @@ async function runTrial(context: {
       if (failure) throw new Error(`Pi stopped on a model error: ${failure}`);
       if (Object.keys(trial.rewards).length === 0)
         throw new Error("Harbor returned no verifier scores");
+      Object.assign(trial, await dariTrialCost(run, trial, child, records));
     }
     // Trials share one record: live output waits ten seconds or a second per trial, if longer.
     const interval = options.progressMs ?? Math.max(10_000, run.trials.length * 1_000);
