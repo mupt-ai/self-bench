@@ -143,6 +143,21 @@ test("accepted tasks deliver native Harbor files, while build inputs remain immu
   await writeFile(join(root, "download.tar.gz"), download.bytes);
   const downloaded = await runCommand("tar", ["-tzf", join(root, "download.tar.gz")]);
   expect(downloaded.stdout.trim().split("\n").sort()).toEqual(delivered.map((f) => `task/${f}`));
+  for (const sandbox of ["daytona"] as const) {
+    const fallbackRoot = join(root, sandbox);
+    await mkdir(fallbackRoot);
+    const fallback = await unpackTrialTask(
+      store,
+      { runId: "run-native", taskId: "task", bundleKey },
+      sandbox,
+      fallbackRoot,
+      {},
+    );
+    expect(await readFile(join(fallback, "environment/repo.tar.gz"), "utf8")).toBe("large-repo");
+    expect(await readFile(join(fallback, "environment/Dockerfile"), "utf8")).toContain(
+      "COPY repo.tar.gz",
+    );
+  }
   const retried = await publishExecutionBundle(store, task, new AbortController().signal);
   expect(retried.bundle).toEqual(result.bundle);
   expect(await publishExecutionBundle(store, result, new AbortController().signal)).toBe(result);
