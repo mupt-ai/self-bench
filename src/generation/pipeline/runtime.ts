@@ -3,11 +3,10 @@ import { ApplicationFailure, CancelledFailure } from "@temporalio/common";
 import { withExecutionEnvironment } from "../../contracts/config/execution-environment.js";
 import { loadWorkerConfig, type SelfBenchWorkerConfig } from "../../contracts/config/index.js";
 import type { RunRequest } from "../../contracts/index.js";
-import { orgRecords } from "../../db/encrypted-records.js";
 import type { UsageLedger } from "../../db/usage.js";
 import type { Vault } from "../../db/vault.js";
 import { withCredentialCapacity } from "../../sandbox/capacity-wait.js";
-import { capacityLimitedSandbox, credentialCapacity } from "../../sandbox/credential-capacity.js";
+import { capacityLimitedSandbox, credentialsCapacity } from "../../sandbox/credential-capacity.js";
 import { createSandboxExecutor, type SandboxExecutor } from "../../sandbox/index.js";
 import { prepareSandboxRuntime } from "../../sandbox/runtime-image.js";
 import { stampedManagedHarbor } from "../billing/managed.js";
@@ -34,7 +33,8 @@ export async function withGenerationRuntime<T>(
     configuredRun: RunRequest,
   ) => Promise<T>,
   usage?: UsageLedger,
-  harborWork = false,
+  /** "agent" sandboxes call the model; "compile" sandboxes do not; "harbor" runs Harbor checks. */
+  work: "agent" | "compile" | "harbor" = "agent",
 ) {
   if (!run.generation) return action(legacySandbox, config.harborEnvironment, run);
   let env: NodeJS.ProcessEnv;
@@ -125,18 +125,14 @@ export async function withGenerationRuntime<T>(
     },
   };
   const orgId = generation.orgId ?? generation.ownerId;
-  const capacityFor = async (id: string | undefined) => {
-    if (!id) return undefined;
-    const credential = await vault.credentials.find(orgId, id);
-    return credential
-      ? credentialCapacity(
-          orgRecords(vault.records, orgId),
-          id,
-          credential.maxSandboxes ?? Number.POSITIVE_INFINITY,
-        )
-      : undefined;
-  };
-  const capacity = await capacityFor(settings.sandboxCredentialId);
+  // Agent sandboxes also hold a slot of the model credential they call; stopping any sandbox
+  // releases both, which is a no-op for one that never took the model's.
+  const capacity = await credentialsCapacity(
+    vault,
+    orgId,
+    [settings.sandboxCredentialId, ...(work === "compile" ? [] : [settings.modelCredentialId])],
+    true,
+  );
   const sandbox = createSandboxExecutor(execution, env);
   const metered = meteredSandboxExecutor(
     capacity ? capacityLimitedSandbox(sandbox, capacity) : sandbox,
@@ -159,8 +155,14 @@ export async function withGenerationRuntime<T>(
         }),
       async () => {
         try {
-          if (!harborWork) return await action(metered, selected.harborEnvironment, configuredRun);
-          const harborCapacity = await capacityFor(settings.harborCredentialId);
+          if (work !== "harbor")
+            return await action(metered, selected.harborEnvironment, configuredRun);
+          const harborCapacity = await credentialsCapacity(
+            vault,
+            orgId,
+            [settings.harborCredentialId],
+            true,
+          );
           if (!harborCapacity)
             return await action(metered, selected.harborEnvironment, configuredRun);
           // Harbor creates its own sandboxes outside the JS executor. Hold one shared slot for

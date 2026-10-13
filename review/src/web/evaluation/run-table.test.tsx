@@ -135,7 +135,9 @@ test("Add Provider offers only model providers and keeps secrets hidden", () => 
   expect(html).toContain("Add Provider");
   expect(html).toContain("Save");
   expect(html).toContain('type="password"');
-  expect(html).not.toContain("Max Concurrent Sandboxes");
+  // A model key's limit counts the sandboxes whose agent calls it.
+  expect(html).toContain("Max Concurrent Sandboxes");
+  expect(html).toContain("Lower it if the provider rate-limits you.");
   expect(options(html)).toEqual([
     "openai",
     "anthropic",
@@ -186,6 +188,31 @@ test("a sandbox credential's limit shows in its group", () => {
     />,
   );
   expect(html).toContain("E2B · API Key · Up to 20 at once");
+});
+
+test("a model credential's limit shows in its group", () => {
+  const html = renderToStaticMarkup(
+    <CredentialGroup
+      title="Model Providers"
+      credentials={[
+        {
+          id: "credential",
+          name: "Meta",
+          kind: "meta",
+          auth: "muse-login",
+          createdAt: "2026-09-09T00:00:00Z",
+          maxSandboxes: 4,
+        },
+      ]}
+      loading={false}
+      canManage
+      onAdd={() => {}}
+      onLimit={() => {}}
+      onReplace={() => {}}
+      onDelete={() => {}}
+    />,
+  );
+  expect(html).toContain("Up to 4 at once");
 });
 
 test("Add Sandbox offers only hosted sandboxes and the fields for its selected sandbox", () => {
