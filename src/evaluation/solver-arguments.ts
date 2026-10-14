@@ -22,7 +22,7 @@ export function solverArguments(
     taskPath,
     jobsPath: jobs,
     jobName: "solver",
-    agent: solverAgent(harness, provider),
+    agent: solverAgent(harness, provider, model),
     environment: sandbox,
     solver: { model, agentArguments: solverAgentArguments(harness, provider, model, thinking) },
     extraAllowedHosts,

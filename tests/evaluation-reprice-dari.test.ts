@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { recomputeEvaluationCost } from "../maintenance/recompute-cost.js";
 import { repriceDariRouter } from "../maintenance/reprice-dari-router.js";
-import { DARI_REQUEST_IDS } from "../src/evaluation/dari/cost.js";
+import { DARI_BILLING } from "../src/evaluation/dari/billing.js";
 import {
   evaluationPrefix,
   getEvaluation,
@@ -10,9 +10,7 @@ import {
 } from "../src/evaluation/store.js";
 import { runnerFixture } from "./support/evaluation-runner-fixture.js";
 
-const env = { OPENAI_BASE_URL: "https://routing.dari.dev/v1", OPENAI_API_KEY: "key" };
-
-test("Dari reprice is dry by default, preserves snapshots, and general recompute leaves its price intact", async () => {
+test("Dari reprice restores response prices from evidence and recompute leaves the price intact", async () => {
   const { store, input } = await runnerFixture();
   const run = initialEvaluation(
     {
@@ -32,45 +30,28 @@ test("Dari reprice is dry by default, preserves snapshots, and general recompute
   const trial = run.trials[0];
   if (!trial) throw new Error("Missing fixture trial");
   trial.status = "completed";
-  const id = "35fcb4c6-5902-40a7-adfe-e9289cab6855";
-  const name = `0/${DARI_REQUEST_IDS}`;
+  const name = `0/${DARI_BILLING}`;
   trial.artifacts = [name];
   await store.put(
     `${evaluationPrefix(run, run.id)}artifacts/${name}`,
     Buffer.from(
-      JSON.stringify({
-        model: "dari/routing",
-        requestIds: [id],
-      }),
+      [
+        JSON.stringify({ type: "request", index: 1 }),
+        JSON.stringify({ type: "cost", index: 1, requestId: crypto.randomUUID(), cost: 0.2 }),
+      ].join("\n"),
     ),
-    "application/json",
+    "application/jsonl",
   );
   await saveEvaluation(store, run);
-  const original = globalThis.fetch;
-  globalThis.fetch = (async () =>
-    Response.json({
-      complete: true,
-      data: [{ request_id: id, selected_model: "model", model_cost_usd: "0.2", observed: true }],
-    })) as unknown as typeof fetch;
-  try {
-    expect((await repriceDariRouter(store, Number(run.repoId), run.id, env, false)).applied).toBe(
-      false,
-    );
-    expect((await getEvaluation(store, run, run.id))?.trials[0]?.apiCostUsd).toBeUndefined();
-    expect((await repriceDariRouter(store, Number(run.repoId), run.id, env, true)).applied).toBe(
-      true,
-    );
-    expect((await getEvaluation(store, run, run.id))?.trials[0]?.apiCostUsd).toBe(0.2);
-    expect((await repriceDariRouter(store, Number(run.repoId), run.id, env, true)).applied).toBe(
-      false,
-    );
-    expect((await recomputeEvaluationCost(store, Number(run.repoId), run.id, true)).applied).toBe(
-      false,
-    );
-    expect((await getEvaluation(store, run, run.id))?.trials[0]?.apiCostUsd).toBe(0.2);
-  } finally {
-    globalThis.fetch = original;
-  }
+  expect((await repriceDariRouter(store, Number(run.repoId), run.id, false)).applied).toBe(false);
+  expect((await getEvaluation(store, run, run.id))?.trials[0]?.apiCostUsd).toBeUndefined();
+  expect((await repriceDariRouter(store, Number(run.repoId), run.id, true)).applied).toBe(true);
+  expect((await getEvaluation(store, run, run.id))?.trials[0]?.apiCostUsd).toBe(0.2);
+  expect((await repriceDariRouter(store, Number(run.repoId), run.id, true)).applied).toBe(false);
+  expect((await recomputeEvaluationCost(store, Number(run.repoId), run.id, true)).applied).toBe(
+    false,
+  );
+  expect((await getEvaluation(store, run, run.id))?.trials[0]?.apiCostUsd).toBe(0.2);
 });
 
 test("Dari repricing refuses active runs", async () => {
@@ -90,7 +71,7 @@ test("Dari repricing refuses active runs", async () => {
   );
   run.status = "running";
   await saveEvaluation(store, run);
-  await expect(repriceDariRouter(store, Number(run.repoId), run.id, env, true)).rejects.toThrow(
+  await expect(repriceDariRouter(store, Number(run.repoId), run.id, true)).rejects.toThrow(
     "still in progress",
   );
 });
