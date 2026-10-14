@@ -102,7 +102,8 @@ test("an unsafe task in a registry dataset refuses the whole dataset, and nothin
 });
 
 test("an org adds registry datasets as benchmarks and runs each apart from its repositories", async () => {
-  const harbor = fakeHarbor(registry, runCommand);
+  const liveRegistry = { ...registry };
+  const harbor = fakeHarbor(liveRegistry, runCommand);
   const fixture = await evaluationServer(memoryVault(), { registryCommand: harbor.command });
   const post = (body: unknown) => ({ method: "POST", body: JSON.stringify(body) });
   try {
@@ -187,8 +188,16 @@ test("an org adds registry datasets as benchmarks and runs each apart from its r
       ).toBe(400);
     expect(fixture.starts).toHaveLength(0);
 
+    // Moving `latest` must not change the tasks or add a judge the Run page never offered.
+    liveRegistry["terminal-bench/dataset@latest"] = [
+      publishedTask("changed/judged", {
+        "task.toml": `${harborTaskToml("changed/judged")}ANTHROPIC_API_KEY = "\${ANTHROPIC_API_KEY}"\n`,
+      }),
+    ];
+    const downloads = harbor.calls.length;
     const id = crypto.randomUUID();
     const accepted = await fixture.request(`${base}/comparisons`, post({ ...selection, id }));
+    expect(harbor.calls).toHaveLength(downloads);
     expect(accepted.status).toBe(202);
     const input = fixture.starts[0];
     if (!input?.benchmarkId) throw new Error("Benchmark did not start");
@@ -196,6 +205,9 @@ test("an org adds registry datasets as benchmarks and runs each apart from its r
       "hello-world/hello-world",
       "terminal-bench/build",
     ]);
+    expect(input.tasks.map(({ runId, taskId, registry }) => ({ runId, taskId, registry }))).toEqual(
+      listedTasks,
+    );
     expect(input.repoId).toBeUndefined();
     // No agent time is imposed: the tasks keep their own limits, which bound each run.
     expect(input.agentMinutes).toBeUndefined();

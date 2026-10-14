@@ -100,7 +100,7 @@ export async function handleScopedEvaluations(
             env,
             options.fetch,
           );
-        } else if (benchmark && scope.benchmarkId !== undefined) {
+        } else if (benchmark && options.benchmarks && scope.benchmarkId !== undefined) {
           const draft = benchmarkComparisonSchema.parse(body);
           selected = { ...draft, tasks: benchmark.tasks };
           record = await createBenchmarkComparison(
@@ -108,11 +108,10 @@ export async function handleScopedEvaluations(
             artifacts,
             managedOffer(env),
             { ...owner, scope: { benchmarkId: scope.benchmarkId } },
-            benchmark,
+            await options.benchmarks.tasks(benchmark.id),
             draft,
             env,
             options.fetch,
-            options.registryCommand,
           );
         } else throw new Error("Benchmark not found");
         const submitted = await resume(
