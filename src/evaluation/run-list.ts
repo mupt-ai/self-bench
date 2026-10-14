@@ -30,6 +30,24 @@ export interface RunList {
 
 const RUN_ID = /^[a-f0-9-]{36}$/;
 
+/** A stored summary as a run, or undefined when it does not read as one. */
+function parseSummary(body: string): EvaluationRun | undefined {
+  try {
+    const run: unknown = JSON.parse(body);
+    if (
+      typeof run === "object" &&
+      run !== null &&
+      typeof (run as EvaluationRun).id === "string" &&
+      typeof (run as EvaluationRun).createdAt === "string" &&
+      Array.isArray((run as EvaluationRun).trials)
+    )
+      return run as EvaluationRun;
+  } catch {
+    // Not JSON: handled below, like any summary that does not read as a run.
+  }
+  return undefined;
+}
+
 function tagOf(revisions: Iterable<readonly [string, number]>): string {
   const lines = [...revisions].map(([id, revision]) => `${id}:${revision}`).sort();
   return createHash("sha256").update(lines.join("\n")).digest("base64url").slice(0, 27);
@@ -104,8 +122,12 @@ export async function listRuns(
       if (run) return run;
       const summary = stored.get(id);
       // A summary can only have moved on since it was checked; one gone altogether (its
-      // repository disconnected meanwhile) is read from the record.
-      return summary ? (JSON.parse(summary.body) as EvaluationRun) : rebuild(store, repoId, id);
+      // repository disconnected meanwhile), or one that does not read as a run, is read from the
+      // record, and the rebuilt summary replaces it.
+      const parsed = summary ? parseSummary(summary.body) : undefined;
+      if (summary && !parsed)
+        console.warn(`evaluation ${id}: stored summary does not read as a run; rebuilt`);
+      return parsed ?? rebuild(store, repoId, id);
     }),
   );
   const listed = newestFirst(runs.filter((run) => run !== undefined));
