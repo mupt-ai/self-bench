@@ -150,7 +150,6 @@ export function EvaluationResults({
         <TrialDialog
           run={run}
           trial={opened.trial}
-          loaded
           baseUrl={baseUrl}
           repo={repo}
           onClose={() => showTrial(undefined)}

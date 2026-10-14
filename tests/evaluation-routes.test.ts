@@ -79,3 +79,37 @@ test("generation checks alone never admit tasks to the dataset", async () => {
     false,
   );
 });
+
+test("a run is read whole, with one trial's transcript, or with none", async () => {
+  const input = { ...evaluationInput(), repoId: server.repo.id };
+  input.tasks.push({ runId: "run-one", taskId: "task-two", bundleKey: "tasks/two.tar.gz" });
+  const run = initialEvaluation(input, input.modelName);
+  for (const [position, trial] of run.trials.entries()) {
+    trial.log = `log ${position}`;
+    trial.steps = [{ id: `step-${position}`, role: "agent", text: "transcript", tools: [] }];
+    trial.artifacts = [`${position}/solver/task/result.json`];
+  }
+  await saveEvaluation(server.artifacts, run);
+  const read = async (query: string) => {
+    const response = await server.request(`${server.base}/${input.id}${query}`);
+    return { status: response.status, body: await response.json() };
+  };
+  const whole = await read("");
+  expect(whole.body.trials.map((trial: { log: string }) => trial.log)).toEqual(["log 0", "log 1"]);
+  const one = await read("?trial=1");
+  expect(one.status).toBe(200);
+  expect(one.body).toEqual({
+    ...whole.body,
+    trials: [{ ...whole.body.trials[0], log: "", steps: [], artifacts: [] }, whole.body.trials[1]],
+  });
+  const none = await read("?trial=none");
+  expect(
+    none.body.trials.map((trial: { log: string; steps: unknown[] }) => [trial.log, trial.steps]),
+  ).toEqual([
+    ["", []],
+    ["", []],
+  ]);
+  expect(none.body.status).toBe(whole.body.status);
+  for (const query of ["?trial=2", "?trial=-1", "?trial=first", "?trial="])
+    expect((await read(query)).status).toBe(404);
+});

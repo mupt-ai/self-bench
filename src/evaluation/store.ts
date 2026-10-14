@@ -54,6 +54,18 @@ export function runSummary(run: EvaluationRun): EvaluationRun {
 }
 
 /**
+ * The run as its summary, but with the trial at `index` whole: what a task's dialog shows, which
+ * is one transcript out of a run that may hold megabytes of them. Undefined for no such trial.
+ */
+export function runWithTrial(run: EvaluationRun, index: number): EvaluationRun | undefined {
+  const trial = run.trials[index];
+  if (!trial) return undefined;
+  const summary = runSummary(run);
+  summary.trials[index] = trial;
+  return summary;
+}
+
+/**
  * Where each artifact store's run summaries are kept, in processes that have the database. Kept
  * beside the store rather than passed to every function that saves a run, so no path that saves
  * one can leave its summary behind.

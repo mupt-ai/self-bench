@@ -23,14 +23,13 @@ function modelName(run: EvaluationRun): string {
 }
 
 /**
- * One task's trial in a dialog: what ran it, its result, and its transcript. The run list leaves
- * transcripts and logs out, so unless `loaded` says the run is complete, the dialog fetches it,
- * and keeps it fresh while it runs.
+ * One task's trial in a dialog: what ran it, its result, and its transcript. Runs come to the
+ * pages without transcripts and logs, so the dialog fetches its trial's, and keeps them fresh
+ * while the run runs.
  */
 export function TrialDialog({
   run: known,
   trial: chosen,
-  loaded = false,
   showRun = false,
   baseUrl,
   repo,
@@ -38,8 +37,6 @@ export function TrialDialog({
 }: {
   run: EvaluationRun;
   trial: EvaluationTrial;
-  /** Whether `run` already has every trial's transcript and logs. */
-  loaded?: boolean;
   /** Whether to link to the run's page. */
   showRun?: boolean;
   baseUrl: string;
@@ -49,14 +46,15 @@ export function TrialDialog({
   const close = useRef<HTMLButtonElement>(null);
   const [fetched, setFetched] = useState<EvaluationRun>();
   const [error, setError] = useState("");
+  // The trial's place in the run names it to the API; trials keep their places.
+  const index = known.trials.findIndex((entry) => sameTrial(entry, chosen));
   useEffect(() => {
-    if (loaded) return;
     let disposed = false;
     let timer: ReturnType<typeof setTimeout>;
     const refresh = async () => {
       try {
         const run = await evaluationRequest<EvaluationRun>(
-          `${baseUrl}/${encodeURIComponent(known.id)}`,
+          `${baseUrl}/${encodeURIComponent(known.id)}${index < 0 ? "" : `?trial=${index}`}`,
         );
         if (disposed) return;
         setFetched(run);
@@ -71,8 +69,8 @@ export function TrialDialog({
       disposed = true;
       clearTimeout(timer);
     };
-  }, [loaded, baseUrl, known.id]);
-  const run = loaded ? known : fetched;
+  }, [baseUrl, known.id, index]);
+  const run = fetched;
   const trial = run?.trials.find((entry) => sameTrial(entry, chosen)) ?? chosen;
   const task = taskParts(trial.taskId);
   const minutes =
