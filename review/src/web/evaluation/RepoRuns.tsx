@@ -1,16 +1,10 @@
 import React from "react";
 import { useLocation } from "react-router";
 import type { CredentialInfo } from "../../../../src/db/credentials";
-import {
-  type EvaluationOptions,
-  type EvaluationRun,
-  evaluationRequest,
-  evaluationUrl,
-  runsRequest,
-} from "./api";
+import { type EvaluationOptions, type EvaluationRun, evaluationRequest, runsRequest } from "./api";
 
 /**
- * A repository's evaluation runs and the org's credentials, shared by the Results page's table and
+ * A repository's (or the org's benchmarks') evaluation runs and the org's credentials, shared by the Results page's table and
  * the chart preview in the repository header. They load when the Results page opens, refresh each
  * time it opens again, and while a run is unfinished every 3 seconds there; elsewhere they rest.
  */
@@ -41,14 +35,17 @@ export function useRepoRuns(): RepoRuns {
 
 export function RepoRunsProvider({
   org,
+  url,
   repo,
   children,
 }: {
   org: string;
-  repo: string;
+  /** The API the runs are under (useEvaluationScope). */
+  url: string;
+  /** `owner/name`, whose accepted tasks the results' coverage uses; none for benchmarks. */
+  repo?: string;
   children: React.ReactNode;
 }) {
-  const url = evaluationUrl(org, repo);
   const [runs, setRuns] = React.useState<EvaluationRun[]>([]);
   const [credentials, setCredentials] = React.useState<CredentialInfo[]>([]);
   const [accepted, setAccepted] = React.useState<AcceptedTask[]>();
@@ -122,7 +119,7 @@ export function RepoRunsProvider({
   // Dataset page's task list, when each was accepted, which says whether a run left a task out or
   // it came after. Reloaded each time the Results page opens, since tasks are accepted elsewhere.
   React.useEffect(() => {
-    if (!onResults) return;
+    if (!onResults || !repo) return;
     let disposed = false;
     const reviews = evaluationRequest<{
       tasks: { runId: string; taskId: string; review?: { decidedAt: string } }[];

@@ -33,7 +33,7 @@ test("Dari reprice restores response prices from evidence and recompute leaves t
   const name = `0/${DARI_BILLING}`;
   trial.artifacts = [name];
   await store.put(
-    `${evaluationPrefix(run.repoId, run.id)}artifacts/${name}`,
+    `${evaluationPrefix(run, run.id)}artifacts/${name}`,
     Buffer.from(
       [
         JSON.stringify({ type: "request", index: 1 }),
@@ -43,13 +43,15 @@ test("Dari reprice restores response prices from evidence and recompute leaves t
     "application/jsonl",
   );
   await saveEvaluation(store, run);
-  expect((await repriceDariRouter(store, run.repoId, run.id, false)).applied).toBe(false);
-  expect((await getEvaluation(store, run.repoId, run.id))?.trials[0]?.apiCostUsd).toBeUndefined();
-  expect((await repriceDariRouter(store, run.repoId, run.id, true)).applied).toBe(true);
-  expect((await getEvaluation(store, run.repoId, run.id))?.trials[0]?.apiCostUsd).toBe(0.2);
-  expect((await repriceDariRouter(store, run.repoId, run.id, true)).applied).toBe(false);
-  expect((await recomputeEvaluationCost(store, run.repoId, run.id, true)).applied).toBe(false);
-  expect((await getEvaluation(store, run.repoId, run.id))?.trials[0]?.apiCostUsd).toBe(0.2);
+  expect((await repriceDariRouter(store, Number(run.repoId), run.id, false)).applied).toBe(false);
+  expect((await getEvaluation(store, run, run.id))?.trials[0]?.apiCostUsd).toBeUndefined();
+  expect((await repriceDariRouter(store, Number(run.repoId), run.id, true)).applied).toBe(true);
+  expect((await getEvaluation(store, run, run.id))?.trials[0]?.apiCostUsd).toBe(0.2);
+  expect((await repriceDariRouter(store, Number(run.repoId), run.id, true)).applied).toBe(false);
+  expect((await recomputeEvaluationCost(store, Number(run.repoId), run.id, true)).applied).toBe(
+    false,
+  );
+  expect((await getEvaluation(store, run, run.id))?.trials[0]?.apiCostUsd).toBe(0.2);
 });
 
 test("Dari repricing refuses active runs", async () => {
@@ -69,7 +71,7 @@ test("Dari repricing refuses active runs", async () => {
   );
   run.status = "running";
   await saveEvaluation(store, run);
-  await expect(repriceDariRouter(store, run.repoId, run.id, true)).rejects.toThrow(
+  await expect(repriceDariRouter(store, Number(run.repoId), run.id, true)).rejects.toThrow(
     "still in progress",
   );
 });

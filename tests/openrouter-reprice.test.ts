@@ -42,7 +42,7 @@ test("OpenRouter recovery dry run is read-only; apply writes evidence and only c
     billedCostUsd: 0,
   });
   trial.artifacts = [`0/${OPENROUTER_GENERATIONS}`, "0/agent/pi.txt"];
-  const prefix = `${evaluationPrefix(run.repoId, run.id)}artifacts/`;
+  const prefix = `${evaluationPrefix(run, run.id)}artifacts/`;
   await store.put(
     `${prefix}0/${OPENROUTER_GENERATIONS}`,
     Buffer.from(
@@ -101,21 +101,30 @@ test("OpenRouter recovery dry run is read-only; apply writes evidence and only c
     return 0;
   }) as unknown as typeof setTimeout;
   try {
-    const before = await getEvaluation(store, run.repoId, run.id);
-    const dry = await repriceOpenRouter(store, run.repoId, run.id, "inference", "billing", false);
+    const before = await getEvaluation(store, run, run.id);
+    const dry = await repriceOpenRouter(
+      store,
+      Number(run.repoId),
+      run.id,
+      "inference",
+      "billing",
+      false,
+    );
     expect(dry.applied).toBe(false);
     expect(dry.trials[0]?.after.apiCostUsd).toBeCloseTo(0.12345678, 10);
-    expect(await getEvaluation(store, run.repoId, run.id)).toEqual(before);
+    expect(await getEvaluation(store, run, run.id)).toEqual(before);
     expect(await store.getByKey(`${prefix}0/${OPENROUTER_BILLING}`)).toBeUndefined();
     truncated = true;
     expect(
-      (await repriceOpenRouter(store, run.repoId, run.id, "inference", "billing", true)).applied,
+      (await repriceOpenRouter(store, Number(run.repoId), run.id, "inference", "billing", true))
+        .applied,
     ).toBe(false);
     truncated = false;
     expect(
-      (await repriceOpenRouter(store, run.repoId, run.id, "inference", "billing", true)).applied,
+      (await repriceOpenRouter(store, Number(run.repoId), run.id, "inference", "billing", true))
+        .applied,
     ).toBe(true);
-    expect((await getEvaluation(store, run.repoId, run.id))?.trials[0]?.apiCostUsd).toBeCloseTo(
+    expect((await getEvaluation(store, run, run.id))?.trials[0]?.apiCostUsd).toBeCloseTo(
       0.12345678,
       10,
     );

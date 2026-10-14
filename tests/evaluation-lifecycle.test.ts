@@ -60,7 +60,7 @@ test("multiple tasks and harnesses run once each; a zero score still completes",
       "harbor_gateway:SelfBenchCodex",
       "pi",
     ]);
-    const run = await getEvaluation(store, input.repoId, input.id);
+    const run = await getEvaluation(store, input, input.id);
     expect(run?.status).toBe("completed");
     expect(run?.trials.map((trial) => trial.rewards.reward)).toEqual([0, 0, 0, 0]);
   } finally {
@@ -78,13 +78,13 @@ test("worker interruption finalizes persisted progress without rerunning the sol
     await saveEvaluation(store, run);
     const activities = createEvaluationActivities(store);
     await activities.failSolverEvaluation(input);
-    const failed = await getEvaluation(store, input.repoId, input.id);
+    const failed = await getEvaluation(store, input, input.id);
     expect(failed?.status).toBe("failed");
     expect(failed?.error).toContain("cleanup");
     expect(failed?.trials[0]?.status).toBe("failed");
     const revision = failed?.revision;
     await activities.failSolverEvaluation(input);
-    expect((await getEvaluation(store, input.repoId, input.id))?.revision).toBe(revision);
+    expect((await getEvaluation(store, input, input.id))?.revision).toBe(revision);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -109,7 +109,7 @@ test("an already-cancelled evaluation does not invoke a solver", async () => {
       },
     });
     expect(calls.every((args) => args[0] === "--version")).toBe(true);
-    expect((await getEvaluation(store, input.repoId, input.id))?.status).toBe("failed");
+    expect((await getEvaluation(store, input, input.id))?.status).toBe("failed");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

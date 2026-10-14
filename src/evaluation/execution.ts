@@ -13,7 +13,9 @@ import {
 } from "../generation/billing/managed.js";
 import { providerCredentialEnvironment } from "../sandbox/provider-environment.js";
 import { type CompatibleEndpoint, compatibleEndpoint } from "./compatible-endpoints.js";
+import { judgeEnvironment } from "./judge.js";
 import { signInRefusal, thinkingArguments } from "./models.js";
+import { sameScope } from "./scope.js";
 import type { EvaluationInput, Harness } from "./types.js";
 
 /**
@@ -43,7 +45,7 @@ export async function credentialExecution(
     throw refuseTrial("Credential references missing");
   const comparison = await comparisons.find(input.comparisonId);
   const saved =
-    comparison?.orgId === orgId && comparison.repoId === input.repoId
+    comparison?.orgId === orgId && sameScope(comparison.scope, input)
       ? comparison.inputs.find((entry) => entry.id === input.id)
       : undefined;
   // A trial workflow carries only its own task (trialInput); the rest must match exactly.
@@ -126,7 +128,33 @@ export async function credentialExecution(
     providerCredentialEnvironment(input.sandbox, { ...sandboxSecret, domain: managedE2B?.domain }),
     managedModal ? { MODAL_ENVIRONMENT: managedModal.MODAL_ENVIRONMENT } : {},
   );
-  return { profile: { model: input.modelName }, child, secrets, auth: info.auth, billingKey };
+  const judge = await judgeCredentialEnvironment(input, orgId, credentials, env);
+  if (judge.secret) secrets.push(judge.secret);
+  return {
+    profile: { model: input.modelName },
+    child,
+    secrets,
+    auth: info.auth,
+    billingKey,
+    judge: judge.env,
+  };
+}
+
+/** The judge variables a benchmark's LLM judge calls with, from its judge credential. */
+async function judgeCredentialEnvironment(
+  input: EvaluationInput,
+  orgId: number,
+  credentials: Vault["credentials"],
+  env: NodeJS.ProcessEnv,
+): Promise<{ env: Record<string, string>; secret?: string }> {
+  const id = input.credentials?.judgeCredentialId;
+  if (!id) return { env: {} };
+  const info = await credentials.find(orgId, id);
+  const secret = info ? (await credentials.secret(orgId, id))?.value : undefined;
+  if (!info || !secret || info.auth !== "api-key")
+    throw refuseTrial("Judge credential unavailable");
+  const endpoint = info.endpoint ? validateEndpoint(info.endpoint, env) : undefined;
+  return { env: judgeEnvironment({ ...info, ...(endpoint ? { endpoint } : {}) }, secret), secret };
 }
 
 function hostsFromEnvironment(env: NodeJS.ProcessEnv): string[] {

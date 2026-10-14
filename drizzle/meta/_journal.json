@@ -141,6 +141,13 @@
       "when": 1791316634478,
       "tag": "0019_credential_max_sandboxes",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1791928030070,
+      "tag": "0020_harbor_benchmarks",
+      "breakpoints": true
     }
   ]
 }

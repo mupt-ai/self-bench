@@ -38,7 +38,7 @@ test("only a live run offers cancellation", () => {
         <EvaluationResults
           run={run}
           baseUrl="/api/evaluations"
-          repo="owner/repo"
+          pages="/repos/owner/repo"
           onCancelled={() => {}}
         />
       </MemoryRouter>,

@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useParams } from "react-router";
 import { BatchProvider } from "./batches/BatchProvider";
+import { evaluationUrl } from "./evaluation/api";
 import { ChartPreview } from "./evaluation/ChartPreview";
 import { RepoRunsProvider } from "./evaluation/RepoRuns";
 import { pageContainer, pageGutter } from "./layout";
@@ -17,7 +18,11 @@ export function RepoLayout() {
       key={`${context.org.login}/${repo}`}
       repoId={{ org: context.org.login, fullName: repo }}
     >
-      <RepoRunsProvider org={context.org.login} repo={repo}>
+      <RepoRunsProvider
+        org={context.org.login}
+        url={evaluationUrl(context.org.login, repo)}
+        repo={repo}
+      >
         <main className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
           {/* Both parts reserve the scrollbar's slot, so the tabs and the page below them line up
             whether or not the page is tall enough to scroll. */}
@@ -27,7 +32,7 @@ export function RepoLayout() {
             <div className={cn(pageContainer, "relative")}>
               {/* The model comparison, in the corner on the Results page; it opens to the full chart. */}
               <div className="absolute top-0 right-0 hidden md:block">
-                <ChartPreview repo={repo} />
+                <ChartPreview pages={base} />
               </div>
               <Breadcrumbs
                 items={[

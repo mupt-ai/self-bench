@@ -102,10 +102,11 @@ const plural = (count: number, word: string) =>
  * does with the settings ticked. Hidden until some configuration has a usable result.
  */
 export function ChartPreview({
-  repo,
+  pages,
   variant = "card",
 }: {
-  repo: string;
+  /** Where the runs' pages live: `/repos/<owner>/<name>`, or `/benchmarks`. */
+  pages: string;
   /** The header's card, or on a phone, where the card has no room, a plain Chart button. */
   variant?: "card" | "button";
 }) {
@@ -211,7 +212,7 @@ export function ChartPreview({
                 showTitle={false}
                 onSelect={(runId) => {
                   setOpen(false);
-                  navigate(`/repos/${repo}/results?run=${encodeURIComponent(runId)}`);
+                  navigate(`${pages}/results?run=${encodeURIComponent(runId)}`);
                 }}
               />
             ) : (

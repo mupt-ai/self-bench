@@ -20,12 +20,12 @@ export function scores(trial: EvaluationTrial): string {
 export function EvaluationResults({
   run,
   baseUrl,
-  repo,
+  pages,
   onCancelled,
 }: {
   run: EvaluationRun;
   baseUrl: string;
-  repo: string;
+  pages: string;
   onCancelled?(run: EvaluationRun): void;
 }) {
   const [search, setSearch] = useSearchParams();
@@ -152,7 +152,7 @@ export function EvaluationResults({
           trial={opened.trial}
           loaded
           baseUrl={baseUrl}
-          repo={repo}
+          pages={pages}
           onClose={() => showTrial(undefined)}
         />
       )}

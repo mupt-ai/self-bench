@@ -34,7 +34,7 @@ export function TrialDialog({
   loaded = false,
   showRun = false,
   baseUrl,
-  repo,
+  pages,
   onClose,
 }: {
   run: EvaluationRun;
@@ -44,7 +44,8 @@ export function TrialDialog({
   /** Whether to link to the run's page. */
   showRun?: boolean;
   baseUrl: string;
-  repo: string;
+  /** Where the run's pages live: `/repos/<owner>/<name>`, or `/benchmarks`. */
+  pages: string;
   onClose(): void;
 }) {
   const close = useRef<HTMLButtonElement>(null);
@@ -135,7 +136,12 @@ export function TrialDialog({
           )}
           <Link
             className={buttonStyles.secondary}
-            to={`/repos/${repo}/tasks/${encodeURIComponent(trial.runId)}/${encodeURIComponent(trial.taskId)}`}
+            to={
+              // A benchmark's tasks are known by name alone; a repository's by batch and name.
+              pages.startsWith("/benchmarks/")
+                ? `${pages}/tasks/${trial.taskId}`
+                : `${pages}/tasks/${encodeURIComponent(trial.runId)}/${encodeURIComponent(trial.taskId)}`
+            }
           >
             View Task ↗
           </Link>

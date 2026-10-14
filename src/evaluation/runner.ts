@@ -144,6 +144,7 @@ async function runTrial(context: {
   billingKey?: string;
   child: NodeJS.ProcessEnv;
   extraAllowedHosts?: readonly string[];
+  verifierEnv?: readonly string[];
   images?: TaskImages;
   command: typeof runCommand;
   redact: (text: string) => string;
@@ -184,7 +185,7 @@ async function runTrial(context: {
       for (const [name, text] of clean) {
         const artifactName = `${index}/${name}`;
         await store.put(
-          `${evaluationPrefix(run.repoId, run.id)}artifacts/${artifactName}`,
+          `${evaluationPrefix(run, run.id)}artifacts/${artifactName}`,
           Buffer.from(text),
           "text/plain",
         );
@@ -201,7 +202,7 @@ async function runTrial(context: {
       if (billing) {
         const name = `${index}/${OPENROUTER_BILLING}`;
         await store.put(
-          `${evaluationPrefix(run.repoId, run.id)}artifacts/${name}`,
+          `${evaluationPrefix(run, run.id)}artifacts/${name}`,
           Buffer.from(redact(billing)),
           "application/json",
         );
@@ -256,11 +257,12 @@ async function runTrial(context: {
           context.extraAllowedHosts,
           context.images,
           run.credentials?.provider,
+          context.verifierEnv,
         ),
         {
           env: child,
           cwd: taskPath,
-          timeoutMs: trialTimeouts(run.agentMinutes).harborMs,
+          timeoutMs: trialTimeouts(run.agentMinutes, run.taskMinutes).harborMs,
           allowFailure: true,
           signal: context.guard.signal,
           onOutput: (_stream, chunk) => {

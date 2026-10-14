@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { DARI_BILLING } from "../src/evaluation/dari/billing.js";
+import { scopeOf } from "../src/evaluation/scope.js";
 import {
   evaluationPrefix,
   getEvaluation,
@@ -73,7 +74,7 @@ test("Pi error/retry saves both returned prices in the completed evaluation", as
   await vault.comparisons.insert({
     id: input.comparisonId,
     orgId: 1,
-    repoId: input.repoId,
+    scope: scopeOf(input),
     createdAt: input.createdAt,
     signature: "local-dari-response-test",
     inputs: [input],
@@ -151,7 +152,7 @@ test("Pi error/retry saves both returned prices in the completed evaluation", as
         return result;
       },
     });
-    const run = await getEvaluation(store, input.repoId, input.id);
+    const run = await getEvaluation(store, input, input.id);
     expect(requests).toBe(2);
     expect(run?.trials[0]).toMatchObject({
       status: "completed",
@@ -161,9 +162,7 @@ test("Pi error/retry saves both returned prices in the completed evaluation", as
     });
     const artifact = run?.trials[0]?.artifacts.find((name) => name.endsWith(DARI_BILLING));
     expect(artifact).toBeDefined();
-    const bytes = await store.getByKey(
-      `${evaluationPrefix(input.repoId, input.id)}artifacts/${artifact}`,
-    );
+    const bytes = await store.getByKey(`${evaluationPrefix(input, input.id)}artifacts/${artifact}`);
     expect(Buffer.from(bytes ?? []).toString()).toContain('"cost":0.02');
     expect(Buffer.from(bytes ?? []).toString()).toContain('"cost":0.03');
   } finally {

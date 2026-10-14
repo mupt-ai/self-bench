@@ -2,13 +2,13 @@ import { X } from "lucide-react";
 import { useState } from "react";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
-import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
+import type { ComparisonSelection } from "../../../../src/evaluation/comparisons";
 import { Notice } from "../ui";
 import { evaluationRequestId } from "./api";
 import { hasDuplicateModelSelections } from "./model-selection";
 import { RunModelRow } from "./RunModelRow";
 
-export function RunModelTable({
+export function RunModelTable<D extends ComparisonSelection>({
   models,
   credentials,
   draft,
@@ -16,10 +16,10 @@ export function RunModelTable({
 }: {
   models: CatalogModel[];
   credentials: CredentialInfo[];
-  draft: ComparisonDraft;
-  onChange(value: ComparisonDraft): void;
+  draft: D;
+  onChange(value: NoInfer<D>): void;
 }) {
-  const [rowKeys] = useState(() => new WeakMap<ComparisonDraft["models"][number], string>());
+  const [rowKeys] = useState(() => new WeakMap<ComparisonSelection["models"][number], string>());
   return (
     <div className="divide-y divide-border">
       {hasDuplicateModelSelections(models, draft.models, credentials) && (

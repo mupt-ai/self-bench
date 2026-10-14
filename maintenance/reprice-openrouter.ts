@@ -14,7 +14,7 @@ export async function repriceOpenRouter(
   store: ArtifactStore, repoId: number, id: string,
   key: string, managementKey: string | undefined, apply: boolean,
 ) {
-  const run = await getEvaluation(store, repoId, id);
+  const run = await getEvaluation(store, { repoId: repoId }, id);
   if (!run || run.credentials?.provider !== "openrouter")
     throw new Error("OpenRouter evaluation not found");
   if (run.status === "running" || run.status === "queued") throw new Error("Evaluation is still in progress");
@@ -32,7 +32,7 @@ export async function repriceOpenRouter(
     trials.push({ index, taskId: trial.taskId, before, after, complete, changed });
     if (apply && complete) {
       const name = `${index}/${OPENROUTER_BILLING}`;
-      await store.put(`${evaluationPrefix(repoId, id)}artifacts/${name}`, Buffer.from(bill), "application/json");
+      await store.put(`${evaluationPrefix({ repoId: repoId }, id)}artifacts/${name}`, Buffer.from(bill), "application/json");
       if (!trial.artifacts.includes(name)) trial.artifacts.push(name);
       Object.assign(trial, after);
     }
@@ -46,7 +46,7 @@ export async function main() {
   const [repo, id] = process.argv.slice(2).filter((arg) => !arg.startsWith("--"));
   if (!repo || !/^\d+$/.test(repo) || !id) throw new Error("Usage: reprice-openrouter.js <repoId> <evaluationId> [--apply]");
   const store = createArtifactStore(loadConfig().artifact);
-  const run = await getEvaluation(store, Number(repo), id);
+  const run = await getEvaluation(store, { repoId: Number(repo) }, id);
   const url = process.env.SELFBENCH_DATABASE_URL;
   const encryptionKey = process.env.SELFBENCH_EVAL_CREDENTIAL_KEY;
   const orgId = run && evaluationCredentialOrg(run);

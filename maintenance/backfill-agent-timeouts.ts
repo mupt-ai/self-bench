@@ -99,7 +99,7 @@ export async function backfillAgentTimeouts(
     skipped: 0,
     applied: false,
   };
-  for (const run of await listEvaluations(store, repoId)) {
+  for (const run of await listEvaluations(store, { repoId })) {
     const candidates = [...run.trials.entries()].filter(
       ([, trial]) => trial.status === "failed" && TIMED_OUT.test(trial.error ?? ""),
     );
@@ -125,7 +125,7 @@ export async function backfillAgentTimeouts(
     report.runs.push(entry);
     if (!apply || scored.size === 0) continue;
     let changed = false;
-    await updateEvaluation(store, repoId, run.id, (latest) => {
+    await updateEvaluation(store, { repoId }, run.id, (latest) => {
       changed = false;
       for (const [index, outcome] of scored) {
         const trial = latest.trials[index];

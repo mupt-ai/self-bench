@@ -24,6 +24,8 @@ export interface HarborRunCommand {
   extraAllowedHosts?: readonly string[];
   /** Harbor `--ek` settings for the environment, such as pinnedImageKwargs. */
   environmentKwargs?: Readonly<Record<string, string>>;
+  /** Harbor `--ve` entries, `KEY=VALUE`, for the verifier (an LLM judge's key, judgeTrial). */
+  verifierEnv?: readonly string[];
   quiet?: boolean;
 }
 
@@ -56,6 +58,7 @@ export function harborRunArguments(input: HarborRunCommand): string[] {
       "--ek",
       `${key}=${value}`,
     ]),
+    ...(input.verifierEnv ?? []).flatMap((entry) => ["--ve", entry]),
     ...(input.solver?.agentArguments ?? []),
   ];
 }

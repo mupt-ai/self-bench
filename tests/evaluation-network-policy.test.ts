@@ -77,6 +77,6 @@ test("a historical bundle is backfilled for execution without changing the store
   };
   await runEvaluation(store, input, { env: {}, vault, command });
   expect(solved).toBe(true);
-  expect((await getEvaluation(store, input.repoId, input.id))?.status).toBe("completed");
+  expect((await getEvaluation(store, input, input.id))?.status).toBe("completed");
   expect(await store.getByKey(key)).toEqual(before);
 });

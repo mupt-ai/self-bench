@@ -12,7 +12,7 @@ export async function repriceDariRouter(
   id: string,
   apply: boolean,
 ) {
-  const run = await getEvaluation(store, repoId, id);
+  const run = await getEvaluation(store, { repoId: repoId }, id);
   if (!run || !isDariRun(run)) throw new Error("Dari router evaluation not found");
   if (run.status === "running" || run.status === "queued") throw new Error("Evaluation is still in progress");
   const trials = [];

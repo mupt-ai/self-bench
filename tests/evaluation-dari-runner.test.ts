@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { DARI_BILLING } from "../src/evaluation/dari/billing.js";
+import { scopeOf } from "../src/evaluation/scope.js";
 import {
   evaluationPrefix,
   getEvaluation,
@@ -36,7 +37,7 @@ test("Dari runner persists response prices without transcript or telemetry looku
   await vault.comparisons.insert({
     id: input.comparisonId,
     orgId: 1,
-    repoId: input.repoId,
+    scope: scopeOf(input),
     createdAt: input.createdAt,
     signature: "dari",
     inputs: [input],
@@ -89,7 +90,7 @@ test("Dari runner persists response prices without transcript or telemetry looku
   } finally {
     globalThis.fetch = original;
   }
-  const run = await getEvaluation(store, input.repoId, input.id);
+  const run = await getEvaluation(store, input, input.id);
   expect(run?.trials[0]).toMatchObject({
     status: "completed",
     modelVerified: true,
@@ -98,9 +99,7 @@ test("Dari runner persists response prices without transcript or telemetry looku
   });
   const artifact = run?.trials[0]?.artifacts.find((name) => name.endsWith(DARI_BILLING));
   expect(artifact).toBeDefined();
-  const bytes = await store.getByKey(
-    `${evaluationPrefix(input.repoId, input.id)}artifacts/${artifact}`,
-  );
+  const bytes = await store.getByKey(`${evaluationPrefix(input, input.id)}artifacts/${artifact}`);
   if (!bytes) throw new Error("Manifest artifact missing");
   expect(Buffer.from(bytes).toString()).toContain('"cost":0.15');
 });

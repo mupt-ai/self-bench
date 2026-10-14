@@ -95,9 +95,9 @@ test("cancelling a comparison stops its runs and keeps resume from submitting th
       "failed",
       "failed",
     ]);
-    expect((await getEvaluation(fixture.artifacts, fixture.repo.id, live.id))?.error).toBe(
-      "Cancelled by avyay.",
-    );
+    expect(
+      (await getEvaluation(fixture.artifacts, { repoId: fixture.repo.id }, live.id))?.error,
+    ).toBe("Cancelled by avyay.");
     await fixture.request(`${fixture.base}/comparisons/${draft.id}/resume`, post({}));
     expect(fixture.starts).toEqual([]);
   } finally {

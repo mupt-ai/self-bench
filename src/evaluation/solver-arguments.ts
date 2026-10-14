@@ -16,6 +16,7 @@ export function solverArguments(
   extraAllowedHosts: readonly string[] = [],
   images?: TaskImages,
   provider?: string,
+  verifierEnv: readonly string[] = [],
 ): string[] {
   return harborRunArguments({
     taskPath,
@@ -25,6 +26,7 @@ export function solverArguments(
     environment: sandbox,
     solver: { model, agentArguments: solverAgentArguments(harness, provider, model, thinking) },
     extraAllowedHosts,
+    verifierEnv,
     // Pinned images are Modal image IDs; every other backend builds the task's Dockerfiles.
     ...(sandbox === "modal" ? { environmentKwargs: pinnedImageKwargs(images) } : {}),
   });

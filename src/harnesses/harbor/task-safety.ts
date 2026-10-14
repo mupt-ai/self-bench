@@ -4,6 +4,7 @@ import { ApplicationFailure } from "@temporalio/common";
 import { parse, stringify } from "smol-toml";
 import { trialTimeouts } from "../../contracts/agent-limit.js";
 import { isRecord } from "../../lib/util.js";
+import { hostVariableRefusal } from "./host-variables.js";
 import {
   guardHarborOutput,
   type HarborOutputGuard,
@@ -50,7 +51,8 @@ export function refuseWithoutRetry(error: unknown): never {
  * Readies one Harbor run under `root` (whose `jobs/` holds its output): checks the task, gives
  * its agent `agentSeconds` (a solver's default for the generation gates' oracle and smoke agents),
  * and guards the output directories. Harbor stages sandbox downloads in TMPDIR, so the run gets
- * its own under `root` where the guard sees them.
+ * its own under `root` where the guard sees them. A `published` task (from Harbor's registry) runs
+ * exactly as published: it is checked but never rewritten, so it keeps its own limits.
  */
 export async function prepareHarborRun(
   taskDirectory: string,
@@ -58,11 +60,13 @@ export async function prepareHarborRun(
   env: NodeJS.ProcessEnv,
   signal?: AbortSignal,
   agentSeconds = trialTimeouts().agentSeconds,
+  { published = false }: { published?: boolean } = {},
 ): Promise<{ env: NodeJS.ProcessEnv; guard: HarborOutputGuard }> {
   const scratch = join(root, "tmp");
   await mkdir(scratch, { recursive: true });
   const child = { ...env, TMPDIR: scratch };
-  await assertHostSafeTask(taskDirectory, child, agentSeconds);
+  if (published) await assertHostSafePublishedTask(taskDirectory, child);
+  else await assertHostSafeTask(taskDirectory, child, agentSeconds);
   return { env: child, guard: guardHarborOutput([join(root, "jobs"), scratch], signal) };
 }
 
@@ -78,8 +82,39 @@ export async function assertHostSafeTask(
   harborEnv: NodeJS.ProcessEnv,
   agentSeconds: number,
 ): Promise<void> {
-  const path = join(taskDirectory, "task.toml");
-  const raw = await readFile(path);
+  const config = await readTaskConfig(taskDirectory);
+  rejectHostKeys(config, "", false);
+  config.agent = {
+    ...(isRecord(config.agent) ? config.agent : {}),
+    timeout_sec: agentSeconds,
+    network_mode: "allowlist",
+    allowed_hosts: [],
+  };
+  await writeFile(join(taskDirectory, "task.toml"), stringify(config));
+  await assertHostSafeCompose(taskDirectory, harborEnv);
+}
+
+/**
+ * Refuses a task from Harbor's registry that would pull host environment into the sandbox, and
+ * changes nothing in it. Its `env` tables may hold literal values, the judge variables a run fills
+ * from the benchmark's judge credential (host-variables.ts), and other variables with defaults, which apply
+ * since runs never set them. Harbor writes empty `mcp_servers` lists into every task, which reach
+ * nothing, and a published task may name its own prebuilt `docker_image`: no SelfBench pull grant
+ * is made for it (registry-pull.ts), so it is pulled as anyone would pull it.
+ */
+export async function assertHostSafePublishedTask(
+  taskDirectory: string,
+  harborEnv: NodeJS.ProcessEnv,
+): Promise<void> {
+  const config = await readTaskConfig(taskDirectory);
+  rejectHostKeys(config, "", true);
+  const refusal = hostVariableRefusal(config);
+  if (refusal) throw new UnsafeHarborTaskError(refusal);
+  await assertHostSafeCompose(taskDirectory, harborEnv);
+}
+
+export async function readTaskConfig(taskDirectory: string): Promise<Record<string, unknown>> {
+  const raw = await readFile(join(taskDirectory, "task.toml"));
   if (raw.byteLength > TASK_TOML_MAX_BYTES)
     throw new UnsafeHarborTaskError("task.toml is too large");
   let config: unknown;
@@ -89,15 +124,13 @@ export async function assertHostSafeTask(
     throw new UnsafeHarborTaskError("task.toml does not parse");
   }
   if (!isRecord(config)) throw new UnsafeHarborTaskError("task.toml is not a table");
-  rejectHostKeys(config, "");
-  config.agent = {
-    ...(isRecord(config.agent) ? config.agent : {}),
-    timeout_sec: agentSeconds,
-    network_mode: "allowlist",
-    allowed_hosts: [],
-  };
-  await writeFile(path, stringify(config));
+  return config;
+}
 
+async function assertHostSafeCompose(
+  taskDirectory: string,
+  harborEnv: NodeJS.ProcessEnv,
+): Promise<void> {
   for (const compose of await composeFiles(taskDirectory)) {
     if ((await stat(compose)).size > COMPOSE_MAX_BYTES)
       throw new UnsafeHarborTaskError("a compose file is too large");
@@ -111,9 +144,10 @@ export async function assertHostSafeTask(
   }
 }
 
-function rejectHostKeys(value: unknown, path: string): void {
+function rejectHostKeys(value: unknown, path: string, published: boolean): void {
   if (Array.isArray(value)) {
-    for (const [index, item] of value.entries()) rejectHostKeys(item, `${path}[${index}]`);
+    for (const [index, item] of value.entries())
+      rejectHostKeys(item, `${path}[${index}]`, published);
     return;
   }
   if (!isRecord(value)) return;
@@ -121,8 +155,12 @@ function rejectHostKeys(value: unknown, path: string): void {
     const at = path ? `${path}.${key}` : key;
     // Metadata is free-form and Harbor only records it.
     if (at === "metadata") continue;
-    if (HOST_KEYS.has(key)) throw new UnsafeHarborTaskError(`task.toml sets ${at}`);
-    rejectHostKeys(child, at);
+    const empty = Array.isArray(child)
+      ? child.length === 0
+      : isRecord(child) && Object.keys(child).length === 0;
+    const allowed = published && (key === "docker_image" || key === "env" || empty);
+    if (HOST_KEYS.has(key) && !allowed) throw new UnsafeHarborTaskError(`task.toml sets ${at}`);
+    rejectHostKeys(child, at, published);
   }
 }
 

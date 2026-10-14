@@ -49,7 +49,7 @@ export async function repriceEvaluation(
   apply: boolean,
   fetcher: typeof fetch = fetch,
 ): Promise<RepriceReport> {
-  const run = await getEvaluation(store, repoId, id);
+  const run = await getEvaluation(store, { repoId }, id);
   if (!run) throw new Error("Evaluation not found");
   if (run.status === "queued" || run.status === "running")
     throw new Error("Evaluation is still in progress");

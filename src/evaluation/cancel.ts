@@ -1,10 +1,11 @@
 import type { ArtifactStore } from "../artifacts/index.js";
 import type { ComparisonRecord } from "../db/comparisons.js";
+import type { EvaluationScope } from "./scope.js";
 import { getEvaluation, initialEvaluation, saveEvaluation, updateEvaluation } from "./store.js";
 import type { EvaluationRun } from "./types.js";
 
 /** Cancels the Temporal workflow that runs an evaluation; a finished or unknown one is ignored. */
-export type StopEvaluation = (repoId: number, id: string) => Promise<void>;
+export type StopEvaluation = (scope: EvaluationScope, id: string) => Promise<void>;
 
 /** Fails an unfinished run and its unfinished trials; returns false for a finished run. */
 function markCancelled(run: EvaluationRun, login: string): boolean {
@@ -31,13 +32,13 @@ function markCancelled(run: EvaluationRun, login: string): boolean {
  */
 export async function cancelEvaluation(
   store: ArtifactStore,
-  repoId: number,
+  scope: EvaluationScope,
   id: string,
   login: string,
   stop: StopEvaluation,
 ): Promise<void> {
-  const run = await updateEvaluation(store, repoId, id, (run) => markCancelled(run, login));
-  if (run.status !== "completed") await stop(repoId, id);
+  const run = await updateEvaluation(store, scope, id, (run) => markCancelled(run, login));
+  if (run.status !== "completed") await stop(scope, id);
 }
 
 /** Cancels every unfinished run of a comparison, including runs never submitted. */
@@ -50,11 +51,11 @@ export async function cancelComparison(
   for (const input of record.inputs) {
     // An unsubmitted run's first record is written already cancelled, so a resume racing this
     // never sees it queued. If a start wrote that record first, the update below cancels it.
-    if (!(await getEvaluation(store, record.repoId, input.id))) {
+    if (!(await getEvaluation(store, record.scope, input.id))) {
       const run = initialEvaluation(input, input.modelName);
       markCancelled(run, login);
       await saveEvaluation(store, run).catch(() => undefined);
     }
-    await cancelEvaluation(store, record.repoId, input.id, login, stop);
+    await cancelEvaluation(store, record.scope, input.id, login, stop);
   }
 }

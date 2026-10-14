@@ -18,9 +18,9 @@ export async function startEvaluation(
   store: ArtifactStore,
   input: EvaluationInput,
 ): Promise<number> {
-  if (!(await getEvaluation(store, input.repoId, input.id)))
+  if (!(await getEvaluation(store, input, input.id)))
     await saveEvaluation(store, initialEvaluation(input, input.modelName));
-  const run = await updateEvaluation(store, input.repoId, input.id, (run) => {
+  const run = await updateEvaluation(store, input, input.id, (run) => {
     if (
       !["queued", "running"].includes(run.status) ||
       run.trials.some((trial) => trial.status !== "queued")
@@ -38,7 +38,7 @@ export async function failTrial(
   input: EvaluationInput,
   index: number,
 ): Promise<void> {
-  await updateEvaluation(store, input.repoId, input.id, (run) => {
+  await updateEvaluation(store, input, input.id, (run) => {
     const trial = run.trials[index];
     if (!trial || (trial.status !== "queued" && trial.status !== "running")) return false;
     trial.status = "failed";
@@ -52,7 +52,7 @@ export async function finishEvaluation(
   store: ArtifactStore,
   input: EvaluationInput,
 ): Promise<void> {
-  await updateEvaluation(store, input.repoId, input.id, (run) => {
+  await updateEvaluation(store, input, input.id, (run) => {
     if (run.status !== "running") return false;
     for (const trial of run.trials) {
       if (trial.status === "queued" || trial.status === "running") {
@@ -71,8 +71,8 @@ export async function failEvaluation(
   input: EvaluationInput,
   error: string,
 ): Promise<void> {
-  if (!(await getEvaluation(store, input.repoId, input.id))) return;
-  await updateEvaluation(store, input.repoId, input.id, (run) => {
+  if (!(await getEvaluation(store, input, input.id))) return;
+  await updateEvaluation(store, input, input.id, (run) => {
     if (run.status === "completed" || run.status === "failed") return false;
     run.status = "failed";
     run.error = error;

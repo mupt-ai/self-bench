@@ -36,14 +36,14 @@ export function ResultsTable({
   credentials,
   accepted,
   baseUrl,
-  repo,
+  pages,
 }: {
   runs: readonly EvaluationRun[];
   credentials: readonly CredentialInfo[];
   /** The repository's accepted tasks, for the cumulative results' coverage, once loaded. */
   accepted?: readonly AcceptedTask[];
   baseUrl: string;
-  repo: string;
+  pages: string;
 }) {
   const [view, setView] = useResultsView(baseUrl);
   const [search, setSearch] = useSearchParams();
@@ -182,7 +182,7 @@ export function ResultsTable({
           trial={opened.trial}
           showRun
           baseUrl={baseUrl}
-          repo={repo}
+          pages={pages}
           onClose={() => showTrial(undefined)}
         />
       )}

@@ -74,7 +74,7 @@ test("timed-out trials recorded as failures are scored from their stored artifac
     };
     for (const [name, text] of Object.entries(files))
       await store.put(
-        `${evaluationPrefix(run.repoId, run.id)}artifacts/${index}/${name}`,
+        `${evaluationPrefix(run, run.id)}artifacts/${index}/${name}`,
         Buffer.from(text),
         "text/plain",
       );
@@ -89,12 +89,14 @@ test("timed-out trials recorded as failures are scored from their stored artifac
   Object.assign(run.trials[2] ?? {}, measured);
   await saveEvaluation(store, run);
 
-  const dry = await backfillAgentTimeouts(store, run.repoId, false);
+  const dry = await backfillAgentTimeouts(store, Number(run.repoId), false);
   expect(dry).toMatchObject({ scored: 2, eligible: 2, skipped: 1, applied: false });
-  expect((await getEvaluation(store, run.repoId, run.id))?.revision).toBe(run.revision);
+  expect((await getEvaluation(store, run, run.id))?.revision).toBe(run.revision);
 
-  expect(await backfillAgentTimeouts(store, run.repoId, true)).toMatchObject({ applied: true });
-  const saved = await getEvaluation(store, run.repoId, run.id);
+  expect(await backfillAgentTimeouts(store, Number(run.repoId), true)).toMatchObject({
+    applied: true,
+  });
+  const saved = await getEvaluation(store, run, run.id);
   const [scored, unscored, kept] = saved?.trials ?? [];
   expect(scored).toMatchObject({
     status: "completed",
@@ -109,7 +111,7 @@ test("timed-out trials recorded as failures are scored from their stored artifac
   expect(unscored?.status).toBe("failed");
   expect(saved?.status).toBe("failed");
   // Applied once, a second pass finds nothing left to score.
-  expect(await backfillAgentTimeouts(store, run.repoId, true)).toMatchObject({
+  expect(await backfillAgentTimeouts(store, Number(run.repoId), true)).toMatchObject({
     scored: 0,
     applied: false,
   });

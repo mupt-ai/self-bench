@@ -7,6 +7,10 @@ export interface EvaluationOptions {
 export function evaluationUrl(org: string, repo: string): string {
   return `/api/orgs/${encodeURIComponent(org)}/repos/${repo.split("/").map(encodeURIComponent).join("/")}/evaluations`;
 }
+/** A benchmark's evaluations: a Harbor registry dataset (`org/name`), run apart from any repository. */
+export function benchmarkUrl(org: string, name: string): string {
+  return `/api/orgs/${encodeURIComponent(org)}/benchmarks/${name.split("/").map(encodeURIComponent).join("/")}/evaluations`;
+}
 export function evaluationRequestId(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
   bytes[6] = (bytes[6] & 0x0f) | 0x40;

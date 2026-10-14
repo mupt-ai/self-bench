@@ -4,6 +4,7 @@ import { credentialSchema } from "../src/db/credentials.js";
 import { credentials } from "../src/db/schema.js";
 import { createVault } from "../src/db/vault.js";
 import { credentialExecution } from "../src/evaluation/execution.js";
+import { scopeOf } from "../src/evaluation/scope.js";
 import { evaluationInput } from "./support/evaluation-fixture.js";
 import { memoryVault } from "./support/evaluation-vault.js";
 import { testDatabase } from "./support/site-fixture.js";
@@ -69,7 +70,7 @@ test("billing access belongs to the reserved workspace credential, never the hos
   await vault.comparisons.insert({
     id: "comparison",
     orgId: 1,
-    repoId: input.repoId,
+    scope: scopeOf(input),
     createdAt: new Date().toISOString(),
     signature: "test",
     inputs: [input],

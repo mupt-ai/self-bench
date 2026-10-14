@@ -1,5 +1,4 @@
 import { EvaluationRequestError, evaluationRequest } from "./api";
-import { restoreRunDraft } from "./run-draft";
 
 export class UnsavedComparisonError extends Error {}
 
@@ -26,8 +25,9 @@ export function unlockMissingComparison(url: string, id: string) {
     const key = `selfbench-run:${url}`;
     const saved = sessionStorage.getItem(key);
     if (!saved) return;
-    const state = restoreRunDraft(saved, null);
-    if (state.draft.id === id)
+    // A repository's draft or a benchmark's: either keeps its request under `draft.id`.
+    const state = JSON.parse(saved) as { draft?: { id?: unknown } } | null;
+    if (state?.draft?.id === id)
       sessionStorage.setItem(key, JSON.stringify({ ...state, submitted: false }));
   } catch {}
 }

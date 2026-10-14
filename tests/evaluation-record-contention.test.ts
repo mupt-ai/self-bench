@@ -41,12 +41,12 @@ test("a hundred trials claiming one record at once all land", async () => {
   await saveEvaluation(store, initialEvaluation(input, "Model"));
   await Promise.all(
     input.tasks.map((_, index) =>
-      updateEvaluation(store, input.repoId, input.id, (run) => {
+      updateEvaluation(store, input, input.id, (run) => {
         const trial = run.trials[index];
         if (trial) trial.status = "running";
       }),
     ),
   );
-  const run = await getEvaluation(store, input.repoId, input.id);
+  const run = await getEvaluation(store, input, input.id);
   expect(run?.trials.filter((trial) => trial.status === "running")).toHaveLength(100);
 }, 60_000);

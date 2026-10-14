@@ -1,0 +1,35 @@
+---
+title: "Run a Benchmark"
+api: "POST https://app.selfbench.dev/api/orgs/{org}/benchmarks/{dataset-org}/{dataset}/evaluations/comparisons"
+description: "Run model and harness settings on a Harbor registry dataset."
+icon: "gauge"
+---
+
+<ParamField path="org" type="string" required>Workspace login.</ParamField>
+<ParamField path="dataset-org" type="string" required>The dataset's registry org, as in `terminal-bench`.</ParamField>
+<ParamField path="dataset" type="string" required>The dataset's name, as in `terminal-bench-2`.</ParamField>
+<ParamField header="Authorization" type="string" required>`Bearer` plus a `write` API key.</ParamField>
+<ParamField body="id" type="string" required>Client-generated UUID; reuse it when retrying.</ParamField>
+<ParamField body="models" type="array" required>Model catalog ID, credential ID, and harnesses (up to 12 model choices).</ParamField>
+<ParamField body="sandbox" type="string" required>Sandbox from the evaluation catalog.</ParamField>
+<ParamField body="sandboxCredentialId" type="string" required>Matching credential ID.</ParamField>
+<ParamField body="skipCompleted" type="boolean">Skip already completed trials.</ParamField>
+
+<RequestExample>
+```bash cURL
+# Add the dataset once (org/name, or org/name@ref to pin a version).
+curl -X POST https://app.selfbench.dev/api/orgs/mupt-ai/benchmarks \
+  -H "Authorization: Bearer $SELFBENCH_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"reference":"terminal-bench/terminal-bench-2"}'
+
+curl -X POST https://app.selfbench.dev/api/orgs/mupt-ai/benchmarks/terminal-bench/terminal-bench-2/evaluations/comparisons \
+  -H "Authorization: Bearer $SELFBENCH_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"id":"7e0acb2b-3b1e-4df6-8afb-1b0a1cf2d6a8",
+    "models":[{"catalogId":"<catalog-id>","credentialId":"<uuid>","harnesses":["codex"]}],
+    "sandbox":"e2b","sandboxCredentialId":"<uuid>"}'
+```
+</RequestExample>
+
+A benchmark is a dataset from Harbor's registry that the workspace added, run apart from any repository. Adding one (`POST …/benchmarks` with `reference`) downloads and safety-checks every task, and refuses a dataset with a task that fails the check or more than 500 tasks; `GET …/benchmarks` lists them and `DELETE …/benchmarks/{dataset-org}/{dataset}` removes one. Each comparison downloads and freezes the dataset again when it starts, so its trials run exactly what was checked. Returns `202` with comparison status. Fetch models and sandboxes from `GET …/evaluations/catalog`, runs from `GET …/evaluations`, and status from `GET …/evaluations/comparisons/{id}`. If `submissionError` is present, resume the same comparison at `POST …/comparisons/{id}/resume`.

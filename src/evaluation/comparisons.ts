@@ -1,29 +1,50 @@
-import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { ArtifactStore } from "../artifacts/index.js";
 import { modelIdPattern, thinkingLevels } from "../contracts/models.js";
+import type { FrozenTask } from "../db/benchmarks.js";
 import type { ComparisonRecord } from "../db/comparisons.js";
-import { runnable } from "../db/task-record.js";
+import type { CredentialInfo } from "../db/credentials.js";
 import type { TaskStore } from "../db/tasks.js";
 import type { Vault } from "../db/vault.js";
-import { type ManagedOffer, managedHarborEnvironment } from "../generation/billing/managed.js";
-import { type CatalogModel, evaluationCatalog, hostedSandboxes, runPricing } from "./catalog.js";
+import type { ManagedOffer } from "../generation/billing/managed.js";
+import { mergeJudgeNeeds } from "../harnesses/harbor/host-variables.js";
+import { hostedSandboxes } from "./catalog.js";
 import { comparisonProgress } from "./comparison-progress.js";
-import {
-  defaultThinking,
-  evaluationTaskKey,
-  harnessIds,
-  routeFor,
-  signInRefusal,
-  thinkingOptions,
-} from "./models.js";
-import { getEvaluation, listEvaluations } from "./store.js";
-import { splitCredentialLimits } from "./trial-input.js";
+import { type ComparisonOwner, saveComparison } from "./comparison-save.js";
+import { repositoryTasks } from "./frozen-tasks.js";
+import { judgeCredentialRefusal } from "./judge.js";
+import { harnessIds } from "./models.js";
+import { getEvaluation } from "./store.js";
 import type { EvaluationInput } from "./types.js";
 
+/** What every comparison selects besides its tasks: models, harnesses, and where they run. */
+const selectionFields = {
+  id: z.uuid(),
+  models: z
+    .array(
+      z
+        .object({
+          catalogId: z.string().max(200),
+          customModel: z.string().regex(modelIdPattern).optional(),
+          credentialId: z.union([z.uuid(), z.literal("managed-model")]),
+          thinking: z.enum(thinkingLevels).optional(),
+          harnesses: z.array(z.enum(harnessIds)).min(1).max(harnessIds.length),
+        })
+        .strict(),
+    )
+    .min(1)
+    .max(12),
+  sandbox: z.enum(["managed", ...hostedSandboxes]),
+  sandboxCredentialId: z.union([z.uuid(), z.literal("managed-sandbox")]),
+  skipCompleted: z.boolean().optional(),
+};
+const comparisonSelection = z.object(selectionFields).strict();
+export type ComparisonSelection = z.infer<typeof comparisonSelection>;
+
+/** A repository's comparison: its approved tasks. */
 export const comparisonSchema = z
   .object({
-    id: z.uuid(),
+    ...selectionFields,
     tasks: z
       .array(
         z
@@ -31,227 +52,96 @@ export const comparisonSchema = z
           .strict(),
       )
       .min(1),
-    models: z
-      .array(
-        z
-          .object({
-            catalogId: z.string().max(200),
-            customModel: z.string().regex(modelIdPattern).optional(),
-            credentialId: z.union([z.uuid(), z.literal("managed-model")]),
-            thinking: z.enum(thinkingLevels).optional(),
-            harnesses: z.array(z.enum(harnessIds)).min(1).max(harnessIds.length),
-          })
-          .strict(),
-      )
-      .min(1)
-      .max(12),
-    sandbox: z.enum(["managed", ...hostedSandboxes]),
-    sandboxCredentialId: z.union([z.uuid(), z.literal("managed-sandbox")]),
-    skipCompleted: z.boolean().optional(),
   })
   .strict();
 export type ComparisonDraft = z.infer<typeof comparisonSchema>;
-export interface ComparisonScope {
-  repoId: number;
-  agentMinutes: number;
-  orgId: number;
-  tenant: string;
-  login: string;
-}
+
+/**
+ * A benchmark's comparison: its dataset is the benchmark's, so it picks models, and the credential
+ * its tasks' LLM judge calls with when they have one.
+ */
+export const benchmarkComparisonSchema = z
+  .object({ ...selectionFields, judgeCredentialId: z.uuid().optional() })
+  .strict();
+export type BenchmarkComparisonDraft = z.infer<typeof benchmarkComparisonSchema>;
+
+export type { ComparisonOwner } from "./comparison-save.js";
+
 export async function createComparison(
-  { credentials, comparisons }: Pick<Vault, "credentials" | "comparisons">,
+  vault: Pick<Vault, "credentials" | "comparisons">,
   tasks: TaskStore,
   store: ArtifactStore,
   managed: ManagedOffer,
-  scope: ComparisonScope,
+  owner: ComparisonOwner & { scope: { repoId: number } },
   draft: ComparisonDraft,
   environment: NodeJS.ProcessEnv = process.env,
   fetcher: typeof fetch = fetch,
 ): Promise<ComparisonRecord> {
   const selection = comparisonSchema.parse(draft);
-  const signature = JSON.stringify(selection);
-  const owned = (record: ComparisonRecord) => {
-    if (
-      record.orgId !== scope.orgId ||
-      record.repoId !== scope.repoId ||
-      record.signature !== signature
-    )
-      throw new Error("Comparison ID belongs to a different selection");
-    return record;
-  };
-  const previous = await comparisons.find(selection.id);
-  if (previous) return owned(previous);
-  if (
-    new Set(selection.tasks.map((task) => evaluationTaskKey(task.runId, task.taskId))).size !==
-    selection.tasks.length
-  )
-    throw new Error("Duplicate task selection");
-  const bundles = await Promise.all(
-    selection.tasks.map((task) => tasks.find(scope.repoId, task.runId, task.taskId)),
+  return saveComparison(
+    vault,
+    store,
+    managed,
+    owner,
+    selection,
+    JSON.stringify(selection),
+    () => repositoryTasks(tasks, owner.scope.repoId, selection.tasks),
+    environment,
+    fetcher,
   );
-  if (bundles.some((task) => !task || !runnable(task)))
-    throw new Error("Every task must be human-approved in this repository");
-  const frozen = bundles.map((task) => {
-    if (!task?.bundleKey) throw new Error("Task bundle unavailable");
-    const { runId, taskId, bundleKey, images } = task;
-    return { runId, taskId, bundleKey, ...(images ? { images } : {}) };
-  });
-  const completed = selection.skipCompleted
-    ? completedConfigurationTasks(await listEvaluations(store, scope.repoId))
-    : new Set<string>();
-  if ((await comparisons.countForOrg(scope.orgId)) >= 500)
-    throw new Error("Comparison retention limit reached; contact an operator");
-  const saved = new Map(
-    (await credentials.list(scope.orgId)).map((credential) => [credential.id, credential]),
-  );
-  const managedSandbox = selection.sandbox === "managed";
-  if (managedSandbox && managedHarborEnvironment(environment) !== "modal")
-    throw new Error("Managed evaluation requires platform Modal credentials.");
-  const sandbox = managedSandbox
-    ? { id: "managed-sandbox", kind: "modal" }
-    : saved.get(selection.sandboxCredentialId);
-  if (
-    !sandbox ||
-    (managedSandbox
-      ? selection.sandboxCredentialId !== "managed-sandbox"
-      : sandbox.kind !== selection.sandbox)
-  )
-    throw new Error("Select your matching sandbox credential");
-  const seen = new Set<string>();
-  const createdAt = new Date().toISOString();
-  const catalogModels = evaluationCatalog();
-  const selections = selection.models.map(async (selected): Promise<EvaluationInput[]> => {
-    const model: CatalogModel | undefined =
-      selected.catalogId === "custom" && selected.customModel
-        ? {
-            id: "custom",
-            label: "Custom model",
-            source: "",
-            provider: "custom",
-            model: selected.customModel,
-            harnesses: ["pi"],
-          }
-        : catalogModels.find((entry) => entry.id === selected.catalogId);
-    if (!model || (selected.catalogId !== "custom" && selected.customModel))
-      throw new Error("Unknown model");
-    const managedModel = selected.credentialId === "managed-model";
-    const credential = managedModel
-      ? { id: "managed-model", kind: "openrouter" as const, auth: "api-key" as const }
-      : saved.get(selected.credentialId);
-    const route = credential ? routeFor(model, credential.kind) : undefined;
-    if (managedModel && !managed.models)
-      throw new Error("Managed models are not available on this deployment.");
-    if (!credential || !route) throw new Error("Select your matching provider credential");
-    const refusal = signInRefusal(credential.auth, selected.harnesses);
-    if (refusal) throw new Error(refusal);
-    if (
-      selected.harnesses.some((harness) => !route.harnesses.includes(harness)) ||
-      new Set(selected.harnesses).size !== selected.harnesses.length
-    )
-      throw new Error("Unsupported or repeated harness");
-    const levels = thinkingOptions(route, selected.harnesses);
-    const thinking = selected.thinking ?? defaultThinking(levels);
-    if (!levels.includes(thinking))
-      throw new Error("Unsupported thinking level for this model and harness");
-    const modelIdentity = selected.catalogId === "custom" ? route.model : model.id;
-    for (const harness of selected.harnesses) {
-      const pair = configurationIdentity(modelIdentity, thinking, harness);
-      if (seen.has(pair))
-        throw new Error("Select each model, harness, and thinking configuration once");
-      seen.add(pair);
-    }
-    const modelName = `${route.provider === "custom" ? "openai" : route.provider}/${route.model}`;
-    const groups = selection.skipCompleted
-      ? selected.harnesses.map((harness) => ({
-          harnesses: [harness],
-          tasks: frozen.filter(
-            (task) =>
-              !completed.has(
-                configurationTaskKey(modelIdentity, thinking, harness, task.runId, task.taskId),
-              ),
-          ),
-        }))
-      : [{ harnesses: selected.harnesses, tasks: frozen }];
-    const pricing = await runPricing(model, route, fetcher);
-    return groups
-      .filter((group) => group.tasks.length > 0)
-      .map(
-        (group): EvaluationInput => ({
-          id: randomUUID(),
-          model: model.id,
-          modelName,
-          thinking,
-          harnesses: group.harnesses,
-          sandbox: selection.sandbox === "managed" ? "modal" : selection.sandbox,
-          tasks: group.tasks,
-          agentMinutes: scope.agentMinutes,
-          repoId: scope.repoId,
-          tenant: scope.tenant,
-          startedBy: scope.login,
-          createdAt,
-          ...(pricing ? { pricing } : {}),
-          credentialOrgId: scope.orgId,
-          comparisonId: selection.id,
-          credentials: {
-            modelCredentialId: credential.id,
-            sandboxCredentialId: sandbox.id,
-            provider: route.provider,
-            auth: credential.auth,
-          },
-        }),
-      );
-  });
-  const inputs = (await Promise.all(selections)).flat();
-  if (inputs.length === 0)
-    throw new Error("Every selected configuration and task already has a completed result.");
-  splitCredentialLimits(inputs, (id) => saved.get(id)?.maxSandboxes);
-  return owned(
-    await comparisons.insert({
-      id: selection.id,
-      orgId: scope.orgId,
-      repoId: scope.repoId,
-      createdAt,
-      signature,
-      inputs,
-    }),
-  );
-}
-function configurationIdentity(model: string, thinking: string | undefined, harness: string) {
-  return JSON.stringify([model, thinking ?? "default", harness]);
 }
 
-function configurationTaskKey(
-  model: string,
-  thinking: string | undefined,
-  harness: string,
-  runId: string,
-  taskId: string,
-) {
-  return JSON.stringify([configurationIdentity(model, thinking, harness), runId, taskId]);
+/**
+ * Saves a benchmark's comparison against the tasks frozen when it was added, matching its
+ * Dataset tab, task files, trial count, and judge requirements even if the registry changes.
+ */
+export async function createBenchmarkComparison(
+  vault: Pick<Vault, "credentials" | "comparisons">,
+  store: ArtifactStore,
+  managed: ManagedOffer,
+  owner: ComparisonOwner & { scope: { benchmarkId: number } },
+  tasks: FrozenTask[],
+  draft: BenchmarkComparisonDraft,
+  environment: NodeJS.ProcessEnv = process.env,
+  fetcher: typeof fetch = fetch,
+): Promise<ComparisonRecord> {
+  const selection = benchmarkComparisonSchema.parse(draft);
+  return saveComparison(
+    vault,
+    store,
+    managed,
+    owner,
+    selection,
+    JSON.stringify(selection),
+    async () => tasks,
+    environment,
+    fetcher,
+    (tasks, saved) => judgeCredential(tasks, saved, selection.judgeCredentialId),
+  );
 }
 
-function completedConfigurationTasks(runs: Awaited<ReturnType<typeof listEvaluations>>) {
-  const completed = new Set<string>();
-  for (const run of runs) {
-    for (const trial of run.trials) {
-      if (trial.status === "completed")
-        completed.add(
-          configurationTaskKey(
-            run.model === "custom" ? run.modelName.replace(/^[^/]+\//, "") : run.model,
-            run.thinking,
-            trial.harness,
-            trial.runId,
-            trial.taskId,
-          ),
-        );
-    }
-  }
-  return completed;
+/**
+ * The credential a benchmark's LLM judge calls with: an API key whose provider gives the judge
+ * variables the tasks read (judgeCredentialRefusal). None when no task has a judge.
+ */
+function judgeCredential(
+  tasks: EvaluationInput["tasks"],
+  saved: ReadonlyMap<string, CredentialInfo>,
+  id: string | undefined,
+): string | undefined {
+  const needs = mergeJudgeNeeds(tasks.map((task) => task.judge));
+  if (needs.variables.length === 0) return undefined;
+  const credential = id ? saved.get(id) : undefined;
+  if (!credential)
+    throw new Error("These tasks grade with an LLM judge: select a judge credential");
+  const refusal = judgeCredentialRefusal(credential, needs);
+  if (refusal) throw new Error(refusal);
+  return credential.id;
 }
 
 export async function comparisonStatus(store: ArtifactStore, record: ComparisonRecord) {
   const runs = await Promise.all(
-    record.inputs.map((input) => getEvaluation(store, record.repoId, input.id)),
+    record.inputs.map((input) => getEvaluation(store, record.scope, input.id)),
   );
   return comparisonProgress(
     record,
@@ -264,12 +154,15 @@ export async function dispatchComparison(
   start: (input: EvaluationInput) => Promise<void>,
 ) {
   for (const input of record.inputs) {
-    const run = await getEvaluation(store, record.repoId, input.id);
+    const run = await getEvaluation(store, record.scope, input.id);
     if (!run || run.status === "queued") await start(input);
   }
 }
 
-/** A credential cannot be deleted while a comparison that uses it still has runs to start. */
+/**
+ * A credential cannot be deleted while a comparison that uses it (for its model, its sandbox, or
+ * its LLM judge) still has runs to start.
+ */
 export async function assertCredentialUnused(
   comparisons: Vault["comparisons"],
   store: ArtifactStore,
@@ -277,15 +170,25 @@ export async function assertCredentialUnused(
   id: string,
 ) {
   for (const comparison of await comparisons.listForOrg(orgId)) {
-    for (const input of comparison.inputs) {
-      if (
-        input.credentials?.modelCredentialId !== id &&
-        input.credentials?.sandboxCredentialId !== id
-      )
-        continue;
-      const run = await getEvaluation(store, input.repoId, input.id);
-      if (!run || run.status === "queued" || run.status === "running")
-        throw new Error("Credential is needed by an active or pending comparison");
-    }
+    const uses = comparison.inputs.filter(
+      ({ credentials }) =>
+        credentials?.modelCredentialId === id ||
+        credentials?.sandboxCredentialId === id ||
+        credentials?.judgeCredentialId === id,
+    );
+    if (await unfinished(store, { ...comparison, inputs: uses }))
+      throw new Error("Credential is needed by an active or pending comparison");
   }
+}
+
+/** Whether any of a comparison's runs has yet to start or finish (one never started counts). */
+export async function unfinished(
+  store: ArtifactStore,
+  comparison: Pick<ComparisonRecord, "scope" | "inputs">,
+): Promise<boolean> {
+  for (const input of comparison.inputs) {
+    const run = await getEvaluation(store, comparison.scope, input.id);
+    if (!run || run.status === "queued" || run.status === "running") return true;
+  }
+  return false;
 }

@@ -23,7 +23,7 @@ test("token usage comes from the whole transcript, though stored artifacts are c
     return { stdout: "", stderr: "", exitCode: 0 };
   };
   await runEvaluation(store, input, { env: {}, vault, command, pollMs: 5, progressMs: 0 });
-  const run = await getEvaluation(store, input.repoId, input.id);
+  const run = await getEvaluation(store, input, input.id);
   expect(run?.trials[0]).toMatchObject({
     modelVerified: true,
     tokenUsage: { input: 800, output: 100, cacheRead: 200, cacheWrite: 0 },
@@ -60,7 +60,7 @@ test("a Pi run that ends on a model error fails, though Harbor scored its unfini
     return { stdout: "", stderr: "", exitCode: 0 };
   };
   await runEvaluation(store, input, { env: {}, vault, command, pollMs: 5, progressMs: 0 });
-  const trial = (await getEvaluation(store, input.repoId, input.id))?.trials[0];
+  const trial = (await getEvaluation(store, input, input.id))?.trials[0];
   expect(trial?.status).toBe("failed");
   expect(trial?.error).toBe(
     "Pi stopped on a model error: 402: This request would exceed your available credits",
@@ -101,7 +101,7 @@ test("an agent stopped at its time limit completes on Harbor's scores, or fails 
       return { stdout: "", stderr: "", exitCode: 0 };
     };
     await runEvaluation(store, input, { env: {}, vault, command, pollMs: 5, progressMs: 0 });
-    return (await getEvaluation(store, input.repoId, input.id))?.trials[0];
+    return (await getEvaluation(store, input, input.id))?.trials[0];
   };
 
   expect(await trialFor({ reward: 1 })).toMatchObject({

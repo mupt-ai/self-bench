@@ -2,12 +2,15 @@ import { createHash } from "node:crypto";
 import type { ArtifactStore } from "../artifacts/index.js";
 import type { RunSummaryStore } from "../db/evaluation-summaries.js";
 import { reportError } from "../lib/telemetry/sentry.js";
+import { type EvaluationScope, scopeOf } from "./scope.js";
 import type { EvaluationInput, EvaluationRun } from "./types.js";
 
-export function evaluationPrefix(repoId: number, id = ""): string {
-  if (!Number.isSafeInteger(repoId) || repoId < 1 || (id && !/^[a-f0-9-]{36}$/.test(id)))
-    throw new Error("Invalid evaluation identity");
-  return `evaluations/repos/${repoId}/${id ? `${id}/` : ""}`;
+export function evaluationPrefix(scope: EvaluationScope, id = ""): string {
+  const { repoId, benchmarkId } = scopeOf(scope);
+  if (id && !/^[a-f0-9-]{36}$/.test(id)) throw new Error("Invalid evaluation identity");
+  const root =
+    repoId !== undefined ? `evaluations/repos/${repoId}` : `evaluations/benchmarks/${benchmarkId}`;
+  return `${root}/${id ? `${id}/` : ""}`;
 }
 export function initialEvaluation(input: EvaluationInput, modelLabel: string): EvaluationRun {
   const { tasks, ...metadata } = input;
@@ -105,7 +108,7 @@ async function writeSummary(
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const { id, revision } = run;
-    const saved = summaries.save(run.repoId, {
+    const saved = summaries.save(run, {
       id,
       revision,
       body: JSON.stringify(runSummary(run)),
@@ -147,7 +150,7 @@ export class RepeatSpendError extends Error {
  */
 export async function updateEvaluation(
   store: ArtifactStore,
-  repoId: number,
+  scope: EvaluationScope,
   id: string,
   change: (run: EvaluationRun) => unknown,
 ): Promise<EvaluationRun> {
@@ -155,7 +158,7 @@ export async function updateEvaluation(
   // jitter and keep trying for two minutes rather than a fixed number of attempts.
   const deadline = Date.now() + 120_000;
   for (let attempt = 1; ; attempt += 1) {
-    const run = await getEvaluation(store, repoId, id);
+    const run = await getEvaluation(store, scope, id);
     if (!run) throw new Error("Evaluation record is missing");
     if (change(run) === false) return run;
     try {
@@ -169,9 +172,9 @@ export async function updateEvaluation(
     );
   }
 }
-type Revision = Pick<EvaluationRun, "repoId" | "id" | "revision">;
+type Revision = EvaluationScope & Pick<EvaluationRun, "id" | "revision">;
 function snapshotKey(run: Revision): string {
-  return `${evaluationPrefix(run.repoId, run.id)}snapshots/${String(run.revision).padStart(10, "0")}.json`;
+  return `${evaluationPrefix(run, run.id)}snapshots/${String(run.revision).padStart(10, "0")}.json`;
 }
 /**
  * Whether a run has been saved since `run`'s revision. Revisions count up by one, so the next
@@ -182,10 +185,10 @@ export async function savedSince(store: ArtifactStore, run: Revision): Promise<b
 }
 export async function getEvaluation(
   store: ArtifactStore,
-  repoId: number,
+  scope: EvaluationScope,
   id: string,
 ): Promise<EvaluationRun | undefined> {
-  const entries = (await store.list(`${evaluationPrefix(repoId, id)}snapshots`)).filter((entry) =>
+  const entries = (await store.list(`${evaluationPrefix(scope, id)}snapshots`)).filter((entry) =>
     /\/snapshots\/\d{10}\.json$/.test(entry.key),
   );
   const latest = entries.sort((left, right) => right.key.localeCompare(left.key))[0];
@@ -194,9 +197,9 @@ export async function getEvaluation(
 }
 export async function listEvaluations(
   store: ArtifactStore,
-  repoId: number,
+  scope: EvaluationScope,
 ): Promise<EvaluationRun[]> {
-  const prefix = evaluationPrefix(repoId);
+  const prefix = evaluationPrefix(scope);
   const entries = (await store.list(prefix.slice(0, -1))).filter((entry) =>
     entry.key.startsWith(prefix),
   );

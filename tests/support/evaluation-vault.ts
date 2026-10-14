@@ -9,6 +9,7 @@ import {
 } from "../../src/db/credentials.js";
 import { type EncryptedRecordStore, RecordStoreError } from "../../src/db/encrypted-records.js";
 import type { Vault } from "../../src/db/vault.js";
+import { sameScope } from "../../src/evaluation/scope.js";
 
 export class MemoryRecords implements EncryptedRecordStore {
   private entries = new Map<string, { value: unknown; version: number }>();
@@ -100,8 +101,8 @@ export function memoryVault(records: EncryptedRecordStore = new MemoryRecords())
     async find(id) {
       return structuredClone(saved.get(id));
     },
-    async listForRepo(repoId) {
-      return [...saved.values()].filter((record) => record.repoId === repoId);
+    async listForScope(scope) {
+      return [...saved.values()].filter((record) => sameScope(record.scope, scope));
     },
     async listForOrg(orgId) {
       return [...saved.values()].filter((record) => record.orgId === orgId);

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { ArtifactStore } from "../artifacts/index.js";
+import { type EvaluationScope, scopeKey, scopeOf } from "./scope.js";
 import {
   evaluationPrefix,
   getEvaluation,
@@ -12,7 +13,7 @@ import {
 import type { EvaluationRun } from "./types.js";
 
 /**
- * A repository's runs as lists show them: each run's summary (runSummary), newest first.
+ * A repository's or benchmark's runs as lists show them: each run's summary (runSummary), newest first.
  *
  * A run's record is megabytes of transcripts, and a list needs none of them, so each save also
  * writes the summary to the database (saveSummary in store.ts) and a list reads those. The bucket stays the
@@ -43,14 +44,14 @@ const rebuilding = new Map<string, Promise<EvaluationRun | undefined>>();
 
 function rebuild(
   store: ArtifactStore,
-  repoId: number,
+  scope: EvaluationScope,
   id: string,
 ): Promise<EvaluationRun | undefined> {
-  const key = `${repoId}/${id}`;
+  const key = `${scopeKey(scope)}/${id}`;
   const pending = rebuilding.get(key);
   if (pending) return pending;
   const read = (async () => {
-    const run = await getEvaluation(store, repoId, id);
+    const run = await getEvaluation(store, scope, id);
     if (!run) return undefined;
     // Saved while the list is answered: the list need not wait for the database.
     void keepSummary(store, run);
@@ -66,28 +67,28 @@ function rebuild(
  */
 export async function listRuns(
   store: ArtifactStore,
-  repoId: number,
+  scope: EvaluationScope,
   have?: string,
 ): Promise<RunList> {
   const summaries = runSummariesOf(store);
   if (!summaries) {
     // No database here (a local run): every record is read, as before summaries.
-    const runs = (await listEvaluations(store, repoId)).map(runSummary);
+    const runs = (await listEvaluations(store, scope)).map(runSummary);
     const tag = tagOf(runs.map((run) => [run.id, run.revision]));
     return tag === have ? { tag } : { tag, runs };
   }
   const [folders, revisions] = await Promise.all([
-    store.folders(evaluationPrefix(repoId).slice(0, -1)),
-    summaries.revisions(repoId),
+    store.folders(evaluationPrefix(scope).slice(0, -1)),
+    summaries.revisions(scope),
   ]);
   const ids = folders.filter((id) => RUN_ID.test(id));
   // Each run's summary revision if it is current, else its rebuilt summary.
   const checked = await Promise.all(
     ids.map(async (id) => {
       const revision = revisions.get(id);
-      if (revision !== undefined && !(await savedSince(store, { repoId, id, revision })))
+      if (revision !== undefined && !(await savedSince(store, { ...scopeOf(scope), id, revision })))
         return { id, revision };
-      const run = await rebuild(store, repoId, id);
+      const run = await rebuild(store, scope, id);
       return run ? { id, revision: run.revision, run } : undefined;
     }),
   );
@@ -96,7 +97,7 @@ export async function listRuns(
     return { tag: have };
   const stored = new Map(
     current.some((entry) => !entry.run)
-      ? (await summaries.list(repoId)).map((summary) => [summary.id, summary])
+      ? (await summaries.list(scope)).map((summary) => [summary.id, summary])
       : [],
   );
   const runs = await Promise.all(
@@ -105,7 +106,7 @@ export async function listRuns(
       const summary = stored.get(id);
       // A summary can only have moved on since it was checked; one gone altogether (its
       // repository disconnected meanwhile) is read from the record.
-      return summary ? (JSON.parse(summary.body) as EvaluationRun) : rebuild(store, repoId, id);
+      return summary ? (JSON.parse(summary.body) as EvaluationRun) : rebuild(store, scope, id);
     }),
   );
   const listed = newestFirst(runs.filter((run) => run !== undefined));

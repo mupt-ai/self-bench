@@ -70,7 +70,7 @@ export async function releaseInputs(
 ): Promise<ReleaseInputs> {
   const [taskList, runs, credentialFacts] = await Promise.all([
     releaseTasks(db, scope.repoId),
-    listEvaluations(artifacts, scope.repoId),
+    listEvaluations(artifacts, { repoId: scope.repoId }),
     releaseCredentials(db, scope.orgId),
   ]);
   const head = headOf(rows);
@@ -121,13 +121,13 @@ export function releasedTrials(db: Database, artifacts: ArtifactStore): TrialSou
   return {
     async run(line, evaluationId): Promise<EvaluationRun | undefined> {
       const repoId = await repoIdOf(line);
-      return repoId ? getEvaluation(artifacts, repoId, evaluationId) : undefined;
+      return repoId ? getEvaluation(artifacts, { repoId }, evaluationId) : undefined;
     },
     async artifact(line, evaluationId, name) {
       const repoId = await repoIdOf(line);
       if (!repoId || name.split("/").includes("..")) return undefined;
       const bytes = await artifacts.getByKey(
-        `${evaluationPrefix(repoId, evaluationId)}artifacts/${name}`,
+        `${evaluationPrefix({ repoId }, evaluationId)}artifacts/${name}`,
       );
       return bytes ? Buffer.from(bytes).toString("utf8") : undefined;
     },

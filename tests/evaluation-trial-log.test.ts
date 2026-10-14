@@ -101,41 +101,45 @@ test("recompute verifies OpenRouter usage without inventing a price and writes o
   ] as const) {
     trial.artifacts.push(name);
     await store.put(
-      `${evaluationPrefix(run.repoId, run.id)}artifacts/${name}`,
+      `${evaluationPrefix(run, run.id)}artifacts/${name}`,
       Buffer.from(JSON.stringify(body)),
       "text/plain",
     );
   }
   await saveEvaluation(store, run);
 
-  const dry = await recomputeEvaluationCost(store, run.repoId, run.id, false);
+  const dry = await recomputeEvaluationCost(store, Number(run.repoId), run.id, false);
   expect(dry.applied).toBe(false);
   expect(dry.trials[0]?.after).toEqual({
     modelVerified: true,
     tokenUsage: usage,
   });
-  expect((await getEvaluation(store, run.repoId, run.id))?.trials[0]?.apiCostUsd).toBeUndefined();
+  expect((await getEvaluation(store, run, run.id))?.trials[0]?.apiCostUsd).toBeUndefined();
 
-  expect((await recomputeEvaluationCost(store, run.repoId, run.id, true)).applied).toBe(true);
-  const saved = await getEvaluation(store, run.repoId, run.id);
+  expect((await recomputeEvaluationCost(store, Number(run.repoId), run.id, true)).applied).toBe(
+    true,
+  );
+  const saved = await getEvaluation(store, run, run.id);
   expect(saved?.revision).toBe(2);
   expect(saved?.trials[0]).toMatchObject({
     modelVerified: true,
     status: "completed",
   });
-  expect((await recomputeEvaluationCost(store, run.repoId, run.id, true)).applied).toBe(false);
+  expect((await recomputeEvaluationCost(store, Number(run.repoId), run.id, true)).applied).toBe(
+    false,
+  );
   // The runner priced the whole transcript; a stored copy cut too far to count keeps that cost.
   await writeFile(
     join(
       directory,
-      evaluationPrefix(run.repoId, run.id),
+      evaluationPrefix(run, run.id),
       "artifacts/0/solver/task__1/agent/trajectory.json",
     ),
     JSON.stringify(trajectory).slice(0, 40),
   );
-  const cut = await recomputeEvaluationCost(store, run.repoId, run.id, true);
+  const cut = await recomputeEvaluationCost(store, Number(run.repoId), run.id, true);
   expect(cut.trials[0]?.changed).toBe(false);
-  expect((await getEvaluation(store, run.repoId, run.id))?.trials[0]?.apiCostUsd).toBeUndefined();
+  expect((await getEvaluation(store, run, run.id))?.trials[0]?.apiCostUsd).toBeUndefined();
 });
 
 test("recompute infers sign-in cache writes only once the credential's sign-in type is known", async () => {
@@ -195,21 +199,21 @@ test("recompute infers sign-in cache writes only once the credential's sign-in t
   ] as const) {
     trial.artifacts.push(name);
     await store.put(
-      `${evaluationPrefix(run.repoId, run.id)}artifacts/${name}`,
+      `${evaluationPrefix(run, run.id)}artifacts/${name}`,
       Buffer.from(JSON.stringify(body)),
       "text/plain",
     );
   }
   await saveEvaluation(store, run);
 
-  const unknown = await recomputeEvaluationCost(store, run.repoId, run.id, false);
+  const unknown = await recomputeEvaluationCost(store, Number(run.repoId), run.id, false);
   expect(unknown.auth).toBe("unknown");
   expect(unknown.trials[0]?.after).toMatchObject({ costSource: "harbor", apiCostUsd: 0.000205 });
 
   // The operator's --auth stands in when the saved credential cannot be looked up.
   const flagged = await recomputeEvaluationCost(
     store,
-    run.repoId,
+    Number(run.repoId),
     run.id,
     false,
     undefined,
@@ -218,10 +222,16 @@ test("recompute infers sign-in cache writes only once the credential's sign-in t
   expect(flagged.trials[0]?.after).toMatchObject({ cacheWritesInferred: true });
 
   const lookups: [number, string][] = [];
-  const signIn = await recomputeEvaluationCost(store, run.repoId, run.id, false, async (...key) => {
-    lookups.push(key);
-    return "codex-login";
-  });
+  const signIn = await recomputeEvaluationCost(
+    store,
+    Number(run.repoId),
+    run.id,
+    false,
+    async (...key) => {
+      lookups.push(key);
+      return "codex-login";
+    },
+  );
   expect(lookups).toEqual([[7, "model"]]);
   expect(signIn.auth).toBe("codex-login");
   expect(signIn.trials[0]?.after).toMatchObject({
@@ -234,10 +244,8 @@ test("recompute infers sign-in cache writes only once the credential's sign-in t
     12,
   );
   // Applied, then recomputed without the credential lookup: the inferred writes are kept.
-  await recomputeEvaluationCost(store, run.repoId, run.id, true, async () => "codex-login");
-  const again = await recomputeEvaluationCost(store, run.repoId, run.id, true);
+  await recomputeEvaluationCost(store, Number(run.repoId), run.id, true, async () => "codex-login");
+  const again = await recomputeEvaluationCost(store, Number(run.repoId), run.id, true);
   expect(again.applied).toBe(false);
-  expect((await getEvaluation(store, run.repoId, run.id))?.trials[0]?.cacheWritesInferred).toBe(
-    true,
-  );
+  expect((await getEvaluation(store, run, run.id))?.trials[0]?.cacheWritesInferred).toBe(true);
 });
