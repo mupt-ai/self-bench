@@ -43,8 +43,8 @@ No invoice or billing ledger is modified.
 New Pi evaluations of `openai/dari/routing` at `https://routing.dari.dev` consume
 Dari's OpenRouter-compatible `usage.cost` directly from each HTTP response. The Dari Pi
 adapter saves compact prices in `solver/dari-billing.jsonl`, independently of the transcript,
-including priced errors and retries. Missing or unknown response prices leave cost unavailable,
-not zero or a partial bill. These reference costs exclude sandbox and selector infrastructure
+including priced errors and retries. Missing or unknown response prices preserve unrelated known
+prices as an explicitly incomplete subtotal. With no known prices, cost remains unavailable. These reference costs exclude sandbox and selector infrastructure
 and are not cash charges for subscription-backed requests. Deploy Dari's response pricing
 before the SelfBench adapter.
 
@@ -53,5 +53,17 @@ before the SelfBench adapter.
 a dry run and appends a snapshot with `--apply`. Historical trials without that evidence remain
 unpriced; it does not query a separate billing ledger or estimate from transcripts.
 `recompute-cost` preserves router-priced trials.
+
+## Repair Cost Coverage
+
+`node dist/maintenance/repair-cost-coverage.js` audits saved evaluations and public releases.
+With `--apply`, it backs up changed records under `maintenance/cost-coverage/<timestamp>/` in the
+artifact store before appending evaluation snapshots or updating release accounting. It preserves
+complete prices, recovers Dari response subtotals and complete request-metric objects from the
+beginning of saved Codex trajectories, and labels these recovered amounts incomplete. Unrecoverable
+amounts remain unknown. Active runs are skipped; their workers must not race a maintenance write.
+Public task selection and scores stay unchanged, but incomplete settings leave the cost frontier.
+Deploy incomplete-cost display support first, inspect the dry-run report, and run during a quiet
+maintenance window. The program needs artifact settings and `SELFBENCH_DATABASE_URL`.
 
 The evaluation tools use the deployment's artifact-store settings and optionally `SELFBENCH_DATABASE_URL` to resolve historical credential sign-in types. The records migration requires `SELFBENCH_DATABASE_URL` and `SELFBENCH_EVAL_CREDENTIAL_KEY`; stop the API and worker and back up the database before applying it. See each program's header for its scope and safety constraints. Do not run these as part of a deployment or routine evaluation.

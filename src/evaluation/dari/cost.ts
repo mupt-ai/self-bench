@@ -1,5 +1,5 @@
 import type { EvaluationRun, EvaluationTrial } from "../types.js";
-import { DARI_BILLING, responseCost } from "./billing.js";
+import { DARI_BILLING, responseBill } from "./billing.js";
 
 export function isDariRun(run: EvaluationRun): boolean {
   return run.credentials?.provider === "custom" && run.modelName === "openai/dari/routing";
@@ -11,12 +11,19 @@ export async function dariTrialCost(
   trial: EvaluationTrial,
   _env: NodeJS.ProcessEnv,
   files: Map<string, string>,
-): Promise<Pick<EvaluationTrial, "apiCostUsd" | "costSource" | "modelVerified">> {
+): Promise<
+  Pick<EvaluationTrial, "apiCostUsd" | "costSource" | "modelVerified" | "costIncomplete">
+> {
   if (!isDariRun(run) || trial.harness !== "pi") return {};
   const bill = files.get(DARI_BILLING);
   if (bill === undefined) return {};
-  const cost = responseCost(bill);
+  const cost = responseBill(bill);
   return cost === undefined
     ? {}
-    : { modelVerified: true, apiCostUsd: cost, costSource: "router-reference-rates" };
+    : {
+        modelVerified: true,
+        apiCostUsd: cost.total,
+        costSource: "router-reference-rates",
+        ...(cost.incomplete ? { costIncomplete: true as const } : {}),
+      };
 }

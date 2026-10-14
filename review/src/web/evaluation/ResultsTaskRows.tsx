@@ -1,4 +1,5 @@
 import { Link, useNavigate, useParams } from "react-router";
+import { knownCostLabel } from "../../../../src/evaluation/cost-total";
 import { cn } from "../primitives/cn";
 import { dollars } from "./benchmark";
 import { NoValue, OutcomeCircle, SortIcon, StateDetails } from "./ResultsMarks";
@@ -288,7 +289,7 @@ export function TaskRow({
         ) : result.trial.apiCostUsd === undefined ? (
           <NoValue width={6} />
         ) : (
-          dollars(result.trial.apiCostUsd)
+          knownCostLabel(result.trial.apiCostUsd, result.trial.costIncomplete, dollars)
         )}
       </td>
     </tr>

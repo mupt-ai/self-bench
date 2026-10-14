@@ -1,4 +1,5 @@
 import { thinkingLevels } from "../../../../src/contracts/models";
+import { knownCostLabel } from "../../../../src/evaluation/cost-total";
 import { type SortDirection, sortRows, useTableSort } from "../../lib/table-sort";
 import type { PublicSetting } from "../contract";
 import {
@@ -91,7 +92,7 @@ export function ModelTable({
       cell: (row) => (
         <Bar
           value={row.costPerTaskUsd / maxCost}
-          label={dollars(row.costPerTaskUsd)}
+          label={knownCostLabel(row.costPerTaskUsd, row.costIncomplete, dollars, row.costedTasks)}
           color="var(--muted-fg)"
         />
       ),

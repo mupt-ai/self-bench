@@ -110,6 +110,7 @@ export default function TraceViewer({
           {trial.apiCostUsd !== undefined && (
             <span className="font-mono text-xs text-muted-foreground">
               {dollars(trial.apiCostUsd)}
+              {trial.costIncomplete ? " (Incomplete)" : ""}
             </span>
           )}
         </p>

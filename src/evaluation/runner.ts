@@ -196,6 +196,7 @@ async function runTrial(context: {
       if (!records) throw new Error("Harbor's transcripts were not read");
       Object.assign(trial, trialCost(run, trial.harness, records, parsed, context.modelAuth));
       Object.assign(trial, await billedTrialCost(run, trial, child, records, context.billingKey));
+      Object.assign(trial, await dariTrialCost(run, trial, child, records));
       const billing = records.get(OPENROUTER_BILLING);
       if (billing) {
         const name = `${index}/${OPENROUTER_BILLING}`;
@@ -219,7 +220,6 @@ async function runTrial(context: {
       if (failure) throw new Error(`Pi stopped on a model error: ${failure}`);
       if (Object.keys(trial.rewards).length === 0)
         throw new Error("Harbor returned no verifier scores");
-      Object.assign(trial, await dariTrialCost(run, trial, child, records));
     }
     // Trials share one record: live output waits ten seconds or a second per trial, if longer.
     const interval = options.progressMs ?? Math.max(10_000, run.trials.length * 1_000);
