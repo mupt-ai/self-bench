@@ -223,6 +223,11 @@ test("an org adds registry datasets as benchmarks and runs each apart from its r
     const boxesNow = (await (await fixture.request(fixture.benchmarks)).json()).benchmarks;
     expect(boxesNow[0].runs).toBe(1);
 
+    // A box with unfinished runs stays, so they can still be followed and cancelled.
+    const busy = await fixture.request(`${fixture.benchmarks}/terminal-bench/dataset`, {
+      method: "DELETE",
+    });
+    expect(busy.status).toBe(409);
     const cancelled = await fixture.request(`${base}/comparisons/${id}/cancel`, post({}));
     expect(cancelled.status).toBe(200);
     expect(fixture.stops).toEqual([`evaluation/benchmark-${input.benchmarkId}/${input.id}`]);

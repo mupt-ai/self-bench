@@ -3,6 +3,7 @@ import { z } from "zod";
 import { REGISTRY_REFERENCE } from "../../contracts/harbor-registry.js";
 import type { Benchmark } from "../../db/benchmarks.js";
 import type { User } from "../../db/users.js";
+import { unfinished } from "../../evaluation/comparisons.js";
 import { freezeRegistryTasks } from "../../evaluation/frozen-tasks.js";
 import { expandBundle } from "../../generation/runs/bundle.js";
 import { mergeJudgeNeeds } from "../../harnesses/harbor/host-variables.js";
@@ -119,8 +120,20 @@ export async function benchmarkRoutes(
       const judge = mergeJudgeNeeds((await store.tasks(benchmark.id)).map((task) => task.judge));
       sendJson(response, 200, { benchmark: { ...benchmark, judge } });
     } else if (request.method === "DELETE" && !item[4]) {
-      await store.remove(tenant.id, benchmark.name);
-      sendJson(response, 200, { ok: true });
+      // Its runs are reached only through the benchmark, so it stays until none are unfinished.
+      const scope = { benchmarkId: benchmark.id };
+      const records = options.vault ? await options.vault.comparisons.listForScope(scope) : [];
+      const active = await Promise.all(
+        records.map((record) => unfinished(options.artifacts, record)),
+      );
+      if (active.includes(true))
+        sendJson(response, 409, {
+          error: "Cancel this benchmark's unfinished comparisons before removing it",
+        });
+      else {
+        await store.remove(tenant.id, benchmark.name);
+        sendJson(response, 200, { ok: true });
+      }
     } else sendJson(response, 405, { error: "Method not allowed" });
     request.resume();
     return true;

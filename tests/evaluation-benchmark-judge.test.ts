@@ -71,6 +71,15 @@ test("a benchmark graded by an LLM judge runs with the judge credential the user
       modelCredentialId: openai,
       judgeCredentialId: anthropic,
     });
+    // The judge's credential can't be deleted while the comparison has runs to start.
+    const deletion = await fixture.request(
+      `/api/orgs/avyay/credentials/${anthropic}/delete`,
+      post({}),
+    );
+    expect(deletion.status).toBe(400);
+    expect((await deletion.json()).error).toBe(
+      "Credential is needed by an active or pending comparison",
+    );
     expect(input?.tasks[0]?.judge).toEqual({
       variables: ["ANTHROPIC_API_KEY"],
       required: ["ANTHROPIC_API_KEY"],

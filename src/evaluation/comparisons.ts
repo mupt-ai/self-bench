@@ -167,7 +167,10 @@ export async function dispatchComparison(
   }
 }
 
-/** A credential cannot be deleted while a comparison that uses it still has runs to start. */
+/**
+ * A credential cannot be deleted while a comparison that uses it (for its model, its sandbox, or
+ * its LLM judge) still has runs to start.
+ */
 export async function assertCredentialUnused(
   comparisons: Vault["comparisons"],
   store: ArtifactStore,
@@ -175,15 +178,25 @@ export async function assertCredentialUnused(
   id: string,
 ) {
   for (const comparison of await comparisons.listForOrg(orgId)) {
-    for (const input of comparison.inputs) {
-      if (
-        input.credentials?.modelCredentialId !== id &&
-        input.credentials?.sandboxCredentialId !== id
-      )
-        continue;
-      const run = await getEvaluation(store, comparison.scope, input.id);
-      if (!run || run.status === "queued" || run.status === "running")
-        throw new Error("Credential is needed by an active or pending comparison");
-    }
+    const uses = comparison.inputs.filter(
+      ({ credentials }) =>
+        credentials?.modelCredentialId === id ||
+        credentials?.sandboxCredentialId === id ||
+        credentials?.judgeCredentialId === id,
+    );
+    if (await unfinished(store, { ...comparison, inputs: uses }))
+      throw new Error("Credential is needed by an active or pending comparison");
   }
+}
+
+/** Whether any of a comparison's runs has yet to start or finish (one never started counts). */
+export async function unfinished(
+  store: ArtifactStore,
+  comparison: Pick<ComparisonRecord, "scope" | "inputs">,
+): Promise<boolean> {
+  for (const input of comparison.inputs) {
+    const run = await getEvaluation(store, comparison.scope, input.id);
+    if (!run || run.status === "queued" || run.status === "running") return true;
+  }
+  return false;
 }
