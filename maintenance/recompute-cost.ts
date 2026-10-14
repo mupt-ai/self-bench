@@ -229,6 +229,13 @@ export async function recomputeEvaluationCost(
     }
     const parsed = record(JSON.parse(result));
     const after = trialCost(run, trial.harness, files, parsed, auth);
+    // Prefix recovery is a known lower bound, not a complete aggregate-token estimate.
+    // Replace it only when the saved evidence proves a complete price at least as large.
+    if (before.costIncomplete && before.apiCostUsd !== undefined &&
+        (after.apiCostUsd === undefined || after.apiCostUsd < before.apiCostUsd)) {
+      report.trials.push({ index, before, changed: false });
+      continue;
+    }
     // The runner reads transcripts whole; stored ones can be cut too far to count again.
     if (before.tokenUsage && !after.tokenUsage) {
       if (run.credentials?.provider === "openrouter") {
