@@ -12,6 +12,7 @@ await mkdir(outputDirectory, { recursive: true });
 await mkdir(join(outputDirectory, "harnesses/harbor/runtime"), { recursive: true });
 for (const asset of [
   "harbor_gateway.py",
+  "harbor_dari.py",
   "harbor_muse.py",
   "harbor_smoke.py",
   "selfbench_e2b.py",
@@ -24,6 +25,10 @@ for (const asset of [
     join(outputDirectory, "harnesses/harbor/runtime", asset),
   );
 }
+await copyFile(
+  join(root, "src/evaluation/dari/capture.cjs"),
+  join(outputDirectory, "harnesses/harbor/runtime/dari_capture.cjs"),
+);
 await Promise.all([
   ...extensions.map(async (extension) => {
     // pi loads each extension file standalone, so shared modules are bundled in while pi's own
