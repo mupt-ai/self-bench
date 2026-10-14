@@ -45,6 +45,9 @@ async def check():
     command, _ = await gateway.exec_as_agent(None, "codex exec --model claude-sonnet-5 --json")
     assert "--model anthropic/claude-sonnet-5 " in command
     assert command.startswith('export NVM_DIR="$HOME/.nvm"; ')
+    gateway.model_name = "openai/dari/routing"
+    command, _ = await gateway.exec_as_agent(None, "codex exec --model routing --json")
+    assert "--model dari/routing " in command
     # Vercel AI Gateway takes Codex's WebSocket upgrade and then fails the turn; gateways get HTTPS.
     config = gateway._build_effective_config("https://gateway.example/v1")
     assert "openai_base_url" not in config
@@ -56,6 +59,17 @@ asyncio.run(check())
     fileURLToPath(new URL("../src/harnesses/harbor/runtime/harbor_gateway.py", import.meta.url)),
   ]);
   expect(result.exitCode).toBe(0);
+});
+
+test("custom Codex endpoints preserve namespaced models through the HTTPS adapter", () => {
+  const model = gatewayModel("custom", "codex", "openai/dari/routing");
+  expect(model).toBe("openai/dari/routing");
+  expect(solverAgent("codex", "custom", model)).toBe("harbor_gateway:GatewayCodex");
+  expect(
+    solverArguments("task", "jobs", "codex", model, "modal", undefined, [], undefined, "custom"),
+  ).toContain("harbor_gateway:GatewayCodex");
+  expect(solverAgent("codex", "openai")).toBe("harbor_gateway:SelfBenchCodex");
+  expect(solverAgent("pi", "custom", model)).toBe("harbor_dari:DariPi");
 });
 
 test("Claude Code installs into an agent-owned cache without Node on non-Alpine images", async () => {

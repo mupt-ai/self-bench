@@ -193,9 +193,8 @@ export function solverAgent(harness: Harness, provider?: string, model?: string)
     return isGateway(provider) ? gateways[provider].harborPi : harness;
   }
   if (harness !== "codex") return harness;
-  // Every gateway route, including a typed model id without a vendor, and every compatible
-  // endpoint needs GatewayCodex's HTTPS-only provider.
-  return isGateway(provider) || compatibleEndpoint(provider, harness)
+  // Gateways and custom/compatible endpoints need HTTPS and must preserve the full model ID.
+  return provider === "custom" || isGateway(provider) || compatibleEndpoint(provider, harness)
     ? "harbor_gateway:GatewayCodex"
     : "harbor_gateway:SelfBenchCodex";
 }
