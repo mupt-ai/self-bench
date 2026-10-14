@@ -33,7 +33,7 @@ test("recompute preserves a recovered prefix subtotal with no complete transcrip
   );
   await saveEvaluation(store, run);
   expect((await recomputeEvaluationCost(store, run.repoId, run.id, true)).applied).toBe(false);
-  expect((await getEvaluation(store, run, run.id))?.trials[0]).toMatchObject({
+  expect((await getEvaluation(store, { repoId: run.repoId }, run.id))?.trials[0]).toMatchObject({
     apiCostUsd: 0.2,
     costIncomplete: true,
   });

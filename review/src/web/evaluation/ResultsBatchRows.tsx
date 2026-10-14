@@ -1,9 +1,8 @@
 import { ExternalLink } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
-import { knownCostLabel } from "../../../../src/evaluation/cost-total";
 import { cn } from "../primitives/cn";
-import { dollars } from "./benchmark";
+import { CostValue } from "./CostValue";
 import { OutcomeFilter } from "./ResultsFilters";
 import { NoValue, ResultsStatus } from "./ResultsMarks";
 import { DoneCell, sortedEntries, TaskHeadings, TaskRow, taskEntries } from "./ResultsTaskRows";
@@ -134,7 +133,7 @@ export function ResultGroupRows({
           {totals.costPerTask === undefined ? (
             <NoValue width={6} />
           ) : (
-            knownCostLabel(totals.costPerTask, totals.costIncomplete, dollars)
+            <CostValue value={totals.costPerTask} incomplete={totals.costIncomplete} />
           )}
         </td>
       </tr>

@@ -1,7 +1,6 @@
 import { Link, useNavigate, useParams } from "react-router";
-import { knownCostLabel } from "../../../../src/evaluation/cost-total";
 import { cn } from "../primitives/cn";
-import { dollars } from "./benchmark";
+import { CostValue } from "./CostValue";
 import { NoValue, OutcomeCircle, SortIcon, StateDetails } from "./ResultsMarks";
 import { BATCH_CHEVRON, TASK_INDENT } from "./ResultsTree";
 import type { MissingTask } from "./results-coverage";
@@ -289,7 +288,7 @@ export function TaskRow({
         ) : result.trial.apiCostUsd === undefined ? (
           <NoValue width={6} />
         ) : (
-          knownCostLabel(result.trial.apiCostUsd, result.trial.costIncomplete, dollars)
+          <CostValue value={result.trial.apiCostUsd} incomplete={result.trial.costIncomplete} />
         )}
       </td>
     </tr>

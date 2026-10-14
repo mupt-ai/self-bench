@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { findModel } from "../../../../src/contracts/models";
-import { knownCostLabel } from "../../../../src/evaluation/cost-total";
 import { harnessLabels } from "../../../../src/evaluation/models";
 import { Dialog, DialogHeader } from "../Dialog";
 import { ListSkeleton } from "../LoadingSkeleton";
 import { buttonStyles, Notice } from "../ui";
 import { type EvaluationRun, type EvaluationTrial, evaluationRequest } from "./api";
-import { dollars } from "./benchmark";
+import { CostValue } from "./CostValue";
 import { OutcomeCircle } from "./ResultsMarks";
 import { outcomeOf } from "./results-model";
 import { routeLabel, taskParts } from "./results-presentation";
@@ -125,7 +124,7 @@ export function TrialDialog({
         )}
         {trial.apiCostUsd !== undefined && (
           <span className="font-mono text-xs text-muted-foreground">
-            {knownCostLabel(trial.apiCostUsd, trial.costIncomplete, dollars)}
+            <CostValue value={trial.apiCostUsd} incomplete={trial.costIncomplete} />
           </span>
         )}
         <span className="ml-auto flex flex-wrap gap-2">
