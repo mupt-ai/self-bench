@@ -162,12 +162,12 @@ export function trustedMutation(
 }
 
 /**
- * Repository paths belong to the SPA even when names or IDs contain dots.
+ * Repository and benchmark paths belong to the SPA even when names or IDs contain dots.
  * API/auth routes, the task image registry (`/v2`), and static assets keep their own handlers.
  */
 export function isSitePage(pathname: string): boolean {
   if (/^\/(v1|v2|api|auth|assets)(\/|$)/.test(pathname)) return false;
-  if (/^\/repos\/[^/]+\/[^/]+(?:\/|$)/.test(pathname)) return true;
+  if (/^\/(repos|benchmarks)\/[^/]+\/[^/]+(?:\/|$)/.test(pathname)) return true;
   const last = pathname.split("/").pop() ?? "";
   return !last.includes(".");
 }

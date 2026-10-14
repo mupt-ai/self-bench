@@ -125,7 +125,7 @@ export function DemoRunPage() {
           />
         </fieldset>
         <RunExecution
-          repo="demo/sample-repository"
+          pages="/repos/demo/sample-repository"
           draft={draft}
           credentials={credentials}
           sandboxes={sandboxes}

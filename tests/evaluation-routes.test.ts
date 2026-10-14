@@ -37,7 +37,7 @@ test("run and artifact lookup remain repository-scoped and reject arbitrary keys
   const run = initialEvaluation(input, input.modelName);
   run.trials[0]?.artifacts.push("0/solver/task/result.json");
   await server.artifacts.put(
-    `${evaluationPrefix(server.repo.id, input.id)}artifacts/0/solver/task/result.json`,
+    `${evaluationPrefix({ repoId: server.repo.id }, input.id)}artifacts/0/solver/task/result.json`,
     Buffer.from('{"reward":1}'),
     "text/plain",
   );

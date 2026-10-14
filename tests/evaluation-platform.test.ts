@@ -156,7 +156,7 @@ test("durable comparison, scoped credentials, frozen tasks, partial dispatch and
     const saved = await fixture.request(`${fixture.base}/comparisons`, post(draft));
     expect(saved.status).toBe(202);
     expect((await saved.json()).submissionError).toBeDefined();
-    const comparisons = await records.comparisons.listForRepo(fixture.repo.id);
+    const comparisons = await records.comparisons.listForScope({ repoId: fixture.repo.id });
     expect(comparisons).toHaveLength(1);
     const comparison = comparisons[0];
     if (!comparison) throw new Error("Missing comparison");

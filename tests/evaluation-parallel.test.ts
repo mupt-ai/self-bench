@@ -82,7 +82,7 @@ test("trials running at once each keep their own progress and result", async () 
     [0, 1, 2, 3].map((index) => executeTrial(store, trialInput(input, index), index, options)),
   );
   await finishEvaluation(store, input);
-  const run = await getEvaluation(store, input.repoId, input.id);
+  const run = await getEvaluation(store, input, input.id);
   expect(run?.status).toBe("completed");
   expect(run?.trials.map((trial) => trial.status)).toEqual(Array(4).fill("completed"));
   expect(new Set(run?.trials.map((trial) => trial.rewards.reward))).toEqual(new Set([0, 1, 2, 3]));
@@ -102,7 +102,7 @@ test("a trial never runs Harbor twice, and a trial failed elsewhere stays failed
     "refusing to repeat model spend",
   );
   expect(calls).toHaveLength(1);
-  const trial = (await getEvaluation(store, input.repoId, input.id))?.trials[0];
+  const trial = (await getEvaluation(store, input, input.id))?.trials[0];
   expect(trial?.status).toBe("failed");
   expect(trial?.error).toContain("timed out");
   await expect(startEvaluation(store, input)).rejects.toThrow("refusing to repeat model spend");
@@ -126,11 +126,11 @@ test("a trial whose setup failed before Harbor ran is retried, and its last atte
   await expect(executeTrial(store, trialInput(input, 0), 0, options)).rejects.toThrow(
     "exceeded 60000ms",
   );
-  expect((await getEvaluation(store, input.repoId, input.id))?.trials[0]?.status).toBe("queued");
+  expect((await getEvaluation(store, input, input.id))?.trials[0]?.status).toBe("queued");
   await executeTrial(store, trialInput(input, 0), 0, options);
   timeouts = 1;
   await executeTrial(store, trialInput(input, 1), 1, { ...options, retry: false });
-  const trials = (await getEvaluation(store, input.repoId, input.id))?.trials;
+  const trials = (await getEvaluation(store, input, input.id))?.trials;
   expect(trials?.slice(0, 2).map((trial) => trial.status)).toEqual(["completed", "failed"]);
   expect(trials?.[1]?.error).toBe("harbor --version exceeded 60000ms");
   expect(calls).toHaveLength(1);
@@ -157,7 +157,7 @@ test("a trial whose worker was lost before its solver started runs on the next a
   stalled.resolve();
   await expect(lost).rejects.toThrow("refusing to repeat model spend");
   expect(calls).toHaveLength(1);
-  const trial = (await getEvaluation(store, input.repoId, input.id))?.trials[0];
+  const trial = (await getEvaluation(store, input, input.id))?.trials[0];
   expect(trial?.status).toBe("completed");
   expect(trial?.solverStartedAt).toBeString();
 });
@@ -198,12 +198,12 @@ test("a stopping worker hands a trial in setup to the next attempt, but runs its
   await expect(executeTrial(store, input, 0, options)).rejects.toThrow(
     "Worker stopped before the solver started",
   );
-  const trial = (await getEvaluation(store, input.repoId, input.id))?.trials[0];
+  const trial = (await getEvaluation(store, input, input.id))?.trials[0];
   expect(trial?.status).toBe("queued");
   expect(trial?.claim).toBeUndefined();
   expect(calls).toHaveLength(0);
   await executeTrial(store, input, 0, { ...options, retry: false });
-  expect((await getEvaluation(store, input.repoId, input.id))?.trials[0]?.status).toBe("completed");
+  expect((await getEvaluation(store, input, input.id))?.trials[0]?.status).toBe("completed");
 });
 
 test("a worker that stops once a solver has started leaves that solver running", async () => {
@@ -226,7 +226,7 @@ test("a worker that stops once a solver has started leaves that solver running",
   });
   expect(aborted).toBe(false);
   expect(calls).toHaveLength(1);
-  expect((await getEvaluation(store, input.repoId, input.id))?.trials[0]?.status).toBe("completed");
+  expect((await getEvaluation(store, input, input.id))?.trials[0]?.status).toBe("completed");
 });
 
 function workflowActivities(runSolverTrial: (index: number) => Promise<void>) {

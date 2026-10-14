@@ -3,11 +3,11 @@ import {
   bigint,
   bigserial,
   boolean,
+  check,
   index,
   integer,
   jsonb,
   pgTable,
-  primaryKey,
   text,
   timestamp,
   unique,
@@ -53,12 +53,18 @@ export const comparisons = pgTable(
   {
     id: uuid("id").primaryKey(),
     orgId: bigint("org_id", { mode: "number" }).notNull(),
-    repoId: bigint("repo_id", { mode: "number" }).notNull(),
+    /** The repository whose tasks it runs, or else the benchmark (benchmarks table). */
+    repoId: bigint("repo_id", { mode: "number" }),
+    benchmarkId: bigint("benchmark_id", { mode: "number" }),
     signature: text("signature").notNull(),
     inputs: jsonb("inputs").notNull(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
-  (table) => [index("comparisons_repo").on(table.repoId)],
+  (table) => [
+    index("comparisons_repo").on(table.repoId),
+    index("comparisons_benchmark").on(table.benchmarkId),
+    check("comparisons_scope", sql`(${table.repoId} is null) <> (${table.benchmarkId} is null)`),
+  ],
 );
 
 /** GitHub accounts that have signed in. The token is sealed; a database read alone is useless. */
@@ -268,22 +274,4 @@ export const releases = pgTable(
 );
 
 export * from "./billing-schema.js";
-
-/**
- * Each evaluation's record without its trials' logs, transcripts and artifact lists: what lists
- * of runs show. A copy of the snapshot at `revision`, which stays in the bucket and stays the
- * truth; reads rebuild a copy that is missing or behind.
- */
-export const evaluationSummaries = pgTable(
-  "evaluation_summaries",
-  {
-    repoId: bigint("repo_id", { mode: "number" })
-      .notNull()
-      .references(() => repos.id, { onDelete: "cascade" }),
-    id: uuid("id").notNull(),
-    revision: integer("revision").notNull(),
-    /** The summary as JSON text, kept as written: jsonb would reorder keys and refuse NULs. */
-    body: text("body").notNull(),
-  },
-  (table) => [primaryKey({ columns: [table.repoId, table.id] })],
-);
+export * from "./evaluation-schema.js";

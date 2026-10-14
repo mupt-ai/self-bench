@@ -25,7 +25,7 @@ const REFUSED = ["RepeatSpendError"];
 // RepeatSpendError. The last attempt records its own setup failure on the trial.
 const trial = (input: EvaluationInput) =>
   proxyActivities<EvaluationActivities>({
-    startToCloseTimeout: trialTimeouts(input.agentMinutes).activityMs,
+    startToCloseTimeout: trialTimeouts(input.agentMinutes, input.taskMinutes).activityMs,
     heartbeatTimeout: "2 minutes",
     cancellationType: ActivityCancellationType.WAIT_CANCELLATION_COMPLETED,
     retry: { maximumAttempts: 3, nonRetryableErrorTypes: REFUSED },

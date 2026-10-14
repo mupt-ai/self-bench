@@ -29,8 +29,10 @@ function renderSidebar(
 test("sidebar exposes labeled navigation and credentials", () => {
   const html = renderSidebar("/");
   const links = html.match(/<a[^>]*data-slot="sidebar-menu-button"[^>]*>/g) ?? [];
-  expect(links).toHaveLength(4);
+  expect(links).toHaveLength(5);
   expect(html).toContain('aria-label="Organization Navigation"');
+  expect(html).toContain('aria-label="Benchmarks"');
+  expect(html).toContain(">Benchmarks</span>");
   expect(html).toContain('aria-label="Credentials"');
   expect(html).toContain("Credentials");
   expect(html).toContain('aria-label="API Keys"');
@@ -43,7 +45,7 @@ test("sidebar exposes labeled navigation and credentials", () => {
 
 test("sidebar leaves out Billing without the managed offering", () => {
   const html = renderSidebar("/", "org", false);
-  expect(html.match(/<a[^>]*data-slot="sidebar-menu-button"[^>]*>/g) ?? []).toHaveLength(3);
+  expect(html.match(/<a[^>]*data-slot="sidebar-menu-button"[^>]*>/g) ?? []).toHaveLength(4);
   expect(html).not.toContain("Billing");
 });
 

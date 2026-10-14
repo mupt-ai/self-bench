@@ -1,4 +1,5 @@
 import { count, desc, eq } from "drizzle-orm";
+import { type EvaluationScope, scopeOf } from "../evaluation/scope.js";
 import type { EvaluationInput } from "../evaluation/types.js";
 import type { Database } from "./client.js";
 import { comparisons } from "./schema.js";
@@ -7,7 +8,8 @@ import { comparisons } from "./schema.js";
 export interface ComparisonRecord {
   id: string;
   orgId: number;
-  repoId: number;
+  /** The repository or benchmark whose evaluations it runs. */
+  scope: EvaluationScope;
   createdAt: string;
   signature: string;
   inputs: EvaluationInput[];
@@ -17,7 +19,10 @@ export function createComparisonStore(db: Database) {
   const record = (row: typeof comparisons.$inferSelect): ComparisonRecord => ({
     id: row.id,
     orgId: row.orgId,
-    repoId: row.repoId,
+    scope: scopeOf({
+      ...(row.repoId === null ? {} : { repoId: row.repoId }),
+      ...(row.benchmarkId === null ? {} : { benchmarkId: row.benchmarkId }),
+    }),
     createdAt: row.createdAt.toISOString(),
     signature: row.signature,
     inputs: row.inputs as EvaluationInput[],
@@ -28,11 +33,16 @@ export function createComparisonStore(db: Database) {
   };
   return {
     find,
-    async listForRepo(repoId: number): Promise<ComparisonRecord[]> {
+    async listForScope(scope: EvaluationScope): Promise<ComparisonRecord[]> {
+      const { repoId, benchmarkId } = scopeOf(scope);
       const rows = await db
         .select()
         .from(comparisons)
-        .where(eq(comparisons.repoId, repoId))
+        .where(
+          repoId !== undefined
+            ? eq(comparisons.repoId, repoId)
+            : eq(comparisons.benchmarkId, benchmarkId ?? 0),
+        )
         .orderBy(desc(comparisons.createdAt));
       return rows.map(record);
     },
@@ -48,9 +58,11 @@ export function createComparisonStore(db: Database) {
     },
     /** Inserts once; a concurrent insert of the same ID returns the stored record. */
     async insert(value: ComparisonRecord): Promise<ComparisonRecord> {
+      const { scope, ...fields } = value;
+      const { repoId = null, benchmarkId = null } = scopeOf(scope);
       const [row] = await db
         .insert(comparisons)
-        .values({ ...value, createdAt: new Date(value.createdAt) })
+        .values({ ...fields, repoId, benchmarkId, createdAt: new Date(value.createdAt) })
         .onConflictDoNothing()
         .returning();
       if (row) return record(row);

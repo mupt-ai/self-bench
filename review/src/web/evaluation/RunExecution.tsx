@@ -3,12 +3,18 @@ import type { ReactNode } from "react";
 import { Link } from "react-router";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { HostedSandbox } from "../../../../src/evaluation/catalog";
-import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
+import type { ComparisonSelection } from "../../../../src/evaluation/comparisons";
 import { cn } from "../primitives/cn";
 import { InfoTooltip } from "../primitives/tooltip";
 import type { Coverage } from "../setup/readiness";
 import { SetupCallout } from "../setup/SetupCallout";
 import { Button, buttonStyles, fieldStyles, Notice, Select } from "../ui";
+
+/**
+ * What the Run pages edit: a repository's comparison picks accepted `tasks`; a benchmark's runs
+ * its dataset, so it has none to pick.
+ */
+export type RunDraft = ComparisonSelection & { tasks?: { runId: string; taskId: string }[] };
 
 /** Why the comparison can't run yet, for the notice above the task picker. Nothing while
  * the accepted tasks are still loading or once the request is submitted. */
@@ -19,14 +25,14 @@ export function runBlocker({
   tasksReady,
   pairs,
 }: {
-  draft: ComparisonDraft;
+  draft: RunDraft;
   ready: boolean;
   submitted: boolean;
   tasksReady: boolean;
   pairs: number;
 }): string | undefined {
   if (ready || submitted || !tasksReady) return undefined;
-  if (!draft.tasks.length) return "Select at least one accepted task to continue.";
+  if (draft.tasks && !draft.tasks.length) return "Select at least one accepted task to continue.";
   if (!pairs) return "Add a model to continue.";
   if (!draft.sandboxCredentialId) return "Select a sandbox credential to continue.";
   return "Check the credentials and harness for each model.";
@@ -53,8 +59,8 @@ export function RunSetupCallout({ coverage }: { coverage: Coverage }) {
   );
 }
 
-export function RunExecution({
-  repo,
+export function RunExecution<D extends RunDraft>({
+  pages,
   draft,
   credentials,
   sandboxes,
@@ -62,20 +68,23 @@ export function RunExecution({
   busy,
   ready,
   pairs,
+  taskCount = draft.tasks?.length ?? 0,
   onChange,
   onSubmit,
   onRunMissing,
   readOnly = false,
 }: {
-  repo: string;
-  draft: ComparisonDraft;
+  pages: string;
+  draft: D;
   credentials: CredentialInfo[];
   sandboxes: (HostedSandbox | "managed")[];
   submitted: boolean;
   busy: boolean;
   ready: boolean;
   pairs: number;
-  onChange(value: ComparisonDraft): void;
+  /** How many tasks each pair runs, when the draft does not pick them (a benchmark's dataset). */
+  taskCount?: number;
+  onChange(value: NoInfer<D>): void;
   onSubmit(): void;
   onRunMissing(): void;
   readOnly?: boolean;
@@ -87,7 +96,7 @@ export function RunExecution({
         {!readOnly && (
           <Link
             className={cn(buttonStyles.secondary, "h-8 px-2.5 text-xs [&>svg]:size-3.5")}
-            to={`/settings/credentials?return=${encodeURIComponent(`/repos/${repo}/run`)}`}
+            to={`/settings/credentials?return=${encodeURIComponent(`${pages}/run`)}`}
           >
             <KeyRound aria-hidden="true" />
             Credentials
@@ -161,7 +170,7 @@ export function RunExecution({
         <dl className="space-y-2 text-sm">
           <div className="flex justify-between gap-3">
             <dt className="text-muted-foreground">Tasks</dt>
-            <dd className="font-mono tabular-nums">{draft.tasks.length}</dd>
+            <dd className="font-mono tabular-nums">{taskCount}</dd>
           </div>
           <div className="flex justify-between gap-3">
             <dt className="text-muted-foreground">Model / Harness Pairs</dt>
@@ -169,7 +178,7 @@ export function RunExecution({
           </div>
           <div className="mt-3 flex justify-between gap-3 border-t border-border pt-3">
             <dt className="text-muted-foreground">Total Trials</dt>
-            <dd className="font-mono tabular-nums">{pairs * draft.tasks.length}</dd>
+            <dd className="font-mono tabular-nums">{pairs * taskCount}</dd>
           </div>
         </dl>
       </div>

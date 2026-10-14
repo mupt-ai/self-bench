@@ -10,6 +10,7 @@ describe("site page routing", () => {
     "/repos/vercel/next.js/tasks/run-one/task.v1",
     "/repos/example/.github",
     "/repos/vercel/next%2Ejs",
+    "/benchmarks/snorkel-ai/senior-swe-bench-v2026.06/results",
     "/",
     "/login",
     "/settings/credentials",

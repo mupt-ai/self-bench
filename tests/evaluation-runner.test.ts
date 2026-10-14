@@ -150,7 +150,7 @@ test("mocked Harbor persists live output, structured tool results and final scor
     await writeFile(join(trial, "trial.log"), `Running tests\n${testModelSecret}\n`);
     options?.onOutput?.("stdout", Buffer.from(`Starting ${testModelSecret}\n`));
     for (let attempt = 0; attempt < 100; attempt += 1) {
-      const snapshot = await getEvaluation(store, input.repoId, input.id);
+      const snapshot = await getEvaluation(store, input, input.id);
       if (snapshot?.trials[0]?.log.includes("Running tests")) {
         sawLive = true;
         expect(JSON.stringify(snapshot)).not.toContain(testModelSecret);
@@ -167,7 +167,7 @@ test("mocked Harbor persists live output, structured tool results and final scor
     return { stdout: "", stderr: "", exitCode: 0 };
   };
   await runEvaluation(store, input, { env: {}, vault, command, pollMs: 5, progressMs: 0 });
-  const run = await getEvaluation(store, input.repoId, input.id);
+  const run = await getEvaluation(store, input, input.id);
   expect(sawLive).toBe(true);
   expect(run?.status).toBe("completed");
   expect(run?.trials[0]?.rewards).toEqual({ reward: 1 });
@@ -176,11 +176,11 @@ test("mocked Harbor persists live output, structured tool results and final scor
   expect(run?.trials[0]?.log).not.toContain("item.completed");
   expect(run?.trials[0]?.log.match(/Starting/g)).toHaveLength(1);
   expect(run?.trials[0]?.artifacts.some((name) => name.endsWith("config.json"))).toBe(false);
-  for (const artifact of await store.list(evaluationPrefix(input.repoId, input.id).slice(0, -1)))
+  for (const artifact of await store.list(evaluationPrefix(input, input.id).slice(0, -1)))
     expect(Buffer.from((await store.getByKey(artifact.key)) ?? []).toString()).not.toContain(
       testModelSecret,
     );
-  expect((await listEvaluations(store, input.repoId))[0]?.status).toBe("completed");
+  expect((await listEvaluations(store, input))[0]?.status).toBe("completed");
   await expect(runEvaluation(store, input, { env: {}, vault, command })).rejects.toThrow(
     "refusing to repeat",
   );
@@ -208,7 +208,7 @@ test("setup failures a retry cannot fix fail the trial at once, before a model c
         return { stdout: version, stderr: "", exitCode: 0 };
       },
     });
-    const run = await getEvaluation(store, input.repoId, input.id);
+    const run = await getEvaluation(store, input, input.id);
     expect(run?.status).toBe("failed");
     expect(run?.trials[0]?.error).toContain(error);
     expect(calls).toBe(0);
@@ -227,7 +227,7 @@ test("missing verifier results are failures, never invented zero scores", async 
       exitCode: 0,
     }),
   });
-  const run = await getEvaluation(store, input.repoId, input.id);
+  const run = await getEvaluation(store, input, input.id);
   expect(run?.status).toBe("failed");
   expect(run?.trials[0]?.error).toContain("trial result");
   expect(run?.trials[0]?.rewards).toEqual({});
@@ -246,7 +246,7 @@ test("a bundle that asks for host credentials fails its trial before Harbor runs
       return { stdout: HARBOR_VERSION, stderr: "", exitCode: 0 };
     },
   });
-  const run = await getEvaluation(store, input.repoId, input.id);
+  const run = await getEvaluation(store, input, input.id);
   expect(run?.trials[0]?.status).toBe("failed");
   expect(run?.trials[0]?.error).toContain("task.toml sets verifier.env");
   expect(calls).toBe(0);
