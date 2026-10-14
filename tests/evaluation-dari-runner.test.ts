@@ -59,7 +59,13 @@ test("Dari runner automatically persists cost and compact IDs despite truncated 
         content: [{ type: "text", text: "x".repeat(1024 * 1024) }],
       },
     });
-    await writeFile(join(trial, "agent", "pi.txt"), `${reply}\n`);
+    // Real Pi streams can exceed wholeTranscripts' 32 MiB ceiling, particularly when
+    // repeated tool output and streaming updates dwarf the accounting events.
+    const delta = JSON.stringify({
+      type: "message_update",
+      assistantMessageEvent: { delta: "x".repeat(33 * 1024 * 1024) },
+    });
+    await writeFile(join(trial, "agent", "pi.txt"), `${reply}\n${delta}\n`);
     await writeFile(
       join(trial, "result.json"),
       JSON.stringify({ verifier_result: { rewards: { reward: 1 } } }),
