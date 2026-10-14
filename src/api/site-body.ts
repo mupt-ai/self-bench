@@ -1,3 +1,4 @@
+import { knownCostLabel } from "../evaluation/cost-total.js";
 import { harnessLabels } from "../evaluation/models.js";
 import { gateways, isGateway } from "../gateways/index.js";
 import { directoryOf } from "../public/directory.js";
@@ -87,7 +88,11 @@ const COLUMNS: readonly [string, (setting: ReleaseSetting) => string][] = [
   ["Reasoning", reasoning],
   ["Access", access],
   ["Accuracy", (setting) => percent(setting.accuracy)],
-  ["Cost / Task", (setting) => dollars(setting.costPerTaskUsd)],
+  [
+    "Cost / Task",
+    (setting) =>
+      knownCostLabel(setting.costPerTaskUsd, setting.costIncomplete, dollars, setting.costedTasks),
+  ],
   ["Frontier", (setting) => (setting.onFrontier ? "Yes" : "No")],
 ];
 

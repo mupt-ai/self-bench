@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { findModel } from "../../../../src/contracts/models";
+import { knownCostLabel } from "../../../../src/evaluation/cost-total";
 import { harnessLabels } from "../../../../src/evaluation/models";
 import { Dialog, DialogHeader } from "../Dialog";
 import { ListSkeleton } from "../LoadingSkeleton";
@@ -123,7 +124,7 @@ export function TrialDialog({
         )}
         {trial.apiCostUsd !== undefined && (
           <span className="font-mono text-xs text-muted-foreground">
-            {dollars(trial.apiCostUsd)}
+            {knownCostLabel(trial.apiCostUsd, trial.costIncomplete, dollars)}
           </span>
         )}
         <span className="ml-auto flex flex-wrap gap-2">

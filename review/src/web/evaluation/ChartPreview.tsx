@@ -128,7 +128,9 @@ export function ChartPreview({
   const shared = useMemo(() => taskSet(chosen, tasks), [chosen, tasks]);
   const points = useMemo(
     () =>
-      shared.length ? chosen.map((option) => configurationPoint(option.configuration, shared)) : [],
+      shared.length
+        ? chosen.flatMap((option) => configurationPoint(option.configuration, shared) ?? [])
+        : [],
     [chosen, shared],
   );
   if (!options.length) return null;
@@ -136,7 +138,7 @@ export function ChartPreview({
     ? "Choose configurations to chart."
     : !shared.length
       ? "They share no accepted task with a usable result. Untick one to chart the rest."
-      : `Over the ${plural(shared.length, "accepted task")} all of them have a usable result on.`;
+      : `Over the ${plural(shared.length, "accepted task")} all of them have a usable result on.${points.length < chosen.length ? " Settings with incomplete costs are omitted." : ""}`;
   return (
     <>
       {variant === "button" ? (

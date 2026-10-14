@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
+import { knownCostLabel } from "../../../../src/evaluation/cost-total";
 import { dollars } from "./benchmark";
 import type { AcceptedTask } from "./RepoRuns";
 import { BatchHeading, ResultGroupRows, startersOf } from "./ResultsBatchRows";
@@ -104,7 +105,7 @@ export function ConfigurationRows({
           {configuration.costPerTask === undefined ? (
             <NoValue width={6} />
           ) : (
-            dollars(configuration.costPerTask)
+            knownCostLabel(configuration.costPerTask, configuration.costIncomplete, dollars)
           )}
         </td>
       </tr>

@@ -44,11 +44,12 @@ export type ModelAuthLookup = (
 
 export type CostFields = Pick<
   EvaluationTrial,
-  "modelVerified" | "apiCostUsd" | "tokenUsage" | "costSource" | "cacheWritesInferred"
+  "modelVerified" | "apiCostUsd" | "costIncomplete" | "tokenUsage" | "costSource" | "cacheWritesInferred"
 >;
 export const costKeys = [
   "modelVerified",
   "apiCostUsd",
+  "costIncomplete",
   "tokenUsage",
   "costSource",
   "cacheWritesInferred",

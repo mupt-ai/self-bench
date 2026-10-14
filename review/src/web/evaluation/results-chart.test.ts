@@ -60,6 +60,19 @@ test("chosen configurations chart over the accepted tasks all of them have a usa
   expect(taskSet([high, low], accepted)).toEqual([]);
 });
 
+test("unknown and incomplete task costs are never plotted as free", () => {
+  for (const trial of [
+    { ...passed("task-1"), apiCostUsd: undefined },
+    { ...passed("task-1"), costIncomplete: true as const },
+  ]) {
+    const configurations = configurationsOf([run("partial", {}, [trial])], credentials, NOW);
+    const configuration = configurations[0];
+    if (!configuration) throw new Error("Fixture configuration missing");
+    expect(configurationPoint(configuration, ["batch-1/task-1"])).toBeUndefined();
+    expect(configuration.costIncomplete).toBe(true);
+  }
+});
+
 test("the default charts the group with the most results, and a saved choice replaces it", () => {
   // high alone charts 1 × 3; with medium, which covers part of its tasks, 2 × 2; low 1 × 1.
   expect(thinking(chosenOptions(options, undefined))).toEqual(["high", "medium"]);

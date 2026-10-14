@@ -6,10 +6,19 @@ import { record } from "../output.js";
 export const DARI_BILLING = "solver/dari-billing.jsonl";
 const UUID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
 
-/** Require a response price for every HTTP attempt; an interrupted request is not free. */
+/** Compatibility helper for callers that require a complete total. */
 export function responseCost(text: string): number | undefined {
+  const bill = responseBill(text);
+  return bill && !bill.incomplete ? bill.total : undefined;
+}
+
+/** Retain valid request prices as a lower bound; invalid structure cannot prove any bill. */
+export function responseBill(
+  text: string,
+): { total: number; incomplete: boolean; known: number; requests: number } | undefined {
   const requests = new Map<number, number | null>();
-  const ids = new Set<string>();
+  const ids = new Map<string, number>();
+  const unpriced = new Set<number>();
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
     let event: Record<string, unknown>;
@@ -27,24 +36,39 @@ export function responseCost(text: string): number | undefined {
       const cost = event.cost;
       if (
         !requests.has(index) ||
-        typeof event.requestId !== "string" ||
-        !UUID.test(event.requestId) ||
-        typeof cost !== "number" ||
-        !Number.isFinite(cost) ||
-        cost < 0
+        (event.requestId !== null &&
+          (typeof event.requestId !== "string" || !UUID.test(event.requestId)))
       )
         return undefined;
-      // Repeated terminal frames may repeat the same price, but cannot disagree.
+      if (typeof event.requestId === "string") {
+        const owner = ids.get(event.requestId);
+        if (owner !== undefined && owner !== index) return undefined;
+        ids.set(event.requestId, index);
+      }
       const previous = requests.get(index);
-      if (previous !== null && previous !== cost) return undefined;
-      if (previous === null && ids.has(event.requestId)) return undefined;
-      ids.add(event.requestId);
-      requests.set(index, cost);
+      if (
+        typeof cost !== "number" ||
+        !Number.isFinite(cost) ||
+        cost < 0 ||
+        event.requestId === null ||
+        (previous !== null && previous !== cost)
+      )
+        unpriced.add(index);
+      // An invalid frame permanently invalidates this request, not unrelated priced requests.
+      requests.set(index, unpriced.has(index) ? null : (cost as number));
     } else return undefined;
   }
-  if (!requests.size || [...requests.values()].some((cost) => cost === null)) return undefined;
-  const total = [...requests.values()].reduce<number>((sum, cost) => sum + (cost ?? 0), 0);
-  return Number.isFinite(total) ? total : undefined;
+  const prices = [...requests.values()].filter((cost): cost is number => cost !== null);
+  if (!prices.length) return undefined;
+  const total = prices.reduce((sum, cost) => sum + cost, 0);
+  return Number.isFinite(total)
+    ? {
+        total,
+        known: prices.length,
+        requests: requests.size,
+        incomplete: prices.length !== requests.size,
+      }
+    : undefined;
 }
 
 /** Read the compact bill directly, independent of collectOutput's shared transcript budget. */

@@ -23,10 +23,13 @@ export async function repriceDariRouter(
     }
     const { files } = await storedHarborFiles(store, run, trial);
     const after = await dariTrialCost(run, trial, {}, files);
-    const before = { apiCostUsd: trial.apiCostUsd, costSource: trial.costSource, modelVerified: trial.modelVerified };
+    const before = { apiCostUsd: trial.apiCostUsd, costSource: trial.costSource, modelVerified: trial.modelVerified, ...(trial.costIncomplete ? { costIncomplete: true as const } : {}) };
     const changed = after.apiCostUsd !== undefined && !isDeepStrictEqual(before, after);
     trials.push({ index, taskId: trial.taskId, before, after, changed });
-    if (changed) Object.assign(trial, after);
+    if (changed) {
+      Object.assign(trial, after);
+      if (!after.costIncomplete) delete trial.costIncomplete;
+    }
   }
   const applied = apply && trials.some((trial) => trial.changed);
   if (applied) await saveEvaluation(store, run);

@@ -1,3 +1,4 @@
+import { knownCostLabel } from "../../../../src/evaluation/cost-total";
 import type { EvaluationTrial } from "./api";
 import { dollars } from "./benchmark";
 
@@ -7,7 +8,12 @@ export function TokenCosts({
   trial: Partial<
     Pick<
       EvaluationTrial,
-      "tokenUsage" | "apiCostUsd" | "costSource" | "cacheWritesInferred" | "billedCostUsd"
+      | "tokenUsage"
+      | "apiCostUsd"
+      | "costIncomplete"
+      | "costSource"
+      | "cacheWritesInferred"
+      | "billedCostUsd"
     >
   >;
 }) {
@@ -31,7 +37,11 @@ export function TokenCosts({
         ))}
         <div>
           <dt>Estimated Model Cost</dt>
-          <dd>{trial.apiCostUsd === undefined ? "Not Available" : dollars(trial.apiCostUsd)}</dd>
+          <dd>
+            {trial.apiCostUsd === undefined
+              ? "Not Available"
+              : knownCostLabel(trial.apiCostUsd, trial.costIncomplete, dollars)}
+          </dd>
         </div>
         {trial.billedCostUsd !== undefined && (
           <div>

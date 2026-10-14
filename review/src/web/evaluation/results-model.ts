@@ -1,5 +1,6 @@
 import { findModel, models, type ThinkingLevel } from "../../../../src/contracts/models";
 import type { CredentialInfo } from "../../../../src/db/credentials";
+import { costTotal } from "../../../../src/evaluation/cost-total";
 import { eligibleTrial } from "../../../../src/evaluation/eligible";
 import { findListedModel, isGateway } from "../../../../src/gateways";
 import type { EvaluationRun, EvaluationTrial, Harness } from "./api";
@@ -61,6 +62,7 @@ export interface Tally {
   passRate?: number;
   /** Mean model cost of the priced results. */
   costPerTask?: number;
+  costIncomplete?: true;
 }
 
 export interface Configuration extends Tally {
@@ -157,16 +159,14 @@ export function tally(results: readonly TaskResult[]): Tally {
   const counts = noOutcomes();
   for (const result of results) counts[result.outcome] += 1;
   const scored = counts.passed + counts.failed;
-  const costs = results.flatMap(({ trial }) =>
-    trial.status === "completed" && typeof trial.apiCostUsd === "number" ? [trial.apiCostUsd] : [],
-  );
+  const finished = results.filter(({ trial }) => trial.status === "completed");
+  const costs = costTotal(finished.map(({ trial }) => trial));
   return {
     counts,
     finished: results.length - counts.running - counts.queued - counts.cancelled,
     ...(scored ? { passRate: (counts.passed / scored) * 100 } : {}),
-    ...(costs.length
-      ? { costPerTask: costs.reduce((sum, cost) => sum + cost, 0) / costs.length }
-      : {}),
+    ...(costs.known ? { costPerTask: costs.total / finished.length } : {}),
+    ...(costs.incomplete ? { costIncomplete: true as const } : {}),
   };
 }
 

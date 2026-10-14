@@ -1,6 +1,7 @@
 import { ExternalLink } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
+import { knownCostLabel } from "../../../../src/evaluation/cost-total";
 import { cn } from "../primitives/cn";
 import { dollars } from "./benchmark";
 import { OutcomeFilter } from "./ResultsFilters";
@@ -130,7 +131,11 @@ export function ResultGroupRows({
           {totals.passRate === undefined ? <NoValue width={3} /> : `${totals.passRate.toFixed(0)}%`}
         </td>
         <td className="text-right font-mono tabular-nums">
-          {totals.costPerTask === undefined ? <NoValue width={6} /> : dollars(totals.costPerTask)}
+          {totals.costPerTask === undefined ? (
+            <NoValue width={6} />
+          ) : (
+            knownCostLabel(totals.costPerTask, totals.costIncomplete, dollars)
+          )}
         </td>
       </tr>
       {open && (
