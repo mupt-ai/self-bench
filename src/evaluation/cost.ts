@@ -1,6 +1,7 @@
 import { isGateway } from "../gateways/index.js";
 import { claudeCodeUsage } from "../harnesses/claude-code/cost.js";
 import { codexCallUsage, harborCost } from "../harnesses/harbor/cost.js";
+import { compatibleEndpoint } from "./compatible-endpoints.js";
 import { gatewayModel } from "./execution.js";
 import { agentTimedOut, record, TRUNCATED_OUTPUT } from "./output.js";
 import { type RequestUsage, requestsCost, sameUsage, sumUsage, wholeCost } from "./request-cost.js";
@@ -108,9 +109,15 @@ export function trialCost(
     const stopped = agentTimedOut(result);
     const messages = piAssistantMessages(text, stopped);
     if (!messages) return {};
+    // Pi can report either its configured custom provider or the OpenAI-compatible protocol name.
+    const endpointModels = compatibleEndpoint(run.credentials?.provider, harness)
+      ? [`harbor-endpoint/${model}`, `openai/${model}`]
+      : [];
     verified =
       messages.length > 0 &&
-      messages.every((message) => `${message.provider}/${message.model}` === run.modelName);
+      messages.every((message) =>
+        [run.modelName, ...endpointModels].includes(`${message.provider}/${message.model}`),
+      );
     const replies: TokenUsage[] = [];
     for (const message of messages) {
       const { input, output, cacheRead, cacheWrite } = record(message.usage);
@@ -222,6 +229,9 @@ export function trialCost(
     ...(cacheWritesInferred ? { cacheWritesInferred: true } : {}),
   };
   if (!verified || !usage) return measured;
+  // OpenRouter's actual charge can include routing, discounts and separate BYOK charges.
+  // Only its gateway billing records provide a price, not harness or catalog estimates.
+  if (run.credentials?.provider === "openrouter") return measured;
   const reported =
     reportedCost === undefined
       ? measured
@@ -232,8 +242,13 @@ export function trialCost(
         };
   // Harbor prices a gateway route from LiteLLM's table for it, which may carry a discount or
   // another provider's rates; gateway runs are priced at their vendor's list rates (runPricing),
-  // and Harbor's figure stands in only where those cannot price the trial.
-  if (!pricing || (reportedCost !== undefined && !isGateway(run.credentials?.provider)))
+  // and Harbor's figure stands in only where those cannot price the trial. A compatible
+  // endpoint's figure would be another vendor's harness pricing the model, so it is the same.
+  const provider = run.credentials?.provider;
+  if (
+    !pricing ||
+    (reportedCost !== undefined && !isGateway(provider) && !compatibleEndpoint(provider, harness))
+  )
     return reported;
   const apiCostUsd = requests
     ? requestsCost(pricing, requests)

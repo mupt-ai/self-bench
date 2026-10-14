@@ -6,7 +6,7 @@ import {
   ratesPricing,
 } from "../contracts/models.js";
 import { listRates } from "./gateway.js";
-import { overrideTiers } from "./openrouter.js";
+import { overrideTiers } from "./openrouter/index.js";
 
 /** A vendor's undiscounted list rates, with what it charges longer prompts. */
 export interface VendorRates extends PromptTiers {

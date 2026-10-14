@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { EncryptedRecordStore } from "../db/encrypted-records.js";
-import { RecordStoreError } from "../db/encrypted-records.js";
+import { orgRecords, RecordStoreError } from "../db/encrypted-records.js";
+import type { Vault } from "../db/vault.js";
 import { SandboxCapacityError, type SandboxExecutor } from "./contracts.js";
 
 interface Reservation {
@@ -29,8 +30,7 @@ export function credentialCapacity(
     }
   };
   return {
-    async acquire(timeoutMs: number): Promise<string> {
-      const id = randomUUID();
+    async acquire(timeoutMs: number, id: string = randomUUID()): Promise<string> {
       await update((leases) => {
         if (leases.length >= limit)
           throw new SandboxCapacityError(`Credential sandbox limit (${limit}) reached`);
@@ -45,6 +45,59 @@ export function credentialCapacity(
 }
 
 export type CredentialCapacity = ReturnType<typeof credentialCapacity>;
+
+/**
+ * Admission under every credential's limit at once, such as a sandbox account's and the model
+ * key its agent calls. One lease ID is held in each, so a started sandbox records only one.
+ */
+function combinedCapacity(capacities: CredentialCapacity[]): CredentialCapacity {
+  return {
+    async acquire(timeoutMs: number, id: string = randomUUID()): Promise<string> {
+      const held: CredentialCapacity[] = [];
+      try {
+        for (const capacity of capacities) {
+          await capacity.acquire(timeoutMs, id);
+          held.push(capacity);
+        }
+      } catch (error) {
+        await Promise.all(held.map((capacity) => capacity.release(id)));
+        throw error;
+      }
+      return id;
+    },
+    async release(id: string) {
+      await Promise.all(capacities.map((capacity) => capacity.release(id)));
+    },
+  };
+}
+
+/**
+ * One admission for the organization's saved credentials among `ids`: a sandbox account, and the
+ * model key or sign-in its agent calls, whose limit then carries into that sandbox. With
+ * `unlimited`, credentials without a limit take leases too, so a sandbox started under a limit
+ * since cleared still releases its slot; otherwise they are left out.
+ */
+export async function credentialsCapacity(
+  vault: Pick<Vault, "credentials" | "records">,
+  orgId: number,
+  ids: readonly (string | undefined)[],
+  unlimited = false,
+): Promise<CredentialCapacity | undefined> {
+  const records = orgRecords(vault.records, orgId);
+  const capacities = (
+    await Promise.all(
+      [...new Set(ids)].map(async (id) => {
+        const credential = id ? await vault.credentials.find(orgId, id) : undefined;
+        if (!id || !credential || (!credential.maxSandboxes && !unlimited)) return [];
+        return [
+          credentialCapacity(records, id, credential.maxSandboxes ?? Number.POSITIVE_INFINITY),
+        ];
+      }),
+    )
+  ).flat();
+  if (capacities.length < 2) return capacities[0];
+  return combinedCapacity(capacities);
+}
 
 /** Detached sandboxes retain their lease across activity completion and worker restarts. */
 export function capacityLimitedSandbox(

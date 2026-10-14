@@ -68,6 +68,15 @@ class SelfBenchClaudeCode(ClaudeCode):
             dependencies = tuple(name for name in dependencies if name not in ("nodejs", "npm"))
         await super().ensure_system_dependencies(environment, dependencies)
 
+    def _resolve_auth_env(self):
+        # Harbor sends any key as ANTHROPIC_API_KEY (x-api-key). A key given as ANTHROPIC_AUTH_TOKEN
+        # alone, as Meta's Anthropic-compatible API takes it, stays a bearer token.
+        env = super()._resolve_auth_env()
+        token = self._get_env("ANTHROPIC_AUTH_TOKEN")
+        if token and not self._get_env("ANTHROPIC_API_KEY") and env.get("ANTHROPIC_API_KEY") == token:
+            env["ANTHROPIC_AUTH_TOKEN"] = env.pop("ANTHROPIC_API_KEY")
+        return env
+
 
 class GatewayPiOptions(PiOptions):
     # Pi's models.json describing the trial's model as the gateway lists it (piModels): `models`

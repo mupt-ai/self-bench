@@ -27,8 +27,9 @@ export const credentialAuths = ["api-key", "codex-login", "claude-login", "muse-
 /** Claude Code's subscription token, as `claude setup-token` prints it. */
 const claudeToken = /^sk-ant-oat[A-Za-z0-9_-]+$/;
 /**
- * How many sandboxes a sandbox credential's account runs at once (its plan's limit, or less to
- * leave room for other work). Generation and evaluations share this credential's sandbox slots.
+ * How many sandboxes use a credential at once. For a sandbox account, those it runs (its plan's
+ * limit, or less to leave room for other work); for a model key or sign-in, those whose agent
+ * calls it, to stay under the provider's rate limits. Generation and evaluations share the slots.
  */
 export const maxSandboxesSchema = z.number().int().min(1).max(1000);
 
@@ -39,6 +40,12 @@ export const credentialSchema = z
     auth: z.enum(credentialAuths).default("api-key"),
     value: z.string().min(1).max(24_000),
     tokenId: z.string().max(4096).optional(),
+    managementKey: z
+      .string()
+      .min(1)
+      .max(4096)
+      .regex(/^[^\r\n\0]+$/)
+      .optional(),
     teamId: providerId.optional(),
     projectId: providerId.optional(),
     endpoint: z.url().optional(),
@@ -69,6 +76,8 @@ export const credentialSchema = z
     } else if (/[\r\n\0]/.test(value.value)) issue("API keys must be a single line");
     else if (value.kind === "anthropic" && value.value.startsWith("sk-ant-oat"))
       issue("This is a Claude subscription token; add it as a Claude sign-in instead");
+    if (value.managementKey && (value.kind !== "openrouter" || value.auth !== "api-key"))
+      issue("Only OpenRouter API credentials accept a management key");
     if ((value.kind === "modal") !== !!value.tokenId) issue("Modal requires a token ID and secret");
     if (
       value.kind === "vercel" ? !value.teamId || !value.projectId : value.teamId || value.projectId
@@ -76,8 +85,6 @@ export const credentialSchema = z
       issue("Vercel requires a team ID and project ID; other providers do not accept them");
     if ((value.kind === "custom") !== !!value.endpoint)
       issue("Only custom providers require an endpoint");
-    if (value.maxSandboxes !== undefined && !isSandboxKind(value.kind))
-      issue("Only sandbox credentials take a sandbox limit");
   });
 export type CredentialDraft = z.infer<typeof credentialSchema>;
 
@@ -92,10 +99,6 @@ function museSignIn(value: string): boolean {
 }
 type CredentialKind = (typeof credentialKinds)[number];
 
-export function isSandboxKind(kind: string): kind is (typeof sandboxKinds)[number] {
-  return (sandboxKinds as readonly string[]).includes(kind);
-}
-
 /** What the browser sees: never the secret. */
 export interface CredentialInfo {
   id: string;
@@ -108,6 +111,8 @@ export interface CredentialInfo {
 }
 export interface CredentialSecret {
   value: string;
+  /** Owner-supplied billing access; never passed to a solver. */
+  managementKey?: string;
   tokenId?: string;
   teamId?: string;
   projectId?: string;
@@ -191,9 +196,10 @@ export function createCredentialStore(db: Database, key: string) {
         .from(credentials)
         .where(and(eq(credentials.orgId, orgId), isNull(credentials.deletedAt)));
       if ((total?.value ?? 0) >= CREDENTIAL_LIMIT) throw new Error("Credential limit reached");
-      const { value, tokenId, teamId, projectId } = parsed;
+      const { value, tokenId, teamId, projectId, managementKey } = parsed;
       const secret: CredentialSecret = {
         value,
+        ...(managementKey ? { managementKey } : {}),
         ...(tokenId ? { tokenId } : {}),
         ...(teamId ? { teamId } : {}),
         ...(projectId ? { projectId } : {}),
@@ -219,10 +225,7 @@ export function createCredentialStore(db: Database, key: string) {
     },
     /** Sets or clears admission for new work; sandboxes already started are not stopped. */
     async limit(orgId: number, id: string, maxSandboxes: number | undefined): Promise<void> {
-      const credential = await find(orgId, id);
-      if (!credential) throw new Error("Credential not found");
-      if (!isSandboxKind(credential.kind))
-        throw new Error("Only sandbox credentials take a sandbox limit");
+      if (!(await find(orgId, id))) throw new Error("Credential not found");
       await db
         .update(credentials)
         .set({

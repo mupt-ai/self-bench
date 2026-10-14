@@ -13,7 +13,7 @@ import {
   type CandidateArtifacts,
 } from "./types.js";
 
-const BUNDLE_NAMES = ["harbor-task.tar.gz", "source-task.tar.gz"];
+const BUNDLE_NAMES = ["execution-task.tar.gz", "harbor-task.tar.gz", "source-task.tar.gz"];
 
 export async function candidateArtifacts(
   store: ArtifactStore,
@@ -131,9 +131,9 @@ const STAGE_ORDER: Record<BundleStage, number> = {
 
 /** Compiled Harbor trees first (they hold the environment, tests, and solution), newest first. */
 function compareBundles(left: BundleRef, right: BundleRef): number {
-  const compiled =
-    Number(right.key.endsWith("/harbor-task.tar.gz")) -
-    Number(left.key.endsWith("/harbor-task.tar.gz"));
+  const rank = (key: string) =>
+    key.endsWith("/execution-task.tar.gz") ? 2 : Number(key.endsWith("/harbor-task.tar.gz"));
+  const compiled = rank(right.key) - rank(left.key);
   if (compiled !== 0) {
     return compiled;
   }

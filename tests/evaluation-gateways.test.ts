@@ -4,7 +4,7 @@ import { credentialSchema } from "../src/db/credentials.js";
 import { catalog } from "../src/evaluation/catalog.js";
 import { gatewayModel, gatewayTrial, solverAgent } from "../src/evaluation/execution.js";
 import { harnessIds, modelRoutes, openHarnesses, routeFor } from "../src/evaluation/models.js";
-import { solverArguments } from "../src/evaluation/runner.js";
+import { solverArguments } from "../src/evaluation/solver-arguments.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";
 import { gatewayIds, gateways, isGateway } from "../src/gateways/index.js";
 import { runCommand } from "../src/lib/process.js";
@@ -191,6 +191,20 @@ for (const provider of gatewayIds) {
     expect(codex.child.ANTHROPIC_API_KEY).toBeUndefined();
     expect(codex.child.OPENAI_BASE_URL).toBe(gateways[provider].openAiBase);
     expect(codex.extraAllowedHosts).toEqual([...hosts]);
+    const args = solverArguments(
+      "task",
+      "jobs",
+      "codex",
+      codex.model,
+      "modal",
+      undefined,
+      codex.extraAllowedHosts,
+      undefined,
+      provider,
+    );
+    expect(
+      args.flatMap((arg, index) => (arg === "--allow-agent-host" ? [args[index + 1]] : [])),
+    ).toEqual([...hosts]);
     // The provider picks the adapter, so a typed id with no vendor still gets HTTPS-only Codex.
     expect(gatewayTrial(input, "codex", `${provider}/gpt-4o`, env).model).toBe("openai/gpt-4o");
     expect(solverAgent("codex", provider)).toBe("harbor_gateway:GatewayCodex");
@@ -216,11 +230,14 @@ for (const provider of gatewayIds) {
   });
 }
 
-test("only gateway routes offer every harness; direct keys keep their native harnesses", () => {
+test("gateways and Meta keys offer every harness they speak; OpenAI and Anthropic keys their protocol's", () => {
   for (const entry of catalog) {
     for (const route of modelRoutes(entry)) {
       if (isGateway(route.provider))
         expect(new Set(route.harnesses)).toEqual(new Set(openHarnesses));
+      else if (route.provider === "meta")
+        expect(new Set(route.harnesses)).toEqual(new Set(harnessIds));
+      // OpenAI serves no Anthropic Messages, and Anthropic no Responses.
       else
         expect(route.harnesses).not.toContain(
           route.provider === "openai" ? "claude-code" : "codex",

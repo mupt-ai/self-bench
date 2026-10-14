@@ -47,8 +47,8 @@ export interface EvaluationInput extends EvaluationScope {
    */
   taskMinutes?: number;
   /**
-   * At most this many of the evaluation's trials run at once: its share of the sandbox
-   * credential's limit (maxSandboxes) when it started. A trial holds one sandbox at a time.
+   * At most this many of the evaluation's trials run at once: its share of the sandbox and model
+   * credentials' limits (maxSandboxes) when it started. A trial holds one sandbox at a time.
    */
   maxTrials?: number;
   pricing?: ModelPricing;
@@ -105,7 +105,8 @@ export interface EvaluationTrial {
    * "gateway": a gateway's charge, where list rates cannot price the trial (billedTrialCost), and
    * on trials recorded before costs moved to vendor list rates.
    */
-  costSource?: "harbor" | "reference-rates" | "gateway";
+  /** Router reference rates sum the selected providers' per-request costs, not cash charges. */
+  costSource?: "harbor" | "reference-rates" | "gateway" | "router-reference-rates";
   /** What the gateway charged, for comparing with the bill; apiCostUsd is the cost shown. */
   billedCostUsd?: number;
 }

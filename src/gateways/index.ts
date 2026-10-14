@@ -11,7 +11,7 @@ import {
   ratesPricing,
 } from "../contracts/models.js";
 import type { Gateway, GatewayListing, ListedModel, PiModel } from "./gateway.js";
-import { openRouter } from "./openrouter.js";
+import { openRouter } from "./openrouter/index.js";
 import { vercelAiGateway } from "./vercel-ai-gateway.js";
 
 export type { ListedModel } from "./gateway.js";

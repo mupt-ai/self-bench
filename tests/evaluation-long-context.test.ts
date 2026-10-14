@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
 import { findModel, nativePricing } from "../src/contracts/models.js";
 import { trialCost } from "../src/evaluation/cost.js";
-import { generationIds } from "../src/evaluation/gateway-cost.js";
 import { initialEvaluation } from "../src/evaluation/store.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";
+import { generationIds } from "../src/gateways/usage.js";
 import { evaluationInput } from "./support/evaluation-fixture.js";
 
 /** The catalog's own pricing for `id` on its vendor's key, long-context tiers included. */

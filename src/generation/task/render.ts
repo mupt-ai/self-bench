@@ -41,7 +41,8 @@ export function taskToml(task: TaskDefinition): string {
     "[agent]",
     'user = "root"',
     'network_mode = "allowlist"',
-    'allowed_hosts = ["chatgpt.com", "*.chatgpt.com", "openai.com", "*.openai.com"]',
+    // The evaluation supplies its selected provider hosts through --allow-agent-host.
+    "allowed_hosts = []",
     "",
     "[verifier]",
     `timeout_sec = ${task.timeouts.setupSeconds + task.timeouts.testsSeconds}.0`,

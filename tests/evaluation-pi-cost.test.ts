@@ -11,6 +11,42 @@ const pricing = {
   source: "https://provider.example/pricing",
   asOf: "2026-09-05",
 };
+test("Meta Pi reports its OpenAI-compatible model identity and keeps reference pricing", () => {
+  const run = initialEvaluation(
+    {
+      ...evaluationInput(),
+      model: "muse-spark-1.3",
+      modelName: "meta/muse-spark-1.3",
+      pricing,
+      credentials: {
+        modelCredentialId: "meta-key",
+        sandboxCredentialId: "sandbox",
+        provider: "meta",
+        auth: "api-key",
+      },
+    },
+    "Test",
+  );
+  const event = {
+    type: "message_end",
+    message: {
+      role: "assistant",
+      provider: "openai",
+      model: "muse-spark-1.3",
+      usage: { input: 100, output: 50, cacheRead: 0, cacheWrite: 0 },
+    },
+  };
+  const result = { agent_result: { cost_usd: 99 } };
+  expect(
+    trialCost(run, "pi", new Map([["solver/trial/agent/pi.txt", JSON.stringify(event)]]), result),
+  ).toEqual({
+    modelVerified: true,
+    apiCostUsd: (100 * pricing.input + 50 * pricing.output) / 1_000_000,
+    tokenUsage: { input: 100, output: 50, cacheRead: 0, cacheWrite: 0 },
+    costSource: "reference-rates",
+  });
+});
+
 test("Pi dollar totals cannot invent pricing for unknown models", () => {
   const run = initialEvaluation(evaluationInput(), "Test");
   const event = {

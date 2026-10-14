@@ -4,7 +4,6 @@ import {
   type CredentialSecret,
   type CredentialStore,
   credentialSchema,
-  isSandboxKind,
   maxSandboxesSchema,
   validateEndpoint,
 } from "../../src/db/credentials.js";
@@ -65,7 +64,7 @@ export function memoryVault(records: EncryptedRecordStore = new MemoryRecords())
         if (existing.orgId !== orgId) throw new RecordStoreError(409, "Credential ID already used");
         return view(existing);
       }
-      const { value, tokenId, teamId, projectId } = parsed;
+      const { value, tokenId, teamId, projectId, managementKey } = parsed;
       rows.set(id, {
         id,
         orgId,
@@ -77,6 +76,7 @@ export function memoryVault(records: EncryptedRecordStore = new MemoryRecords())
         ...(parsed.maxSandboxes ? { maxSandboxes: parsed.maxSandboxes } : {}),
         secret: {
           value,
+          ...(managementKey ? { managementKey } : {}),
           ...(tokenId ? { tokenId } : {}),
           ...(teamId ? { teamId } : {}),
           ...(projectId ? { projectId } : {}),
@@ -87,8 +87,6 @@ export function memoryVault(records: EncryptedRecordStore = new MemoryRecords())
     async limit(orgId, id, maxSandboxes) {
       const row = live(orgId, id);
       if (!row) throw new Error("Credential not found");
-      if (!isSandboxKind(row.kind))
-        throw new Error("Only sandbox credentials take a sandbox limit");
       if (maxSandboxes === undefined) delete row.maxSandboxes;
       else row.maxSandboxes = maxSandboxesSchema.parse(maxSandboxes);
     },

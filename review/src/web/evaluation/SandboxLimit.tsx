@@ -2,13 +2,19 @@ import React from "react";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
 import { Button, fieldStyles, Input } from "../ui";
+import { isSandbox } from "./credential-presentation";
 
-/** A sandbox credential's optional limit on sandboxes running at once; blank means none. */
+/**
+ * A credential's optional limit on sandboxes using it at once; blank means none. A model
+ * credential's limit counts the sandboxes whose agent calls it.
+ */
 export function SandboxLimitField({
+  sandbox,
   value,
   onChange,
   inputRef,
 }: {
+  sandbox: boolean;
   value: number | undefined;
   onChange(value: number | undefined): void;
   inputRef?: React.Ref<HTMLInputElement>;
@@ -31,8 +37,10 @@ export function SandboxLimitField({
         }
       />
       <span className="text-xs font-normal leading-5 text-muted-foreground">
-        Generation and evaluations share this credential's sandbox limit. Use your plan's limit,
-        such as 20 on E2B Hobby. Leave blank for no limit.
+        {sandbox
+          ? "Generation and evaluations share this credential's sandbox limit. Use your plan's limit, such as 20 on E2B Hobby."
+          : "Evaluation trials and generation sandboxes calling this credential share this limit. Lower it if the provider rate-limits you."}{" "}
+        Leave blank for no limit.
       </span>
     </label>
   );
@@ -61,7 +69,7 @@ export function SandboxLimitDialog({
       aria-describedby="sandbox-limit-description"
     >
       <DialogHeader
-        title="Set Sandbox Limit"
+        title="Set Concurrency Limit"
         titleId="sandbox-limit-title"
         descriptionId="sandbox-limit-description"
         description={<span className="break-all">{credential.name}</span>}
@@ -85,7 +93,12 @@ export function SandboxLimitDialog({
       >
         <DialogBody>
           <fieldset disabled={busy} className="space-y-5">
-            <SandboxLimitField value={value} onChange={setValue} inputRef={field} />
+            <SandboxLimitField
+              sandbox={isSandbox(credential.kind)}
+              value={value}
+              onChange={setValue}
+              inputRef={field}
+            />
           </fieldset>
           <p className="mt-4 text-xs leading-5 text-muted-foreground">
             Already-started work is not stopped. New work waits for a free slot.

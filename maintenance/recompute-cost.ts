@@ -75,7 +75,7 @@ export async function storedHarborFiles(
 ): Promise<{ files: Map<string, string>; result: string | undefined }> {
   const files = new Map<string, string>();
   for (const name of trial.artifacts) {
-    if (!/\/(trajectory\.json|pi\.txt|result\.json)$/.test(name)) continue;
+    if (!/\/(trajectory\.json|pi\.txt|result\.json|dari-request-ids\.json|openrouter-generation-ids\.json)$/.test(name)) continue;
     const bytes = await store.getByKey(`${evaluationPrefix(run, run.id)}artifacts/${name}`);
     if (bytes) files.set(name.slice(name.indexOf("/") + 1), Buffer.from(bytes).toString("utf8"));
   }
@@ -216,7 +216,7 @@ export async function recomputeEvaluationCost(
   for (const [index, trial] of run.trials.entries()) {
     const before = costFields(trial);
     // A billed gateway cost cannot be reconstructed from token usage or stored transcripts.
-    if (before.costSource === "gateway") {
+    if (before.costSource === "gateway" || before.costSource === "router-reference-rates") {
       report.trials.push({ index, before, changed: false });
       continue;
     }
@@ -230,6 +230,10 @@ export async function recomputeEvaluationCost(
     const after = trialCost(run, trial.harness, files, parsed, auth);
     // The runner reads transcripts whole; stored ones can be cut too far to count again.
     if (before.tokenUsage && !after.tokenUsage) {
+      if (run.credentials?.provider === "openrouter") {
+        report.trials.push({ index, before, changed: false });
+        continue;
+      }
       const reported =
         trial.harness === "claude-code" ? await claudeCodeCost(store, run, trial) : undefined;
       const recorded =

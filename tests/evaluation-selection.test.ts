@@ -66,6 +66,51 @@ test("one model row resolves its saved route and rejects unsupported thinking be
   }
 });
 
+test("a Meta key runs any harness; an OpenAI key cannot run Claude Code", async () => {
+  const fixture = await evaluationServer();
+  const post = (body: unknown) => ({ method: "POST", body: JSON.stringify(body) });
+  try {
+    const credential = async (kind: string) => {
+      const response = await fixture.request(
+        "/api/orgs/avyay/credentials",
+        post({ kind, name: kind, value: `fake-${kind}` }),
+      );
+      expect(response.status).toBe(201);
+      return (await response.json()).id as string;
+    };
+    const meta = await credential("meta");
+    const openai = await credential("openai");
+    const sandbox = await credential("e2b");
+    const draft = (catalogId: string, credentialId: string, harnesses: string[]) => ({
+      id: crypto.randomUUID(),
+      tasks: [{ runId: "run-one", taskId: "task-one" }],
+      models: [{ catalogId, credentialId, harnesses }],
+      sandbox: "e2b",
+      sandboxCredentialId: sandbox,
+    });
+    const harnesses = ["muse-code", "codex", "claude-code", "pi", "mini-swe-agent", "terminus-2"];
+    const accepted = await fixture.request(
+      `${fixture.base}/comparisons`,
+      post(draft("muse-spark-1.3", meta, harnesses)),
+    );
+    expect(accepted.status).toBe(202);
+    expect(fixture.starts[0]).toMatchObject({
+      modelName: "meta/muse-spark-1.3",
+      harnesses,
+      credentials: { provider: "meta", auth: "api-key" },
+    });
+    // OpenAI serves no Anthropic Messages API for Claude Code to speak.
+    const refused = await fixture.request(
+      `${fixture.base}/comparisons`,
+      post(draft("gpt-6-sol", openai, ["claude-code"])),
+    );
+    expect(refused.status).toBe(400);
+    expect(fixture.starts).toHaveLength(1);
+  } finally {
+    await fixture.close();
+  }
+});
+
 test("missing-task runs skip only completed model, harness, thinking and task pairs", async () => {
   const fixture = await evaluationServer();
   const post = (body: unknown) => ({ method: "POST", body: JSON.stringify(body) });
