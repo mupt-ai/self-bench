@@ -24,6 +24,10 @@ module.exports = function (pi) {
       let cost = null;
       let invalid = false;
       let pending = "";
+      const invalidate = () => {
+        invalid = true;
+        write({ type: "cost", index, requestId, cost: null });
+      };
       const decoder = new TextDecoder();
       const streaming = response.headers.get("content-type")?.includes("text/event-stream");
       const observe = (text) => {
@@ -33,7 +37,7 @@ module.exports = function (pi) {
           if (!data.usage || !("cost" in data.usage)) return;
           const value = data.usage.cost;
           if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
-            invalid = true;
+            invalidate();
             return;
           }
           if (cost !== null && cost !== value) invalid = true;
@@ -41,7 +45,7 @@ module.exports = function (pi) {
           // Persist before Pi handles a terminal error and cancels its reader.
           write({ type: "cost", index, requestId, cost: invalid ? null : cost });
         } catch {
-          invalid = true;
+          invalidate();
         }
       };
       const consume = (text, end = false) => {
@@ -54,7 +58,7 @@ module.exports = function (pi) {
         } else if (end) observe(pending);
         // Stream deltas can be large, but never retain an unbounded line or JSON body.
         if (pending.length > 16 * 1024 * 1024) {
-          invalid = true;
+          invalidate();
           pending = "";
         }
       };
