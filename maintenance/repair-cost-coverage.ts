@@ -36,7 +36,7 @@ export async function main() {
     };
     const rows = await database.db.select().from(evaluationSummaries);
     for (const row of rows) {
-      const run = await getEvaluation(store, row, row.id);
+      const run = await getEvaluation(store, { repoId: row.repoId }, row.id);
       if (!run) continue;
       report.runsScanned++;
       if (report.runsScanned % 25 === 0) console.error(JSON.stringify({ scanned: report.runsScanned, recovered: report.trialsRecovered }));
@@ -80,7 +80,8 @@ export async function main() {
       if (apply) {
         // Append-only snapshots remain readable; retain an explicit repair backup as well.
         await store.put(`${backup}/runs/${run.repoId}/${run.id}.json`, Buffer.from(original), "application/json");
-        const current = await getEvaluation(store, run, run.id);
+        if (run.repoId === undefined) throw new Error(`Run ${run.id} has no repository scope`);
+        const current = await getEvaluation(store, { repoId: run.repoId }, run.id);
         if (current?.revision !== run.revision) throw new Error(`Run ${run.id} changed during repair`);
         await saveEvaluation(store, run);
       }

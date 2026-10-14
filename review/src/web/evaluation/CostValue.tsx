@@ -11,6 +11,7 @@ export function CostValue({ value, incomplete }: { value: number; incomplete?: b
           label="Incomplete Cost"
           content="This is known spend, not a complete total. Some requests have no recorded price, so the actual cost may be higher."
           className="shrink-0"
+          onTriggerClick={(event) => event.stopPropagation()}
         />
       )}
     </span>
