@@ -3,7 +3,7 @@ import {
   DARI_REQUEST_IDS,
   dariRequestManifest,
   dariTrialCost,
-} from "../src/evaluation/dari-cost.js";
+} from "../src/evaluation/dari/cost.js";
 import { initialEvaluation } from "../src/evaluation/store.js";
 import { evaluationInput } from "./support/evaluation-fixture.js";
 

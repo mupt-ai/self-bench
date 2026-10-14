@@ -2,8 +2,8 @@ import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DARI_REQUEST_IDS } from "../src/evaluation/dari-cost.js";
-import { retainDariManifest } from "../src/evaluation/dari-manifest.js";
+import { DARI_REQUEST_IDS } from "../src/evaluation/dari/cost.js";
+import { retainDariManifest } from "../src/evaluation/dari/manifest.js";
 import { TRUNCATED_OUTPUT } from "../src/evaluation/output.js";
 
 const path = "solver/task/agent/pi.txt";

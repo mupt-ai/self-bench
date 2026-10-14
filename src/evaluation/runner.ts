@@ -13,8 +13,8 @@ import type { HarborOutputGuard } from "../harnesses/harbor/output-guard.js";
 import { runCommand } from "../lib/process.js";
 import { claimTrial, WorkerStoppingError } from "./claim.js";
 import { trialCost } from "./cost.js";
-import { DARI_REQUEST_IDS, dariRequestManifest, dariTrialCost, isDariRun } from "./dari-cost.js";
-import { retainDariManifest } from "./dari-manifest.js";
+import { DARI_REQUEST_IDS, dariRequestManifest, dariTrialCost, isDariRun } from "./dari/cost.js";
+import { retainDariManifest } from "./dari/manifest.js";
 import { billedTrialCost } from "./gateway-cost.js";
 import {
   agentTimedOut,

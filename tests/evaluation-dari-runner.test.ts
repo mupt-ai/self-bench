@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { DARI_REQUEST_IDS } from "../src/evaluation/dari-cost.js";
+import { DARI_REQUEST_IDS } from "../src/evaluation/dari/cost.js";
 import {
   evaluationPrefix,
   getEvaluation,

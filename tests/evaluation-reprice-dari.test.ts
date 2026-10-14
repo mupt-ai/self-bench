@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { recomputeEvaluationCost } from "../maintenance/recompute-cost.js";
 import { repriceDariRouter } from "../maintenance/reprice-dari-router.js";
-import { DARI_REQUEST_IDS } from "../src/evaluation/dari-cost.js";
+import { DARI_REQUEST_IDS } from "../src/evaluation/dari/cost.js";
 import {
   evaluationPrefix,
   getEvaluation,
