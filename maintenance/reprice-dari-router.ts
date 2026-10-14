@@ -3,7 +3,7 @@ import { type ArtifactStore, createArtifactStore } from "../src/artifacts/index.
 import { loadConfig } from "../src/contracts/config/index.js";
 import { openDatabase } from "../src/db/client.js";
 import { createCredentialStore } from "../src/db/credentials.js";
-import { dariTrialCost, isDariRun } from "../src/evaluation/dari-cost.js";
+import { dariTrialCost, isDariRun } from "../src/evaluation/dari/cost.js";
 import { evaluationCredentialOrg } from "../src/evaluation/execution.js";
 import { getEvaluation, saveEvaluation } from "../src/evaluation/store.js";
 import { storedHarborFiles } from "./recompute-cost.js";
