@@ -157,10 +157,13 @@ function providerHosts(provider: string | undefined, env: NodeJS.ProcessEnv): st
 }
 
 /** The Harbor agent for a harness over the selected connection (`provider`, when there is one). */
-export function solverAgent(harness: Harness, provider?: string): string {
+export function solverAgent(harness: Harness, provider?: string, model?: string): string {
   if (harness === "claude-code") return "harbor_gateway:SelfBenchClaudeCode";
   if (harness === "muse-code") return "harbor_muse:SelfBenchMuseCode";
-  if (harness === "pi") return isGateway(provider) ? gateways[provider].harborPi : harness;
+  if (harness === "pi") {
+    if (provider === "custom" && model === "openai/dari/routing") return "harbor_dari:DariPi";
+    return isGateway(provider) ? gateways[provider].harborPi : harness;
+  }
   if (harness !== "codex") return harness;
   // Every gateway route, including a typed model id without a vendor, and every compatible
   // endpoint needs GatewayCodex's HTTPS-only provider.

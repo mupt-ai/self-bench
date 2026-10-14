@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { DARI_REQUEST_IDS } from "../src/evaluation/dari/cost.js";
+import { DARI_BILLING } from "../src/evaluation/dari/billing.js";
 import {
   evaluationPrefix,
   getEvaluation,
@@ -13,7 +13,7 @@ import type { runCommand } from "../src/lib/process.js";
 import { runEvaluation } from "./support/evaluation-run.js";
 import { runnerFixture } from "./support/evaluation-runner-fixture.js";
 
-test("Dari runner automatically persists cost and compact IDs despite truncated archived output", async () => {
+test("Dari runner persists response prices without transcript or telemetry lookup", async () => {
   const { store, input, vault } = await runnerFixture();
   const credential = await vault.credentials.create(
     1,
@@ -67,24 +67,19 @@ test("Dari runner automatically persists cost and compact IDs despite truncated 
     });
     await writeFile(join(trial, "agent", "pi.txt"), `${reply}\n${delta}\n`);
     await writeFile(
+      join(trial, "agent", "dari-billing.jsonl"),
+      `${JSON.stringify({ type: "request", index: 1 })}\n${JSON.stringify({ type: "cost", index: 1, requestId: id, cost: 0.15 })}\n`,
+    );
+    await writeFile(
       join(trial, "result.json"),
       JSON.stringify({ verifier_result: { rewards: { reward: 1 } } }),
     );
     return { stdout: "", stderr: "", exitCode: 0 };
   };
   const original = globalThis.fetch;
-  globalThis.fetch = (async () =>
-    Response.json({
-      complete: true,
-      data: [
-        {
-          request_id: id,
-          model_cost_usd: "0.15",
-          selected_model: "openai/gpt-6.1-sol",
-          observed: true,
-        },
-      ],
-    })) as unknown as typeof fetch;
+  globalThis.fetch = (async () => {
+    throw new Error("Response pricing must not query telemetry");
+  }) as unknown as typeof fetch;
   try {
     await runEvaluation(store, input, {
       env: { SELFBENCH_CUSTOM_MODEL_HOSTS: "routing.dari.dev" },
@@ -101,14 +96,11 @@ test("Dari runner automatically persists cost and compact IDs despite truncated 
     apiCostUsd: 0.15,
     costSource: "router-reference-rates",
   });
-  const artifact = run?.trials[0]?.artifacts.find((name) => name.endsWith(DARI_REQUEST_IDS));
+  const artifact = run?.trials[0]?.artifacts.find((name) => name.endsWith(DARI_BILLING));
   expect(artifact).toBeDefined();
   const bytes = await store.getByKey(
     `${evaluationPrefix(input.repoId, input.id)}artifacts/${artifact}`,
   );
   if (!bytes) throw new Error("Manifest artifact missing");
-  expect(JSON.parse(Buffer.from(bytes).toString())).toEqual({
-    model: "dari/routing",
-    requestIds: [id],
-  });
+  expect(Buffer.from(bytes).toString()).toContain('"cost":0.15');
 });

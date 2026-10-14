@@ -40,23 +40,18 @@ No invoice or billing ledger is modified.
 
 ## Dari Router Pricing
 
-New Pi evaluations of `openai/dari/routing` at `https://routing.dari.dev` automatically
-look up authenticated per-request model reference costs when each trial finishes.
-The worker retries delayed telemetry for about 30 seconds and saves a compact
-`solver/dari-request-ids.json` artifact for later retries even if the transcript is
-truncated. Missing records, unknown prices, or incomplete streams leave cost unavailable,
-not zero. These estimates exclude sandbox and selector infrastructure and are not cash
-charges for subscription-backed requests.
+New Pi evaluations of `openai/dari/routing` at `https://routing.dari.dev` consume
+Dari's OpenRouter-compatible `usage.cost` directly from each HTTP response. The Dari Pi
+adapter saves compact prices in `solver/dari-billing.jsonl`, independently of the transcript,
+including priced errors and retries. Missing or unknown response prices leave cost unavailable,
+not zero or a partial bill. These reference costs exclude sandbox and selector infrastructure
+and are not cash charges for subscription-backed requests. Deploy Dari's response pricing
+before the SelfBench adapter.
 
-Deploy Dari's `/v1/request-costs` endpoint (control plane first, routing runtime second)
-before the SelfBench worker. No new SelfBench secrets are required: it uses the custom
-endpoint's existing API key, and Dari scopes returned records to that exact key.
-
-`reprice-dari-router` retries pricing for finished runs only. It requires the deployment's
-artifact settings, `SELFBENCH_DATABASE_URL`, and `SELFBENCH_EVAL_CREDENTIAL_KEY` to load the
-run's existing custom key. It defaults to a dry run and appends a snapshot with `--apply`.
-Historical runs without the compact manifest can only be repriced from complete saved
-Pi streams; truncated streams are intentionally skipped. It does not estimate a whole
-trial's cost by expanding conversations. `recompute-cost` preserves router-priced trials.
+`reprice-dari-router` can restore costs only when a completed trial already has the compact
+`solver/dari-billing.jsonl` response evidence. It requires only the artifact store, defaults to
+a dry run and appends a snapshot with `--apply`. Historical trials without that evidence remain
+unpriced; it does not query a separate billing ledger or estimate from transcripts.
+`recompute-cost` preserves router-priced trials.
 
 The evaluation tools use the deployment's artifact-store settings and optionally `SELFBENCH_DATABASE_URL` to resolve historical credential sign-in types. The records migration requires `SELFBENCH_DATABASE_URL` and `SELFBENCH_EVAL_CREDENTIAL_KEY`; stop the API and worker and back up the database before applying it. See each program's header for its scope and safety constraints. Do not run these as part of a deployment or routine evaluation.

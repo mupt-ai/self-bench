@@ -13,8 +13,8 @@ import type { HarborOutputGuard } from "../harnesses/harbor/output-guard.js";
 import { runCommand } from "../lib/process.js";
 import { claimTrial, WorkerStoppingError } from "./claim.js";
 import { trialCost } from "./cost.js";
-import { DARI_REQUEST_IDS, dariRequestManifest, dariTrialCost, isDariRun } from "./dari/cost.js";
-import { retainDariManifest } from "./dari/manifest.js";
+import { DARI_BILLING, retainDariBilling } from "./dari/billing.js";
+import { dariTrialCost, isDariRun } from "./dari/cost.js";
 import { billedTrialCost } from "./gateway-cost.js";
 import {
   agentTimedOut,
@@ -175,9 +175,9 @@ async function runTrial(context: {
     trial.log = trialLog(redact(archive ? stdout : completeLines(stdout)), clean);
     if (archive) {
       if (isDariRun(run) && trial.harness === "pi" && records) {
-        await retainDariManifest(jobs, records);
-        const manifest = dariRequestManifest(records);
-        if (manifest) clean.set(DARI_REQUEST_IDS, JSON.stringify(manifest));
+        await retainDariBilling(jobs, records);
+        const bill = records.get(DARI_BILLING);
+        if (bill !== undefined) clean.set(DARI_BILLING, bill);
       }
       if (run.credentials?.provider === "openrouter" && records)
         openRouterManifest(trial.harness, records, clean);
