@@ -41,6 +41,10 @@ export async function exportAcceptedTask(
   task: AuthoredTask,
   repository: string | undefined,
 ): Promise<AuthoredTask> {
+  if (task.images?.provider === "oci")
+    return withHeartbeats(`publishing ${task.taskId}`, (signal) =>
+      publishExecutionBundle(store, task, signal),
+    );
   if (!repository || environment !== "modal" || !task.images) return task;
   return await withHeartbeats(`exporting ${task.taskId}'s images`, async (signal) => {
     const exported = await exportTaskImages(store, task, {
@@ -77,7 +81,7 @@ export async function exportTaskImages(
   options: TaskImageExportOptions,
 ): Promise<AuthoredTask> {
   const images = task.images;
-  if (!images || images.registry) return task;
+  if (images?.provider !== "modal" || images.registry) return task;
   const command = options.command ?? runCommand;
   const root = await mkdtemp(join(tmpdir(), `selfbench-export-${task.taskId}-`));
   // An access token lasts about an hour and an export can take two, so the exporter rereads this

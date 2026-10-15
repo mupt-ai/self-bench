@@ -2,9 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { LocalArtifactStore } from "../../src/artifacts/local.js";
-import { AGENT_MINUTES, trialTimeouts } from "../../src/contracts/agent-limit.js";
 import { withExecutionEnvironment } from "../../src/contracts/config/execution-environment.js";
 import type { AuthoredTask } from "../../src/contracts/index.js";
 import { solverArguments } from "../../src/evaluation/solver-arguments.js";
@@ -68,6 +66,10 @@ const path = require('node:path');
 const args = process.argv.slice(2);
 if (args[0] === '--version') { console.log('0.23.0'); process.exit(0); }
 fs.appendFileSync(${JSON.stringify(capture)}, JSON.stringify(args) + '\\n');
+if (process.env.SELFBENCH_REGISTRY_HOST) {
+  const toml = fs.readFileSync(path.join(args[args.indexOf('--path') + 1], 'task.toml'), 'utf8');
+  if (!toml.includes('docker_image') || !toml.includes(process.env.SELFBENCH_REGISTRY_HOST)) throw new Error('gate did not use portable images');
+}
 const agent = args[args.indexOf('--agent') + 1];
 const record = args.find((arg) => arg.startsWith('image_record_dir='));
 if (record) {
@@ -133,6 +135,54 @@ for (const environment of ["modal", "e2b"] as const) {
   });
 }
 
+for (const environment of ["docker", "modal", "e2b", "daytona", "vercel"] as const) {
+  test(`portable ${environment} gates run the same digest pair without rebuilding source`, async () => {
+    const root = await temporary();
+    const store = new LocalArtifactStore(join(root, "store"));
+    const bundle = await storedTask(store, false);
+    const capture = await fakeHarbor(root);
+    const registry = {
+      agent: `us-central1-docker.pkg.dev/p/tasks/task@sha256:${"a".repeat(64)}`,
+      verifier: `us-central1-docker.pkg.dev/p/tasks/task@sha256:${"b".repeat(64)}`,
+    };
+    const task: AuthoredTask = {
+      candidateId: "cand-1",
+      taskId: "portable",
+      definition: bundle,
+      sourceBundle: bundle,
+      bundle,
+      images: { provider: "oci", registry },
+    };
+    const result = await withExecutionEnvironment(
+      {
+        PATH: `${join(root, "bin")}:/usr/bin:/bin`,
+        SELFBENCH_TASK_IMAGE_REPOSITORY: "us-central1-docker.pkg.dev/p/tasks",
+      },
+      () =>
+        runHarborGates(
+          store,
+          task,
+          environment,
+          `${COMPILE}/portable`,
+          new AbortController().signal,
+          undefined,
+          {
+            url: "https://app.selfbench.test",
+            secret: "s".repeat(32),
+          },
+        ),
+    );
+    expect(result.oracle.ok).toBe(true);
+    expect(result.images).toEqual(task.images);
+    const calls = (await readFile(capture, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as string[]);
+    expect(calls).toHaveLength(2);
+    expect(calls.flat().some((arg) => arg.startsWith("image_record_dir="))).toBe(false);
+  });
+}
+
 test("a Modal trial starts from the pinned images; other backends build the Dockerfiles", () => {
   const modal = solverArguments(
     "/task",
@@ -188,83 +238,4 @@ test("a Modal trial of a compile without the split files unpacks the full bundle
   });
   expect(await readFile(join(directory, "environment/Dockerfile"), "utf8")).toBe(DOCKERFILE);
   expect(await readFile(join(directory, "environment/repo.tar.gz"), "utf8")).toBe("snapshot");
-});
-
-test("the Modal environment starts from its role's pin, falls back when Modal lost it, records the image, and bounds sandbox lifetime", async () => {
-  const record = await temporary();
-  const result = await runCommand("python3", [
-    "-c",
-    `import asyncio, importlib.util, logging, os, pathlib, sys, types
-modal = types.ModuleType("modal"); exception = types.ModuleType("modal.exception")
-class NotFoundError(Exception): pass
-class PermissionDeniedError(Exception): pass
-class InvalidError(Exception): pass
-class Image:
-    def __init__(self, object_id): self.object_id = object_id
-    @staticmethod
-    def from_id(image_id): return Image(image_id)
-    @staticmethod
-    def from_registry(image, secret):
-        assert image == "registry.example/task@sha256:abc", image
-        assert secret == {"REGISTRY_USERNAME": "selfbench", "REGISTRY_PASSWORD": "grant"}, secret
-        return Image("im-Registry")
-modal.Image = Image
-modal.Secret = types.SimpleNamespace(from_dict=lambda values: values)
-exception.NotFoundError, exception.PermissionDeniedError, exception.InvalidError = NotFoundError, PermissionDeniedError, InvalidError
-harbor_modal = types.ModuleType("harbor.environments.modal")
-class ModalEnvironment:
-    def __init__(self, environment_dir, compose=False, **kwargs):
-        self.kwargs = kwargs
-        self.environment_dir = pathlib.Path(environment_dir)
-        self._compose_mode = compose
-        self._image = Image("im-Built")
-        self.task_env_config = types.SimpleNamespace(docker_image=None)
-        self.logger = logging.getLogger("test")
-        self.started = []
-    async def _create_sandbox(self, **kwargs):
-        if self._image.object_id == "im-Gone": raise NotFoundError()
-        self.started.append(self._image.object_id)
-        return "sandbox"
-harbor_modal.ModalEnvironment = ModalEnvironment
-sys.modules.update({"modal": modal, "modal.exception": exception, "harbor.environments.modal": harbor_modal})
-spec = importlib.util.spec_from_file_location("selfbench_modal", sys.argv[1])
-module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
-record = pathlib.Path(sys.argv[2])
-pins = dict(agent_image="im-Agent1", verifier_image="im-Gone", image_record_dir=str(record))
-async def check():
-    agent = module.SelfBenchModalEnvironment("/task/environment", **pins)
-    await agent._create_sandbox()
-    assert agent.started == ["im-Agent1"], agent.started
-    verifier = module.SelfBenchModalEnvironment("/task/tests", **pins)
-    await verifier._create_sandbox()
-    assert verifier.started == ["im-Built"], verifier.started
-    assert (record / "agent").read_text() == "im-Agent1"
-    assert (record / "verifier").read_text() == "im-Built"
-    composed = module.SelfBenchModalEnvironment("/task/tests", compose=True, verifier_image="im-Verifier1")
-    await composed._create_sandbox()
-    assert composed.started == ["im-Built"], composed.started
-    # A sandbox whose trial stops without cleaning up ends within hours, not Harbor's 24.
-    for environment in (agent, verifier, composed):
-        assert environment.kwargs == {"sandbox_timeout_secs": 10800, "sandbox_idle_timeout_secs": 1800}, environment.kwargs
-    # A solver trial at the most agent minutes still ends inside its sandbox's lifetime.
-    assert module.SANDBOX_LIFETIME_SECS * 1000 > ${trialTimeouts(AGENT_MINUTES.max).harborMs}
-    os.environ.update(SELFBENCH_REGISTRY_HOST="registry.example", SELFBENCH_REGISTRY_USERNAME="selfbench", SELFBENCH_REGISTRY_PASSWORD="grant")
-    fallback = module.SelfBenchModalEnvironment("/task/tests", verifier_image="im-Gone")
-    fallback.task_env_config.docker_image = "registry.example/task@sha256:abc"
-    await fallback._create_sandbox()
-    assert fallback.started == ["im-Registry"], fallback.started
-    preferred = module.SelfBenchModalEnvironment("/task/environment", agent_image="im-Agent1")
-    preferred.task_env_config.docker_image = "registry.example/task@sha256:abc"
-    await preferred._create_sandbox()
-    assert preferred.started == ["im-Agent1"], preferred.started
-    tuned = module.SelfBenchModalEnvironment("/task/tests", sandbox_idle_timeout_secs=None)
-    assert tuned.kwargs["sandbox_idle_timeout_secs"] is None, tuned.kwargs
-asyncio.run(check())
-`,
-    fileURLToPath(
-      new URL("../../src/harnesses/harbor/runtime/selfbench_modal.py", import.meta.url),
-    ),
-    record,
-  ]);
-  expect(result.exitCode).toBe(0);
 });

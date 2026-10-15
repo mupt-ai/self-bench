@@ -66,6 +66,8 @@ export function harborRunArguments(input: HarborRunCommand): string[] {
 const SELFBENCH_ENVIRONMENTS: Partial<Record<HarborEnvironment, string>> = {
   modal: "selfbench_modal:SelfBenchModalEnvironment",
   e2b: "selfbench_e2b:SelfBenchE2BEnvironment",
+  daytona: "selfbench_daytona:SelfBenchDaytonaEnvironment",
+  vercel: "selfbench_vercel:SelfBenchVercelEnvironment",
 };
 
 /**
@@ -73,7 +75,8 @@ const SELFBENCH_ENVIRONMENTS: Partial<Record<HarborEnvironment, string>> = {
  * which records the images a run built and starts trials from a task's pinned images. With no
  * pins it behaves exactly like `--env modal`. E2B's subclass (runtime/selfbench_e2b.py) rebuilds a
  * template whose last build failed instead of starting from it, and says when a key's E2B plan is
- * too small for Harbor's 24-hour sandboxes. Every other provider is Harbor's own.
+ * too small for Harbor's 24-hour sandboxes. Daytona and Vercel adapters add scoped private-image
+ * authentication during startup; Docker uses its per-run DOCKER_CONFIG.
  */
 function harborEnvironmentArgument(environment: HarborEnvironment): string {
   return SELFBENCH_ENVIRONMENTS[environment] ?? environment;

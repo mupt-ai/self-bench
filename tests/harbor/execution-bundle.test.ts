@@ -153,9 +153,8 @@ test("accepted tasks deliver native Harbor files, while build inputs remain immu
       fallbackRoot,
       {},
     );
-    expect(await readFile(join(fallback, "environment/repo.tar.gz"), "utf8")).toBe("large-repo");
-    expect(await readFile(join(fallback, "environment/Dockerfile"), "utf8")).toContain(
-      "COPY repo.tar.gz",
+    expect(await readFile(join(fallback, "environment/Dockerfile"), "utf8")).toBe(
+      `FROM ${task.images?.registry?.agent}\n`,
     );
   }
   const retried = await publishExecutionBundle(store, task, new AbortController().signal);
@@ -169,7 +168,8 @@ test("tasks without both exported images retain runnable build bundles", async (
   expect(await publishExecutionBundle(store, unexported, new AbortController().signal)).toBe(
     unexported,
   );
-  if (!task.images?.registry) throw new Error("Missing fixture images");
+  if (task.images?.provider !== "modal" || !task.images.registry)
+    throw new Error("Missing fixture images");
   const noVerifier = {
     ...task,
     images: { ...task.images, registry: { agent: task.images.registry.agent } },
@@ -191,7 +191,8 @@ test("native execution bundles retain service compose contexts and reject invali
   expect(await readFile(join(directory, "harbor-task/tests/docker-compose.yaml"), "utf8")).toBe(
     compose,
   );
-  if (!task.images?.registry) throw new Error("Missing fixture images");
+  if (task.images?.provider !== "modal" || !task.images.registry)
+    throw new Error("Missing fixture images");
   await expect(
     publishExecutionBundle(
       store,

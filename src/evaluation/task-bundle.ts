@@ -36,16 +36,7 @@ export async function unpackTrialTask(
   trialRoot: string,
   options: { snapshotLink?: SandboxCallback; signal?: AbortSignal },
 ): Promise<string> {
-  // Daytona builds from source and cannot authenticate to our private image registry.
-  // The native bundle's immutable compiler sibling remains available for that build.
-  const bundleKey =
-    sandbox === "daytona" &&
-    /\/execution-[a-f0-9]{24}\/execution-task\.tar\.gz$/.test(task.bundleKey)
-      ? task.bundleKey.replace(
-          /\/execution-[a-f0-9]{24}\/execution-task\.tar\.gz$/,
-          COMPILED_BUNDLE,
-        )
-      : task.bundleKey;
+  const bundleKey = task.bundleKey;
   const link = sandbox === "modal" ? options.snapshotLink : undefined;
   // Any trouble finding the split files only means reading the full bundle.
   const split = link ? await splitBundle(store, bundleKey).catch(() => undefined) : undefined;

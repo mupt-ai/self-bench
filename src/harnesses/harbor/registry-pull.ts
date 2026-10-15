@@ -18,7 +18,13 @@ import {
  * runtime/selfbench_e2b.py, Docker through DOCKER_CONFIG, and Modal through an ephemeral
  * registry secret. Modal still prefers its pins; its fallback can pull the exported image.
  */
-const PULLING_ENVIRONMENTS: ReadonlySet<HarborEnvironment> = new Set(["e2b", "docker", "modal"]);
+const PULLING_ENVIRONMENTS: ReadonlySet<HarborEnvironment> = new Set([
+  "e2b",
+  "docker",
+  "modal",
+  "daytona",
+  "vercel",
+]);
 
 function pullsTaskImages(environment: HarborEnvironment): boolean {
   return PULLING_ENVIRONMENTS.has(environment);

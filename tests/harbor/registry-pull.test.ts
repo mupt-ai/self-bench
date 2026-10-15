@@ -35,7 +35,7 @@ async function task(toml: string): Promise<string> {
 }
 
 test("E2B, Docker and Modal can pull exported images by digest through the API", async () => {
-  for (const environment of ["e2b", "docker", "modal"] as const) {
+  for (const environment of ["e2b", "docker", "modal", "daytona", "vercel"] as const) {
     const root = await task('schema_version = "1.4"\n[verifier.environment]\ncpus = 2\n');
     const env = await startFromExportedImages(root, images, environment, serving, root);
 

@@ -203,16 +203,23 @@ const registryImageSchema = z
  *
  * `registry` holds the same images exported, once the task was accepted, into SelfBench's task
  * image repository by digest, so providers that cannot use a Modal ID (E2B, Docker, another Modal
- * workspace) start from exactly what verification ran on too.
+ * workspace) start from exactly what verification ran on too. New tasks use `provider: "oci"`
+ * with both portable digests, independent of any provider's cache IDs.
  */
-export const taskImagesSchema = z.object({
-  provider: z.literal("modal"),
-  agent: modalImageIdSchema,
-  verifier: modalImageIdSchema.optional(),
-  registry: z
-    .object({ agent: registryImageSchema, verifier: registryImageSchema.optional() })
-    .optional(),
-});
+export const taskImagesSchema = z.discriminatedUnion("provider", [
+  z.object({
+    provider: z.literal("modal"),
+    agent: modalImageIdSchema,
+    verifier: modalImageIdSchema.optional(),
+    registry: z
+      .object({ agent: registryImageSchema, verifier: registryImageSchema.optional() })
+      .optional(),
+  }),
+  z.object({
+    provider: z.literal("oci"),
+    registry: z.object({ agent: registryImageSchema, verifier: registryImageSchema }),
+  }),
+]);
 
 export type TaskImages = z.infer<typeof taskImagesSchema>;
 
