@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse } from "smol-toml";
@@ -59,6 +59,26 @@ test("E2B, Docker and Modal can pull exported images by digest through the API",
       Buffer.from(`selfbench:${env.SELFBENCH_REGISTRY_PASSWORD}`).toString("base64"),
     );
   }
+});
+
+test("service contexts build FROM the proxied image the compose login covers", async () => {
+  const root = await task('schema_version = "1.4"\n');
+  for (const context of ["environment", "tests"]) {
+    await mkdir(join(root, context));
+    await writeFile(join(root, context, "Dockerfile"), `FROM ${REPOSITORY}/${AGENT}\n`);
+  }
+  await writeFile(
+    join(root, "tests", "docker-compose.yaml"),
+    '{"services":{"main":{"build":"."}}}',
+  );
+  await startFromExportedImages(root, images, "daytona", serving, root);
+  expect(await readFile(join(root, "tests", "Dockerfile"), "utf8")).toBe(
+    `FROM app.selfbench.test/${VERIFIER}\n`,
+  );
+  // A context without services starts from `docker_image`; its Dockerfile is left alone.
+  expect(await readFile(join(root, "environment", "Dockerfile"), "utf8")).toBe(
+    `FROM ${REPOSITORY}/${AGENT}\n`,
+  );
 });
 
 test("an unexported task or deployment without image serving builds its Dockerfiles", async () => {
