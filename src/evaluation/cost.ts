@@ -3,6 +3,7 @@ import { measureClaudeCodeCost } from "./claude-code-cost.js";
 import { measureCodexCost } from "./codex-cost.js";
 import { compatibleEndpoint } from "./compatible-endpoints.js";
 import { gatewayModel } from "./execution.js";
+import { measureHarborAgentCost } from "./harbor-agent-cost.js";
 import { measureMuseCodeCost } from "./muse-code-cost.js";
 import { measurePiCost } from "./pi-cost.js";
 import { type RequestUsage, requestsCost, wholeCost } from "./request-cost.js";
@@ -33,6 +34,7 @@ export function trialCost(
         cacheWritesInferred?: boolean;
         largestPrompt?: number;
         hourCacheWrite?: number;
+        referenceRatesComplete?: boolean;
       }
     | undefined;
 
@@ -46,6 +48,8 @@ export function trialCost(
     measurement = measureCodexCost(run, files, result, auth, pricing, matches);
   } else if (harness === "claude-code") {
     measurement = measureClaudeCodeCost(files, result, matches);
+  } else if (harness === "mini-swe-agent" || harness === "terminus-2") {
+    measurement = measureHarborAgentCost(files, result, matches);
   } else if (harness === "muse-code") {
     const muse = measureMuseCodeCost(files, result);
     if (!muse) return {};
@@ -67,6 +71,7 @@ export function trialCost(
     cacheWritesInferred,
     largestPrompt,
     hourCacheWrite = 0,
+    referenceRatesComplete = true,
   } = measurement;
   const measured = {
     modelVerified,
@@ -95,6 +100,13 @@ export function trialCost(
     (reportedCost !== undefined && !isGateway(provider) && !compatibleEndpoint(provider, harness))
   )
     return reported;
+  if (!referenceRatesComplete && pricing.cacheWrite > pricing.input) {
+    return reportedCost !== undefined &&
+      !isGateway(provider) &&
+      !compatibleEndpoint(provider, harness)
+      ? reported
+      : measured;
+  }
   const apiCostUsd = requests
     ? requestsCost(pricing, requests)
     : wholeCost(pricing, tokenUsage, largestPrompt, hourCacheWrite);

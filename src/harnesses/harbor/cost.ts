@@ -31,7 +31,11 @@ export function harborCallUsage(
     // Harbor's Codex adapter omits cached_tokens when a call read nothing from cache.
     const cached = metrics.cached_tokens ?? 0;
     // Codex names its writes one way, Claude Code (split by cache lifetime) another.
-    const written = extra.cache_write_input_tokens ?? extra.cache_creation_input_tokens ?? 0;
+    const written =
+      extra.cache_write_input_tokens ??
+      extra.cache_creation_input_tokens ??
+      record(extra.prompt_tokens_details).cache_creation_tokens ??
+      0;
     const hour = record(extra.cache_creation).ephemeral_1h_input_tokens ?? 0;
     const cost = metrics.cost_usd;
     if (
