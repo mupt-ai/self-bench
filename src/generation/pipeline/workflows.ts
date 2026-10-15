@@ -98,7 +98,13 @@ const workflowActivities: SelfBenchActivities = {
   compileAndVerify: async (input) => {
     const compiled = await whenSandboxFree(() => compile.compileTask(input));
     const finished = await finish.finishCompile({ ...input, compiled });
-    return await whenSandboxFree(() => harbor().verifyCompiled({ ...input, compiled: finished }));
+    return await whenSandboxFree(() =>
+      harbor().verifyCompiled({
+        ...input,
+        compiled: finished,
+        ...(patched("portable-task-images") ? { portableImages: true } : {}),
+      }),
+    );
   },
 };
 
@@ -227,7 +233,7 @@ export async function executeCandidate(
       if (verdict.kind === "accepted") {
         // A failed export only means other providers build the task's Dockerfiles, as before.
         const kept = await activities.exportTaskImages({ run, task }).catch((error: unknown) => {
-          if (isCancellation(error)) throw error;
+          if (isCancellation(error) || task.images?.provider === "oci") throw error;
           return task;
         });
         return { progress: update({ status: "accepted" }), task: kept, report: verified.reportRef };

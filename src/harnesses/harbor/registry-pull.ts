@@ -18,7 +18,13 @@ import {
  * runtime/selfbench_e2b.py, Docker through DOCKER_CONFIG, and Modal through an ephemeral
  * registry secret. Modal still prefers its pins; its fallback can pull the exported image.
  */
-const PULLING_ENVIRONMENTS: ReadonlySet<HarborEnvironment> = new Set(["e2b", "docker", "modal"]);
+const PULLING_ENVIRONMENTS: ReadonlySet<HarborEnvironment> = new Set([
+  "e2b",
+  "docker",
+  "modal",
+  "daytona",
+  "vercel",
+]);
 
 function pullsTaskImages(environment: HarborEnvironment): boolean {
   return PULLING_ENVIRONMENTS.has(environment);
@@ -94,6 +100,19 @@ async function applyTaskImages(taskDirectory: string, pull: TaskImagePull): Prom
     };
   }
   await writeFile(path, stringify(config));
+  // Compose builds `main` from the context's Dockerfile rather than `docker_image`, so a service
+  // context starts FROM the proxied image the run's login covers, not the registry it lives in.
+  for (const [context, image] of [
+    ["environment", pull.images.agent],
+    ["tests", pull.images.verifier],
+  ] as const) {
+    if (!image) continue;
+    const composed = await readFile(join(taskDirectory, context, "docker-compose.yaml")).then(
+      () => true,
+      () => false,
+    );
+    if (composed) await writeFile(join(taskDirectory, context, "Dockerfile"), `FROM ${image}\n`);
+  }
 }
 
 /**

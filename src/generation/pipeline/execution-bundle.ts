@@ -27,10 +27,12 @@ export async function publishExecutionBundle(
   store: ArtifactStore,
   task: AuthoredTask,
   signal: AbortSignal,
+  purpose: "execution" | "verification" = "execution",
 ): Promise<AuthoredTask> {
+  const bundleName = purpose === "execution" ? EXECUTION_BUNDLE_NAME : "verification-task.tar.gz";
   const images = task.images?.registry;
   if (!images?.agent || !images.verifier) return task;
-  if (task.bundle.uri.endsWith(`/${EXECUTION_BUNDLE_NAME}`)) return task;
+  if (task.bundle.uri.endsWith(`/${bundleName}`)) return task;
   const runIndex = task.bundle.uri.indexOf("/runs/");
   if (runIndex < 0) throw new Error("Execution bundle must belong to a generation run");
   const prefix = dirname(task.bundle.uri.slice(runIndex + 1));
@@ -77,7 +79,7 @@ export async function publishExecutionBundle(
     const revision = sha256(
       JSON.stringify([task.bundle.sha256, images.agent, images.verifier]),
     ).slice(0, 24);
-    const key = `${prefix}/execution-${revision}/${EXECUTION_BUNDLE_NAME}`;
+    const key = `${prefix}/execution-${revision}/${bundleName}`;
     const existing = await store.stat(key);
     const bundle = existing
       ? { ...existing, contentType: "application/gzip" }

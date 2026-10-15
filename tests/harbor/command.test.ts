@@ -21,6 +21,8 @@ test("all Harbor providers share invocation policy without acquiring solver retr
         {
           modal: "selfbench_modal:SelfBenchModalEnvironment",
           e2b: "selfbench_e2b:SelfBenchE2BEnvironment",
+          daytona: "selfbench_daytona:SelfBenchDaytonaEnvironment",
+          vercel: "selfbench_vercel:SelfBenchVercelEnvironment",
         }[environment as string] ?? environment,
       );
       expect(args[args.indexOf("--path") + 1]).toBe("/task with spaces");

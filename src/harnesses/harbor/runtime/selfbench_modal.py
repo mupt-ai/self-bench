@@ -19,6 +19,7 @@ from modal import Image, Secret
 from modal.exception import InvalidError, NotFoundError, PermissionDeniedError
 
 from harbor.environments.modal import ModalEnvironment
+from registry_auth import registry_login, stage_compose_login
 
 # What Modal raises for an image ID this workspace cannot use; anything else is a real failure.
 UNUSABLE_PIN = (NotFoundError, PermissionDeniedError, InvalidError)
@@ -56,6 +57,23 @@ class SelfBenchModalEnvironment(ModalEnvironment):
         pins = {"agent": agent_image, "verifier": verifier_image}
         self._selfbench_pin = pins.get(self._selfbench_role) if self._selfbench_role else None
         self._selfbench_record = Path(image_record_dir) if image_record_dir else None
+
+    async def _sdk_upload_dir(self, source_dir, target_dir):
+        if self._compose_mode and registry_login():
+            result = await self._sdk_exec("mkdir -p /root/.docker")
+            if result.return_code != 0:
+                raise RuntimeError("Could not prepare compose registry authentication")
+            await stage_compose_login(self._sdk_upload_file)
+        return await super()._sdk_upload_dir(source_dir, target_dir)
+
+    async def start(self, force_build):
+        try:
+            return await super().start(force_build)
+        finally:
+            if self._compose_mode and self._sandbox and registry_login():
+                result = await self._sdk_exec("rm -f /root/.docker/config.json")
+                if result.return_code != 0:
+                    raise RuntimeError("Could not clear compose registry authentication")
 
     async def _create_sandbox(self, **kwargs):
         if self._compose_mode or self._selfbench_role is None:

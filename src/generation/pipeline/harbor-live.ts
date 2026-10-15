@@ -103,6 +103,6 @@ async function trialLogs(jobDirectory: string): Promise<string[]> {
 /** Credential values Harbor's process holds, so live output never republishes them. */
 export function providerSecrets(env: NodeJS.ProcessEnv): string[] {
   return Object.entries(env)
-    .filter(([key, value]) => /TOKEN|SECRET|KEY/.test(key) && value && value.length >= 8)
+    .filter(([key, value]) => /TOKEN|SECRET|KEY|PASSWORD/.test(key) && value && value.length >= 8)
     .map(([, value]) => value as string);
 }

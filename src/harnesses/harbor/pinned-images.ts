@@ -4,7 +4,7 @@ import { type TaskImages, taskImagesSchema } from "../../contracts/index.js";
 
 /** The environment kwargs that start a Modal trial from a task's pinned images. */
 export function pinnedImageKwargs(images: TaskImages | undefined): Record<string, string> {
-  if (!images) return {};
+  if (images?.provider !== "modal") return {};
   return {
     agent_image: images.agent,
     ...(images.verifier ? { verifier_image: images.verifier } : {}),

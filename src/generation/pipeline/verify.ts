@@ -16,8 +16,10 @@ import type { SandboxExecutor } from "../../sandbox/index.js";
 import type { SandboxJobOutcome } from "../../sandbox/jobs.js";
 import { githubToken } from "../../third_party/github/token.js";
 import { verifierRuntimeFiles } from "../task/runtime-assets.js";
+import { publishExecutionBundle } from "./execution-bundle.js";
 import { notRunGates, runHarborGates } from "./harbor-gates.js";
 import { artifactFile, readAsset, withHeartbeats } from "./helpers.js";
+import { PortableImageBuildError, preparePortableImages } from "./portable-images.js";
 import { remoteGate } from "./remote-gate.js";
 import { runSandboxJob, type SandboxCallback } from "./sandbox-job.js";
 import { isGreen, renderVerifyReport } from "./verify-report.js";
@@ -28,6 +30,8 @@ export interface CompileAndVerifyInput {
   readonly task: AuthoredTaskDraft;
   readonly stage: PipelineStage;
   readonly round: number;
+  /** Versioned by the workflow; old histories retain source-build verification. */
+  readonly portableImages?: boolean;
   /** Set for a `verify` the author asked for mid-round: the turn that asked. */
   readonly turn?: number;
 }
@@ -145,6 +149,7 @@ export async function verifyCompiled(
   harborEnvironment: SelfBenchConfig["harborEnvironment"],
   input: VerifyCompiledInput,
   callback: SandboxCallback,
+  repository?: string,
 ): Promise<VerifyOutcome> {
   const { stage, round, compiled } = input;
   const prefix = verifyPrefix(input);
@@ -155,21 +160,45 @@ export async function verifyCompiled(
     const bundle = compiled.files["harbor-task.tar.gz"];
     // The compiled definition carries the image digests the compiler pinned.
     const definition = compiled.files[PINNED_DEFINITION] ?? input.task.definition;
-    const task: AuthoredTask | undefined =
+    let task: AuthoredTask | undefined =
       result.compileErrors.length === 0 && bundle
         ? { ...input.task, definition, bundle }
         : undefined;
+    let imageBuildError: string | undefined;
+    if (task && result.auditBlockers.length === 0 && input.portableImages && repository) {
+      try {
+        task = await preparePortableImages(store, task, repository, signal);
+      } catch (error) {
+        if (!(error instanceof PortableImageBuildError)) throw error;
+        imageBuildError = error.message;
+      }
+    }
+    const gateTask =
+      task?.images?.provider === "oci"
+        ? await publishExecutionBundle(store, task, signal, "verification")
+        : task;
     const { images, ...gates }: Awaited<ReturnType<typeof runHarborGates>> =
-      task && result.auditBlockers.length === 0
+      gateTask && !imageBuildError && result.auditBlockers.length === 0
         ? await runHarborGates(
             store,
-            task,
+            gateTask,
             harborEnvironment,
             prefix,
             signal,
-            remoteGate(harborEnvironment, compiled, callback),
+            gateTask.images?.provider === "oci"
+              ? undefined
+              : remoteGate(harborEnvironment, compiled, callback),
+            callback,
           )
         : notRunGates();
+    if (imageBuildError) {
+      const log = await store.put(
+        `${prefix}/image-build.log`,
+        Buffer.from(imageBuildError),
+        "text/plain",
+      );
+      gates.build = { ran: true, ok: false, infrastructure: false, logTail: imageBuildError, log };
+    }
     const partial = {
       schemaVersion: 1 as const,
       stage,
