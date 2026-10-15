@@ -55,7 +55,11 @@ class AsyncDaytona:
     async def create(self, params, timeout=None):
         events.append(("daytona", params.snapshot)); return DaytonaSandbox()
     async def close(self): events.append("closed")
-module("daytona", AsyncDaytona=AsyncDaytona, CreateSandboxFromSnapshotParams=lambda snapshot: types.SimpleNamespace(snapshot=snapshot))
+def snapshot_params(snapshot, os_user=None, auto_stop_interval=None):
+    # Packed as root, and never stopped while the archive downloads.
+    assert os_user == "root" and auto_stop_interval == 0, (os_user, auto_stop_interval)
+    return types.SimpleNamespace(snapshot=snapshot)
+module("daytona", AsyncDaytona=AsyncDaytona, CreateSandboxFromSnapshotParams=snapshot_params)
 class Reader:
     def __init__(self): self.offset = 0
     async def __aenter__(self): return self
@@ -165,4 +169,6 @@ print("ok")
   );
   expect(result.stdout.trim()).toBe("ok");
   expect(registry.manifests.size).toBe(0);
+  // The upload opens with the first bytes, so a pack that fails (or runs long) holds no request.
+  expect(registry.uploads.size).toBe(0);
 });

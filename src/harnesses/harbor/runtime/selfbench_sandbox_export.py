@@ -63,8 +63,11 @@ async def stream_daytona(snapshot: str, layer: LayerUpload) -> None:
 
     daytona = AsyncDaytona()
     try:
+        # As root, so a Dockerfile USER cannot hide part of the tree, and never auto-stopped,
+        # since it sits idle while the archive downloads; the finally below deletes it.
         sandbox = await daytona.create(
-            CreateSandboxFromSnapshotParams(snapshot=snapshot), timeout=SANDBOX_LIFETIME_SECS
+            CreateSandboxFromSnapshotParams(snapshot=snapshot, os_user="root", auto_stop_interval=0),
+            timeout=SANDBOX_LIFETIME_SECS,
         )
         try:
             result = await sandbox.process.exec(

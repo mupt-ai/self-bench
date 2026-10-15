@@ -20,6 +20,8 @@ export async function fakeRegistry(
   api: string;
   blobs: Map<string, Buffer>;
   manifests: Map<string, Buffer>;
+  /** Blob uploads opened, finished or not. */
+  uploads: Map<string, Buffer[]>;
 }> {
   const blobs = new Map<string, Buffer>();
   const manifests = new Map<string, Buffer>();
@@ -57,5 +59,10 @@ export async function fakeRegistry(
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as AddressInfo;
-  return { api: `http://127.0.0.1:${port}/v2/selfbench-test/selfbench-tasks`, blobs, manifests };
+  return {
+    api: `http://127.0.0.1:${port}/v2/selfbench-test/selfbench-tasks`,
+    blobs,
+    manifests,
+    uploads,
+  };
 }

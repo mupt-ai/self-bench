@@ -88,18 +88,26 @@ class LayerUpload:
     """Gzips a tar stream into one streamed blob upload, hashing both sides for the image.
 
     Artifact Registry takes a blob in a single PATCH (as `docker push` sends it), so a thread
-    streams the request body from a bounded queue while the sandbox's tar is read.
+    streams the request body from a bounded queue while the sandbox's tar is read. The upload
+    opens only with the first bytes: packing a large sandbox first can outlast the request's
+    idle timeout.
     """
 
     def __init__(self, registry: Registry, name: str):
         self.registry = registry
-        self.location = registry.start_upload(name)
+        self.name = name
         self.compressor = zlib.compressobj(6, zlib.DEFLATED, 31)
         self.raw = hashlib.sha256()
         self.gzipped = hashlib.sha256()
         self.size = 0
         self.chunks: queue.Queue[bytes | None] = queue.Queue(maxsize=8)
-        self.upload = asyncio.ensure_future(asyncio.to_thread(self._patch))
+        self.upload: asyncio.Future[str] | None = None
+
+    def _open(self) -> asyncio.Future[str]:
+        if self.upload is None:
+            self.location = self.registry.start_upload(self.name)
+            self.upload = asyncio.ensure_future(asyncio.to_thread(self._patch))
+        return self.upload
 
     def _body(self):
         while (chunk := self.chunks.get()) is not None:
@@ -112,9 +120,10 @@ class LayerUpload:
         return headers.get("Location", self.location)
 
     async def _queue(self, chunk: bytes | None) -> None:
+        upload = self._open()
         while True:
-            if self.upload.done():
-                self.upload.result()
+            if upload.done():
+                upload.result()
                 raise RuntimeError("the layer upload ended before the layer did")
             try:
                 await asyncio.to_thread(self.chunks.put, chunk, True, 5)
@@ -134,6 +143,8 @@ class LayerUpload:
 
     def abort(self) -> None:
         """Ends the request body early so the upload thread returns and the process can exit."""
+        if self.upload is None:
+            return
         while True:
             try:
                 self.chunks.put_nowait(None)
@@ -147,7 +158,7 @@ class LayerUpload:
     async def finish(self) -> tuple[str, str, int]:
         await self._send(self.compressor.flush())
         await self._queue(None)
-        location = await self.upload
+        location = await self._open()
         digest = f"sha256:{self.gzipped.hexdigest()}"
         self.registry.finish_upload(location, digest)
         return digest, f"sha256:{self.raw.hexdigest()}", self.size
