@@ -9,6 +9,20 @@ import tempfile
 from pathlib import Path
 
 
+# Harbor builds the agent from the task's environment/ and a separate verifier from its tests/.
+ROLES = {"environment": "agent", "tests": "verifier"}
+
+
+def record_image(record_dir: str | None, environment_dir: Path, image: str | None) -> None:
+    """Writes the provider image a role's sandbox started from, for the worker to export later."""
+    role = ROLES.get(environment_dir.name)
+    if not record_dir or not role or not image:
+        return
+    directory = Path(record_dir)
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / role).write_text(image)
+
+
 def registry_login() -> tuple[str, str, str] | None:
     host = os.environ.get("SELFBENCH_REGISTRY_HOST")
     password = os.environ.get("SELFBENCH_REGISTRY_PASSWORD")

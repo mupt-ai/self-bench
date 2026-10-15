@@ -195,29 +195,33 @@ const registryImageSchema = z
   .string()
   .regex(/^[a-z0-9.-]+(?::\d+)?\/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$/);
 
+/** An E2B template, a Daytona snapshot, or a Vercel registry image, as the provider names it. */
+const providerImageSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,511}$/);
+const exportedImagesSchema = z
+  .object({ agent: registryImageSchema, verifier: registryImageSchema.optional() })
+  .optional();
+
 /**
  * The images a task's verification passed its oracle on: the agent's (from `environment/`) and
- * the separate verifier's (from `tests/`, absent for tasks with services). They are IDs in the
- * Modal workspace that verified the task; Modal trials there start from them instead of building
- * the Dockerfiles.
+ * the separate verifier's (from `tests/`, absent for tasks with services), in the account that
+ * verified the task. Modal trials there start from Modal IDs instead of building the Dockerfiles.
  *
  * `registry` holds the same images exported, once the task was accepted, into SelfBench's task
- * image repository by digest, so providers that cannot use a Modal ID (E2B, Docker, another Modal
- * workspace) start from exactly what verification ran on too. New tasks use `provider: "oci"`
- * with both portable digests, independent of any provider's cache IDs.
+ * image repository by digest, so other providers and accounts start from exactly what
+ * verification ran on too.
  */
 export const taskImagesSchema = z.discriminatedUnion("provider", [
   z.object({
     provider: z.literal("modal"),
     agent: modalImageIdSchema,
     verifier: modalImageIdSchema.optional(),
-    registry: z
-      .object({ agent: registryImageSchema, verifier: registryImageSchema.optional() })
-      .optional(),
+    registry: exportedImagesSchema,
   }),
   z.object({
-    provider: z.literal("oci"),
-    registry: z.object({ agent: registryImageSchema, verifier: registryImageSchema }),
+    provider: z.enum(["e2b", "daytona", "vercel"]),
+    agent: providerImageSchema,
+    verifier: providerImageSchema.optional(),
+    registry: exportedImagesSchema,
   }),
 ]);
 

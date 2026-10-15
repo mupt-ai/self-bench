@@ -19,13 +19,11 @@ from modal import Image, Secret
 from modal.exception import InvalidError, NotFoundError, PermissionDeniedError
 
 from harbor.environments.modal import ModalEnvironment
+from registry_auth import ROLES as _ROLES
 from registry_auth import registry_login, stage_compose_login
 
 # What Modal raises for an image ID this workspace cannot use; anything else is a real failure.
 UNUSABLE_PIN = (NotFoundError, PermissionDeniedError, InvalidError)
-
-# Harbor builds the agent from the task's environment/ and a separate verifier from its tests/.
-_ROLES = {"environment": "agent", "tests": "verifier"}
 
 # Harbor's defaults keep a sandbox for a day with no idle limit, so a trial stopped mid-run
 # (cancelled, timed out, or its worker replaced) left its sandbox running for 24 hours. No Harbor

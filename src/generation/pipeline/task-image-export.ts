@@ -32,8 +32,9 @@ export interface ExportTaskImagesInput {
 
 /**
  * The accepted task with its verified images exported, when this deployment has a task image
- * repository and the task was verified on Modal; otherwise the task as it is. Runs with the run's
- * own Modal credentials, which can read the images its verification built.
+ * repository and verification recorded the images it ran on (Modal, E2B, Daytona or Vercel);
+ * otherwise the task as it is. Runs with the run's own credentials for that provider, which can
+ * read the images its verification built.
  */
 export async function exportAcceptedTask(
   store: ArtifactStore,
@@ -41,11 +42,7 @@ export async function exportAcceptedTask(
   task: AuthoredTask,
   repository: string | undefined,
 ): Promise<AuthoredTask> {
-  if (task.images?.provider === "oci")
-    return withHeartbeats(`publishing ${task.taskId}`, (signal) =>
-      publishExecutionBundle(store, task, signal),
-    );
-  if (!repository || environment !== "modal" || !task.images) return task;
+  if (!repository || task.images?.provider !== environment) return task;
   return await withHeartbeats(`exporting ${task.taskId}'s images`, async (signal) => {
     const exported = await exportTaskImages(store, task, {
       repository,
@@ -60,7 +57,7 @@ export async function exportAcceptedTask(
 export interface TaskImageExportOptions {
   /** `<region>-docker.pkg.dev/<project>/<repository>` */
   readonly repository: string;
-  /** The Harbor process environment with the Modal credentials that verified the task. */
+  /** The Harbor process environment with the provider credentials that verified the task. */
   readonly env: NodeJS.ProcessEnv;
   /** An access token that may push to the repository. */
   readonly token: () => Promise<string>;
@@ -71,9 +68,9 @@ export interface TaskImageExportOptions {
 }
 
 /**
- * Exports the Modal images an accepted task's verification ran on into SelfBench's task image
+ * Exports the provider images an accepted task's verification ran on into SelfBench's task image
  * repository (see runtime/selfbench_export.py), and returns the task with them by digest beside
- * its Modal pins. A task without pins, or already exported, is returned as it is.
+ * its provider images. A task without them, or already exported, is returned as it is.
  */
 export async function exportTaskImages(
   store: ArtifactStore,
@@ -81,7 +78,7 @@ export async function exportTaskImages(
   options: TaskImageExportOptions,
 ): Promise<AuthoredTask> {
   const images = task.images;
-  if (images?.provider !== "modal" || images.registry) return task;
+  if (!images || images.registry) return task;
   const command = options.command ?? runCommand;
   const root = await mkdtemp(join(tmpdir(), `selfbench-export-${task.taskId}-`));
   // An access token lasts about an hour and an export can take two, so the exporter rereads this
@@ -108,7 +105,7 @@ export async function exportTaskImages(
       const config = await dockerfileImageConfig(dockerfile, options.configFor ?? imageConfig);
       const result = await command(
         python,
-        [join(harborPythonPath(), "selfbench_export.py"), pin, name],
+        [join(harborPythonPath(), "selfbench_export.py"), images.provider, pin, name],
         {
           env: {
             ...options.env,

@@ -127,7 +127,7 @@ test("an accepted task's Modal images are exported beside its pins", async () =>
         env,
         token: await readFile(env.SELFBENCH_EXPORT_TOKEN_FILE ?? "", "utf8"),
       });
-      const digit = args[1] === "im-Agent1" ? "1" : "2";
+      const digit = args[2] === "im-Agent1" ? "1" : "2";
       return { exitCode: 0, stdout: `pushing\nsha256:${digit.repeat(64)}\n`, stderr: "" };
     }) as typeof runCommand,
   });
@@ -141,9 +141,9 @@ test("an accepted task's Modal images are exported beside its pins", async () =>
       verifier: `${REPOSITORY}/task-1@sha256:${"2".repeat(64)}`,
     },
   });
-  expect(calls.map((call) => call.args.slice(1, 3))).toEqual([
-    ["im-Agent1", "task-1"],
-    ["im-Verifier1", "task-1"],
+  expect(calls.map((call) => call.args.slice(1, 4))).toEqual([
+    ["modal", "im-Agent1", "task-1"],
+    ["modal", "im-Verifier1", "task-1"],
   ]);
   for (const [index, call] of calls.entries()) {
     expect(call.args[0]?.endsWith("selfbench_export.py")).toBe(true);
@@ -159,6 +159,31 @@ test("an accepted task's Modal images are exported beside its pins", async () =>
       WorkingDir: "/app",
     });
   }
+  // E2B, Daytona and Vercel images go through the same script, which picks the provider's sandbox.
+  const e2bArgs: (readonly string[])[] = [];
+  const fromE2b = await exportTaskImages(
+    store,
+    { ...task, images: { provider: "e2b", agent: "selfbench-task-1__abc" } },
+    {
+      repository: REPOSITORY,
+      env: { PATH: bin, E2B_API_KEY: "e2b" },
+      token: async () => "push-token",
+      signal: new AbortController().signal,
+      configFor: async () => ({ Env: [] }),
+      command: (async (_command: string, args: readonly string[]) => {
+        e2bArgs.push(args);
+        return { exitCode: 0, stdout: `sha256:${"3".repeat(64)}\n`, stderr: "" };
+      }) as typeof runCommand,
+    },
+  );
+  expect(e2bArgs.map((args) => args.slice(1, 4))).toEqual([
+    ["e2b", "selfbench-task-1__abc", "task-1"],
+  ]);
+  expect(fromE2b.images).toEqual({
+    provider: "e2b",
+    agent: "selfbench-task-1__abc",
+    registry: { agent: `${REPOSITORY}/task-1@sha256:${"3".repeat(64)}` },
+  });
   // A task already exported, or never pinned, is left as it is.
   expect(await exportTaskImages(store, exported, {} as never)).toBe(exported);
 });

@@ -29,32 +29,3 @@ test("an accepted task carries its exported images; a failed export keeps it acc
     );
   }
 });
-
-test("a portable task cannot be accepted when publishing its execution bundle fails", async () => {
-  const value = candidate("portable", 1);
-  const activities = acceptingActivities([value]);
-  const compile = activities.compileAndVerify;
-  activities.compileAndVerify = async (input) => {
-    const outcome = await compile(input);
-    return {
-      ...outcome,
-      ...(outcome.task
-        ? {
-            task: {
-              ...outcome.task,
-              images: {
-                provider: "oci" as const,
-                registry: { agent: exported, verifier: exported },
-              },
-            },
-          }
-        : {}),
-    };
-  };
-  activities.exportTaskImages = async () => {
-    throw new Error("artifact storage unavailable");
-  };
-  const result = await executeCandidate({ run, candidate: value }, activities, () => {});
-  expect(result.progress.status).toBe("infrastructure_failed");
-  expect(result.task).toBeUndefined();
-});
