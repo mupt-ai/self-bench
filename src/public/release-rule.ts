@@ -1,6 +1,7 @@
 import { findModel, models } from "../contracts/models.js";
 import type { TaskState } from "../db/task-record.js";
 import type { TaskRecord } from "../db/tasks.js";
+import { costTotal } from "../evaluation/cost-total.js";
 import type { Setting, SettingResults } from "./release-results.js";
 import type { ReleaseSetting } from "./release-types.js";
 
@@ -177,7 +178,14 @@ function publicSetting(
   setting: Setting,
 ): Omit<
   ReleaseSetting,
-  "tasks" | "passed" | "accuracy" | "costPerTaskUsd" | "totalCostUsd" | "onFrontier"
+  | "tasks"
+  | "passed"
+  | "accuracy"
+  | "costPerTaskUsd"
+  | "totalCostUsd"
+  | "costIncomplete"
+  | "costedTasks"
+  | "onFrontier"
 > {
   return {
     id: setting.id,
@@ -200,7 +208,8 @@ export function scores(chosen: readonly Candidate[], tasks: readonly string[]): 
       return result.trial;
     });
     const passed = trials.filter((trial) => trial.rewards.reward === 1).length;
-    const totalCostUsd = trials.reduce((sum, trial) => sum + (trial.apiCostUsd ?? 0), 0);
+    const costs = costTotal(trials);
+    const totalCostUsd = costs.total;
     return {
       ...publicSetting(entry.setting),
       tasks: tasks.length,
@@ -208,9 +217,11 @@ export function scores(chosen: readonly Candidate[], tasks: readonly string[]): 
       accuracy: (passed / tasks.length) * 100,
       costPerTaskUsd: totalCostUsd / tasks.length,
       totalCostUsd,
+      costedTasks: costs.known,
+      ...(costs.incomplete ? { costIncomplete: true as const } : {}),
       onFrontier: false,
     };
   });
-  const frontier = frontierOf(scored);
+  const frontier = frontierOf(scored.filter((setting) => !setting.costIncomplete));
   return scored.map((setting) => ({ ...setting, onFrontier: frontier.has(setting.id) }));
 }

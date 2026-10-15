@@ -28,6 +28,7 @@ export type TrialTranscript = Pick<EvaluationTrial, "steps"> &
       | "artifacts"
       | "tokenUsage"
       | "apiCostUsd"
+      | "costIncomplete"
       | "costSource"
       | "cacheWritesInferred"
       | "billedCostUsd"

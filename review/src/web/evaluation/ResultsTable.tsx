@@ -42,7 +42,7 @@ export function ResultsTable({
   credentials,
   accepted,
   baseUrl,
-  repo,
+  pages,
   onChanged,
 }: {
   runs: readonly EvaluationRun[];
@@ -50,7 +50,8 @@ export function ResultsTable({
   /** The repository's accepted tasks, for the cumulative results' coverage, once loaded. */
   accepted?: readonly AcceptedTask[];
   baseUrl: string;
-  repo: string;
+  /** Where the scope's pages live: `/repos/<owner>/<name>`, or a benchmark's. */
+  pages: string;
   onChanged?(run: EvaluationRun): void;
 }) {
   const [view, setView] = useResultsView(baseUrl);
@@ -237,7 +238,7 @@ export function ResultsTable({
           task={audited}
           configurations={configurations}
           baseUrl={baseUrl}
-          repo={repo}
+          pages={pages}
           onClose={() => show(AUDIT_PARAM, undefined)}
           onOpenTrial={(result) => showTrial(trialParam(result.run, result.trial))}
         />
@@ -247,7 +248,7 @@ export function ResultsTable({
           run={opened.run}
           trial={opened.trial}
           baseUrl={baseUrl}
-          repo={repo}
+          pages={pages}
           onClose={() => showTrial(undefined)}
           {...(onChanged ? { onExplained: onChanged } : {})}
         />

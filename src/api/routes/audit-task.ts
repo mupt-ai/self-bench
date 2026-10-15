@@ -54,7 +54,10 @@ export async function auditTaskRoute(
     return;
   }
   const ref = { repoId: repo.id, ...task };
-  const attempts = taskAttempts(await listEvaluations(options.artifacts, repo.id), task);
+  const attempts = taskAttempts(
+    await listEvaluations(options.artifacts, { repoId: repo.id }),
+    task,
+  );
   const failures = attempts.filter(failedAttempt);
   const { audit, failure } = await readTaskAudit(options.artifacts, ref);
   const running = options.audit ? (await options.audit.state(ref)).running : false;

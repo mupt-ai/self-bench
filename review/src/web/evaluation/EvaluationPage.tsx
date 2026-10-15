@@ -1,4 +1,4 @@
-import { Link, useParams } from "react-router";
+import { Link } from "react-router";
 import { ListSkeleton } from "../LoadingSkeleton";
 import { useDocumentTitle } from "../session";
 import { buttonStyles, EmptyState, Notice, PageContent, PageHeader } from "../ui";
@@ -7,12 +7,12 @@ import { ComparisonHistory } from "./ComparisonHistory";
 import { GhostChart } from "./GhostChart";
 import { useRepoRuns } from "./RepoRuns";
 import { ResultsTable } from "./ResultsTable";
+import { useEvaluationScope } from "./useEvaluationScope";
 
 export function EvaluationPage() {
-  const { owner = "", name = "" } = useParams();
-  const repo = `${owner}/${name}`;
+  const { repo, pages, label } = useEvaluationScope();
   const { url, runs, credentials, accepted, loading, error, update } = useRepoRuns();
-  useDocumentTitle(`Results · ${repo}`);
+  useDocumentTitle(`Results · ${label}`);
   return (
     <PageContent>
       <PageHeader
@@ -20,18 +20,20 @@ export function EvaluationPage() {
         description="Inspect accuracy, cost, and what the solver did."
         className="mb-5"
       >
+        {/* The header's chart preview has no room on a phone; this opens the same chart. */}
         <span className="md:hidden">
-          <ChartPreview repo={repo} variant="button" />
+          <ChartPreview pages={pages} variant="button" />
         </span>
       </PageHeader>
       {error && <Notice className="mb-4">{error}</Notice>}
       <ResultsTable
+        // Open rows and the filter belong to one repository.
         key={`table:${url}`}
         runs={runs}
         credentials={credentials}
         {...(accepted ? { accepted } : {})}
         baseUrl={url}
-        repo={repo}
+        pages={pages}
         onChanged={update}
       />
       {loading && !runs.length && !error && (
@@ -39,6 +41,7 @@ export function EvaluationPage() {
           <ListSkeleton label="Loading Runs" />
         </div>
       )}
+      {/* Not when the list failed: the repository may have runs it could not show. */}
       {!loading && !error && !runs.length && (
         <EmptyState
           title="No Runs Yet"
@@ -46,20 +49,25 @@ export function EvaluationPage() {
           visual={<GhostChart />}
           action={
             <>
-              <Link className={buttonStyles.primary} to={`/repos/${repo}/run`}>
+              <Link className={buttonStyles.primary} to={`${pages}/run`}>
                 Run Models
               </Link>
-              <Link className={buttonStyles.secondary} to={`/repos/${repo}`}>
-                Review Tasks
-              </Link>
+              {repo && (
+                <Link className={buttonStyles.secondary} to={pages}>
+                  Review Tasks
+                </Link>
+              )}
             </>
           }
         >
-          Run models on this repository's approved tasks. Each one lands on the chart by how many
-          tasks it solved and what each task cost.
+          {repo
+            ? "Run models on this repository's approved tasks."
+            : "Run models on datasets from Harbor's registry."}{" "}
+          Each one lands on the chart by how many tasks it solved and what each task cost.
         </EmptyState>
       )}
-      {!loading && <ComparisonHistory key={`history:${url}`} repo={repo} url={url} />}
+      {/* Below the table once it has its rows, so it can tell whether it is in view. */}
+      {!loading && <ComparisonHistory key={`history:${url}`} pages={pages} url={url} />}
     </PageContent>
   );
 }

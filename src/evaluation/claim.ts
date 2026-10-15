@@ -21,7 +21,7 @@ export class WorkerStoppingError extends Error {
 export async function claimTrial(store: ArtifactStore, input: EvaluationInput, index: number) {
   const id = randomUUID();
   const update = (change: (run: EvaluationRun) => unknown) =>
-    updateEvaluation(store, input.repoId, input.id, change);
+    updateEvaluation(store, input, input.id, change);
   const run = await update((run) => {
     const trial = run.trials[index];
     const abandoned = trial?.status === "running" && !!trial.claim && !trial.solverStartedAt;

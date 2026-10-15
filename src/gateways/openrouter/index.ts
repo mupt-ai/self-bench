@@ -1,4 +1,4 @@
-import { modelIdPattern } from "../contracts/models.js";
+import { modelIdPattern } from "../../contracts/models.js";
 import {
   type Gateway,
   type ListedModel,
@@ -7,7 +7,7 @@ import {
   listTiers,
   readsAndWritesText,
   reasoningLevels,
-} from "./gateway.js";
+} from "../gateway.js";
 
 interface OpenRouterEntry {
   id?: unknown;
@@ -49,8 +49,10 @@ function parse(body: unknown, asOf: string) {
       pricing.input_cache_read,
       pricing.input_cache_write,
     );
-    if (!entryRates) continue;
-    rates.set(entry.id, { rates: entryRates, asOf, ...overrideTiers(pricing) });
+    // Variable-price routers quote -1 for both prices because the selected model sets the cost.
+    // They can still drive agents; leave their list price unknown rather than inventing one.
+    if (!entryRates && !(pricing.prompt === "-1" && pricing.completion === "-1")) continue;
+    if (entryRates) rates.set(entry.id, { rates: entryRates, asOf, ...overrideTiers(pricing) });
     if (drivesAgents(entry.id, entry)) {
       const thinking = efforts(entry.reasoning);
       const index = entry.benchmarks?.artificial_analysis?.intelligence_index;

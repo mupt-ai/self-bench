@@ -102,10 +102,11 @@ const plural = (count: number, word: string) =>
  * does with the settings ticked. Hidden until some configuration has a usable result.
  */
 export function ChartPreview({
-  repo,
+  pages,
   variant = "card",
 }: {
-  repo: string;
+  /** Where the runs' pages live: `/repos/<owner>/<name>`, or `/benchmarks`. */
+  pages: string;
   /** The header's card, or on a phone, where the card has no room, a plain Chart button. */
   variant?: "card" | "button";
 }) {
@@ -128,7 +129,9 @@ export function ChartPreview({
   const shared = useMemo(() => taskSet(chosen, tasks), [chosen, tasks]);
   const points = useMemo(
     () =>
-      shared.length ? chosen.map((option) => configurationPoint(option.configuration, shared)) : [],
+      shared.length
+        ? chosen.flatMap((option) => configurationPoint(option.configuration, shared) ?? [])
+        : [],
     [chosen, shared],
   );
   if (!options.length) return null;
@@ -136,7 +139,7 @@ export function ChartPreview({
     ? "Choose configurations to chart."
     : !shared.length
       ? "They share no accepted task with a usable result. Untick one to chart the rest."
-      : `Over the ${plural(shared.length, "accepted task")} all of them have a usable result on.`;
+      : `Over the ${plural(shared.length, "accepted task")} all of them have a usable result on.${points.length < chosen.length ? " Settings with incomplete costs are omitted." : ""}`;
   return (
     <>
       {variant === "button" ? (
@@ -209,7 +212,7 @@ export function ChartPreview({
                 showTitle={false}
                 onSelect={(runId) => {
                   setOpen(false);
-                  navigate(`/repos/${repo}/results?run=${encodeURIComponent(runId)}`);
+                  navigate(`${pages}/results?run=${encodeURIComponent(runId)}`);
                 }}
               />
             ) : (

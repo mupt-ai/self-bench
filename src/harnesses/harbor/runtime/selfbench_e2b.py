@@ -18,7 +18,10 @@ Harbor starts every sandbox with a 24-hour lifetime. E2B's Hobby plan caps sandb
 and refuses with "400: Timeout cannot be greater than 1 hours", which left a trial failing with no
 hint of what to change; that refusal is reported here as the key's plan being too small. Harbor
 creates sandboxes through the ``AsyncSandbox`` its E2B module imported, so that name is pointed at
-``PlanCheckedSandbox``, which passes Harbor's arguments through unchanged.
+``PlanCheckedSandbox``, which passes Harbor's arguments through unchanged. E2B also caps a
+template's memory at 8 GiB on Hobby, and on Pro until E2B support raises it, refusing a task that
+asks for more with "400: Memory can't be higher than 8192 MiB"; that refusal names the plan's
+limit and the task's request.
 
 An E2B team runs a limited number of sandboxes and template builds at once, and refuses more with
 "429: Rate limit exceeded" ("maximum number of concurrent template builds (20)"). Harbor tried
@@ -57,6 +60,7 @@ from harbor.environments.e2b import E2BEnvironment
 TAG = "default"
 CAPACITY_WAIT_SECS = (15, 120)
 PLAN_LIMIT = re.compile(r"Timeout cannot be greater than (\d+) hours?")
+MEMORY_LIMIT = re.compile(r"Memory can't be higher than (\d+) MiB")
 IMAGE_ENV = "/etc/profile.d/selfbench-image-env.sh"
 MANIFEST_TYPES = ", ".join(
     [
@@ -113,7 +117,19 @@ class SelfBenchE2BEnvironment(E2BEnvironment):
         await self._when_free("sandbox", super()._create_sandbox)
 
     async def _create_template(self):
-        await self._when_free(f"template build {self._template_name}", self._build_template)
+        try:
+            await self._when_free(f"template build {self._template_name}", self._build_template)
+        except BuildException as error:
+            # BuildException carries no status_code; the message leads with the status.
+            limit = MEMORY_LIMIT.search(str(error))
+            if not str(error).startswith("400:") or not limit:
+                raise
+            raise BuildException(
+                f"This E2B key's plan allows sandboxes of at most {mib(int(limit[1]))} of memory, "
+                f"and this task asks for {mib(self._effective_memory_mb)}. Ask E2B support "
+                "(support@e2b.dev) to raise the team's memory limit, or run the task on another "
+                "sandbox."
+            ) from error
 
     async def _does_template_exist(self) -> bool:
         return await self._when_free("template lookup", self._template_ready)
@@ -167,6 +183,11 @@ class SelfBenchE2BEnvironment(E2BEnvironment):
             alias=self._template_name,
             **{key: value for key, value in resources.items() if value is not None},
         )
+
+
+def mib(amount: int) -> str:
+    """`amount` MiB in whole GiB when it is one, else in MiB."""
+    return f"{amount // 1024} GiB" if amount % 1024 == 0 else f"{amount} MiB"
 
 
 async def image_config(image: str, username: str, password: str) -> dict:

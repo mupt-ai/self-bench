@@ -59,6 +59,10 @@ export interface ReleaseSetting {
   accuracy: number;
   costPerTaskUsd: number;
   totalCostUsd: number;
+  /** Known lower bound only; must not participate in cost frontiers. */
+  costIncomplete?: true;
+  /** Zero means no cost evidence; an aggregate zero is not a free setting. */
+  costedTasks?: number;
   onFrontier: boolean;
 }
 
@@ -116,6 +120,7 @@ export interface PublishedTrial
     | "agentTimedOut"
     | "failureSummary"
     | "apiCostUsd"
+    | "costIncomplete"
     | "costSource"
     | "tokenUsage"
     | "cacheWritesInferred"

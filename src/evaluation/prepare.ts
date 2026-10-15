@@ -12,7 +12,10 @@ import {
 } from "../harnesses/harbor/command.js";
 import { pinnedImageKwargs } from "../harnesses/harbor/pinned-images.js";
 import { startFromExportedImages } from "../harnesses/harbor/registry-pull.js";
-import { assertHostSafeTask } from "../harnesses/harbor/task-safety.js";
+import {
+  assertHostSafePublishedTask,
+  assertHostSafeTask,
+} from "../harnesses/harbor/task-safety.js";
 import { runCommand } from "../lib/process.js";
 import { credentialExecution } from "./execution.js";
 import type { RunnerOptions } from "./runner.js";
@@ -60,8 +63,10 @@ export async function prepareTaskImages(
       ...(options.snapshotLink ? { snapshotLink: options.snapshotLink } : {}),
       ...(options.signal ? { signal: options.signal } : {}),
     });
-    // The script reads task.toml, so it gets the same checked copy Harbor would.
-    await assertHostSafeTask(taskPath, child, trialTimeouts(input.agentMinutes).agentSeconds);
+    // The script reads task.toml, so it gets the same checked copy Harbor would; a registry task
+    // is only checked, since it runs exactly as published.
+    if (task.registry) await assertHostSafePublishedTask(taskPath, child);
+    else await assertHostSafeTask(taskPath, child, trialTimeouts(input.agentMinutes).agentSeconds);
     // An E2B template is then made from the task's exported image instead of its Dockerfile.
     const pull = await startFromExportedImages(
       taskPath,

@@ -10,7 +10,15 @@ An evaluation runs a model and harness against approved tasks in fresh sandboxes
 
 Open your repository's **Run** page. Select approved tasks, add model and harness pairs, choose a sandbox, and supply the required workspace credentials. Model choices and reference pricing come from the app's catalog. **Run Full Comparison** executes every selected task for each model/harness pair; **Run Missing Tasks** skips completed trials for those pairs. Each trial is a separate Harbor run.
 
-A ChatGPT or Claude sign-in or a model API key can run evaluations, subject to harness compatibility. Modal, E2B, or Daytona can run the tasks. See [Quickstart](/quickstart) for credentials and [Task Generation](/concepts/task-generation#what-the-evaluated-agent-sees) for what the evaluated agent can access.
+A ChatGPT, Claude or Meta sign-in or a model API key can run evaluations, subject to harness compatibility: each sign-in runs only its own CLI (Codex, Claude Code or Muse Code), and a Meta key runs only Muse Code. Each row offers the reasoning levels its model lists that every one of its harnesses accepts. Modal, E2B, or Daytona can run the tasks. See [Quickstart](/quickstart) for credentials and [Task Generation](/concepts/task-generation#what-the-evaluated-agent-sees) for what the evaluated agent can access.
+
+## Use a Custom Router
+
+Add a **Custom Endpoint** credential with the router's API key and HTTPS **base URL**, not the URL of a specific API method. Its hostname must be allowed by the deployment's `SELFBENCH_CUSTOM_MODEL_HOSTS` setting. Pi uses the endpoint's OpenAI-compatible Chat Completions API; Codex requires its Responses API.
+
+For Dari, use `https://routing.dari.dev/v1` for your default router, or `https://routing.dari.dev/<router_id>` for a specific router, and enter `dari/routing` as the custom model ID. Select **Pi** as the harness. Do not include `/chat/completions` or `/responses` in the credential's endpoint: the harness appends the API method itself.
+
+To evaluate Jev through Dari, create a separate Dari router with Jev as its selector and use that router's base URL. The API key and model ID stay the same. Separate credentials for the Dari and Jev router URLs let you compare them without changing your default router.
 
 ## Read Results
 

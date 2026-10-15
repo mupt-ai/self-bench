@@ -3,8 +3,8 @@ import { fileURLToPath } from "node:url";
 import { credentialSchema } from "../src/db/credentials.js";
 import { catalog } from "../src/evaluation/catalog.js";
 import { gatewayModel, gatewayTrial, solverAgent } from "../src/evaluation/execution.js";
-import { harnessIds, modelRoutes, routeFor } from "../src/evaluation/models.js";
-import { solverArguments } from "../src/evaluation/runner.js";
+import { harnessIds, modelRoutes, openHarnesses, routeFor } from "../src/evaluation/models.js";
+import { solverArguments } from "../src/evaluation/solver-arguments.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";
 import { gatewayIds, gateways, isGateway } from "../src/gateways/index.js";
 import { runCommand } from "../src/lib/process.js";
@@ -45,6 +45,9 @@ async def check():
     command, _ = await gateway.exec_as_agent(None, "codex exec --model claude-sonnet-5 --json")
     assert "--model anthropic/claude-sonnet-5 " in command
     assert command.startswith('export NVM_DIR="$HOME/.nvm"; ')
+    gateway.model_name = "openai/dari/routing"
+    command, _ = await gateway.exec_as_agent(None, "codex exec --model routing --json")
+    assert "--model dari/routing " in command
     # Vercel AI Gateway takes Codex's WebSocket upgrade and then fails the turn; gateways get HTTPS.
     config = gateway._build_effective_config("https://gateway.example/v1")
     assert "openai_base_url" not in config
@@ -56,6 +59,17 @@ asyncio.run(check())
     fileURLToPath(new URL("../src/harnesses/harbor/runtime/harbor_gateway.py", import.meta.url)),
   ]);
   expect(result.exitCode).toBe(0);
+});
+
+test("custom Codex endpoints preserve namespaced models through the HTTPS adapter", () => {
+  const model = gatewayModel("custom", "codex", "openai/dari/routing");
+  expect(model).toBe("openai/dari/routing");
+  expect(solverAgent("codex", "custom", model)).toBe("harbor_gateway:GatewayCodex");
+  expect(
+    solverArguments("task", "jobs", "codex", model, "modal", undefined, [], undefined, "custom"),
+  ).toContain("harbor_gateway:GatewayCodex");
+  expect(solverAgent("codex", "openai")).toBe("harbor_gateway:SelfBenchCodex");
+  expect(solverAgent("pi", "custom", model)).toBe("harbor_dari:DariPi");
 });
 
 test("Claude Code installs into an agent-owned cache without Node on non-Alpine images", async () => {
@@ -191,6 +205,20 @@ for (const provider of gatewayIds) {
     expect(codex.child.ANTHROPIC_API_KEY).toBeUndefined();
     expect(codex.child.OPENAI_BASE_URL).toBe(gateways[provider].openAiBase);
     expect(codex.extraAllowedHosts).toEqual([...hosts]);
+    const args = solverArguments(
+      "task",
+      "jobs",
+      "codex",
+      codex.model,
+      "modal",
+      undefined,
+      codex.extraAllowedHosts,
+      undefined,
+      provider,
+    );
+    expect(
+      args.flatMap((arg, index) => (arg === "--allow-agent-host" ? [args[index + 1]] : [])),
+    ).toEqual([...hosts]);
     // The provider picks the adapter, so a typed id with no vendor still gets HTTPS-only Codex.
     expect(gatewayTrial(input, "codex", `${provider}/gpt-4o`, env).model).toBe("openai/gpt-4o");
     expect(solverAgent("codex", provider)).toBe("harbor_gateway:GatewayCodex");
@@ -216,10 +244,14 @@ for (const provider of gatewayIds) {
   });
 }
 
-test("only gateway routes offer every harness; direct keys keep their native harnesses", () => {
+test("gateways and Meta keys offer every harness they speak; OpenAI and Anthropic keys their protocol's", () => {
   for (const entry of catalog) {
     for (const route of modelRoutes(entry)) {
-      if (isGateway(route.provider)) expect(new Set(route.harnesses)).toEqual(new Set(harnessIds));
+      if (isGateway(route.provider))
+        expect(new Set(route.harnesses)).toEqual(new Set(openHarnesses));
+      else if (route.provider === "meta")
+        expect(new Set(route.harnesses)).toEqual(new Set(harnessIds));
+      // OpenAI serves no Anthropic Messages, and Anthropic no Responses.
       else
         expect(route.harnesses).not.toContain(
           route.provider === "openai" ? "claude-code" : "codex",

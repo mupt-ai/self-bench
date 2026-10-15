@@ -124,7 +124,7 @@ async function explainableTrial(
       status: 409,
       error: "Failure explanations are unavailable on this deployment.",
     };
-  const run = await getEvaluation(options.artifacts, repo.id, evaluationId);
+  const run = await getEvaluation(options.artifacts, { repoId: repo.id }, evaluationId);
   const index =
     run?.trials.findIndex(
       (trial) =>

@@ -48,7 +48,7 @@ test("the table starts closed, opening to batches and then to tasks", () => {
         runs={[run("one", {}, [passed("earendil-works-pi-pr-7371-unix-client-transport")])]}
         credentials={credentials}
         baseUrl="/api/evaluations"
-        repo="owner/repo"
+        pages="/repos/owner/repo"
       />
     </MemoryRouter>,
   );

@@ -12,12 +12,14 @@ gets a lifetime and an idle limit, so one whose trial stopped without cleaning u
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
-from modal import Image
+from modal import Image, Secret
 from modal.exception import InvalidError, NotFoundError, PermissionDeniedError
 
 from harbor.environments.modal import ModalEnvironment
+from registry_auth import registry_login, stage_compose_login
 
 # What Modal raises for an image ID this workspace cannot use; anything else is a real failure.
 UNUSABLE_PIN = (NotFoundError, PermissionDeniedError, InvalidError)
@@ -56,9 +58,38 @@ class SelfBenchModalEnvironment(ModalEnvironment):
         self._selfbench_pin = pins.get(self._selfbench_role) if self._selfbench_role else None
         self._selfbench_record = Path(image_record_dir) if image_record_dir else None
 
+    async def _sdk_upload_dir(self, source_dir, target_dir):
+        if self._compose_mode and registry_login():
+            result = await self._sdk_exec("mkdir -p /root/.docker")
+            if result.return_code != 0:
+                raise RuntimeError("Could not prepare compose registry authentication")
+            await stage_compose_login(self._sdk_upload_file)
+        return await super()._sdk_upload_dir(source_dir, target_dir)
+
+    async def start(self, force_build):
+        try:
+            return await super().start(force_build)
+        finally:
+            if self._compose_mode and self._sandbox and registry_login():
+                result = await self._sdk_exec("rm -f /root/.docker/config.json")
+                if result.return_code != 0:
+                    raise RuntimeError("Could not clear compose registry authentication")
+
     async def _create_sandbox(self, **kwargs):
         if self._compose_mode or self._selfbench_role is None:
             return await super()._create_sandbox(**kwargs)
+        image = self.task_env_config.docker_image
+        host = os.environ.get("SELFBENCH_REGISTRY_HOST")
+        password = os.environ.get("SELFBENCH_REGISTRY_PASSWORD")
+        if image and host and password and image.startswith(f"{host}/"):
+            # The short-lived grant is only a registry build secret, never sandbox env.
+            self._image = Image.from_registry(
+                image,
+                secret=Secret.from_dict({
+                    "REGISTRY_USERNAME": os.environ["SELFBENCH_REGISTRY_USERNAME"],
+                    "REGISTRY_PASSWORD": password,
+                }),
+            )
         if self._selfbench_pin:
             built = self._image
             self._image = Image.from_id(self._selfbench_pin)

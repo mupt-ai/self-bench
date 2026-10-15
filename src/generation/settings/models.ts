@@ -39,7 +39,10 @@ export function generationCredentialRuns(
 ): boolean {
   if (credential.auth === "codex-login")
     return credential.kind === "openai" && model.provider === "openai";
-  return credential.auth === "api-key" && !!routeFor(model, credential.kind);
+  // A route only a vendor's own CLI drives, as Muse Code drives Meta's, has no Pi.
+  return (
+    credential.auth === "api-key" && !!routeFor(model, credential.kind)?.harnesses.includes("pi")
+  );
 }
 
 /**
@@ -63,8 +66,9 @@ export function generationModelRoute(
   if (!model) throw new Error(`Unknown generation model ${id}`);
   const runs = credential ? generationCredentialRuns(model, credential) : managedRuns(model);
   const route = runs ? routeFor(model, credential?.kind ?? "openrouter") : undefined;
-  // Catalog models never route to a custom endpoint; the check narrows the provider.
-  if (!route || route.provider === "custom")
+  // Catalog models never route to a custom endpoint, nor run Pi on Meta's own key
+  // (generationCredentialRuns); the check narrows the provider.
+  if (!route || route.provider === "custom" || route.provider === "meta")
     throw new Error(`${model.label} cannot run on this credential`);
   return {
     provider: credential?.auth === "codex-login" ? "openai-codex" : route.provider,

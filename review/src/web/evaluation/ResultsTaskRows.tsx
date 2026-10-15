@@ -1,5 +1,5 @@
 import { cn } from "../primitives/cn";
-import { dollars } from "./benchmark";
+import { CostValue } from "./CostValue";
 import { NoValue, OutcomeCircle, SortIcon, StateDetails } from "./ResultsMarks";
 import { BATCH_CHEVRON, TASK_INDENT } from "./ResultsTree";
 import type { Outcome, TaskResult } from "./results-model";
@@ -134,7 +134,6 @@ export function TaskRow({ entry, onOpen }: { entry: TaskEntry; onOpen(result: Ta
   const counted = result.replacedBy;
   const after = !!counted && result.run.createdAt > counted.run.createdAt;
   return (
-    // biome-ignore lint/a11y/useKeyWithClickEvents: the task's own button inside the row is the keyboard path; the row only widens the pointer target.
     <tr
       className={cn(
         "cursor-pointer text-xs hover:bg-foreground/[0.04]",
@@ -202,7 +201,7 @@ export function TaskRow({ entry, onOpen }: { entry: TaskEntry; onOpen(result: Ta
         {result.trial.apiCostUsd === undefined ? (
           <NoValue width={6} />
         ) : (
-          dollars(result.trial.apiCostUsd)
+          <CostValue value={result.trial.apiCostUsd} incomplete={result.trial.costIncomplete} />
         )}
       </td>
     </tr>

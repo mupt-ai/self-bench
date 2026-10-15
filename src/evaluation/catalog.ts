@@ -1,6 +1,7 @@
 import {
   findModel,
   longContextOf,
+  type Model,
   type ModelPricing,
   models,
   nativePricing,
@@ -23,7 +24,7 @@ import type { Harness } from "./models.js";
 
 export { catalogVersion } from "../contracts/models.js";
 
-export type CatalogProvider = "openai" | "anthropic" | GatewayId | "custom";
+export type CatalogProvider = "openai" | "anthropic" | "meta" | GatewayId | "custom";
 
 /** Evaluation's view of a catalog model: the credential it runs on and its native harnesses. */
 export interface CatalogModel {
@@ -46,9 +47,10 @@ export interface CatalogModel {
   pricing?: ModelPricing;
 }
 
-const nativeHarnesses: Record<"openai" | "anthropic", Harness[]> = {
+const nativeHarnesses: Record<NonNullable<Model["vendor"]>, Harness[]> = {
   openai: ["codex", "pi"],
   anthropic: ["claude-code", "pi"],
+  meta: ["muse-code"],
 };
 
 /**
@@ -98,12 +100,22 @@ export function evaluationCatalog(): CatalogModel[] {
     const names = new Map<string, number>();
     for (const entry of listed)
       names.set(vendorName(entry), (names.get(vendorName(entry)) ?? 0) + 1);
+    // A curated model's route here, by the id this gateway gives it. A vendor alias can read that
+    // id as another catalog id: Vercel's meta is OpenRouter's meta-llama, but its Muse is meta's.
+    const routed = new Map(
+      [...curated, ...merged].flatMap(([key, model]) => {
+        const route = model.gateways?.[gateway];
+        return route ? [[route, key] as const] : [];
+      }),
+    );
     for (const entry of listed) {
       let id = catalogModelId(gateway, entry.id);
+      const claimed = routed.get(entry.id);
+      if (!merged.has(id) && !curated.has(id) && claimed) id = claimed;
       // A name stands for one model only where it is unambiguous: this gateway lists the vendor's
       // name once, and exactly one other model of that vendor and name, which this gateway does
       // not list by id, awaits a route here. Otherwise listing order would pick the pair.
-      if (!merged.has(id) && !curated.has(id) && names.get(vendorName(entry)) === 1) {
+      else if (!merged.has(id) && !curated.has(id) && names.get(vendorName(entry)) === 1) {
         const entryVendors = vendors({ [gateway]: entry.id });
         const [twin, ...others] = (named.get(nameKey(entry.label)) ?? []).filter((candidate) => {
           const routes = (merged.get(candidate) ?? curated.get(candidate))?.gateways ?? {};

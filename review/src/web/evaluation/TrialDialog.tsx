@@ -6,7 +6,7 @@ import { ListSkeleton } from "../LoadingSkeleton";
 import { useSession } from "../session";
 import { Notice } from "../ui";
 import { type EvaluationRun, type EvaluationTrial, evaluationRequest } from "./api";
-import { dollars } from "./benchmark";
+import { CostValue } from "./CostValue";
 import { FailureExplanationForm } from "./FailureExplanationForm";
 import { OutcomeCircle } from "./ResultsMarks";
 import { outcomeOf } from "./results-model";
@@ -19,11 +19,17 @@ type TrialIdentity = Pick<EvaluationTrial, "runId" | "taskId" | "harness">;
 const sameTrial = (a: TrialIdentity, b: TrialIdentity) =>
   a.runId === b.runId && a.taskId === b.taskId && a.harness === b.harness;
 
-/** The task's own page, which the dialog opens in a new tab. */
+/**
+ * The task's own page, which the dialog opens in a new tab. A benchmark's tasks are known by name
+ * alone; a repository's by batch and name.
+ */
 export const taskPage = (
-  repo: string,
+  pages: string,
   { runId, taskId }: Pick<EvaluationTrial, "runId" | "taskId">,
-) => `/repos/${repo}/tasks/${encodeURIComponent(runId)}/${encodeURIComponent(taskId)}`;
+) =>
+  pages.startsWith("/benchmarks/")
+    ? `${pages}/tasks/${taskId}`
+    : `${pages}/tasks/${encodeURIComponent(runId)}/${encodeURIComponent(taskId)}`;
 
 /** The model's catalog name, or a custom endpoint's typed name, as the table names it. */
 function modelName(run: EvaluationRun): string {
@@ -53,7 +59,8 @@ type TrialDialogProps = {
   /** Whether `run` already has every trial's transcript and logs. */
   loaded?: boolean;
   baseUrl: string;
-  repo: string;
+  /** Where the run's pages live: `/repos/<owner>/<name>`, or `/benchmarks`. */
+  pages: string;
   onClose(): void;
   /** The run, once it carries the explanation this dialog asked for. */
   onExplained?(run: EvaluationRun): void;
@@ -64,7 +71,7 @@ function TrialDialogContent({
   trial: chosen,
   loaded = false,
   baseUrl,
-  repo,
+  pages,
   onClose,
   onExplained,
 }: TrialDialogProps) {
@@ -159,12 +166,12 @@ function TrialDialogContent({
         )}
         {trial.apiCostUsd !== undefined && (
           <span className="font-mono text-xs text-muted-foreground">
-            {dollars(trial.apiCostUsd)}
+            <CostValue value={trial.apiCostUsd} incomplete={trial.costIncomplete} />
           </span>
         )}
         <a
           className="ml-auto text-sm font-medium underline decoration-foreground/25 underline-offset-4 hover:decoration-foreground"
-          href={taskPage(repo, trial)}
+          href={taskPage(pages, trial)}
           target="_blank"
           rel="noopener"
         >

@@ -5,11 +5,12 @@ import {
   WorkflowNotFoundError,
 } from "@temporalio/common";
 import type { StopEvaluation } from "./cancel.js";
+import { type EvaluationScope, scopeKey } from "./scope.js";
 import type { TaskAuditRequest } from "./task-audit.js";
 import type { EvaluationInput, FailedTrial } from "./types.js";
 
-function evaluationWorkflowId(repoId: number, id: string): string {
-  return `evaluation/${repoId}/${id}`;
+function evaluationWorkflowId(scope: EvaluationScope, id: string): string {
+  return `evaluation/${scopeKey(scope)}/${id}`;
 }
 
 export function evaluationStarter(
@@ -20,7 +21,7 @@ export function evaluationStarter(
   return async (input: EvaluationInput): Promise<void> => {
     try {
       await client.workflow.start("selfBenchEvaluationRunWorkflow", {
-        workflowId: evaluationWorkflowId(input.repoId, input.id),
+        workflowId: evaluationWorkflowId(input, input.id),
         taskQueue: env.SELFBENCH_EVAL_TASK_QUEUE ?? fallbackQueue,
         args: [input],
         workflowExecutionTimeout: "73 hours",
@@ -48,7 +49,7 @@ export function failureExplainer(
   env: NodeJS.ProcessEnv = process.env,
 ): FailureExplainer {
   const workflowId = (trial: FailedTrial) =>
-    `${evaluationWorkflowId(trial.repoId, trial.id)}/trial/${trial.index}/explain`;
+    `${evaluationWorkflowId({ repoId: trial.repoId }, trial.id)}/trial/${trial.index}/explain`;
   return {
     async start(trial) {
       try {
@@ -122,9 +123,9 @@ export function taskAuditor(
 }
 
 export function evaluationStopper(client: Client): StopEvaluation {
-  return async (repoId, id) => {
+  return async (scope, id) => {
     try {
-      await client.workflow.getHandle(evaluationWorkflowId(repoId, id)).cancel();
+      await client.workflow.getHandle(evaluationWorkflowId(scope, id)).cancel();
     } catch (error) {
       if (!(error instanceof WorkflowNotFoundError)) throw error;
     }

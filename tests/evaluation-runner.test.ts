@@ -3,7 +3,7 @@ import { mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { credentialExecution } from "../src/evaluation/execution.js";
 import { collectOutput, completeLines, redactOutput } from "../src/evaluation/output.js";
-import { solverArguments } from "../src/evaluation/runner.js";
+import { solverArguments } from "../src/evaluation/solver-arguments.js";
 import { evaluationPrefix, getEvaluation, listEvaluations } from "../src/evaluation/store.js";
 import {
   assertEvaluationBundleSize,
@@ -26,6 +26,56 @@ test("solver invocation carries the selected thinking level", () => {
   const args = solverArguments("/task", "/jobs", "codex", "openai/gpt-6-astra", "e2b", "max");
   expect(args.slice(-2)).toEqual(["--agent-kwarg", "reasoning_effort=max"]);
   expect(args[args.indexOf("--model") + 1]).toBe("openai/gpt-6-astra");
+});
+test("Pi custom endpoints receive Harbor's explicit Chat Completions API style", () => {
+  for (const model of ["openai/dari/routing", "openai/jev-test"]) {
+    const args = solverArguments(
+      "/task",
+      "/jobs",
+      "pi",
+      model,
+      "e2b",
+      "default",
+      ["routing.dari.dev"],
+      undefined,
+      "custom",
+    );
+    expect(args.slice(-2)).toEqual(["--agent-kwarg", "model_api=openai-completions"]);
+    expect(args[args.indexOf("--model") + 1]).toBe(model);
+  }
+  const native = solverArguments("/task", "/jobs", "pi", "openai/gpt-6-astra", "e2b");
+  expect(native).not.toContain("model_api=openai-completions");
+});
+test("custom endpoint API style preserves thinking and leaves other harnesses unchanged", () => {
+  const args = solverArguments(
+    "/task",
+    "/jobs",
+    "pi",
+    "openai/dari/routing",
+    "modal",
+    "high",
+    [],
+    undefined,
+    "custom",
+  );
+  expect(args.slice(-4)).toEqual([
+    "--agent-kwarg",
+    "thinking=high",
+    "--agent-kwarg",
+    "model_api=openai-completions",
+  ]);
+  const codex = solverArguments(
+    "/task",
+    "/jobs",
+    "codex",
+    "openai/dari/routing",
+    "e2b",
+    undefined,
+    [],
+    undefined,
+    "custom",
+  );
+  expect(codex).not.toContain("model_api=openai-completions");
 });
 const trajectory = {
   steps: [
@@ -100,7 +150,7 @@ test("mocked Harbor persists live output, structured tool results and final scor
     await writeFile(join(trial, "trial.log"), `Running tests\n${testModelSecret}\n`);
     options?.onOutput?.("stdout", Buffer.from(`Starting ${testModelSecret}\n`));
     for (let attempt = 0; attempt < 100; attempt += 1) {
-      const snapshot = await getEvaluation(store, input.repoId, input.id);
+      const snapshot = await getEvaluation(store, input, input.id);
       if (snapshot?.trials[0]?.log.includes("Running tests")) {
         sawLive = true;
         expect(JSON.stringify(snapshot)).not.toContain(testModelSecret);
@@ -117,7 +167,7 @@ test("mocked Harbor persists live output, structured tool results and final scor
     return { stdout: "", stderr: "", exitCode: 0 };
   };
   await runEvaluation(store, input, { env: {}, vault, command, pollMs: 5, progressMs: 0 });
-  const run = await getEvaluation(store, input.repoId, input.id);
+  const run = await getEvaluation(store, input, input.id);
   expect(sawLive).toBe(true);
   expect(run?.status).toBe("completed");
   expect(run?.trials[0]?.rewards).toEqual({ reward: 1 });
@@ -126,11 +176,11 @@ test("mocked Harbor persists live output, structured tool results and final scor
   expect(run?.trials[0]?.log).not.toContain("item.completed");
   expect(run?.trials[0]?.log.match(/Starting/g)).toHaveLength(1);
   expect(run?.trials[0]?.artifacts.some((name) => name.endsWith("config.json"))).toBe(false);
-  for (const artifact of await store.list(evaluationPrefix(input.repoId, input.id).slice(0, -1)))
+  for (const artifact of await store.list(evaluationPrefix(input, input.id).slice(0, -1)))
     expect(Buffer.from((await store.getByKey(artifact.key)) ?? []).toString()).not.toContain(
       testModelSecret,
     );
-  expect((await listEvaluations(store, input.repoId))[0]?.status).toBe("completed");
+  expect((await listEvaluations(store, input))[0]?.status).toBe("completed");
   await expect(runEvaluation(store, input, { env: {}, vault, command })).rejects.toThrow(
     "refusing to repeat",
   );
@@ -158,7 +208,7 @@ test("setup failures a retry cannot fix fail the trial at once, before a model c
         return { stdout: version, stderr: "", exitCode: 0 };
       },
     });
-    const run = await getEvaluation(store, input.repoId, input.id);
+    const run = await getEvaluation(store, input, input.id);
     expect(run?.status).toBe("failed");
     expect(run?.trials[0]?.error).toContain(error);
     expect(calls).toBe(0);
@@ -177,7 +227,7 @@ test("missing verifier results are failures, never invented zero scores", async 
       exitCode: 0,
     }),
   });
-  const run = await getEvaluation(store, input.repoId, input.id);
+  const run = await getEvaluation(store, input, input.id);
   expect(run?.status).toBe("failed");
   expect(run?.trials[0]?.error).toContain("trial result");
   expect(run?.trials[0]?.rewards).toEqual({});
@@ -196,7 +246,7 @@ test("a bundle that asks for host credentials fails its trial before Harbor runs
       return { stdout: HARBOR_VERSION, stderr: "", exitCode: 0 };
     },
   });
-  const run = await getEvaluation(store, input.repoId, input.id);
+  const run = await getEvaluation(store, input, input.id);
   expect(run?.trials[0]?.status).toBe("failed");
   expect(run?.trials[0]?.error).toContain("task.toml sets verifier.env");
   expect(calls).toBe(0);

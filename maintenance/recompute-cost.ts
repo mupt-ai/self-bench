@@ -44,11 +44,12 @@ export type ModelAuthLookup = (
 
 export type CostFields = Pick<
   EvaluationTrial,
-  "modelVerified" | "apiCostUsd" | "tokenUsage" | "costSource" | "cacheWritesInferred"
+  "modelVerified" | "apiCostUsd" | "costIncomplete" | "tokenUsage" | "costSource" | "cacheWritesInferred"
 >;
 export const costKeys = [
   "modelVerified",
   "apiCostUsd",
+  "costIncomplete",
   "tokenUsage",
   "costSource",
   "cacheWritesInferred",
@@ -75,8 +76,8 @@ export async function storedHarborFiles(
 ): Promise<{ files: Map<string, string>; result: string | undefined }> {
   const files = new Map<string, string>();
   for (const name of trial.artifacts) {
-    if (!/\/(trajectory\.json|pi\.txt|result\.json)$/.test(name)) continue;
-    const bytes = await store.getByKey(`${evaluationPrefix(run.repoId, run.id)}artifacts/${name}`);
+    if (!/\/(trajectory\.json|pi\.txt|result\.json|dari-billing\.jsonl|openrouter-generation-ids\.json)$/.test(name)) continue;
+    const bytes = await store.getByKey(`${evaluationPrefix(run, run.id)}artifacts/${name}`);
     if (bytes) files.set(name.slice(name.indexOf("/") + 1), Buffer.from(bytes).toString("utf8"));
   }
   const result = [...files].find(([name]) => /^solver\/[^/]+\/result\.json$/.test(name))?.[1];
@@ -128,7 +129,7 @@ async function claudeCodeCost(
 ): Promise<number | undefined> {
   const name = trial.artifacts.find((artifact) => artifact.endsWith("/claude-code.txt"));
   if (!name) return undefined;
-  const bytes = await store.getByKey(`${evaluationPrefix(run.repoId, run.id)}artifacts/${name}`);
+  const bytes = await store.getByKey(`${evaluationPrefix(run, run.id)}artifacts/${name}`);
   const lines = Buffer.from(bytes ?? [])
     .toString("utf8")
     .split("\n")
@@ -191,7 +192,7 @@ export async function recomputeEvaluationCost(
   lookup?: ModelAuthLookup,
   fallbackAuth?: ModelAuth,
 ): Promise<RecomputeReport> {
-  const run = await getEvaluation(store, repoId, id);
+  const run = await getEvaluation(store, { repoId }, id);
   if (!run) throw new Error("Evaluation not found");
   if (run.status === "queued" || run.status === "running")
     throw new Error("Evaluation is still in progress");
@@ -216,7 +217,7 @@ export async function recomputeEvaluationCost(
   for (const [index, trial] of run.trials.entries()) {
     const before = costFields(trial);
     // A billed gateway cost cannot be reconstructed from token usage or stored transcripts.
-    if (before.costSource === "gateway") {
+    if (before.costSource === "gateway" || before.costSource === "router-reference-rates") {
       report.trials.push({ index, before, changed: false });
       continue;
     }
@@ -228,8 +229,19 @@ export async function recomputeEvaluationCost(
     }
     const parsed = record(JSON.parse(result));
     const after = trialCost(run, trial.harness, files, parsed, auth);
+    // Prefix recovery is a known lower bound, not a complete aggregate-token estimate.
+    // Replace it only when the saved evidence proves a complete price at least as large.
+    if (before.costIncomplete && before.apiCostUsd !== undefined &&
+        (after.apiCostUsd === undefined || after.apiCostUsd < before.apiCostUsd)) {
+      report.trials.push({ index, before, changed: false });
+      continue;
+    }
     // The runner reads transcripts whole; stored ones can be cut too far to count again.
     if (before.tokenUsage && !after.tokenUsage) {
+      if (run.credentials?.provider === "openrouter") {
+        report.trials.push({ index, before, changed: false });
+        continue;
+      }
       const reported =
         trial.harness === "claude-code" ? await claudeCodeCost(store, run, trial) : undefined;
       const recorded =
@@ -270,7 +282,7 @@ export async function main(): Promise<void> {
   const store = createArtifactStore(loadConfig().artifact);
   // A gateway route's bound comes from its gateway's listing, so a listing that fails to load
   // stops the recompute rather than falling back to reference rates.
-  const provider = (await getEvaluation(store, Number(repoId), id))?.credentials?.provider;
+  const provider = (await getEvaluation(store, { repoId: Number(repoId) }, id))?.credentials?.provider;
   if (isGateway(provider)) await refreshGateway(provider);
   const url = process.env.SELFBENCH_DATABASE_URL;
   const database = url ? await openDatabase(url, { light: true }) : undefined;

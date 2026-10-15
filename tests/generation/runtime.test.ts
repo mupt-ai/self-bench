@@ -48,11 +48,13 @@ test("saved ChatGPT logins use subscription authentication without inheriting an
   await vault.records.write(generationRecordPath("codex-run"), reference, 0);
   const base = {
     OPENAI_API_KEY: "host-key",
+    META_API_KEY: "host-meta-key",
     SELFBENCH_PI_AUTH_JSON: "host-subscription",
     SELFBENCH_MANAGED_OPENROUTER_API_KEY: "platform-openrouter",
   };
   const env = await generationEnvironment(vault, "codex-run", reference, base);
   expect(env.OPENAI_API_KEY).toBeUndefined();
+  expect(env.META_API_KEY).toBeUndefined();
   expect(base.OPENAI_API_KEY).toBe("host-key");
   await withExecutionEnvironment(env, async () => {
     const auth = await loadPiModelAuth();

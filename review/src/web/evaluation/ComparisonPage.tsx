@@ -15,8 +15,8 @@ export type ComparisonStatus = Awaited<ReturnType<typeof comparisonStatus>> & {
   submissionError?: string;
 };
 export function ComparisonPage() {
-  const { repo, url } = useEvaluationScope();
-  useDocumentTitle(`Comparison · ${repo}`);
+  const { url, pages, label } = useEvaluationScope();
+  useDocumentTitle(`Comparison · ${label}`);
   const { comparisonId } = useParams();
   const [status, setStatus] = React.useState<ComparisonStatus>();
   const [error, setError] = React.useState("");
@@ -90,7 +90,7 @@ export function ComparisonPage() {
             onCancelled={setStatus}
           />
         )}
-        <Link className={buttonStyles.secondary} to={`/repos/${repo}/results`}>
+        <Link className={buttonStyles.secondary} to={`${pages}/results`}>
           View Results
         </Link>
       </PageHeader>
@@ -99,7 +99,7 @@ export function ComparisonPage() {
           <p>This comparison could not be found. Return to Run to review your selection.</p>
           <Link
             className="font-semibold text-foreground underline underline-offset-4"
-            to={`/repos/${repo}/run`}
+            to={`${pages}/run`}
           >
             Back to Run
           </Link>
@@ -116,7 +116,7 @@ export function ComparisonPage() {
               .map((run) => (
                 <Link
                   key={run.id}
-                  to={`/repos/${repo}/results?run=${run.id}`}
+                  to={`${pages}/results?run=${run.id}`}
                   className={`block min-w-0 px-4 py-3.5 hover:bg-muted/60 ${run.status === "running" ? "border-l-2 border-l-brand" : ""}`}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">

@@ -62,7 +62,7 @@ test("recompute prices requests past a flat 200k bound the model's pricing never
   ] as const) {
     trial.artifacts.push(name);
     await store.put(
-      `${evaluationPrefix(run.repoId, run.id)}artifacts/${name}`,
+      `${evaluationPrefix(run, run.id)}artifacts/${name}`,
       Buffer.from(body),
       "text/plain",
     );
@@ -70,18 +70,20 @@ test("recompute prices requests past a flat 200k bound the model's pricing never
   await saveEvaluation(store, run);
 
   const cost = (50_000 * 4 + 1_000 * 20 + 200_000 * 0.2) / 1e6;
-  const dry = await recomputeEvaluationCost(store, run.repoId, run.id, false);
+  const dry = await recomputeEvaluationCost(store, Number(run.repoId), run.id, false);
   // One rate covers Opus 5.5's whole context window, so the request has a price.
   expect(dry.maxInputTokens).toEqual({ before: 200_000, after: undefined, changed: true });
   expect(dry.trials[0]?.after?.apiCostUsd).toBeCloseTo(cost, 12);
 
   // A stored transcript cut too far to count again is priced from the recorded usage.
   await writeFile(
-    join(directory, evaluationPrefix(run.repoId, run.id), "artifacts", piName),
+    join(directory, evaluationPrefix(run, run.id), "artifacts", piName),
     `[Earlier output truncated]\n${whole.slice(40)}`,
   );
-  expect((await recomputeEvaluationCost(store, run.repoId, run.id, true)).applied).toBe(true);
-  const saved = await getEvaluation(store, run.repoId, run.id);
+  expect((await recomputeEvaluationCost(store, Number(run.repoId), run.id, true)).applied).toBe(
+    true,
+  );
+  const saved = await getEvaluation(store, run, run.id);
   expect(saved?.pricing).toMatchObject({ input: 4, cacheRead: 0.2 });
   expect(saved?.pricing?.maxInputTokens).toBeUndefined();
   expect(saved?.trials[0]).toMatchObject({ costSource: "reference-rates", tokenUsage: usage });
@@ -134,13 +136,13 @@ test("recompute prices a cut Claude Code trial by the cache lifetimes Claude Cod
     ] as const) {
       trial.artifacts.push(name);
       await store.put(
-        `${evaluationPrefix(run.repoId, run.id)}artifacts/${name}`,
+        `${evaluationPrefix(run, run.id)}artifacts/${name}`,
         Buffer.from(body),
         "text/plain",
       );
     }
     await saveEvaluation(store, run);
-    return (await recomputeEvaluationCost(store, run.repoId, run.id, false)).trials[0];
+    return (await recomputeEvaluationCost(store, Number(run.repoId), run.id, false)).trials[0];
   };
   expect((await recompute(hourly))?.after?.apiCostUsd).toBeCloseTo(hourly, 9);
   // 100,000 of the writes kept for five minutes, at $5 rather than $8 per million.
@@ -205,13 +207,13 @@ test.each([
     ] as const) {
       trial.artifacts.push(name);
       await store.put(
-        `${evaluationPrefix(run.repoId, run.id)}artifacts/${name}`,
+        `${evaluationPrefix(run, run.id)}artifacts/${name}`,
         Buffer.from(body),
         "text/plain",
       );
     }
     await saveEvaluation(store, run);
-    const report = await recomputeEvaluationCost(store, run.repoId, run.id, false);
+    const report = await recomputeEvaluationCost(store, Number(run.repoId), run.id, false);
     expect(report.maxInputTokens).toEqual({ before: 200_000, after: bound, changed: true });
     expect(report.trials[0]?.after).toEqual({ modelVerified: true, tokenUsage: usage });
   },

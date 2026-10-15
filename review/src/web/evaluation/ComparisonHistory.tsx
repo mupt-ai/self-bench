@@ -4,7 +4,7 @@ import { DataTable, SectionHeader } from "../ui";
 import { evaluationRequest } from "./api";
 import type { ComparisonStatus } from "./ComparisonPage";
 
-export function ComparisonHistory({ repo, url }: { repo: string; url: string }) {
+export function ComparisonHistory({ pages, url }: { pages: string; url: string }) {
   const [comparisons, setComparisons] = React.useState<ComparisonStatus[]>([]);
   const [error, setError] = React.useState("");
   // The comparisons sit below the results table, so they load once the page is scrolled near
@@ -85,7 +85,7 @@ export function ComparisonHistory({ repo, url }: { repo: string; url: string }) 
                   {comparison.runs.reduce((sum, run) => sum + run.trials, 0)}
                 </td>
                 <td>
-                  <Link to={`/repos/${repo}/comparisons/${comparison.id}`}>View Comparison →</Link>
+                  <Link to={`${pages}/comparisons/${comparison.id}`}>View Comparison →</Link>
                 </td>
               </tr>
             ))}

@@ -4,6 +4,7 @@ import { gatewayIds, gateways } from "../../../../src/gateways/index";
 export const providers = [
   { id: "openai", label: "OpenAI" },
   { id: "anthropic", label: "Anthropic" },
+  { id: "meta", label: "Meta" },
   ...gatewayIds.map((id) => ({ id, label: gateways[id].label })),
   { id: "custom", label: "Custom Endpoint" },
 ] as const;
@@ -24,6 +25,14 @@ export const signIns = [
     harness: "Claude Code",
     name: "Claude",
     importLabel: "Paste a Setup Token",
+  },
+  {
+    id: "muse-login",
+    kind: "meta",
+    label: "Meta Sign-In",
+    harness: "Muse Code",
+    name: "Muse Code",
+    importLabel: undefined,
   },
 ] as const;
 const signInOf = (auth: CredentialInfo["auth"]) => signIns.find((entry) => entry.id === auth);

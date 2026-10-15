@@ -57,7 +57,7 @@ export async function explainTrialFailure(
   options: FailureSummaryOptions,
 ): Promise<void> {
   const environment = options.env ?? process.env;
-  const run = await getEvaluation(store, request.repoId, request.id);
+  const run = await getEvaluation(store, { repoId: request.repoId }, request.id);
   const trial = run?.trials[request.index];
   if (!trial || !explainable(trial)) return;
   let key: string | undefined;
@@ -93,7 +93,7 @@ export async function explainTrialFailure(
     selected,
   );
   if (!summary) return;
-  await updateEvaluation(store, request.repoId, request.id, (latest) => {
+  await updateEvaluation(store, { repoId: request.repoId }, request.id, (latest) => {
     const current = latest.trials[request.index];
     if (!current || !explainable(current)) return false;
     current.failureSummary = summary;

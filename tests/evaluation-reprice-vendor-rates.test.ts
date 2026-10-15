@@ -68,25 +68,25 @@ test("reprice moves a gateway run to vendor list rates and keeps the gateway's c
   Object.assign(failed, { status: "failed" });
   run.status = "running";
   await saveEvaluation(store, run);
-  await expect(repriceEvaluation(store, run.repoId, run.id, true, openRouter)).rejects.toThrow(
-    "still in progress",
-  );
+  await expect(
+    repriceEvaluation(store, Number(run.repoId), run.id, true, openRouter),
+  ).rejects.toThrow("still in progress");
   run.status = "completed";
   await saveEvaluation(store, run);
 
   // $1.36, $4.18 and $0.14 per million: twice the preview rates.
   const listCost = (1_000_000 * 1.36 + 100_000 * 4.18 + 5_000_000 * 0.14) / 1_000_000;
-  const dry = await repriceEvaluation(store, run.repoId, run.id, false, openRouter);
+  const dry = await repriceEvaluation(store, Number(run.repoId), run.id, false, openRouter);
   expect(dry.trials.map((trial) => trial.after?.apiCostUsd)).toEqual([
     listCost,
     listCost,
     undefined,
   ]);
   expect(dry.totalCostUsd.after).toBeCloseTo(2 * listCost, 9);
-  expect((await getEvaluation(store, run.repoId, run.id))?.pricing?.input).toBe(0.68);
+  expect((await getEvaluation(store, run, run.id))?.pricing?.input).toBe(0.68);
 
-  await repriceEvaluation(store, run.repoId, run.id, true, openRouter);
-  const saved = await getEvaluation(store, run.repoId, run.id);
+  await repriceEvaluation(store, Number(run.repoId), run.id, true, openRouter);
+  const saved = await getEvaluation(store, run, run.id);
   expect(saved?.pricing).toMatchObject({ input: 1.36, output: 4.18, cacheRead: 0.14 });
   expect(
     saved?.trials.map(({ apiCostUsd, costSource, billedCostUsd }) => ({

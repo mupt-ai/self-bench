@@ -21,7 +21,7 @@ test("catalog is populated without keys and only exposes supported provider fami
     expect(response.status).toBe(200);
     expect(body.models.length).toBeGreaterThan(4);
     expect(new Set(body.models.map((model: { provider: string }) => model.provider))).toEqual(
-      new Set(["openai", "anthropic", "openrouter"]),
+      new Set(["openai", "anthropic", "meta", "openrouter"]),
     );
     expect(body.sandboxes).not.toContain("docker");
     expect((await fixture.request(`${fixture.base}/catalog`, {}, null)).status).toBe(401);
@@ -157,7 +157,7 @@ test("durable comparison, scoped credentials, frozen tasks, partial dispatch and
     const saved = await fixture.request(`${fixture.base}/comparisons`, post(draft));
     expect(saved.status).toBe(202);
     expect((await saved.json()).submissionError).toBeDefined();
-    const comparisons = await records.comparisons.listForRepo(fixture.repo.id);
+    const comparisons = await records.comparisons.listForScope({ repoId: fixture.repo.id });
     expect(comparisons).toHaveLength(1);
     const comparison = comparisons[0];
     if (!comparison) throw new Error("Missing comparison");

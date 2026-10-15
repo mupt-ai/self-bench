@@ -4,12 +4,12 @@ import {
   type CredentialSecret,
   type CredentialStore,
   credentialSchema,
-  isSandboxKind,
   maxSandboxesSchema,
   validateEndpoint,
 } from "../../src/db/credentials.js";
 import { type EncryptedRecordStore, RecordStoreError } from "../../src/db/encrypted-records.js";
 import type { Vault } from "../../src/db/vault.js";
+import { sameScope } from "../../src/evaluation/scope.js";
 
 export class MemoryRecords implements EncryptedRecordStore {
   private entries = new Map<string, { value: unknown; version: number }>();
@@ -64,7 +64,7 @@ export function memoryVault(records: EncryptedRecordStore = new MemoryRecords())
         if (existing.orgId !== orgId) throw new RecordStoreError(409, "Credential ID already used");
         return view(existing);
       }
-      const { value, tokenId, teamId, projectId } = parsed;
+      const { value, tokenId, teamId, projectId, managementKey } = parsed;
       rows.set(id, {
         id,
         orgId,
@@ -76,6 +76,7 @@ export function memoryVault(records: EncryptedRecordStore = new MemoryRecords())
         ...(parsed.maxSandboxes ? { maxSandboxes: parsed.maxSandboxes } : {}),
         secret: {
           value,
+          ...(managementKey ? { managementKey } : {}),
           ...(tokenId ? { tokenId } : {}),
           ...(teamId ? { teamId } : {}),
           ...(projectId ? { projectId } : {}),
@@ -86,8 +87,6 @@ export function memoryVault(records: EncryptedRecordStore = new MemoryRecords())
     async limit(orgId, id, maxSandboxes) {
       const row = live(orgId, id);
       if (!row) throw new Error("Credential not found");
-      if (!isSandboxKind(row.kind))
-        throw new Error("Only sandbox credentials take a sandbox limit");
       if (maxSandboxes === undefined) delete row.maxSandboxes;
       else row.maxSandboxes = maxSandboxesSchema.parse(maxSandboxes);
     },
@@ -102,8 +101,8 @@ export function memoryVault(records: EncryptedRecordStore = new MemoryRecords())
     async find(id) {
       return structuredClone(saved.get(id));
     },
-    async listForRepo(repoId) {
-      return [...saved.values()].filter((record) => record.repoId === repoId);
+    async listForScope(scope) {
+      return [...saved.values()].filter((record) => sameScope(record.scope, scope));
     },
     async listForOrg(orgId) {
       return [...saved.values()].filter((record) => record.orgId === orgId);

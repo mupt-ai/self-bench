@@ -47,7 +47,7 @@ async function evaluate(
   const command = async (name: string, args: readonly string[], options?: CommandOptions) => {
     if (name === process.execPath) {
       const material = args.find((arg) => arg.startsWith("@"))?.slice(1) ?? "";
-      const saved = (await getEvaluation(store, input.repoId, input.id))?.trials[0];
+      const saved = (await getEvaluation(store, input, input.id))?.trials[0];
       calls.push({
         args,
         env: options?.env ?? {},
@@ -77,7 +77,7 @@ async function evaluate(
     return { stdout: "", stderr: "", exitCode: 0 };
   };
   await runEvaluation(store, input, { env, vault, command, pollMs: 5, progressMs: 0 });
-  const trial = (await getEvaluation(store, input.repoId, input.id))?.trials[0];
+  const trial = (await getEvaluation(store, input, input.id))?.trials[0];
   return { trial, calls, store, input, command };
 }
 
@@ -185,7 +185,7 @@ test("BYOK explanations resolve the selected key in the worker, redact it, and n
     {},
   );
   const request = {
-    repoId: input.repoId,
+    repoId: Number(input.repoId),
     id: input.id,
     index: 0,
     bundleKey: input.tasks[0]?.bundleKey ?? "",
@@ -222,7 +222,7 @@ test("BYOK explanations resolve the selected key in the worker, redact it, and n
     ),
   ).rejects.toThrow("API key");
   await explainTrialFailure(store, request, options);
-  expect((await getEvaluation(store, input.repoId, input.id))?.trials[0]?.failureSummary).toEqual({
+  expect((await getEvaluation(store, input, input.id))?.trials[0]?.failureSummary).toEqual({
     text: "It reversed the chunks. [redacted]",
     model: "gpt-6-sol",
   });
@@ -233,7 +233,7 @@ test("Explain Failure explains a trial that kept no material from what its evalu
   // Run without consent, as every trial before this feature did: nothing kept, Pi never asked.
   const { calls, store, input, command } = await evaluate(MANAGED, 0, LUNA, false);
   expect(calls).toHaveLength(0);
-  const request = { repoId: input.repoId, id: input.id, index: 0 };
+  const request = { repoId: Number(input.repoId), id: input.id, index: 0 };
   const bundleKey = input.tasks[0]?.bundleKey ?? "";
   const redact = (text: string) => text.split(PLATFORM_KEY).join("[redacted]");
   await explainTrialFailure(store, { ...request, bundleKey }, { command, env: MANAGED, redact });
@@ -249,7 +249,7 @@ test("Explain Failure explains a trial that kept no material from what its evalu
     expect(call.material).toContain(evidence);
   // The diff only Harbor's run held is not claimed to be empty.
   expect(call.material).not.toContain("changed no files");
-  const trial = (await getEvaluation(store, input.repoId, input.id))?.trials[0];
+  const trial = (await getEvaluation(store, input, input.id))?.trials[0];
   expect(trial?.failureSummary?.text).toStartWith("The agent reversed the chunks");
   // Asked again, an explained trial is left as it is.
   await explainTrialFailure(store, { ...request, bundleKey }, { command, env: MANAGED, redact });

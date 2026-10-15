@@ -40,7 +40,7 @@ test("run and artifact lookup remain repository-scoped and reject arbitrary keys
   const run = initialEvaluation(input, input.modelName);
   run.trials[0]?.artifacts.push("0/solver/task/result.json");
   await server.artifacts.put(
-    `${evaluationPrefix(server.repo.id, input.id)}artifacts/0/solver/task/result.json`,
+    `${evaluationPrefix({ repoId: server.repo.id }, input.id)}artifacts/0/solver/task/result.json`,
     Buffer.from('{"reward":1}'),
     "text/plain",
   );
@@ -141,7 +141,7 @@ test("Explain Failure starts one explanation for a trial that failed its tests",
     await vault.comparisons.insert({
       id: input.comparisonId ?? "",
       orgId: fixture.repo.orgId,
-      repoId: fixture.repo.id,
+      scope: { repoId: fixture.repo.id },
       createdAt: input.createdAt,
       signature: "test",
       inputs: [input],

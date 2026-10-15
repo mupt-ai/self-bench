@@ -1,20 +1,26 @@
+import {
+  billingPause,
+  generationCharge,
+  generationLookup,
+  lookupGenerations,
+} from "../gateways/billing.js";
 import { gateways } from "../gateways/index.js";
-import { record, TRUNCATED_OUTPUT } from "./output.js";
+import { openRouterCost } from "../gateways/openrouter/billing.js";
+import { gatewayUsage, generationIds } from "../gateways/usage.js";
 import type { EvaluationRun, EvaluationTrial, Harness } from "./types.js";
 
 type BilledGateway = "openrouter" | "vercel-ai-gateway";
 
 /**
- * What the gateway charged for the whole trial, when every request's bill is available. It is
- * kept beside the trial's cost rather than replacing it: costs are priced at the vendor's list
- * rates (runPricing), and a gateway's charge reflects its routing and any discount. It stands in
- * only for a cost those rates cannot give, as for a request past their long-context bound.
+ * Actual OpenRouter charges replace estimates. Other gateways retain their direct bill as
+ * supporting evidence while list pricing remains primary.
  */
 export async function billedTrialCost(
   run: EvaluationRun,
   trial: EvaluationTrial,
   env: NodeJS.ProcessEnv,
   files: Map<string, string>,
+  billingKey?: string,
 ): Promise<Pick<EvaluationTrial, "billedCostUsd" | "apiCostUsd" | "costSource">> {
   const provider = run.credentials?.provider;
   if (!trial.modelVerified || (provider !== "openrouter" && provider !== "vercel-ai-gateway"))
@@ -24,118 +30,46 @@ export async function billedTrialCost(
     env[gateways[provider].keyVariable],
     trial.harness,
     files,
+    fetch,
+    billingKey,
   );
   if (cost === undefined) return {};
-  return trial.apiCostUsd === undefined
+  return provider === "openrouter" || trial.apiCostUsd === undefined
     ? { billedCostUsd: cost, apiCostUsd: cost, costSource: "gateway" }
     : { billedCostUsd: cost };
 }
 
-/** Only completed Pi replies have a generation ID we can match to a gateway bill. */
-export function generationIds(harness: Harness, files: Map<string, string>): string[] | undefined {
-  if (harness !== "pi") return undefined;
-  const text = [...files].find(([name]) => name.endsWith("/pi.txt"))?.[1];
-  if (!text) return undefined;
-  const ids: string[] = [];
-  const seen = new Set<string>();
-  const ends: Record<string, unknown>[] = [];
-  let started = false;
-  let unfinished = false;
-  const lines = text.split("\n");
-  for (const [index, line] of lines.entries()) {
-    if (!line) continue;
-    let event: Record<string, unknown>;
-    try {
-      event = record(JSON.parse(line));
-    } catch {
-      // Pi's notices precede its stream; a stored tail's final agent_end carries all messages of
-      // that agent run.
-      if (!started) continue;
-      if (index === lines.length - 1 && !text.endsWith("\n")) {
-        unfinished = true;
-        break;
-      }
-      return undefined;
-    }
-    started = true;
-    if (event.type === "agent_end") ends.push(event);
-    if (event.type !== "message_end") continue;
-    const message = record(event.message);
-    if (message.role !== "assistant") continue;
-    const id = message.responseId;
-    if (typeof id !== "string" || !/^(gen_[a-zA-Z0-9]+|gen-[a-zA-Z0-9-]+)$/.test(id))
-      return undefined;
-    if (seen.has(id)) return undefined;
-    seen.add(id);
-    ids.push(id);
-  }
-  if (!text.startsWith(TRUNCATED_OUTPUT)) return ids.length && !unfinished ? ids : undefined;
-  const [end] = ends;
-  if (ends.length !== 1 || !end || end.willRetry || !Array.isArray(end.messages)) return undefined;
-  const messages = end.messages.map(record);
-  if (messages.find((message) => message.role !== "system")?.role !== "user") return undefined;
-  return responseIds(messages);
-}
-
-function responseIds(messages: Record<string, unknown>[]): string[] | undefined {
-  const ids = messages
-    .filter((message) => message.role === "assistant")
-    .map((message) => message.responseId);
-  return ids.length &&
-    ids.every(
-      (id) => typeof id === "string" && /^(gen_[a-zA-Z0-9]+|gen-[a-zA-Z0-9-]+)$/.test(id),
-    ) &&
-    new Set(ids).size === ids.length
-    ? (ids as string[])
-    : undefined;
-}
-
-/** Gateway's charged USD; incomplete lookups leave the caller's usage estimate in place. */
+/** Gateway's charged USD; incomplete lookups never return a partial bill. */
 export async function gatewayCost(
   provider: BilledGateway,
   key: string | undefined,
   harness: Harness,
   files: Map<string, string>,
   fetcher: typeof fetch = fetch,
+  billingKey?: string,
+  pause: () => Promise<void> = billingPause,
 ): Promise<number | undefined> {
+  if (!key) return undefined;
+  if (provider === "openrouter")
+    return openRouterCost(harness, files, key, billingKey, fetcher, pause);
   const ids = generationIds(harness, files);
-  if (!key || !ids) return undefined;
-  const base =
-    provider === "openrouter"
-      ? "https://openrouter.ai/api/v1/generation?id="
-      : "https://ai-gateway.vercel.sh/v1/generation?id=";
-  const lookup = async (id: string): Promise<number | undefined> => {
-    try {
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const response = await fetcher(base + encodeURIComponent(id), {
-          headers: { Authorization: `Bearer ${key}` },
-          signal: AbortSignal.timeout(5000),
-        });
-        if (response.ok) {
-          // Both gateways leave a BYOK request's provider charge out of total_cost, which then
-          // holds only the gateway's own fee, and report it as upstream_inference_cost instead.
-          const data = record((await response.json()).data);
-          const total = charge(data.total_cost);
-          const upstream = data.is_byok === true ? charge(data.upstream_inference_cost) : 0;
-          return total === undefined || upstream === undefined ? undefined : total + upstream;
-        }
-        if (response.status !== 404) return undefined;
-        if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 2000));
-      }
-    } catch {
-      // A lookup failure is not a zero-cost request.
-    }
-    return undefined;
-  };
+  if (!ids) return undefined;
+  const lookup = generationLookup("https://ai-gateway.vercel.sh/v1", key, fetcher, pause);
+  const generations = await lookupGenerations(ids, lookup);
+  if (!generations) return undefined;
+  const usage = gatewayUsage(files);
   let total = 0;
-  for (let index = 0; index < ids.length; index += 10) {
-    const costs = await Promise.all(ids.slice(index, index + 10).map(lookup));
-    if (costs.some((cost) => cost === undefined)) return undefined;
-    total += (costs as number[]).reduce((sum, cost) => sum + cost, 0);
+  for (const data of generations) {
+    const cost = generationCharge(data);
+    if (
+      cost === undefined ||
+      (cost === 0 &&
+        data.native_tokens_prompt === 0 &&
+        data.native_tokens_completion === 0 &&
+        ((usage.get(data.id)?.prompt ?? 0) > 0 || (usage.get(data.id)?.completion ?? 0) > 0))
+    )
+      return undefined;
+    total += cost;
   }
-  return total;
-}
-
-function charge(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
+  return Number.isFinite(total) ? total : undefined;
 }

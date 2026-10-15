@@ -168,7 +168,7 @@ async function judge(
   const key = (await options.vault?.credentials.secret(orgId, credentialId))?.value;
   if (!key) throw new Error("Audit API key is unavailable.");
 
-  const attempts = taskAttempts(await listEvaluations(store, request.repoId), request);
+  const attempts = taskAttempts(await listEvaluations(store, { repoId: request.repoId }), request);
   const failures = attempts.filter(failedAttempt);
   if (!failures.length) return true;
   const redact = (text: string) => options.redact(redactOutput(text, [key]));
@@ -251,7 +251,7 @@ async function auditMaterial(
       .filter(failedAttempt)
       .slice(-MAX_FAILURES)
       .map(async (attempt) => {
-        const prefix = `${evaluationPrefix(repoId, attempt.run.id)}artifacts/`;
+        const prefix = `${evaluationPrefix({ repoId }, attempt.run.id)}artifacts/`;
         const output = await Promise.all(
           attempt.trial.artifacts
             .filter((name) => VERIFIER_FILE.test(name))

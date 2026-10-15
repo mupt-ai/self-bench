@@ -7,7 +7,8 @@ instead of building it again (and parallel trials of one task never build it sid
 
 - Modal: a pinned image the workspace can still use is kept; otherwise the Dockerfile image is
   built into the workspace's image cache, which the trial's identical Dockerfile then hits. A
-  compose verifier runs Docker-in-Docker and is left to the trial.
+  compose verifier runs Docker-in-Docker and is left to the trial, and so is a task that names a
+  prebuilt `docker_image` (a Harbor registry task), which Harbor pulls rather than builds.
 - E2B: the template Harbor names after the environment's content hash is built unless its last
   build is ready (selfbench_e2b.py), as the trial's environment checks it.
 
@@ -73,7 +74,9 @@ async def main(path: str, backend: str, *pins: str) -> None:
     with tempfile.TemporaryDirectory() as scratch:
 
         async def prepare(role: str, context: Path, config) -> None:
-            if backend == "modal":
+            if backend == "modal" and getattr(config, "docker_image", None):
+                outcome = "skipped"
+            elif backend == "modal":
                 outcome = await _modal(context, pinned.get(f"{role}_image"))
             elif backend == "e2b":
                 outcome = await _e2b(task, context, config, Path(scratch) / role)

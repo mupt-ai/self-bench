@@ -132,7 +132,7 @@ test("an audit keeps the model's verdict, or why the model gave none, through th
     { name: "My Key", kind: "openai", auth: "api-key", value: key },
     {},
   );
-  const task = { repoId: input.repoId, runId: "run-one", taskId: "task-one" };
+  const task = { repoId: Number(input.repoId), runId: "run-one", taskId: "task-one" };
   const request = {
     ...task,
     filesKey,

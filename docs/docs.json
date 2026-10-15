@@ -26,7 +26,7 @@
         "tab": "API Reference",
         "groups": [
           { "group": "Public Results", "pages": ["api-reference/overview", "api-reference/list-results", "api-reference/repository-results"] },
-          { "group": "Workspace API", "pages": ["api-reference/workspace", "api-reference/api-keys", "api-reference/list-tasks", "api-reference/create-batch", "api-reference/create-comparison", "api-reference/publish-release"] }
+          { "group": "Workspace API", "pages": ["api-reference/workspace", "api-reference/api-keys", "api-reference/list-tasks", "api-reference/create-batch", "api-reference/create-comparison", "api-reference/create-benchmark", "api-reference/publish-release"] }
         ]
       }
     ]

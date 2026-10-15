@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { cn } from "../primitives/cn";
 import type { EvaluationRun } from "./api";
-import { dollars } from "./benchmark";
 import { CancelEvaluation } from "./CancelEvaluation";
+import { CostValue } from "./CostValue";
 import { OutcomeFilter } from "./ResultsFilters";
 import { NoValue, ResultsStatus } from "./ResultsMarks";
 import { DoneCell, sortedEntries, TaskHeadings, TaskRow, taskEntries } from "./ResultsTaskRows";
@@ -105,7 +105,11 @@ export function ResultGroupRows({
           {totals.passRate === undefined ? <NoValue width={3} /> : `${totals.passRate.toFixed(0)}%`}
         </td>
         <td className="text-right font-mono tabular-nums">
-          {totals.costPerTask === undefined ? <NoValue width={6} /> : dollars(totals.costPerTask)}
+          {totals.costPerTask === undefined ? (
+            <NoValue width={6} />
+          ) : (
+            <CostValue value={totals.costPerTask} incomplete={totals.costIncomplete} />
+          )}
         </td>
       </tr>
       {open && (

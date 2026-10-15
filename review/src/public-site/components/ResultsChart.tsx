@@ -44,6 +44,11 @@ export function ResultsChart({
   const lowest = Math.min(...settings.map((setting) => setting.accuracy));
   return (
     <div ref={frame}>
+      {settings.some((setting) => setting.costIncomplete) && (
+        <p className="text-xs text-muted-foreground">
+          Settings with incomplete costs are omitted from the chart.
+        </p>
+      )}
       <ResultsPlot
         title="Accuracy versus cost per task for every model setting"
         showTitle={false}
@@ -65,15 +70,17 @@ export function ResultsChart({
         hoverRadius={36}
         // A quiet corner button for making the chart's text smaller or larger.
         showSettings
-        points={settings.map((setting) => ({
-          id: setting.id,
-          label: settingLabel(setting, settings),
-          ...(setting.reasoningLevel === "default" ? {} : { note: setting.reasoningLevel }),
-          x: setting.costPerTaskUsd,
-          y: setting.accuracy,
-          ...vendorPoint(setting, setting.custom ? setting.model.label : undefined),
-          description: `${harnessLabel(setting)} · ${setting.reasoningLevel} · ${setting.passed} / ${setting.tasks} passed`,
-        }))}
+        points={settings
+          .filter((setting) => !setting.costIncomplete)
+          .map((setting) => ({
+            id: setting.id,
+            label: settingLabel(setting, settings),
+            ...(setting.reasoningLevel === "default" ? {} : { note: setting.reasoningLevel }),
+            x: setting.costPerTaskUsd,
+            y: setting.accuracy,
+            ...vendorPoint(setting, setting.custom ? setting.model.label : undefined),
+            description: `${harnessLabel(setting)} · ${setting.reasoningLevel} · ${setting.passed} / ${setting.tasks} passed`,
+          }))}
         xAxis={{
           label: "Cost per Task",
           objective: "minimize",

@@ -10,11 +10,13 @@ import {
 } from "../../src/api/routes/evaluations.js";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { apiKeyDenies, createApiKeyStore } from "../../src/db/api-keys.js";
+import { createBenchmarkStore } from "../../src/db/benchmarks.js";
 import { createRunSummaryStore } from "../../src/db/evaluation-summaries.js";
 import { createRepoStore } from "../../src/db/repos.js";
 import { createTaskStore } from "../../src/db/tasks.js";
 import { createUserStore } from "../../src/db/users.js";
 import { createVault, type Vault } from "../../src/db/vault.js";
+import { scopeKey, scopeOf } from "../../src/evaluation/scope.js";
 import { keepRunSummaries } from "../../src/evaluation/store.js";
 import type { TaskAuditRequest } from "../../src/evaluation/task-audit.js";
 import type { EvaluationInput, FailedTrial } from "../../src/evaluation/types.js";
@@ -55,7 +57,7 @@ export async function credentialedInput(
   await vault.comparisons.insert({
     id: input.comparisonId ?? "",
     orgId: 1,
-    repoId: input.repoId,
+    scope: scopeOf(input),
     createdAt: input.createdAt,
     signature: "test",
     inputs: [input],
@@ -83,7 +85,10 @@ export function evaluationInput(): EvaluationInput {
  */
 export async function evaluationServer(
   vault?: Vault,
-  logins: Pick<EvaluationRoutesOptions, "codexLogins" | "claudeLogins"> = {},
+  logins: Pick<
+    EvaluationRoutesOptions,
+    "codexLogins" | "claudeLogins" | "museLogins" | "registryCommand"
+  > = {},
   env: NodeJS.ProcessEnv = evaluationEnv,
   github?: { private: boolean },
 ) {
@@ -160,6 +165,7 @@ export async function evaluationServer(
   let explainState: { running: boolean; endedAt?: number } = { running: false };
   let failStart = false;
   const apiKeys = createApiKeyStore(database.db);
+  const benchmarks = createBenchmarkStore(database.db);
   const auth = createSiteAuth({
     config: testAuthConfig,
     users,
@@ -191,6 +197,7 @@ export async function evaluationServer(
       const routes = createEvaluationRoutes({
         users,
         repos,
+        benchmarks,
         tasks,
         artifacts,
         publicUrl,
@@ -212,8 +219,8 @@ export async function evaluationServer(
           if (failStart) throw new Error("mock connection lost");
           starts.push(input);
         },
-        async stop(repoId, id) {
-          stops.push(`evaluation/${repoId}/${id}`);
+        async stop(scope, id) {
+          stops.push(`evaluation/${scopeKey(scope)}/${id}`);
         },
         explain: {
           async start(trial) {
@@ -264,6 +271,7 @@ export async function evaluationServer(
     audits,
     outsider,
     base: "/api/orgs/avyay/repos/avyay/repo/evaluations",
+    benchmarks: "/api/orgs/avyay/benchmarks",
     failStart(value: boolean) {
       failStart = value;
     },

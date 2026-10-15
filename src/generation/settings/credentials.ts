@@ -139,7 +139,7 @@ export async function checkGenerationCredentials(
       model &&
       (model.kind === "openai"
         ? ["api-key", "codex-login"].includes(model.auth)
-        : model.kind !== "custom" && model.auth === "api-key");
+        : !["custom", "meta"].includes(model.kind) && model.auth === "api-key");
     if (!usable)
       throw new Error(
         "Choose a model credential that can run both the author and verifier models.",
@@ -237,6 +237,7 @@ export async function generationEnvironment(
   const env: NodeJS.ProcessEnv = { ...base };
   delete env.OPENAI_API_KEY;
   delete env.ANTHROPIC_API_KEY;
+  delete env.META_API_KEY;
   for (const { keyVariable } of Object.values(gateways)) delete env[keyVariable];
   delete env.SELFBENCH_PI_AUTH_JSON;
   // The platform OpenRouter key is not a run credential: managed runs re-inject it under

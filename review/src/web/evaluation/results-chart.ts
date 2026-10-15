@@ -1,3 +1,4 @@
+import { costTotal } from "../../../../src/evaluation/cost-total";
 import { eligibleTrial } from "../../../../src/evaluation/eligible";
 import type { BenchmarkPoint } from "./benchmark";
 import type { Configuration, TaskResult } from "./results-model";
@@ -76,9 +77,11 @@ export function chosenOptions(
 export function configurationPoint(
   configuration: Configuration,
   tasks: readonly string[],
-): BenchmarkPoint {
+): BenchmarkPoint | undefined {
   const usable = usableResults(configuration);
   const results = tasks.flatMap((task) => usable.get(task) ?? []);
+  if (!results.length || costTotal(results.map((result) => result.trial)).incomplete)
+    return undefined;
   const mean = (values: number[]) =>
     values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length);
   return {

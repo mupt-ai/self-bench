@@ -73,7 +73,14 @@ try {
     "dist/maintenance/backfill-agent-timeouts.js",
     "dist/maintenance/records-migration.js",
     "dist/harnesses/harbor/runtime/harbor_gateway.py",
+    "dist/harnesses/harbor/runtime/harbor_dari.py",
+    "dist/harnesses/harbor/runtime/dari_capture.cjs",
+    "dist/harnesses/harbor/runtime/harbor_muse.py",
     "dist/harnesses/harbor/runtime/harbor_smoke.py",
+    "dist/harnesses/harbor/runtime/registry_auth.py",
+    "dist/harnesses/harbor/runtime/selfbench_build_export.py",
+    "dist/harnesses/harbor/runtime/selfbench_daytona.py",
+    "dist/harnesses/harbor/runtime/selfbench_vercel.py",
     "dist/harnesses/harbor/runtime/selfbench_e2b.py",
     "dist/harnesses/harbor/runtime/selfbench_export.py",
     "dist/harnesses/harbor/runtime/selfbench_modal.py",
@@ -110,7 +117,13 @@ try {
   }
   for (const asset of [
     "harbor_gateway.py",
+    "harbor_dari.py",
+    "harbor_muse.py",
     "harbor_smoke.py",
+    "registry_auth.py",
+    "selfbench_build_export.py",
+    "selfbench_daytona.py",
+    "selfbench_vercel.py",
     "selfbench_e2b.py",
     "selfbench_export.py",
     "selfbench_modal.py",
@@ -121,6 +134,12 @@ try {
     if ((await digest(source)) !== (await digest(packed))) {
       throw new Error(`packed Harbor runtime asset differs from source: ${asset}`);
     }
+  }
+  if (
+    (await digest(join(root, "src/evaluation/dari/capture.cjs"))) !==
+    (await digest(join(installedRoot, "dist/harnesses/harbor/runtime/dari_capture.cjs")))
+  ) {
+    throw new Error("packed Dari Pi capture extension differs from source");
   }
   const runtimeModule = join(installedRoot, "dist/generation/task/runtime-assets.js");
   const assets = await run(

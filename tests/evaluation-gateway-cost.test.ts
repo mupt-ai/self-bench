@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
-import { billedTrialCost, gatewayCost, generationIds } from "../src/evaluation/gateway-cost.js";
+import { billedTrialCost, gatewayCost } from "../src/evaluation/gateway-cost.js";
 import { initialEvaluation } from "../src/evaluation/store.js";
+import { generationIds } from "../src/gateways/usage.js";
 import { evaluationInput } from "./support/evaluation-fixture.js";
 
 const files = new Map([
@@ -45,6 +46,138 @@ test("BYOK generations count the provider's charge, which the gateway leaves out
   const unbilled = (async () =>
     Response.json({ data: { total_cost: 0, is_byok: true } })) as unknown as typeof fetch;
   expect(await gatewayCost("vercel-ai-gateway", "key", "pi", files, unbilled)).toBeUndefined();
+});
+
+test("OpenRouter retries delayed generations but never accepts a routed leaf subtotal without billing access", async () => {
+  let attempts = 0;
+  let waitMs = 0;
+  const originalSetTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = ((
+    callback: (...args: unknown[]) => void,
+    delay?: number,
+    ...args: unknown[]
+  ) => {
+    waitMs += delay ?? 0;
+    queueMicrotask(() => callback(...args));
+    return 0 as unknown as ReturnType<typeof setTimeout>;
+  }) as typeof setTimeout;
+  const delayed = (async () => {
+    attempts += 1;
+    return attempts < 3
+      ? Response.json({ error: { message: "Generation not found" } }, { status: 404 })
+      : Response.json({
+          data: {
+            router: "example/router",
+            model: "openai/gpt-6-luna",
+            total_cost: 0,
+            upstream_inference_cost: 0.0000039,
+            is_byok: true,
+          },
+        });
+  }) as unknown as typeof fetch;
+  try {
+    const single = new Map([
+      [
+        "solver/trial/agent/pi.txt",
+        JSON.stringify({
+          type: "message_end",
+          message: { role: "assistant", responseId: "gen-1791843781-routertest" },
+        }),
+      ],
+    ]);
+    expect(await gatewayCost("openrouter", "key", "pi", single, delayed)).toBeUndefined();
+    expect(attempts).toBe(3);
+    expect(waitMs).toBe(10_000);
+  } finally {
+    globalThis.setTimeout = originalSetTimeout;
+  }
+});
+
+test("OpenRouter zero-token billing placeholders cannot price token-bearing replies as free", async () => {
+  const message = {
+    role: "assistant",
+    responseId: "gen-1791855534-NslUwCGGykHhJuQnwkrz",
+    usage: { input: 3, output: 80, cacheRead: 12000, cacheWrite: 200 },
+  };
+  const placeholder = (async () =>
+    Response.json({
+      data: {
+        router: "example/router",
+        total_cost: 0,
+        upstream_inference_cost: 0,
+        is_byok: false,
+        native_tokens_prompt: 0,
+        native_tokens_completion: 0,
+      },
+    })) as unknown as typeof fetch;
+  for (const usage of [message.usage, { cacheRead: 12000 }, { cacheWrite: 200 }]) {
+    const reply = { ...message, usage };
+    for (const text of [
+      JSON.stringify({ type: "message_end", message: reply }),
+      `[Earlier output truncated]\n${JSON.stringify({
+        type: "agent_end",
+        messages: [{ role: "user" }, reply],
+      })}\n`,
+    ]) {
+      const measured = new Map([["agent/pi.txt", text]]);
+      expect(await gatewayCost("openrouter", "key", "pi", measured, placeholder)).toBeUndefined();
+    }
+  }
+});
+
+test("one contradictory zero-token bill prevents publishing a partial trial bill", async () => {
+  const measured = new Map([
+    [
+      "agent/pi.txt",
+      [...files.values()][0] +
+        "\n" +
+        JSON.stringify({
+          type: "agent_end",
+          messages: [
+            { role: "user" },
+            {
+              role: "assistant",
+              responseId: "gen_01ARZ3NDEKTSV4RRFFQ69G5FAX",
+              usage: { output: 100 },
+            },
+          ],
+        }),
+    ],
+  ]);
+  const partial = (async (url: string) =>
+    Response.json({
+      data: url.endsWith("FAV")
+        ? { total_cost: 0.12 }
+        : { total_cost: 0, native_tokens_prompt: 0, native_tokens_completion: 0 },
+    })) as unknown as typeof fetch;
+  expect(await gatewayCost("openrouter", "key", "pi", measured, partial)).toBeUndefined();
+});
+
+test("explicitly free token-bearing generations and empty replies still cost zero", async () => {
+  const measured = (usage: Record<string, number>) =>
+    new Map([
+      [
+        "agent/pi.txt",
+        JSON.stringify({
+          type: "message_end",
+          message: { role: "assistant", responseId: "gen-free-model", usage },
+        }),
+      ],
+    ]);
+  const free = (async () =>
+    Response.json({
+      data: { total_cost: 0, native_tokens_prompt: 10, native_tokens_completion: 5 },
+    })) as unknown as typeof fetch;
+  expect(
+    await gatewayCost("openrouter", "key", "pi", measured({ input: 10, output: 5 }), free),
+  ).toBe(0);
+  const empty = (async () =>
+    Response.json({
+      data: { total_cost: 0, native_tokens_prompt: 0, native_tokens_completion: 0 },
+    })) as unknown as typeof fetch;
+  expect(
+    await gatewayCost("openrouter", "key", "pi", measured({ input: 0, output: 0 }), empty),
+  ).toBe(0);
 });
 
 test("missing bills and unsupported harnesses leave the caller's usage estimate untouched", async () => {

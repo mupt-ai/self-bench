@@ -16,7 +16,7 @@ export function CredentialActions({
   onDelete,
 }: {
   name: string;
-  /** Sandbox credentials only: opens the limit on sandboxes running at once. */
+  /** Opens the credential's limit on sandboxes using it at once. */
   onLimit?(): void;
   onReplace(): void;
   onDelete(): void;
@@ -62,7 +62,7 @@ export function CredentialActions({
             }}
           >
             <Gauge aria-hidden="true" />
-            Set Sandbox Limit
+            Set Concurrency Limit
           </DropdownMenuItem>
         )}
         <DropdownMenuItem

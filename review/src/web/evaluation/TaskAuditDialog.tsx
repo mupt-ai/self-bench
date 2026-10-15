@@ -21,24 +21,26 @@ export function TaskAuditDialog({
   task,
   configurations,
   baseUrl,
-  repo,
+  pages,
   onClose,
   onOpenTrial,
 }: {
   task: OutcomeGridTask;
   configurations: readonly Configuration[];
   baseUrl: string;
-  repo: string;
+  /** Where the scope's pages live; only a repository's tasks are audited. */
+  pages: string;
   onClose(): void;
   onOpenTrial(result: TaskResult): void;
 }) {
   const close = useRef<HTMLButtonElement>(null);
   const { session } = useSession();
+  const auditable = !pages.startsWith("/benchmarks/");
   const { state, auditing, error, audit } = useTaskAudit({
     baseUrl,
     runId: task.runId,
     taskId: task.id,
-    enabled: session.status === "signed-in",
+    enabled: auditable && session.status === "signed-in",
   });
   const rows = configurations.flatMap((configuration) =>
     configuration.batches
@@ -85,7 +87,7 @@ export function TaskAuditDialog({
         <span className="font-mono text-xs text-muted-foreground">{task.id}</span>
         <a
           className="ml-auto text-sm font-medium underline decoration-foreground/25 underline-offset-4 hover:decoration-foreground"
-          href={taskPage(repo, { runId: task.runId, taskId: task.id })}
+          href={taskPage(pages, { runId: task.runId, taskId: task.id })}
           target="_blank"
           rel="noopener"
         >
@@ -93,29 +95,31 @@ export function TaskAuditDialog({
         </a>
       </div>
       <div className="min-w-0 space-y-6 p-4 sm:p-6">
-        <section aria-label="Audit" className="space-y-3">
-          {last && (
-            <div className="space-y-1.5">
-              <h3 className="text-sm font-semibold">Verdict: {VERDICTS[last.verdict]}</h3>
-              <p className="text-sm leading-6">{last.text}</p>
-              <p className="text-xs text-muted-foreground">
-                {last.model} read {last.failures} failed of {last.attempts} scored{" "}
-                {last.attempts === 1 ? "attempt" : "attempts"} · {momentLabel(last.auditedAt)}
-              </p>
-            </div>
-          )}
-          {state?.available || auditing ? (
-            <FailureExplanationForm
-              baseUrl={baseUrl}
-              explaining={auditing}
-              onExplain={audit}
-              labels={last ? { ...AUDIT, action: "Audit Again" } : AUDIT}
-            />
-          ) : (
-            state?.reason && <p className="text-sm text-muted-foreground">{state.reason}</p>
-          )}
-          {error && <Notice>{error}</Notice>}
-        </section>
+        {auditable && (
+          <section aria-label="Audit" className="space-y-3">
+            {last && (
+              <div className="space-y-1.5">
+                <h3 className="text-sm font-semibold">Verdict: {VERDICTS[last.verdict]}</h3>
+                <p className="text-sm leading-6">{last.text}</p>
+                <p className="text-xs text-muted-foreground">
+                  {last.model} read {last.failures} failed of {last.attempts} scored{" "}
+                  {last.attempts === 1 ? "attempt" : "attempts"} · {momentLabel(last.auditedAt)}
+                </p>
+              </div>
+            )}
+            {state?.available || auditing ? (
+              <FailureExplanationForm
+                baseUrl={baseUrl}
+                explaining={auditing}
+                onExplain={audit}
+                labels={last ? { ...AUDIT, action: "Audit Again" } : AUDIT}
+              />
+            ) : (
+              state?.reason && <p className="text-sm text-muted-foreground">{state.reason}</p>
+            )}
+            {error && <Notice>{error}</Notice>}
+          </section>
+        )}
         <section aria-labelledby="task-attempts" className="space-y-2">
           <h3 id="task-attempts" className="text-sm font-semibold">
             Attempts

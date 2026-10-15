@@ -17,9 +17,11 @@ import { memoryVault } from "./support/evaluation-vault.js";
 let server: Awaited<ReturnType<typeof evaluationServer>>;
 /** The same directory through a store that keeps no summaries: a worker from before them. */
 let older: LocalArtifactStore;
+let scope: { repoId: number };
 beforeAll(async () => {
   server = await evaluationServer();
   older = new LocalArtifactStore(server.directory);
+  scope = { repoId: server.repo.id };
 });
 afterAll(async () => {
   await server.close();
@@ -43,7 +45,7 @@ const passTrial = (run: EvaluationRun) => {
 };
 /** What lists returned before summaries: every record read, and stripped. */
 async function fromRecords() {
-  return (await listEvaluations(older, server.repo.id)).map((run) => ({
+  return (await listEvaluations(older, scope)).map((run) => ({
     ...run,
     trials: run.trials.map((trial) => ({ ...trial, log: "", steps: [], artifacts: [] })),
   }));
@@ -68,18 +70,18 @@ const listed = async () => (await (await server.request(server.base)).json()).ru
 /** The repository's summary revisions once `done` holds: a list saves what it rebuilds behind it. */
 async function storedWhen(done: (revisions: Map<string, number>) => boolean) {
   for (let tries = 0; tries < 100; tries += 1) {
-    const revisions = await server.summaries.revisions(server.repo.id);
+    const revisions = await server.summaries.revisions(scope);
     if (done(revisions)) return revisions;
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  return server.summaries.revisions(server.repo.id);
+  return server.summaries.revisions(scope);
 }
 
 test("a save writes the run's summary, and a list reads summaries, not records", async () => {
   const first = await savedRun(server.artifacts, "2026-01-01T00:00:00.000Z");
   const second = await savedRun(server.artifacts, "2026-01-02T00:00:00.000Z");
-  await updateEvaluation(server.artifacts, server.repo.id, first.id, passTrial);
-  expect(await server.summaries.revisions(server.repo.id)).toEqual(
+  await updateEvaluation(server.artifacts, scope, first.id, passTrial);
+  expect(await server.summaries.revisions(scope)).toEqual(
     new Map([
       [first.id, 2],
       [second.id, 1],
@@ -101,8 +103,8 @@ test("a run saved without its summary is listed, and its summary rebuilt once", 
   // A worker on older code: one run it started, and a newer save of a run that has a summary.
   const unseen = await savedRun(older);
   const known = await savedRun();
-  await updateEvaluation(older, server.repo.id, known.id, passTrial);
-  const revisions = await server.summaries.revisions(server.repo.id);
+  await updateEvaluation(older, scope, known.id, passTrial);
+  const revisions = await server.summaries.revisions(scope);
   expect(revisions.has(unseen.id)).toBe(false);
   expect(revisions.get(known.id)).toBe(1);
 
@@ -125,16 +127,14 @@ test("an older revision's summary never replaces a newer one", async () => {
   // A run the bucket does not have, so lists leave its summary out.
   const id = crypto.randomUUID();
   const summary = (revision: number) => ({ id, revision, body: `{"revision":${revision}}` });
-  await server.summaries.save(server.repo.id, summary(5));
-  await server.summaries.save(server.repo.id, summary(3));
-  expect((await server.summaries.list(server.repo.id)).find((entry) => entry.id === id)).toEqual(
-    summary(5),
-  );
-  await server.summaries.save(server.repo.id, summary(6));
-  expect((await server.summaries.revisions(server.repo.id)).get(id)).toBe(6);
+  await server.summaries.save(scope, summary(5));
+  await server.summaries.save(scope, summary(3));
+  expect((await server.summaries.list(scope)).find((entry) => entry.id === id)).toEqual(summary(5));
+  await server.summaries.save(scope, summary(6));
+  expect((await server.summaries.revisions(scope)).get(id)).toBe(6);
   // A repository disconnected while its run saves has no summaries to keep, and that is no error.
-  await server.summaries.save(987_654, summary(1));
-  expect(await server.summaries.list(987_654)).toEqual([]);
+  await server.summaries.save({ repoId: 987_654 }, summary(1));
+  expect(await server.summaries.list({ repoId: 987_654 })).toEqual([]);
   expect((await listed()).some((run: EvaluationRun) => run.id === id)).toBe(false);
 });
 
@@ -160,11 +160,11 @@ test("a save succeeds when its summary cannot be saved, and the list still has t
   try {
     run = await savedRun(failing);
     // A database that is down is not asked again at once: the next saves do not wait on it.
-    await updateEvaluation(failing, server.repo.id, run.id, passTrial);
+    await updateEvaluation(failing, scope, run.id, passTrial);
   } finally {
     console.warn = warn;
   }
-  expect((await getEvaluation(failing, server.repo.id, run.id))?.revision).toBe(2);
+  expect((await getEvaluation(failing, scope, run.id))?.revision).toBe(2);
   expect(attempts).toBe(1);
   expect(warnings).toEqual([
     `evaluation ${run.id}: summary of revision 1 not saved: database unavailable`,
@@ -197,7 +197,7 @@ test("a list stores the summaries it rebuilds, however slow the database and whi
     // Neither has a summary yet: the list rebuilds both, answers without waiting for the slow
     // saves, and the saves still store them.
     const started = Date.now();
-    const { runs } = await listRuns(busy, server.repo.id);
+    const { runs } = await listRuns(busy, scope);
     expect(Date.now() - started).toBeLessThan(2_000);
     expect(runs?.some((run) => run.id === first.id)).toBe(true);
     const stored = await storedWhen(
@@ -227,9 +227,9 @@ test("a poll that sends the list's tag is told when nothing changed, without the
   expect(unchanged.headers.get("cache-control")).toBe("no-store");
   expect(await unchanged.text()).toBe("");
   // An unchanged poll reads no summary bodies: only the tag is worked out.
-  expect((await listRuns(server.artifacts, server.repo.id, tag.slice(1, -1))).runs).toBeUndefined();
+  expect((await listRuns(server.artifacts, scope, tag.slice(1, -1))).runs).toBeUndefined();
 
-  await updateEvaluation(server.artifacts, server.repo.id, run.id, passTrial);
+  await updateEvaluation(server.artifacts, scope, run.id, passTrial);
   const changed = await server.request(server.base, { headers: { "if-none-match": tag } });
   expect(changed.status).toBe(200);
   expect(changed.headers.get("etag")).not.toBe(tag);
@@ -250,9 +250,9 @@ test("overlapping lists share one read of a record that needs rebuilding", async
 });
 
 test("a store that keeps no summaries lists from the records, as before", async () => {
-  const { tag, runs } = await listRuns(older, server.repo.id);
+  const { tag, runs } = await listRuns(older, scope);
   expect(runs).toEqual(await fromRecords());
-  expect((await listRuns(older, server.repo.id, tag)).runs).toBeUndefined();
+  expect((await listRuns(older, scope, tag)).runs).toBeUndefined();
 });
 
 test("saved comparisons take their progress from summaries, as their own pages do from records", async () => {
@@ -265,7 +265,7 @@ test("saved comparisons take their progress from summaries, as their own pages d
     const record = {
       id: crypto.randomUUID(),
       orgId: 1,
-      repoId: fixture.repo.id,
+      scope: { repoId: fixture.repo.id },
       createdAt: new Date().toISOString(),
       signature: "test",
       inputs,

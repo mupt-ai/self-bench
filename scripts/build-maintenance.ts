@@ -7,7 +7,10 @@ await mkdir(outdir, { recursive: true });
 const result = await Bun.build({
   entrypoints: [
     "recompute-cost",
+    "repair-cost-coverage",
     "reprice-vendor-rates",
+    "reprice-dari-router",
+    "reprice-openrouter",
     "backfill-agent-timeouts",
     "records-migration",
   ].map((name) => join(root, "maintenance/bin", `${name}.ts`)),

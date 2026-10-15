@@ -31,7 +31,7 @@ export function runEvaluation(
       if (input.explainFailures)
         await explainTrialFailure(
           store,
-          { repoId: input.repoId, id: input.id, index },
+          { repoId: Number(input.repoId), id: input.id, index },
           {
             command: options.command ?? runCommand,
             env: options.env,

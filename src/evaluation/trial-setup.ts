@@ -7,10 +7,16 @@ import {
   HARBOR_PROCESS_TIMEOUT_MS,
   harborProcessEnvironment,
 } from "../harnesses/harbor/command.js";
+import { hostVariables } from "../harnesses/harbor/host-variables.js";
 import { startFromExportedImages } from "../harnesses/harbor/registry-pull.js";
-import { prepareHarborRun, refuseWithoutRetry } from "../harnesses/harbor/task-safety.js";
+import {
+  prepareHarborRun,
+  readTaskConfig,
+  refuseWithoutRetry,
+} from "../harnesses/harbor/task-safety.js";
 import type { runCommand } from "../lib/process.js";
 import { credentialExecution, gatewayTrial, refuseTrial } from "./execution.js";
+import { judgeTrial } from "./judge.js";
 import type { RunnerOptions } from "./runner.js";
 import { unpackTrialTask } from "./task-bundle.js";
 import type { EvaluationInput, EvaluationRun, EvaluationTrial } from "./types.js";
@@ -68,7 +74,14 @@ export async function setUpTrial(
     gateway.child,
     options.signal,
     trialTimeouts(run.agentMinutes).agentSeconds,
+    // A registry task runs exactly as published, with its own limits.
+    { published: !!task.registry },
   ).catch(refuseWithoutRetry);
+  // A registry task's env tables read their host variables from the judge credential alone.
+  const judged = task.registry
+    ? judgeTrial(hostVariables(await readTaskConfig(taskPath)), prepared.env, execution.judge)
+    : { child: prepared.env, verifierEnv: [] };
+  if ("refusal" in judged) throw refuseTrial(judged.refusal);
   // E2B and Docker start from the images verification ran on, when the task has them exported.
   const pull = await startFromExportedImages(
     taskPath,
@@ -84,7 +97,9 @@ export async function setUpTrial(
     ...(task.images ? { images: task.images } : {}),
     ...gateway,
     modelAuth: execution.auth,
-    child: { ...prepared.env, ...pull },
+    ...(execution.billingKey ? { billingKey: execution.billingKey } : {}),
+    child: { ...judged.child, ...pull },
+    verifierEnv: judged.verifierEnv,
     guard: prepared.guard,
   };
 }

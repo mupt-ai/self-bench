@@ -11,8 +11,9 @@ import {
 import {
   capacityLimitedSandbox,
   credentialCapacity,
+  credentialsCapacity,
 } from "../../src/sandbox/credential-capacity.js";
-import { MemoryRecords } from "../support/evaluation-vault.js";
+import { MemoryRecords, memoryVault } from "../support/evaluation-vault.js";
 
 const request = { runId: "batch-test", stage: "discover", command: ["true"], timeoutMs: 60_000 };
 
@@ -100,4 +101,51 @@ test("credential reservations recover expiration, isolate organizations, and sha
   await expect(waiting).rejects.toBeInstanceOf(ApplicationFailure);
   expect(entered).toBe(false);
   await expect(capacity.acquire(60_000)).rejects.toBeInstanceOf(SandboxCapacityError);
+});
+
+// A model key's limit carries into the sandboxes whose agent calls it, alongside the sandbox
+// account's own. Regressions keep the sandbox slot when the model refuses, or free only one of
+// the two at stop.
+test("a model credential's limit carries into the sandboxes that call it", async () => {
+  const vault = memoryVault();
+  const create = (kind: "e2b" | "meta", maxSandboxes: number) =>
+    vault.credentials.create(
+      1,
+      { name: kind, kind, auth: "api-key", value: "k", maxSandboxes },
+      {},
+    );
+  const sandboxKey = await create("e2b", 3);
+  const modelKey = await create("meta", 1);
+  const provider: SandboxExecutor = {
+    async start() {
+      return {
+        sandboxId: crypto.randomUUID(),
+        stage: "author",
+        startedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      };
+    },
+    async run() {
+      throw new Error("not used");
+    },
+    async stop() {},
+    close() {},
+  };
+  const capacity = async (ids: string[]) => {
+    const found = await credentialsCapacity(vault, 1, ids);
+    if (!found) throw new Error("Missing capacity");
+    return found;
+  };
+  const agent = capacityLimitedSandbox(provider, await capacity([sandboxKey.id, modelKey.id]));
+  const compile = capacityLimitedSandbox(provider, await capacity([sandboxKey.id]));
+  const first = await agent.start(request);
+  await expect(agent.start(request)).rejects.toBeInstanceOf(SandboxCapacityError);
+  // The refused agent returned its sandbox slot: two sandboxes that call no model still fit.
+  await compile.start(request);
+  await compile.start(request);
+  await expect(compile.start(request)).rejects.toBeInstanceOf(SandboxCapacityError);
+  // Stopping the agent freed both of its slots.
+  await agent.stop(first);
+  await agent.start(request);
+  await expect(compile.start(request)).rejects.toBeInstanceOf(SandboxCapacityError);
 });

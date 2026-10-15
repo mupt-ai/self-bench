@@ -4,9 +4,11 @@ export const AGENT_MINUTES = { default: 40, min: 10, max: 90 } as const;
 /**
  * Every limit a trial runs under, from its agent minutes: the agent itself, the `harbor run`
  * around it (sandbox start, agent setup, grading: 80 minutes), and the Temporal activity around
- * that (bundle download and artifact upload: 30 more).
+ * that (bundle download and artifact upload: 30 more). A registry task runs with its own limits,
+ * so `taskMinutes` (its build, agent, and verifier limits together) bounds its run instead, with
+ * 30 minutes for sandbox start and agent setup.
  */
-export function trialTimeouts(agentMinutes: number = AGENT_MINUTES.default) {
-  const harborMs = (agentMinutes + 80) * 60_000;
+export function trialTimeouts(agentMinutes: number = AGENT_MINUTES.default, taskMinutes?: number) {
+  const harborMs = (taskMinutes !== undefined ? taskMinutes + 30 : agentMinutes + 80) * 60_000;
   return { agentSeconds: agentMinutes * 60, harborMs, activityMs: harborMs + 30 * 60_000 };
 }

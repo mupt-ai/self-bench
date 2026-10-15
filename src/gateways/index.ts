@@ -11,7 +11,7 @@ import {
   ratesPricing,
 } from "../contracts/models.js";
 import type { Gateway, GatewayListing, ListedModel, PiModel } from "./gateway.js";
-import { openRouter } from "./openrouter.js";
+import { openRouter } from "./openrouter/index.js";
 import { vercelAiGateway } from "./vercel-ai-gateway.js";
 
 export type { ListedModel } from "./gateway.js";
@@ -99,12 +99,12 @@ function piThinking({ thinkingLevelMap, compat }: PiModel): object | undefined {
 }
 
 /**
- * Whether the gateway serves its model `id`: it prices it, or its prices have not loaded yet (and
- * in the browser), when a curated model is assumed to be on every gateway.
+ * Whether the gateway serves its model `id`: it prices or lists it (including variable-price
+ * routers), or its prices have not loaded yet, when curated models are assumed to be served.
  */
 export function gatewayServes(gateway: GatewayId, id: string): boolean {
-  const { rates } = listing(gateway);
-  return rates.size === 0 || rates.has(id);
+  const { rates, models } = listing(gateway);
+  return rates.size === 0 || rates.has(id) || models.some((model) => model.id === id);
 }
 
 /** The catalog's id for the model a gateway names `id`. */
@@ -147,5 +147,6 @@ export function gatewayPricing(
  */
 export function modelApiKeyVariable(provider: string): string {
   if (isGateway(provider)) return gateways[provider].keyVariable;
+  if (provider === "meta") return "META_API_KEY";
   return provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY";
 }

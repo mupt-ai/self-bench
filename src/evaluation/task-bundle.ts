@@ -36,9 +36,10 @@ export async function unpackTrialTask(
   trialRoot: string,
   options: { snapshotLink?: SandboxCallback; signal?: AbortSignal },
 ): Promise<string> {
+  const bundleKey = task.bundleKey;
   const link = sandbox === "modal" ? options.snapshotLink : undefined;
   // Any trouble finding the split files only means reading the full bundle.
-  const split = link ? await splitBundle(store, task.bundleKey).catch(() => undefined) : undefined;
+  const split = link ? await splitBundle(store, bundleKey).catch(() => undefined) : undefined;
   if (link && split) {
     const root = join(trialRoot, "task");
     await mkdir(root);
@@ -55,7 +56,7 @@ export async function unpackTrialTask(
     });
     return directory;
   }
-  const bundle = await store.getByKey(task.bundleKey);
+  const bundle = await store.getByKey(bundleKey);
   if (!bundle) throw refuseTrial("Task bundle is missing");
   assertEvaluationBundleSize(bundle.byteLength);
   const archive = join(trialRoot, "task.tar.gz");

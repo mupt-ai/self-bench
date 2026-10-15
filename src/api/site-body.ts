@@ -1,3 +1,4 @@
+import { knownCostLabel } from "../evaluation/cost-total.js";
 import { harnessLabels } from "../evaluation/models.js";
 import { gateways, isGateway } from "../gateways/index.js";
 import { directoryOf } from "../public/directory.js";
@@ -74,9 +75,11 @@ const access = (setting: ReleaseSetting) =>
       ? "ChatGPT Sign-In"
       : setting.signIn === "claude-login"
         ? "Claude Sign-In"
-        : isGateway(setting.provider)
-          ? gateways[setting.provider].label
-          : "API Key";
+        : setting.signIn === "muse-login"
+          ? "Meta Sign-In"
+          : isGateway(setting.provider)
+            ? gateways[setting.provider].label
+            : "API Key";
 
 /** The settings table's columns, as the page's own table names them, plus the frontier it marks. */
 const COLUMNS: readonly [string, (setting: ReleaseSetting) => string][] = [
@@ -85,7 +88,11 @@ const COLUMNS: readonly [string, (setting: ReleaseSetting) => string][] = [
   ["Reasoning", reasoning],
   ["Access", access],
   ["Accuracy", (setting) => percent(setting.accuracy)],
-  ["Cost / Task", (setting) => dollars(setting.costPerTaskUsd)],
+  [
+    "Cost / Task",
+    (setting) =>
+      knownCostLabel(setting.costPerTaskUsd, setting.costIncomplete, dollars, setting.costedTasks),
+  ],
   ["Frontier", (setting) => (setting.onFrontier ? "Yes" : "No")],
 ];
 

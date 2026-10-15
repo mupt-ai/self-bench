@@ -4,9 +4,9 @@ import type { CredentialDraft, CredentialInfo } from "../../../../src/db/credent
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
 import { Button, fieldStyles, Input, Select } from "../ui";
 import { ClaudeSignIn } from "./ClaudeSignIn";
-import { CodexSignIn } from "./CodexSignIn";
 import { CredentialSecret } from "./CredentialSecret";
 import { isSandbox, providers, sandboxes, signIns } from "./credential-presentation";
+import { DeviceSignIn } from "./DeviceSignIn";
 import { SandboxLimitField } from "./SandboxLimit";
 
 export function CredentialEditor({
@@ -159,15 +159,17 @@ export function CredentialEditor({
               />
             </label>
           </fieldset>
-          {draft.auth === "claude-login" && (
+          {(draft.auth === "claude-login" || draft.auth === "muse-login") && (
             <p
               role="note"
               className="flex items-start gap-2 border-l-2 border-warning pl-3 text-xs leading-5 text-muted-foreground"
             >
               <CircleAlert aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-warning" />
               <span>
-                A Claude plan only works with the Claude Code harness; other harnesses need an API
-                key. Runs count against your plan's usage limits.
+                {draft.auth === "claude-login"
+                  ? "A Claude plan only works with the Claude Code harness; other harnesses need an API key."
+                  : "A Muse Code plan only works with the Muse Code harness."}{" "}
+                Runs count against your plan's usage limits.
               </span>
             </p>
           )}
@@ -178,8 +180,9 @@ export function CredentialEditor({
               onActiveChange={setSigningIn}
               onDone={onSaved}
             />
-          ) : isLogin ? (
-            <CodexSignIn
+          ) : isLogin && (draft.auth === "codex-login" || draft.auth === "muse-login") ? (
+            <DeviceSignIn
+              login={draft.auth}
               org={org}
               name={draft.name}
               onActiveChange={setSigningIn}
@@ -230,12 +233,11 @@ export function CredentialEditor({
                     />
                   </label>
                 ))}
-              {sandbox && (
-                <SandboxLimitField
-                  value={draft.maxSandboxes}
-                  onChange={(maxSandboxes) => setDraft({ ...draft, maxSandboxes })}
-                />
-              )}
+              <SandboxLimitField
+                sandbox={sandbox}
+                value={draft.maxSandboxes}
+                onChange={(maxSandboxes) => setDraft({ ...draft, maxSandboxes })}
+              />
               <CredentialSecret
                 draft={draft}
                 setDraft={setDraft}
@@ -249,7 +251,7 @@ export function CredentialEditor({
               />
             </fieldset>
           )}
-          {draft.auth !== "api-key" && !signingIn && (
+          {draft.auth !== "api-key" && signIn?.importLabel && !signingIn && (
             <button
               type="button"
               className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"

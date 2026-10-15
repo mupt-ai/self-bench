@@ -28,7 +28,7 @@ const REFUSED = ["RepeatSpendError"];
 // RepeatSpendError. The last attempt records its own setup failure on the trial.
 const trial = (input: EvaluationInput) =>
   proxyActivities<EvaluationActivities>({
-    startToCloseTimeout: trialTimeouts(input.agentMinutes).activityMs,
+    startToCloseTimeout: trialTimeouts(input.agentMinutes, input.taskMinutes).activityMs,
     heartbeatTimeout: "2 minutes",
     cancellationType: ActivityCancellationType.WAIT_CANCELLATION_COMPLETED,
     retry: { maximumAttempts: 3, nonRetryableErrorTypes: REFUSED },
@@ -56,7 +56,7 @@ const explaining = proxyActivities<EvaluationActivities>({
 /**
  * Runs each trial as its own child workflow, `<evaluation workflow ID>/trial/<index>`, all started
  * at once, so a trial's history stands alone in Temporal and the Harbor queue sees the whole
- * evaluation; under a sandbox limit (maxTrials), each starts as another ends. Cancelling the
+ * evaluation; under a credential's limit (maxTrials), each starts as another ends. Cancelling the
  * evaluation cancels every trial workflow and waits for each to record where it stopped; closing
  * it any other way terminates them. A task's trials start once its images are built
  * (taskImagesReady).
@@ -135,7 +135,7 @@ export async function selfBenchSolverTrialWorkflow(
     },
     records,
   );
-  if (input.explainFailures && patched("explain-failed-trials")) {
+  if (input.explainFailures && input.repoId !== undefined && patched("explain-failed-trials")) {
     const bundleKey = input.tasks[0]?.bundleKey;
     try {
       await startChild(selfBenchFailedTrialWorkflow, {

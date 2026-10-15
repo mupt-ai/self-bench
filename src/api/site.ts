@@ -2,6 +2,7 @@ import type { Client } from "@temporalio/client";
 import type { ArtifactStore } from "../artifacts/index.js";
 import type { SelfBenchConfig } from "../contracts/config/index.js";
 import { createApiKeyStore } from "../db/api-keys.js";
+import { createBenchmarkStore } from "../db/benchmarks.js";
 import { createBillingStore } from "../db/billing.js";
 import { type OpenDatabase, openDatabase } from "../db/client.js";
 import { createRunSummaryStore } from "../db/evaluation-summaries.js";
@@ -139,6 +140,7 @@ export async function openSite(
     evaluations: createEvaluationRoutes({
       users,
       repos,
+      benchmarks: createBenchmarkStore(database.db),
       tasks,
       artifacts,
       publicUrl,

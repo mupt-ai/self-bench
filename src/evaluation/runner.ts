@@ -4,19 +4,17 @@ import { join } from "node:path";
 import { ApplicationFailure } from "@temporalio/common";
 import type { ArtifactStore } from "../artifacts/index.js";
 import { trialTimeouts } from "../contracts/agent-limit.js";
-import type { HarborEnvironment } from "../contracts/config/providers.js";
-import type { ThinkingLevel } from "../contracts/models.js";
 import type { TaskImages } from "../contracts/task.js";
 import type { CredentialInfo } from "../db/credentials.js";
 import type { Vault } from "../db/vault.js";
+import { OPENROUTER_BILLING, openRouterManifest } from "../gateways/openrouter/billing.js";
 import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
-import { harborRunArguments } from "../harnesses/harbor/command.js";
 import type { HarborOutputGuard } from "../harnesses/harbor/output-guard.js";
-import { pinnedImageKwargs } from "../harnesses/harbor/pinned-images.js";
 import { runCommand } from "../lib/process.js";
 import { claimTrial, WorkerStoppingError } from "./claim.js";
 import { trialCost } from "./cost.js";
-import { solverAgent, solverAgentArguments } from "./execution.js";
+import { DARI_BILLING, retainDariBilling } from "./dari/billing.js";
+import { dariTrialCost, isDariRun } from "./dari/cost.js";
 import { failureMaterial, keepFailureMaterial } from "./failure-material.js";
 import { billedTrialCost } from "./gateway-cost.js";
 import {
@@ -31,34 +29,11 @@ import {
   verifierRewards,
   wholeTranscripts,
 } from "./output.js";
+import { solverArguments } from "./solver-arguments.js";
 import { evaluationPrefix, RepeatSpendError } from "./store.js";
 import { transcriptSteps } from "./transcript.js";
 import { setUpTrial } from "./trial-setup.js";
-import type { EvaluationInput, EvaluationRun, EvaluationTrial, Harness } from "./types.js";
-
-export function solverArguments(
-  taskPath: string,
-  jobs: string,
-  harness: Harness,
-  model: string,
-  sandbox: HarborEnvironment,
-  thinking?: ThinkingLevel,
-  extraAllowedHosts: readonly string[] = [],
-  images?: TaskImages,
-  provider?: string,
-): string[] {
-  return harborRunArguments({
-    taskPath,
-    jobsPath: jobs,
-    jobName: "solver",
-    agent: solverAgent(harness, provider),
-    environment: sandbox,
-    solver: { model, agentArguments: solverAgentArguments(harness, provider, model, thinking) },
-    extraAllowedHosts,
-    // Pinned images are Modal image IDs; every other backend builds the task's Dockerfiles.
-    ...(sandbox === "modal" ? { environmentKwargs: pinnedImageKwargs(images) } : {}),
-  });
-}
+import type { EvaluationInput, EvaluationRun, EvaluationTrial } from "./types.js";
 export interface RunnerOptions {
   command?: typeof runCommand;
   env?: NodeJS.ProcessEnv;
@@ -119,8 +94,9 @@ export async function executeTrial(
     const solver = { store, run, trial, index, save, command, redact, options };
     const material = await runTrial({ ...solver, ...ready });
     // Kept before the trial is saved completed, so no explanation can start without it.
-    const failed = { repoId: input.repoId, id: input.id, index };
-    if (material !== undefined) await keepFailureMaterial(store, failed, material);
+    // Only a repository's evaluation explains failures (comparison-save.ts).
+    if (material !== undefined && input.repoId !== undefined)
+      await keepFailureMaterial(store, { repoId: input.repoId, id: input.id, index }, material);
   } catch (error) {
     // This attempt lost its claim (or its evaluation stopped); the trial's holder records it.
     if (error instanceof RepeatSpendError) {
@@ -170,8 +146,10 @@ async function runTrial(context: {
   guard: HarborOutputGuard;
   model: string;
   modelAuth: CredentialInfo["auth"];
+  billingKey?: string;
   child: NodeJS.ProcessEnv;
   extraAllowedHosts?: readonly string[];
+  verifierEnv?: readonly string[];
   images?: TaskImages;
   command: typeof runCommand;
   redact: (text: string) => string;
@@ -202,10 +180,17 @@ async function runTrial(context: {
     outputs = clean;
     trial.log = trialLog(redact(archive ? stdout : completeLines(stdout)), clean);
     if (archive) {
+      if (isDariRun(run) && trial.harness === "pi" && records) {
+        await retainDariBilling(jobs, records);
+        const bill = records.get(DARI_BILLING);
+        if (bill !== undefined) clean.set(DARI_BILLING, bill);
+      }
+      if (run.credentials?.provider === "openrouter" && records)
+        openRouterManifest(trial.harness, records, clean);
       for (const [name, text] of clean) {
         const artifactName = `${index}/${name}`;
         await store.put(
-          `${evaluationPrefix(run.repoId, run.id)}artifacts/${artifactName}`,
+          `${evaluationPrefix(run, run.id)}artifacts/${artifactName}`,
           Buffer.from(text),
           "text/plain",
         );
@@ -216,7 +201,18 @@ async function runTrial(context: {
       const parsed = record(JSON.parse(result[1]));
       if (!records) throw new Error("Harbor's transcripts were not read");
       Object.assign(trial, trialCost(run, trial.harness, records, parsed, context.modelAuth));
-      Object.assign(trial, await billedTrialCost(run, trial, child, records));
+      Object.assign(trial, await billedTrialCost(run, trial, child, records, context.billingKey));
+      Object.assign(trial, await dariTrialCost(run, trial, child, records));
+      const billing = records.get(OPENROUTER_BILLING);
+      if (billing) {
+        const name = `${index}/${OPENROUTER_BILLING}`;
+        await store.put(
+          `${evaluationPrefix(run, run.id)}artifacts/${name}`,
+          Buffer.from(redact(billing)),
+          "application/json",
+        );
+        trial.artifacts.push(name);
+      }
       trial.rewards = verifierRewards(parsed);
       // The time limit is part of the task: a stopped agent is scored on what it left, if scored.
       const timedOut = agentTimedOut(parsed) && Object.keys(trial.rewards).length > 0;
@@ -266,11 +262,12 @@ async function runTrial(context: {
           context.extraAllowedHosts,
           context.images,
           run.credentials?.provider,
+          context.verifierEnv,
         ),
         {
           env: child,
           cwd: taskPath,
-          timeoutMs: trialTimeouts(run.agentMinutes).harborMs,
+          timeoutMs: trialTimeouts(run.agentMinutes, run.taskMinutes).harborMs,
           allowFailure: true,
           signal: context.guard.signal,
           onOutput: (_stream, chunk) => {

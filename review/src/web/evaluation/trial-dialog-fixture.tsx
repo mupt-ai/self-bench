@@ -139,7 +139,7 @@ export async function open(run = failedRun(), managedOffering = false, signedIn 
             trial={trial}
             loaded
             baseUrl={BASE}
-            repo="avyay/repo"
+            pages="/repos/avyay/repo"
             onClose={() => {}}
           />
         </MemoryRouter>

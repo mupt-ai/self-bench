@@ -14,7 +14,7 @@ export async function frozenTrialBundle(
 ): Promise<string | undefined> {
   const record = run.comparisonId ? await vault?.comparisons.find(run.comparisonId) : undefined;
   const frozen =
-    record?.repoId === repo.id && record.orgId === repo.orgId
+    record?.scope.repoId === repo.id && record.orgId === repo.orgId
       ? record.inputs.find((input) => input.id === run.id)
       : undefined;
   return frozen && trialInput(frozen, index).tasks[0]?.bundleKey;
@@ -33,6 +33,6 @@ export async function trialTaskFiles(
 ): Promise<{ bundleKey: string } | { filesKey: string } | undefined> {
   const bundleKey = await frozenTrialBundle(vault, repo, run, index);
   if (bundleKey && (await artifacts.stat(bundleKey))) return { bundleKey };
-  const filesKey = `${evaluationPrefix(repo.id, run.id)}tasks/${index}.json`;
+  const filesKey = `${evaluationPrefix({ repoId: repo.id }, run.id)}tasks/${index}.json`;
   return (await artifacts.stat(filesKey)) ? { filesKey } : undefined;
 }

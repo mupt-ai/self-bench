@@ -83,7 +83,7 @@ test.each([
   );
 });
 
-test("a run gives the agent its time, whatever an older task set", async () => {
+test("a run gives the agent its time and an empty allowlist, whatever an older task set", async () => {
   const root = await taskDirectory(
     'schema_version = "1.4"\n[agent]\ntimeout_sec = 2400.0\nuser = "root"\n',
   );
@@ -91,8 +91,35 @@ test("a run gives the agent its time, whatever an older task set", async () => {
   expect(parse(await readFile(join(root, "task.toml"), "utf8")).agent).toEqual({
     timeout_sec: 3600,
     user: "root",
+    network_mode: "allowlist",
+    allowed_hosts: [],
   });
 });
+
+test.each([
+  'network_mode = "allowlist"\nallowed_hosts = ["chatgpt.com", "*.chatgpt.com", "openai.com", "*.openai.com"]',
+  'network_mode = "public"',
+  'network_mode = "allowlist"\nallowed_hosts = ["unrelated.example"]',
+])(
+  "old agent network policy is backfilled without changing setup or verifier: %s",
+  async (policy) => {
+    const original = `[agent]\nuser = "root"\n${policy}\n[environment]\nnetwork_mode = "public"\n[verifier]\nnetwork_mode = "public"\n[verifier.environment]\nnetwork_mode = "public"\n`;
+    const root = await taskDirectory(original);
+    await assertHostSafeTask(root, harborEnv, 60);
+    const updated = parse(await readFile(join(root, "task.toml"), "utf8"));
+    const before = parse(original);
+    expect(updated.agent).toEqual({
+      user: "root",
+      timeout_sec: 60,
+      network_mode: "allowlist",
+      allowed_hosts: [],
+    });
+    expect(updated.environment).toEqual(before.environment);
+    expect(updated.verifier).toEqual(before.verifier);
+    await assertHostSafeTask(root, harborEnv, 60);
+    expect(parse(await readFile(join(root, "task.toml"), "utf8"))).toEqual(updated);
+  },
+);
 
 test("free-form metadata may use any key", async () => {
   const root = await taskDirectory('schema_version = "1.4"\n[metadata]\nenv = "prod"\n');

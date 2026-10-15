@@ -58,7 +58,7 @@ test("an image keeps its base's config, then each ENV, USER and WORKDIR in order
 
 test("a multi-stage Dockerfile's image has its last stage's config", async () => {
   const dockerfile = [
-    "FROM golang:1.23@sha256:" + "b".repeat(64) + " AS build",
+    `FROM golang:1.23@sha256:${"b".repeat(64)} AS build`,
     "ENV CGO_ENABLED=0",
     "WORKDIR /src",
     `FROM debian@sha256:${"c".repeat(64)}`,
