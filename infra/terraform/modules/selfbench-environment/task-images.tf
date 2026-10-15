@@ -39,7 +39,12 @@ resource "google_artifact_registry_repository_iam_member" "api_task_images" {
 }
 
 locals {
-  task_image_env = var.task_images ? {
-    SELFBENCH_TASK_IMAGE_REPOSITORY = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.tasks[0].repository_id}"
-  } : {}
+  task_image_env = var.task_images ? merge(
+    {
+      SELFBENCH_TASK_IMAGE_REPOSITORY = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.tasks[0].repository_id}"
+    },
+    var.task_image_builder && var.task_image_builder_modal_environment != null ? {
+      SELFBENCH_TASK_IMAGE_BUILDER_MODAL_ENVIRONMENT = var.task_image_builder_modal_environment
+    } : {},
+  ) : {}
 }

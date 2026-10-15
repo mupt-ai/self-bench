@@ -61,6 +61,29 @@ test("builder credentials are independent of verification credentials and contai
   expect(portableBuilderConfigured({})).toBe(false);
   expect(portableBuilderConfigured({ MODAL_TOKEN_ID: "id" })).toBe(false);
   expect(portableBuilderConfigured({ MODAL_TOKEN_ID: "id", MODAL_TOKEN_SECRET: "s" })).toBe(true);
+  // The dedicated builder wins, and its pair is never mixed with another account's.
+  const dedicated = portableBuilderEnvironment({
+    SELFBENCH_TASK_IMAGE_BUILDER_MODAL_TOKEN_ID: "builder-id",
+    SELFBENCH_TASK_IMAGE_BUILDER_MODAL_TOKEN_SECRET: "builder-secret",
+    SELFBENCH_TASK_IMAGE_BUILDER_MODAL_ENVIRONMENT: "builder-env",
+    SELFBENCH_MANAGED_MODAL_TOKEN_ID: "platform-id",
+    SELFBENCH_MANAGED_MODAL_TOKEN_SECRET: "platform-secret",
+    SELFBENCH_MANAGED_MODAL_ENVIRONMENT: "platform-env",
+  });
+  expect([
+    dedicated.MODAL_TOKEN_ID,
+    dedicated.MODAL_TOKEN_SECRET,
+    dedicated.MODAL_ENVIRONMENT,
+  ]).toEqual(["builder-id", "builder-secret", "builder-env"]);
+  const halfPair = portableBuilderEnvironment({
+    SELFBENCH_TASK_IMAGE_BUILDER_MODAL_TOKEN_ID: "builder-id",
+    MODAL_TOKEN_ID: "worker-id",
+    MODAL_TOKEN_SECRET: "worker-secret",
+  });
+  expect([halfPair.MODAL_TOKEN_ID, halfPair.MODAL_TOKEN_SECRET]).toEqual([
+    "worker-id",
+    "worker-secret",
+  ]);
 });
 
 test("builds agent and verifier in separate contexts and records OCI digests before verification", async () => {

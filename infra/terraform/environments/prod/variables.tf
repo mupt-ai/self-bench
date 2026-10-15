@@ -96,3 +96,11 @@ variable "task_images" {
   type    = bool
   default = false
 }
+variable "task_image_builder" {
+  type    = bool
+  default = false
+}
+variable "task_image_builder_modal_environment" {
+  type    = string
+  default = null
+}

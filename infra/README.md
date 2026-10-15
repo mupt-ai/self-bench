@@ -85,10 +85,11 @@ Required secrets:
 - `selfbench-api-token`
 - `selfbench-worker-api-token`
 
-The managed offering's secrets are not Terraform's. Create each one, with its version, before turning on its feature; Terraform only grants the API and workers access:
+The managed offering's secrets, and the task image builder's, are not Terraform's. Create each one, with its version, before turning on its feature; Terraform only grants the API and workers access:
 
 - `selfbench-managed-openrouter-api-key`, `selfbench-managed-e2b-api-key`, `selfbench-managed-modal-token-id` and `selfbench-managed-modal-token-secret` when `managed_offering` is true
 - `selfbench-stripe-secret-key` and `selfbench-stripe-webhook-secret` when `managed_offering` is true and `stripe_price_id` is set
+- `selfbench-task-image-builder-modal-token-id` and `selfbench-task-image-builder-modal-token-secret` (workers only) when `task_images` and `task_image_builder` are true. They are the platform Modal account that builds each accepted task's images before verification, so every sandbox provider delivers minimal bundles. Set `task_image_builder_modal_environment` to pick its Modal environment. Without the builder, generation keeps verifying source builds.
 
 ```sh
 gcloud secrets create selfbench-managed-e2b-api-key --project PROJECT --replication-policy=user-managed --locations=REGION

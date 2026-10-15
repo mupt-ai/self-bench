@@ -14,11 +14,28 @@ import { dockerfileImageConfig } from "./task-image-export.js";
 
 export class PortableImageBuildError extends Error {}
 
+/**
+ * The dedicated builder account, then the managed offering's Modal account, then the worker's own.
+ * Each pair is taken whole, so an ID and a secret never come from different accounts.
+ */
 function builderToken(base: NodeJS.ProcessEnv) {
-  return {
-    id: base.SELFBENCH_MANAGED_MODAL_TOKEN_ID || base.MODAL_TOKEN_ID,
-    secret: base.SELFBENCH_MANAGED_MODAL_TOKEN_SECRET || base.MODAL_TOKEN_SECRET,
-  };
+  for (const [id, secret, environment] of [
+    [
+      "SELFBENCH_TASK_IMAGE_BUILDER_MODAL_TOKEN_ID",
+      "SELFBENCH_TASK_IMAGE_BUILDER_MODAL_TOKEN_SECRET",
+      "SELFBENCH_TASK_IMAGE_BUILDER_MODAL_ENVIRONMENT",
+    ],
+    [
+      "SELFBENCH_MANAGED_MODAL_TOKEN_ID",
+      "SELFBENCH_MANAGED_MODAL_TOKEN_SECRET",
+      "SELFBENCH_MANAGED_MODAL_ENVIRONMENT",
+    ],
+    ["MODAL_TOKEN_ID", "MODAL_TOKEN_SECRET", "MODAL_ENVIRONMENT"],
+  ] as const) {
+    if (base[id]?.trim() && base[secret]?.trim())
+      return { id: base[id]?.trim(), secret: base[secret]?.trim(), environment: base[environment] };
+  }
+  return {};
 }
 
 /** Deployments without a builder keep verifying source builds rather than failing every task. */
@@ -29,7 +46,7 @@ export function portableBuilderConfigured(base: NodeJS.ProcessEnv): boolean {
 
 /** The builder is deployment infrastructure, never the run's chosen verification account. */
 export function portableBuilderEnvironment(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const { id, secret } = builderToken(base);
+  const { id, secret, environment } = builderToken(base);
   if (!id || !secret)
     throw new Error("Portable task images require a configured Modal image builder.");
   return {
@@ -38,9 +55,7 @@ export function portableBuilderEnvironment(base: NodeJS.ProcessEnv): NodeJS.Proc
     PYTHONPATH: harborPythonPath(),
     MODAL_TOKEN_ID: id,
     MODAL_TOKEN_SECRET: secret,
-    ...(base.SELFBENCH_MANAGED_MODAL_ENVIRONMENT
-      ? { MODAL_ENVIRONMENT: base.SELFBENCH_MANAGED_MODAL_ENVIRONMENT }
-      : {}),
+    ...(environment ? { MODAL_ENVIRONMENT: environment } : {}),
   };
 }
 

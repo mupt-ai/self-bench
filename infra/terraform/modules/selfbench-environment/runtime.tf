@@ -102,10 +102,30 @@ locals {
   retired_secrets = {
     task_canary = "selfbench-task-canary"
   }
-  readable_secrets = merge(local.runtime_secrets, local.managed_secrets)
+  # The Modal account that builds accepted tasks' images before verification (portable-images.ts).
+  # It is the platform's, whatever provider a run verifies on. Operators create both values before
+  # turning task_image_builder on, as for the managed offering's.
+  builder_secrets = {
+    task_image_builder_modal_token_id = {
+      id      = "selfbench-task-image-builder-modal-token-id"
+      env     = "SELFBENCH_TASK_IMAGE_BUILDER_MODAL_TOKEN_ID"
+      api     = false
+      worker  = true
+      enabled = var.task_images && var.task_image_builder
+    }
+    task_image_builder_modal_token_secret = {
+      id      = "selfbench-task-image-builder-modal-token-secret"
+      env     = "SELFBENCH_TASK_IMAGE_BUILDER_MODAL_TOKEN_SECRET"
+      api     = false
+      worker  = true
+      enabled = var.task_images && var.task_image_builder
+    }
+  }
+  readable_secrets = merge(local.runtime_secrets, local.managed_secrets, local.builder_secrets)
   secret_ids = merge(
     { for key, secret in google_secret_manager_secret.value : key => secret.secret_id },
     { for key, secret in local.managed_secrets : key => secret.id },
+    { for key, secret in local.builder_secrets : key => secret.id },
   )
   temporal_secret = {
     id  = "selfbench-temporal-api-key"

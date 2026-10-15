@@ -302,6 +302,35 @@ run "task_images" {
     error_message = "Only the worker writes task images; the API only reads them."
   }
 }
+run "task_image_builder" {
+  command = plan
+  variables {
+    task_images                          = true
+    task_image_builder                   = true
+    task_image_builder_modal_environment = "selfbench-dev"
+  }
+  assert {
+    condition = toset([
+      for env in google_cloud_run_v2_worker_pool.worker[0].template[0].containers[0].env : env.name
+      if startswith(env.name, "SELFBENCH_TASK_IMAGE_BUILDER_")
+    ]) == toset(["SELFBENCH_TASK_IMAGE_BUILDER_MODAL_TOKEN_ID", "SELFBENCH_TASK_IMAGE_BUILDER_MODAL_TOKEN_SECRET", "SELFBENCH_TASK_IMAGE_BUILDER_MODAL_ENVIRONMENT"])
+    error_message = "Workers receive the image builder's Modal token pair and environment."
+  }
+  assert {
+    condition     = length([for env in google_cloud_run_v2_service.api.template[0].containers[0].env : env if startswith(env.name, "SELFBENCH_TASK_IMAGE_BUILDER_MODAL_TOKEN")]) == 0
+    error_message = "The API never holds the image builder's token."
+  }
+}
+run "task_image_builder_off_by_default" {
+  command = plan
+  variables {
+    task_images = true
+  }
+  assert {
+    condition     = length([for env in google_cloud_run_v2_worker_pool.worker[0].template[0].containers[0].env : env if startswith(env.name, "SELFBENCH_TASK_IMAGE_BUILDER_")]) == 0
+    error_message = "Workers mount no builder secrets until their values exist and the builder is turned on."
+  }
+}
 run "gke_workers_off_by_default" {
   command = plan
   assert {

@@ -155,6 +155,16 @@ variable "task_images" {
   type        = bool
   default     = false
 }
+variable "task_image_builder" {
+  description = "Build accepted tasks' images before verification with the platform Modal account in selfbench-task-image-builder-modal-token-id and -secret, so every provider delivers minimal bundles. Create both secret values first; requires task_images."
+  type        = bool
+  default     = false
+}
+variable "task_image_builder_modal_environment" {
+  description = "Modal environment the task image builder uses; null uses the token's default."
+  type        = string
+  default     = null
+}
 variable "gke_workers" {
   description = "Run the Temporal workers on GKE Autopilot instead of a Cloud Run worker pool: the workflow worker as a Deployment, Harbor work as jobs scaled by KEDA on the Harbor queue backlog."
   type        = bool
