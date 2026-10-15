@@ -35,6 +35,7 @@ export function trialCost(
         largestPrompt?: number;
         hourCacheWrite?: number;
         referenceRatesComplete?: boolean;
+        costUnavailable?: boolean;
       }
     | undefined;
 
@@ -72,13 +73,14 @@ export function trialCost(
     largestPrompt,
     hourCacheWrite = 0,
     referenceRatesComplete = true,
+    costUnavailable = false,
   } = measurement;
   const measured = {
     modelVerified,
     ...(tokenUsage ? { tokenUsage } : {}),
     ...(cacheWritesInferred ? { cacheWritesInferred: true } : {}),
   };
-  if (!modelVerified || !tokenUsage) return measured;
+  if (!modelVerified || !tokenUsage || costUnavailable) return measured;
   // OpenRouter's actual charge can include routing, discounts and separate BYOK charges.
   // Only its gateway billing records provide a price, not harness or catalog estimates.
   if (run.credentials?.provider === "openrouter") return measured;

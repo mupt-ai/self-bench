@@ -113,6 +113,26 @@ test("Mini-SWE-Agent records cache writes in prompt token details", () => {
   });
 });
 
+test("identical consecutive ATIF calls retain both Harbor costs", () => {
+  const trajectory = atif();
+  const first = trajectory.steps[0];
+  if (!first) throw new Error("Missing fixture step");
+  trajectory.steps[1] = structuredClone(first);
+  expect(
+    trialCost(
+      makeRun("mini-swe-agent"),
+      "mini-swe-agent",
+      files(trajectory),
+      result({ n_input_tokens: 2000, n_cache_tokens: 400, n_output_tokens: 100, cost_usd: 0.008 }),
+    ),
+  ).toEqual({
+    modelVerified: true,
+    tokenUsage: { input: 1600, output: 100, cacheRead: 400, cacheWrite: 0 },
+    apiCostUsd: 0.008,
+    costSource: "harbor",
+  });
+});
+
 test("cache writes unavailable means no Anthropic-premium reference estimate", () => {
   const run = makeRun("terminus-2", "vercel-ai-gateway");
   expect(trialCost(run, "terminus-2", files(atif()), result())).toMatchObject({

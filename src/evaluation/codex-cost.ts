@@ -42,6 +42,7 @@ export interface CodexCostMeasurement {
   requests?: readonly RequestUsage[];
   reportedCost?: number;
   cacheWritesInferred?: boolean;
+  costUnavailable?: boolean;
   largestPrompt?: number;
 }
 
@@ -92,7 +93,7 @@ export function measureCodexCost(
     calls && sameUsage(sumUsage(calls), usage) ? calls : undefined;
   const billed =
     auth === "codex-login" ? inferSubscriptionWrites(trajectory, run, usage) : "unchanged";
-  if (billed === null) return { modelVerified, tokenUsage: usage };
+  if (billed === null) return { modelVerified, tokenUsage: usage, costUnavailable: true };
   if (billed === "unchanged") {
     const reportedCost = harborCost(trajectory, usage, tokens.cost_usd);
     return {
