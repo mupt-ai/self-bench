@@ -31,7 +31,11 @@ export function harborCallUsage(
     // Harbor's Codex adapter omits cached_tokens when a call read nothing from cache.
     const cached = metrics.cached_tokens ?? 0;
     // Codex names its writes one way, Claude Code (split by cache lifetime) another.
-    const written = extra.cache_write_input_tokens ?? extra.cache_creation_input_tokens ?? 0;
+    const written =
+      extra.cache_write_input_tokens ??
+      extra.cache_creation_input_tokens ??
+      record(extra.prompt_tokens_details).cache_creation_tokens ??
+      0;
     const hour = record(extra.cache_creation).ephemeral_1h_input_tokens ?? 0;
     const cost = metrics.cost_usd;
     if (
@@ -75,10 +79,13 @@ export function codexCallUsage(trajectory: Record<string, unknown>): HarborCallU
   );
 }
 
-export function harborCost(trajectory: Record<string, unknown>, usage: TokenUsage, total: unknown) {
+export function harborCallsCost(
+  calls: readonly HarborCallUsage[] | undefined,
+  usage: TokenUsage,
+  total: unknown,
+) {
   if (typeof total !== "number" || !Number.isFinite(total) || total < 0) return undefined;
-  const calls = codexCallUsage(trajectory);
-  if (!calls || calls.some((call) => call.cost === undefined)) return undefined;
+  if (!calls?.length || calls.some((call) => call.cost === undefined)) return undefined;
   const sums = calls.reduce(
     (sum, call) => ({
       input: sum.input + call.input,
@@ -98,4 +105,8 @@ export function harborCost(trajectory: Record<string, unknown>, usage: TokenUsag
   )
     return undefined;
   return total;
+}
+
+export function harborCost(trajectory: Record<string, unknown>, usage: TokenUsage, total: unknown) {
+  return harborCallsCost(codexCallUsage(trajectory), usage, total);
 }

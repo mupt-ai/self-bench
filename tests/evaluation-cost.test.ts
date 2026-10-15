@@ -169,6 +169,9 @@ test("Codex sign-in bills eligible unreported fresh input as cache writes, like 
   const bigger = { agent_result: { ...result.agent_result, n_input_tokens: 73_780 } };
   expect(trialCost(signIn, "codex", files(), bigger).apiCostUsd).toBeUndefined();
   first.metrics.prompt_tokens -= 20_000;
+  first.metrics.prompt_tokens += 1;
+  expect(trialCost(signIn, "codex", files(), result).apiCostUsd).toBeUndefined();
+  first.metrics.prompt_tokens -= 1;
   expect(trialCost(signIn, "codex", files(), bigger)).toEqual({
     modelVerified: true,
     tokenUsage: { input: 37_772, output: 346, cacheRead: 31_008, cacheWrite: 5000 },
