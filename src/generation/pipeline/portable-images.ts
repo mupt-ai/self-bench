@@ -14,10 +14,22 @@ import { dockerfileImageConfig } from "./task-image-export.js";
 
 export class PortableImageBuildError extends Error {}
 
+function builderToken(base: NodeJS.ProcessEnv) {
+  return {
+    id: base.SELFBENCH_MANAGED_MODAL_TOKEN_ID || base.MODAL_TOKEN_ID,
+    secret: base.SELFBENCH_MANAGED_MODAL_TOKEN_SECRET || base.MODAL_TOKEN_SECRET,
+  };
+}
+
+/** Deployments without a builder keep verifying source builds rather than failing every task. */
+export function portableBuilderConfigured(base: NodeJS.ProcessEnv): boolean {
+  const { id, secret } = builderToken(base);
+  return !!id && !!secret;
+}
+
 /** The builder is deployment infrastructure, never the run's chosen verification account. */
 export function portableBuilderEnvironment(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const id = base.SELFBENCH_MANAGED_MODAL_TOKEN_ID || base.MODAL_TOKEN_ID;
-  const secret = base.SELFBENCH_MANAGED_MODAL_TOKEN_SECRET || base.MODAL_TOKEN_SECRET;
+  const { id, secret } = builderToken(base);
   if (!id || !secret)
     throw new Error("Portable task images require a configured Modal image builder.");
   return {

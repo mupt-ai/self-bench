@@ -19,7 +19,11 @@ import { verifierRuntimeFiles } from "../task/runtime-assets.js";
 import { publishExecutionBundle } from "./execution-bundle.js";
 import { notRunGates, runHarborGates } from "./harbor-gates.js";
 import { artifactFile, readAsset, withHeartbeats } from "./helpers.js";
-import { PortableImageBuildError, preparePortableImages } from "./portable-images.js";
+import {
+  PortableImageBuildError,
+  portableBuilderConfigured,
+  preparePortableImages,
+} from "./portable-images.js";
 import { remoteGate } from "./remote-gate.js";
 import { runSandboxJob, type SandboxCallback } from "./sandbox-job.js";
 import { isGreen, renderVerifyReport } from "./verify-report.js";
@@ -165,7 +169,13 @@ export async function verifyCompiled(
         ? { ...input.task, definition, bundle }
         : undefined;
     let imageBuildError: string | undefined;
-    if (task && result.auditBlockers.length === 0 && input.portableImages && repository) {
+    if (
+      task &&
+      result.auditBlockers.length === 0 &&
+      input.portableImages &&
+      repository &&
+      portableBuilderConfigured(process.env)
+    ) {
       try {
         task = await preparePortableImages(store, task, repository, signal);
       } catch (error) {

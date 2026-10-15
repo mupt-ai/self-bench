@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { LocalArtifactStore } from "../../src/artifacts/local.js";
 import { taskImagesSchema } from "../../src/contracts/task.js";
 import {
+  portableBuilderConfigured,
   portableBuilderEnvironment,
   preparePortableImages,
 } from "../../src/generation/pipeline/portable-images.js";
@@ -55,6 +56,11 @@ test("builder credentials are independent of verification credentials and contai
   ])
     expect(env[key]).toBeUndefined();
   expect(() => portableBuilderEnvironment({})).toThrow("configured Modal image builder");
+  // Verification only takes the portable path when a builder exists, so prod without one still
+  // accepts tasks instead of failing each of them.
+  expect(portableBuilderConfigured({})).toBe(false);
+  expect(portableBuilderConfigured({ MODAL_TOKEN_ID: "id" })).toBe(false);
+  expect(portableBuilderConfigured({ MODAL_TOKEN_ID: "id", MODAL_TOKEN_SECRET: "s" })).toBe(true);
 });
 
 test("builds agent and verifier in separate contexts and records OCI digests before verification", async () => {
