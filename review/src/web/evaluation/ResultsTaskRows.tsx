@@ -177,7 +177,6 @@ export function TaskRow({
     </>
   );
   return (
-    // biome-ignore lint/a11y/useKeyWithClickEvents: the task's own button or link inside the row is the keyboard path; the row only widens the pointer target.
     <tr
       className={cn(
         "cursor-pointer text-xs hover:bg-foreground/[0.04]",

@@ -99,59 +99,57 @@ export function ReleasesPage() {
           cost for the settings you choose.
         </EmptyState>
       ) : (
-        <>
-          <DataTable>
-            <thead>
-              <tr>
-                <th>Released</th>
-                <th>By</th>
-                <th>Settings</th>
-                <th>Tasks</th>
-                <th>Status</th>
-                <th>
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.releases.map((release) => (
-                <tr key={release.id}>
-                  <td>
-                    {new Date(release.releasedAt).toLocaleString()}
-                    <small>{formatAgo(release.releasedAt)}</small>
-                  </td>
-                  <td>{release.releasedBy}</td>
-                  <td className="font-mono">{release.settings}</td>
-                  <td className="font-mono">
-                    {release.tasks}
-                    {/* Their files are public on selfbench.dev, to browse and download, and with
+        <DataTable>
+          <thead>
+            <tr>
+              <th>Released</th>
+              <th>By</th>
+              <th>Settings</th>
+              <th>Tasks</th>
+              <th>Status</th>
+              <th>
+                <span className="sr-only">Actions</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.releases.map((release) => (
+              <tr key={release.id}>
+                <td>
+                  {new Date(release.releasedAt).toLocaleString()}
+                  <small>{formatAgo(release.releasedAt)}</small>
+                </td>
+                <td>{release.releasedBy}</td>
+                <td className="font-mono">{release.settings}</td>
+                <td className="font-mono">
+                  {release.tasks}
+                  {/* Their files are public on selfbench.dev, to browse and download, and with
                         trials, each setting's result and transcript on them. */}
-                    {release.tasksPublished && (
-                      <small className="font-sans">
-                        {release.trialsPublished ? "Published with Results" : "Published"}
-                      </small>
-                    )}
-                  </td>
-                  <td>
-                    {release.withdrawnAt ? "Withdrawn" : release.current ? "Current" : "Superseded"}
-                    {release.withdrawnAt && (
-                      <small>
-                        by {release.withdrawnBy} {formatAgo(release.withdrawnAt)}
-                      </small>
-                    )}
-                  </td>
-                  <td className="text-right">
-                    {!release.withdrawnAt && (
-                      <Button size="small" variant="ghost" onClick={() => setWithdrawing(release)}>
-                        Withdraw
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </DataTable>
-        </>
+                  {release.tasksPublished && (
+                    <small className="font-sans">
+                      {release.trialsPublished ? "Published with Results" : "Published"}
+                    </small>
+                  )}
+                </td>
+                <td>
+                  {release.withdrawnAt ? "Withdrawn" : release.current ? "Current" : "Superseded"}
+                  {release.withdrawnAt && (
+                    <small>
+                      by {release.withdrawnBy} {formatAgo(release.withdrawnAt)}
+                    </small>
+                  )}
+                </td>
+                <td className="text-right">
+                  {!release.withdrawnAt && (
+                    <Button size="small" variant="ghost" onClick={() => setWithdrawing(release)}>
+                      Withdraw
+                    </Button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </DataTable>
       )}
       {releasing && (
         <ReleaseDialog

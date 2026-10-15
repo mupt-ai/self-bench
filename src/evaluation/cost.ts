@@ -1,3 +1,4 @@
+import { findModel, nativePricing } from "../contracts/models.js";
 import { isGateway } from "../gateways/index.js";
 import { claudeCodeUsage } from "../harnesses/claude-code/cost.js";
 import { codexCallUsage, harborCost } from "../harnesses/harbor/cost.js";
@@ -206,8 +207,7 @@ export function trialCost(
       }
     }
   } else if (harness === "claude-code" || harness === "muse-code") {
-    // SelfBench's Muse Code adapter writes the same trajectory from Muse's session log
-    // (harbor_muse.py): one step per request, adding up to the totals it gives Harbor.
+    // Both adapters write one trajectory step per model response.
     const text = [...files].find(([name]) => name.endsWith("/trajectory.json"))?.[1];
     if (!text) return {};
     let measured: ReturnType<typeof claudeCodeUsage>;
@@ -217,11 +217,35 @@ export function trialCost(
       return {};
     }
     if (!measured) return {};
-    verified = measured.models.every(matches);
     usage = measured.usage;
     requests = measured.requests;
     largestPrompt = measured.largestPrompt;
     hourCacheWrite = measured.hourCacheWrite;
+    if (harness === "muse-code") {
+      // Muse Code can answer some requests (goal and verify checks) with another Muse model
+      // than the one selected, so each request is priced at its own model's Meta list rates.
+      const pricingFor = (name: unknown) => {
+        if (typeof name !== "string") return undefined;
+        const model = findModel(name.replace(/^meta\//, ""));
+        return model?.vendor === "meta" ? nativePricing(model) : undefined;
+      };
+      let apiCostUsd = 0;
+      for (const request of measured.requests) {
+        if (request.input + request.output + request.cacheRead + request.cacheWrite === 0) continue;
+        const pricing = pricingFor(request.model);
+        if (!pricing) return { modelVerified: false, tokenUsage: usage };
+        const cost = requestsCost(pricing, [request]);
+        if (cost === undefined) return { modelVerified: true, tokenUsage: usage };
+        apiCostUsd += cost;
+      }
+      return {
+        modelVerified: true,
+        tokenUsage: usage,
+        apiCostUsd,
+        costSource: "reference-rates",
+      };
+    }
+    verified = measured.models.every(matches);
   }
   const measured = {
     modelVerified: verified,
