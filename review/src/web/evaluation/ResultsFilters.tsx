@@ -61,36 +61,24 @@ function StateFilter<Key extends string>({
 export function OutcomeFilter({
   outcomes,
   selected,
-  coverage = false,
   onToggle,
 }: {
   outcomes: readonly Outcome[];
   selected: ReadonlySet<Outcome>;
-  /** Whether to offer Left Out and Added Later, for tasks a configuration has no result for. */
-  coverage?: boolean;
   onToggle(outcome: Outcome): void;
 }) {
   return (
     <StateFilter
       legend="Filter Results"
-      states={[...resultStates, ...(coverage ? (["unrun", "added"] as const) : [])].map(
-        (outcome) => ({
-          key: outcome,
-          circle: <OutcomeCircle outcome={outcome} />,
-          count: outcomes.filter((entry) => entry === outcome).length,
-        }),
-      )}
+      states={resultStates.map((outcome) => ({
+        key: outcome,
+        circle: <OutcomeCircle outcome={outcome} />,
+        count: outcomes.filter((entry) => entry === outcome).length,
+      }))}
       selected={selected}
       onToggle={onToggle}
     />
   );
-}
-
-/** A selection with one state switched on or off. */
-export function toggledOutcome(selected: ReadonlySet<Outcome>, outcome: Outcome) {
-  const next = new Set(selected);
-  if (!next.delete(outcome)) next.add(outcome);
-  return next;
 }
 
 export function RunStateFilter({

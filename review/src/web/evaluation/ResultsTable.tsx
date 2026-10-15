@@ -1,8 +1,8 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "react-router";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { EvaluationRun } from "./api";
-import { ColumnHeading, ConfigurationToolbar } from "./ConfigurationFilters";
+import { ColumnHeading, ConfigurationToolbar, LayoutToggle } from "./ConfigurationFilters";
 import {
   type ConfigurationColumn,
   matchingFacets,
@@ -11,17 +11,23 @@ import {
 import type { AcceptedTask } from "./RepoRuns";
 import { ConfigurationRows } from "./ResultsConfigurationRows";
 import { runStateOf } from "./ResultsMarks";
-import { missingTasks, unsolvedOf } from "./results-coverage";
+import { missingTasks } from "./results-coverage";
 import { configurationsOf } from "./results-model";
 import {
   findTrial,
   nextOrder,
+  revealRun,
   TRIAL_PARAM,
   trialParam,
   useResultsView,
   useScrollMemory,
 } from "./results-view";
+import { TaskAuditDialog } from "./TaskAuditDialog";
+import { outcomeGridTasks, TaskOutcomeGrid } from "./TaskOutcomeGrid";
 import { TrialDialog } from "./TrialDialog";
+
+/** The search parameter naming the task whose audit dialog is open. */
+const AUDIT_PARAM = "audit";
 
 const flipped = <T,>(list: readonly T[], item: T) =>
   list.includes(item) ? list.filter((entry) => entry !== item) : [...list, item];
@@ -37,6 +43,7 @@ export function ResultsTable({
   accepted,
   baseUrl,
   repo,
+  onChanged,
 }: {
   runs: readonly EvaluationRun[];
   credentials: readonly CredentialInfo[];
@@ -44,12 +51,38 @@ export function ResultsTable({
   accepted?: readonly AcceptedTask[];
   baseUrl: string;
   repo: string;
+  onChanged?(run: EvaluationRun): void;
 }) {
   const [view, setView] = useResultsView(baseUrl);
   const [search, setSearch] = useSearchParams();
   const configurations = useMemo(() => configurationsOf(runs, credentials), [runs, credentials]);
-  // Over every configuration, whatever the filters show.
-  const unsolved = useMemo(() => unsolvedOf(configurations, accepted), [configurations, accepted]);
+  const selectedRun = search.get("run");
+  const revealed = useRef("");
+  useEffect(() => {
+    if (!selectedRun || !configurations.length) return;
+    const next = revealRun(view, configurations, selectedRun);
+    if (!next) return;
+    setView(next);
+    setSearch(
+      (previous) => {
+        const params = new URLSearchParams(previous);
+        params.delete("run");
+        return params;
+      },
+      { replace: true },
+    );
+    revealed.current = selectedRun;
+  }, [selectedRun, configurations, view, setView, setSearch]);
+  useEffect(() => {
+    if (!revealed.current || !view.batches.length) return;
+    const row = [...document.querySelectorAll<HTMLElement>("[data-run-id]")].find(
+      (entry) => entry.dataset.runId === revealed.current,
+    );
+    if (row) {
+      row.scrollIntoView?.({ block: "nearest" });
+      revealed.current = "";
+    }
+  }, [view]);
   useScrollMemory(baseUrl, configurations.length > 0);
   // Escape folds the table up a level at a time: open runs first, then open configurations.
   useEffect(() => {
@@ -71,16 +104,21 @@ export function ResultsTable({
   }, [setView]);
   if (!configurations.length) return null;
   const opened = findTrial(runs, search.get(TRIAL_PARAM));
-  const showTrial = (param: string | undefined) =>
+  // One dialog at a time: a trial, or a task's audit.
+  const show = (param: typeof TRIAL_PARAM | typeof AUDIT_PARAM, value: string | undefined) =>
     setSearch(
       (previous) => {
         const next = new URLSearchParams(previous);
-        if (param) next.set(TRIAL_PARAM, param);
-        else next.delete(TRIAL_PARAM);
+        next.delete(TRIAL_PARAM);
+        next.delete(AUDIT_PARAM);
+        if (value) next.set(param, value);
         return next;
       },
       { replace: true },
     );
+  const showTrial = (value: string | undefined) => show(TRIAL_PARAM, value);
+  const gridTasks = outcomeGridTasks(configurations);
+  const audited = gridTasks.find((task) => task.key === search.get(AUDIT_PARAM));
   // Facets narrow the table and the state counts; the state toggles then narrow it further.
   const faceted = matchingFacets(configurations, view.facets);
   const states = faceted.map((configuration) =>
@@ -103,6 +141,16 @@ export function ResultsTable({
     <section aria-label="Configurations">
       <h2 className="sr-only">Configurations</h2>
       <ConfigurationToolbar
+        end={
+          <LayoutToggle
+            layout={view.layout ?? "table"}
+            onChange={(layout) =>
+              setView(({ layout: _, ...current }) =>
+                layout === "grid" ? { ...current, layout } : current,
+              )
+            }
+          />
+        }
         configurations={configurations}
         states={states}
         chosenStates={new Set(view.states)}
@@ -123,7 +171,18 @@ export function ResultsTable({
           })
         }
       />
-      {shown.length ? (
+      {!shown.length ? (
+        <p className="panel px-4 py-3 text-sm text-muted-foreground">
+          No configurations match this filter.
+        </p>
+      ) : view.layout === "grid" ? (
+        <TaskOutcomeGrid
+          configurations={shown}
+          tasks={outcomeGridTasks(shown)}
+          onOpenTask={(result) => showTrial(trialParam(result.run, result.trial))}
+          onOpenAudit={(task) => show(AUDIT_PARAM, task.key)}
+        />
+      ) : (
         <section
           className="panel min-w-0 overflow-x-auto"
           aria-label="Scrollable Table"
@@ -162,28 +221,35 @@ export function ResultsTable({
                   key={configuration.key}
                   configuration={configuration}
                   accepted={accepted}
-                  unsolved={unsolved}
                   view={view}
                   setView={setView}
+                  baseUrl={baseUrl}
+                  {...(onChanged ? { onChanged } : {})}
                   onOpenTask={(result) => showTrial(trialParam(result.run, result.trial))}
                 />
               ))}
             </tbody>
           </table>
         </section>
-      ) : (
-        <p className="panel px-4 py-3 text-sm text-muted-foreground">
-          No configurations match this filter.
-        </p>
+      )}
+      {audited && (
+        <TaskAuditDialog
+          task={audited}
+          configurations={configurations}
+          baseUrl={baseUrl}
+          repo={repo}
+          onClose={() => show(AUDIT_PARAM, undefined)}
+          onOpenTrial={(result) => showTrial(trialParam(result.run, result.trial))}
+        />
       )}
       {opened && (
         <TrialDialog
           run={opened.run}
           trial={opened.trial}
-          showRun
           baseUrl={baseUrl}
           repo={repo}
           onClose={() => showTrial(undefined)}
+          {...(onChanged ? { onExplained: onChanged } : {})}
         />
       )}
     </section>

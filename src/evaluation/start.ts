@@ -5,6 +5,7 @@ import {
   WorkflowNotFoundError,
 } from "@temporalio/common";
 import type { StopEvaluation } from "./cancel.js";
+import type { TaskAuditRequest } from "./task-audit.js";
 import type { EvaluationInput, FailedTrial } from "./types.js";
 
 function evaluationWorkflowId(repoId: number, id: string): string {
@@ -68,6 +69,50 @@ export function failureExplainer(
           running: status.name === "RUNNING",
           ...(closeTime ? { endedAt: closeTime.getTime() } : {}),
         };
+      } catch (error) {
+        if (error instanceof WorkflowNotFoundError) return { running: false };
+        throw error;
+      }
+    },
+  };
+}
+
+/** Starts one task's audit, and tells whether one is running. */
+export interface TaskAuditor {
+  start(request: TaskAuditRequest): Promise<void>;
+  state(
+    request: Pick<TaskAuditRequest, "repoId" | "runId" | "taskId">,
+  ): Promise<{ running: boolean }>;
+}
+
+/** Audits a task under one workflow ID per task, so two audits of it never run at once. */
+export function taskAuditor(
+  client: Client,
+  fallbackQueue: string,
+  env: NodeJS.ProcessEnv = process.env,
+): TaskAuditor {
+  const workflowId = ({
+    repoId,
+    runId,
+    taskId,
+  }: Pick<TaskAuditRequest, "repoId" | "runId" | "taskId">) => `audit/${repoId}/${runId}/${taskId}`;
+  return {
+    async start(request) {
+      try {
+        await client.workflow.start("selfBenchTaskAuditWorkflow", {
+          workflowId: workflowId(request),
+          taskQueue: env.SELFBENCH_EVAL_TASK_QUEUE ?? fallbackQueue,
+          args: [request],
+          workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
+        });
+      } catch (error) {
+        if (!(error instanceof WorkflowExecutionAlreadyStartedError)) throw error;
+      }
+    },
+    async state(request) {
+      try {
+        const { status } = await client.workflow.getHandle(workflowId(request)).describe();
+        return { running: status.name === "RUNNING" };
       } catch (error) {
         if (error instanceof WorkflowNotFoundError) return { running: false };
         throw error;

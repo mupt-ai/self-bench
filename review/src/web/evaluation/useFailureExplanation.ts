@@ -11,6 +11,12 @@ interface ExplainState {
   explained?: boolean;
 }
 
+export interface ExplanationSelection {
+  credentialId: string;
+  /** A catalog model ID, or the raw model ID for a custom endpoint. */
+  model: string;
+}
+
 const POLL_MS = 4000;
 
 /**
@@ -28,7 +34,7 @@ export function useFailureExplanation({
   baseUrl: string;
   evaluationId: string;
   trial: EvaluationTrial;
-  /** Whether this deployment may offer explanations at all (its managed offering). */
+  /** Whether a signed-in user has loaded the trial. */
   enabled: boolean;
   onExplained(run: EvaluationRun): void;
 }) {
@@ -46,7 +52,7 @@ export function useFailureExplanation({
       const answer = await evaluationRequest<ExplainState>(stateUrl);
       if (!live()) return;
       setState(answer);
-      if (answer.running) setExplaining(true);
+      setExplaining(answer.running);
       if (!answer.explained) return;
       const latest = await evaluationRequest<EvaluationRun>(runUrl);
       if (!live()) return;
@@ -57,6 +63,9 @@ export function useFailureExplanation({
     [stateUrl, runUrl, onExplained],
   );
   useEffect(() => {
+    setState(undefined);
+    setExplaining(false);
+    setError("");
     if (!wanted) return;
     let disposed = false;
     check(() => !disposed).catch(() => undefined);
@@ -101,10 +110,11 @@ export function useFailureExplanation({
     };
   }, [explaining, stateUrl, runUrl, runId, taskId, harness, onExplained]);
 
-  const explain = async () => {
+  const explain = async (explanation: ExplanationSelection) => {
+    if (!wanted || explaining || !state?.available) return;
     setError("");
     try {
-      await evaluationRequest(`${runUrl}/explain`, { runId, taskId, harness });
+      await evaluationRequest(`${runUrl}/explain`, { runId, taskId, harness, explanation });
       setExplaining(true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not start the explanation");
@@ -117,6 +127,7 @@ export function useFailureExplanation({
     offered: wanted && (explaining || state?.available === true),
     explaining,
     error,
+    reason: wanted && !explaining ? state?.reason : undefined,
     explain,
   };
 }

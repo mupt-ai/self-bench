@@ -2,15 +2,19 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { z } from "zod";
 import type { ConnectedRepo } from "../../db/repos.js";
 import type { User } from "../../db/users.js";
+import {
+  explanationModel,
+  explanationSelectionSchema,
+} from "../../evaluation/explanation-model.js";
 import { materialKey } from "../../evaluation/failure-material.js";
 import { explainable } from "../../evaluation/failure-summary.js";
 import { harnessIds } from "../../evaluation/models.js";
 import { getEvaluation } from "../../evaluation/store.js";
-import { trialInput } from "../../evaluation/trial-input.js";
 import type { FailedTrial } from "../../evaluation/types.js";
 import { managedOffer } from "../../generation/billing/managed.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
 import type { EvaluationRoutesOptions } from "./evaluations.js";
+import { frozenTrialBundle } from "./trial-task.js";
 
 /** How long after an explanation ended without one the same trial may be asked again. */
 const RETRY_AFTER_MS = 10 * 60_000;
@@ -30,8 +34,8 @@ interface Context {
 /**
  * `…/evaluations/<id>/explain`, for one trial named by its task and harness (Explain Failure in
  * the app). GET tells whether it can be explained, is running, or already was; POST starts it.
- * Asking is consent for that trial's material to reach the summary model through SelfBench's
- * account, whatever the repository.
+ * A saved-key request is explicit consent to send the trial's material through that key's provider.
+ * Requests without a saved selection retain the platform-funded behavior where available.
  */
 export async function explainTrial(
   options: Options,
@@ -45,12 +49,15 @@ export async function explainTrial(
     return;
   }
   let identity: z.infer<typeof trialSchema>;
+  let selection: z.infer<typeof explanationSelectionSchema> | undefined;
   try {
-    identity = trialSchema.parse(
-      request.method === "POST"
-        ? JSON.parse((await readBody(request, 4_096)).toString())
-        : Object.fromEntries(url.searchParams),
-    );
+    if (request.method === "POST") {
+      const { explanation, ...trial } = trialSchema
+        .extend({ explanation: explanationSelectionSchema.optional() })
+        .parse(JSON.parse((await readBody(request, 4_096)).toString()));
+      identity = trial;
+      selection = explanation;
+    } else identity = trialSchema.parse(Object.fromEntries(url.searchParams));
   } catch {
     sendJson(response, 400, { error: "Name the trial by its runId, taskId and harness." });
     return;
@@ -79,22 +86,43 @@ export async function explainTrial(
     sendJson(response, 429, { error: reason });
     return;
   }
-  if (!running) await explainer.start(trial);
+  if (!running) {
+    if (selection) {
+      const credential = await options.vault?.credentials.find(
+        context.repo.orgId,
+        selection.credentialId,
+      );
+      try {
+        if (!credential) throw new Error("The selected model API key is unavailable.");
+        explanationModel(credential, selection.model, context.env);
+      } catch (error) {
+        sendJson(response, 400, {
+          error: error instanceof Error ? error.message : "Invalid explanation model.",
+        });
+        return;
+      }
+      trial.explanation = { ...selection, orgId: context.repo.orgId };
+    } else if (!managedOffer(context.env).models) {
+      sendJson(response, 400, { error: "Choose a saved model API key and explanation model." });
+      return;
+    }
+    await explainer.start(trial);
+  }
   sendJson(response, 202, {});
 }
 
 async function explainableTrial(
   options: Options,
-  { repo, evaluationId, env }: Context,
+  { repo, evaluationId }: Context,
   identity: z.infer<typeof trialSchema>,
 ): Promise<
   | { trial: FailedTrial; explainer: NonNullable<Options["explain"]> }
   | { status: number; error: string; explained?: boolean }
 > {
-  if (!options.explain || !managedOffer(env).models)
+  if (!options.explain)
     return {
       status: 409,
-      error: "Failure explanations need SelfBench's managed models, which this deployment lacks.",
+      error: "Failure explanations are unavailable on this deployment.",
     };
   const run = await getEvaluation(options.artifacts, repo.id, evaluationId);
   const index =
@@ -112,13 +140,7 @@ async function explainableTrial(
       error: "Only a trial that failed its tests and has no explanation yet can be explained.",
       ...(trial.failureSummary ? { explained: true } : {}),
     };
-  // The bundle the trial ran, as its comparison froze it; a later bundle has other tests.
-  const record = run.comparisonId
-    ? await options.vault?.comparisons.find(run.comparisonId)
-    : undefined;
-  const frozen =
-    record?.repoId === repo.id ? record.inputs.find((input) => input.id === run.id) : undefined;
-  const bundleKey = frozen && trialInput(frozen, index).tasks[0]?.bundleKey;
+  const bundleKey = await frozenTrialBundle(options.vault, repo, run, index);
   const failed = { repoId: repo.id, id: run.id, index };
   if (!bundleKey && !(await options.artifacts.stat(materialKey(failed))))
     return { status: 409, error: "This trial's task was not recorded, so it can't be explained." };

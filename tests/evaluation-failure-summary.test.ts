@@ -9,6 +9,7 @@ import type { CommandOptions, CommandResult } from "../src/lib/process.js";
 import { testModelSecret } from "./support/evaluation-fixture.js";
 import { runEvaluation } from "./support/evaluation-run.js";
 import { runnerFixture } from "./support/evaluation-runner-fixture.js";
+import { memoryVault } from "./support/evaluation-vault.js";
 
 const PLATFORM_KEY = "sk-or-platform-key-never-publish";
 const MANAGED = {
@@ -172,6 +173,60 @@ test("a summary never holds up or changes a trial's result", async () => {
     expect(trial?.rewards.reward).toBe(entry.reward);
     expect(trial?.failureSummary).toBeUndefined();
   }
+});
+
+test("BYOK explanations resolve the selected key in the worker, redact it, and never fall back", async () => {
+  const { calls, store, input } = await evaluate(MANAGED, 0, LUNA, false);
+  const vault = { ...memoryVault(), repoOrg: async () => 7 };
+  const key = "byok-sensitive-provider-secret";
+  const credential = await vault.credentials.create(
+    7,
+    { name: "My Key", kind: "openai", auth: "api-key", value: key },
+    {},
+  );
+  const request = {
+    repoId: input.repoId,
+    id: input.id,
+    index: 0,
+    bundleKey: input.tasks[0]?.bundleKey ?? "",
+    explanation: { orgId: 7, credentialId: credential.id, model: "gpt-6-sol" },
+  };
+  const command = async (_name: string, args: readonly string[], options?: CommandOptions) => {
+    expect(options?.env?.OPENAI_API_KEY).toBe(key);
+    expect(options?.env?.OPENROUTER_API_KEY).toBeUndefined();
+    expect(args[args.indexOf("--provider") + 1]).toBe("openai");
+    expect(args).not.toContain(key);
+    const home = options?.env?.HOME ?? "";
+    const settings = JSON.parse(await readFile(join(home, ".pi/agent/settings.json"), "utf8"));
+    expect(settings.retry).toMatchObject({ enabled: false, provider: { maxRetries: 0 } });
+    return { exitCode: 0, stdout: `It reversed the chunks. ${key}`, stderr: "" };
+  };
+  const options = {
+    vault,
+    command,
+    env: { ...MANAGED, SELFBENCH_MANAGED_OFFERING: "false" },
+    redact: (text: string) => text,
+  };
+  await expect(
+    explainTrialFailure(
+      store,
+      { ...request, explanation: { ...request.explanation, orgId: 9 } },
+      options,
+    ),
+  ).rejects.toThrow("repository");
+  await expect(
+    explainTrialFailure(
+      store,
+      { ...request, explanation: { ...request.explanation, credentialId: crypto.randomUUID() } },
+      options,
+    ),
+  ).rejects.toThrow("API key");
+  await explainTrialFailure(store, request, options);
+  expect((await getEvaluation(store, input.repoId, input.id))?.trials[0]?.failureSummary).toEqual({
+    text: "It reversed the chunks. [redacted]",
+    model: "gpt-6-sol",
+  });
+  expect(calls).toHaveLength(0);
 });
 
 test("Explain Failure explains a trial that kept no material from what its evaluation stored", async () => {

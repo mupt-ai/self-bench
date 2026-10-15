@@ -4,7 +4,8 @@ import { MemoryRouter } from "react-router";
 import { initialEvaluation } from "../../../../src/evaluation/store";
 import { evaluationInput } from "../../../../tests/support/evaluation-fixture";
 import { evaluationRequestId, evaluationUrl } from "./api";
-import { EvaluationResults, scores } from "./EvaluationResults";
+import { ResultGroupRows } from "./ResultsBatchRows";
+import { outcomeOf } from "./results-model";
 import { TrialDetails } from "./TrialDetails";
 
 test("request IDs work without secure-context randomUUID and URL scopes are encoded", () => {
@@ -20,9 +21,10 @@ test("results distinguish zero rewards from missing scores and show the last sol
   const run = initialEvaluation(evaluationInput(), "Test model");
   const trial = run.trials[0];
   if (!trial) throw new Error("Missing trial");
-  expect(scores(trial)).toBe("Not Scored");
+  trial.status = "completed";
+  expect(outcomeOf(trial)).toBe("unscored");
   trial.rewards = { reward: 0 };
-  expect(scores(trial)).toBe("reward: 0");
+  expect(outcomeOf(trial)).toBe("failed");
   trial.steps = [
     { id: "one", role: "agent", text: "Reading the parser.", tools: [] },
     { id: "two", role: "agent", text: "Patched the parser.", tools: [] },
@@ -39,12 +41,25 @@ test("only a live run offers cancellation", () => {
   const render = () =>
     renderToStaticMarkup(
       <MemoryRouter>
-        <EvaluationResults
-          run={run}
-          baseUrl="/api/evaluations"
-          repo="owner/repo"
-          onChanged={() => {}}
-        />
+        <table>
+          <tbody>
+            <ResultGroupRows
+              run={run}
+              baseUrl="/api/evaluations"
+              onChanged={() => {}}
+              name="test Run"
+              heading="Run"
+              results={[]}
+              open
+              shown={new Set()}
+              sort={undefined}
+              onToggle={() => {}}
+              onToggleOutcome={() => {}}
+              onSort={() => {}}
+              onOpenTask={() => {}}
+            />
+          </tbody>
+        </table>
       </MemoryRouter>,
     );
   run.status = "running";

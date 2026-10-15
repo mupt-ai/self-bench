@@ -8,7 +8,7 @@ import { evaluationPrefix } from "./store.js";
 import type { EvaluationTrial, FailedTrial } from "./types.js";
 
 /** The verifier's output files among a trial's collected or stored files. */
-const VERIFIER_FILE = /\/verifier\/[^/]+\.(txt|json)$/;
+export const VERIFIER_FILE = /\/verifier\/[^/]+\.(txt|json)$/;
 
 interface FailureEvidence {
   /** The unpacked Harbor task: instruction.md, tests/test.patch, solution/gold.patch. */
@@ -153,7 +153,7 @@ function materialFrom({
 }
 
 /** The start and the end of a long text, which hold a test run's first error and its summary. */
-function excerpt(text: string, limit: number): string {
+export function excerpt(text: string, limit: number): string {
   if (text.length <= limit) return text;
   const head = Math.floor(limit * 0.4);
   return `${text.slice(0, head)}\n[… ${text.length - limit} characters omitted …]\n${text.slice(-(limit - head))}`;

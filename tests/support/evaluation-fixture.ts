@@ -16,6 +16,7 @@ import { createTaskStore } from "../../src/db/tasks.js";
 import { createUserStore } from "../../src/db/users.js";
 import { createVault, type Vault } from "../../src/db/vault.js";
 import { keepRunSummaries } from "../../src/evaluation/store.js";
+import type { TaskAuditRequest } from "../../src/evaluation/task-audit.js";
 import type { EvaluationInput, FailedTrial } from "../../src/evaluation/types.js";
 import { testAuthConfig, testDatabase } from "./site-fixture.js";
 
@@ -155,6 +156,7 @@ export async function evaluationServer(
   const starts: EvaluationInput[] = [];
   const stops: string[] = [];
   const explains: FailedTrial[] = [];
+  const audits: TaskAuditRequest[] = [];
   let explainState: { running: boolean; endedAt?: number } = { running: false };
   let failStart = false;
   const apiKeys = createApiKeyStore(database.db);
@@ -221,6 +223,14 @@ export async function evaluationServer(
             return explainState;
           },
         },
+        audit: {
+          async start(request) {
+            audits.push(request);
+          },
+          async state() {
+            return { running: false };
+          },
+        },
       });
       if (
         !(await routes.handle(request, new URL(request.url ?? "/", publicUrl), response, signedIn))
@@ -251,6 +261,7 @@ export async function evaluationServer(
     starts,
     stops,
     explains,
+    audits,
     outsider,
     base: "/api/orgs/avyay/repos/avyay/repo/evaluations",
     failStart(value: boolean) {

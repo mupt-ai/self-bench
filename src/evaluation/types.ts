@@ -66,6 +66,8 @@ export interface FailedTrial {
   index: number;
   /** The task's bundle, to rebuild the trial's material from when it kept none. */
   bundleKey?: string;
+  /** Explicit on-demand BYOK selection. Only references, never secrets, enter workflow history. */
+  explanation?: { orgId: number; credentialId: string; model: string };
 }
 /** A model's explanation of a failed trial, and the catalog id of the model that wrote it. */
 export interface FailureSummary {

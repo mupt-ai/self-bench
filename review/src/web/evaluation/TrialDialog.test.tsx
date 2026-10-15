@@ -1,157 +1,282 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
-import { Window } from "happy-dom";
+import { expect, test } from "bun:test";
 import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
-import { MemoryRouter } from "react-router";
-import { initialEvaluation } from "../../../../src/evaluation/store";
-import { evaluationInput } from "../../../../tests/support/evaluation-fixture";
-import { SessionContext, type SessionState } from "../session";
-import type { EvaluationRun } from "./api";
-import { TrialDialog } from "./TrialDialog";
+import {
+  BASE,
+  catalogModel,
+  chooseKey,
+  chooseModel,
+  dialog,
+  explainButton,
+  failedRun,
+  key,
+  open,
+  posts,
+  SUMMARY,
+  setupTrialDialogTests,
+  submitExplanation,
+} from "./trial-dialog-fixture";
 
-let browser: Window;
-let root: Root;
-let restoreGlobals: () => void;
-let requests: { url: string; body?: unknown }[];
-/** What the server says of the trial's explanation. */
-let explainState: object;
+setupTrialDialogTests();
 
-const BASE = "/api/orgs/avyay/repos/avyay/repo/evaluations";
-const SUMMARY = { text: "The parser still drops trailing commas.", model: "gpt-6-luna" };
+test.each([false, true])(
+  "saved-key explanation works with managed offering %s; only click starts it",
+  async (managed) => {
+    const run = failedRun();
+    await open(run, managed);
+    expect(explainButton()?.disabled).toBe(true);
+    expect(posts()).toEqual([]);
+    expect(dialog.requests).toContainEqual({ url: "/api/orgs/avyay/credentials" });
+    expect(dialog.requests).toContainEqual({ url: `${BASE}/catalog` });
+    await chooseKey("openai-key");
+    await chooseModel("openai-model");
+    expect(explainButton()?.disabled).toBe(false);
+    expect(posts()).toEqual([]);
+    expect(document.querySelector('input[type="checkbox"]')).toBeNull();
+    expect(document.body.textContent).toContain("Provider charges apply.");
+    await submitExplanation();
+    expect(posts()).toEqual([
+      {
+        url: `${BASE}/${run.id}/explain`,
+        body: {
+          runId: "run-one",
+          taskId: "task-one",
+          harness: "codex",
+          explanation: { credentialId: "openai-key", model: "openai-model" },
+        },
+      },
+    ]);
+    expect(document.body.textContent).toContain(SUMMARY.text);
+    expect(explainButton()).toBeUndefined();
+  },
+);
 
-/** A finished run whose one trial failed its tests; `explained` adds its explanation. */
-function failedRun(explained = false): EvaluationRun {
-  const input = evaluationInput();
-  const run = initialEvaluation({ ...input, id: "6f9c1a52-1111-4222-8333-444455556666" }, "Test");
-  run.status = "completed";
-  Object.assign(run.trials[0] ?? {}, {
-    status: "completed",
-    rewards: { reward: 0 },
-    ...(explained ? { failureSummary: SUMMARY } : {}),
-  });
-  return run;
-}
+test.each(["router-key", "vercel-key", "anthropic-key"])(
+  "%s uses compatible catalog IDs, not provider IDs",
+  async (id) => {
+    await open();
+    await chooseKey(id);
+    await chooseModel("anthropic-model");
+    await submitExplanation();
+    expect(posts()[0]?.body).toEqual({
+      runId: "run-one",
+      taskId: "task-one",
+      harness: "codex",
+      explanation: { credentialId: id, model: "anthropic-model" },
+    });
+  },
+);
 
-beforeEach(() => {
-  browser = new Window({ url: "https://selfbench.test" });
-  requests = [];
-  explainState = { available: true, running: false };
-  const globals = {
-    window: browser,
-    document: browser.document,
-    HTMLElement: browser.HTMLElement,
-    IS_REACT_ACT_ENVIRONMENT: true,
-    fetch: async (url: string, init?: RequestInit) => {
-      const body = init?.body ? JSON.parse(String(init.body)) : undefined;
-      requests.push({ url, ...(body ? { body } : {}) });
-      // The trial can be explained and nothing is running; once asked, the run comes back explained.
-      if (url.includes("/explain?")) return Response.json(explainState);
-      if (url.endsWith("/explain")) return Response.json({}, { status: 202 });
-      return Response.json(failedRun(true));
-    },
-  };
-  const previous = Object.keys(globals).map(
-    (name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const,
-  );
-  for (const [name, value] of Object.entries(globals))
-    Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
-  restoreGlobals = () => {
-    for (const [name, descriptor] of previous) {
-      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
-      else Reflect.deleteProperty(globalThis, name);
-    }
-  };
-  const container = document.createElement("div");
-  document.body.append(container);
-  root = createRoot(container);
-});
-
-afterEach(async () => {
-  await act(async () => root.unmount());
-  restoreGlobals();
-  await browser.happyDOM.close();
-});
-
-async function open(run: EvaluationRun, managedOffering: boolean) {
-  const session: SessionState = {
-    status: "signed-in",
-    user: { githubId: 1, login: "avyay" },
-    orgs: [],
-    managedOffering,
-  };
-  const trial = run.trials[0];
-  if (!trial) throw new Error("Missing trial");
+test("direct keys show only compatible models and changing key clears stale selection", async () => {
+  await open();
+  await chooseKey("openai-key");
   await act(async () =>
-    root.render(
-      <SessionContext.Provider value={{ session, signOut: async () => undefined }}>
-        <MemoryRouter>
-          <TrialDialog
-            run={run}
-            trial={trial}
-            loaded
-            baseUrl={BASE}
-            repo="avyay/repo"
-            onClose={() => {}}
-          />
-        </MemoryRouter>
-      </SessionContext.Provider>,
-    ),
+    (document.querySelector('button[aria-label="Explanation Model"]') as HTMLButtonElement).click(),
   );
-}
-
-const explainButton = () =>
-  [...document.querySelectorAll("button")].find(
-    (button) => button.textContent === "Explain Failure",
-  );
-
-test("Explain Failure asks for the trial's explanation and shows it when it arrives", async () => {
-  const run = failedRun();
-  await open(run, true);
-  const button = explainButton();
-  if (!button) throw new Error("Missing Explain Failure");
-  await act(async () => button.click());
-  await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
-  expect(requests).toContainEqual({
-    url: `${BASE}/${run.id}/explain`,
-    body: { runId: "run-one", taskId: "task-one", harness: "codex" },
-  });
-  expect(document.body.textContent).toContain(SUMMARY.text);
-  expect(explainButton()).toBeUndefined();
+  expect(
+    [...document.querySelectorAll('[role="option"]')].map((entry) => entry.textContent),
+  ).toEqual(["Model openai-model"]);
+  await act(async () => (document.querySelector('[role="option"]') as HTMLButtonElement).click());
+  await chooseKey("anthropic-key");
+  expect(explainButton()?.disabled).toBe(true);
+  await chooseModel("anthropic-model");
+  await chooseKey("router-key");
+  await chooseModel("openai-model");
+  await chooseModel("anthropic-model");
+  expect(explainButton()?.disabled).toBe(false);
+  expect(posts()).toEqual([]);
 });
 
-test("Explain Failure is offered only for an unexplained failure on managed models", async () => {
-  await open(failedRun(), false);
+test("custom endpoint requires a nonblank raw model ID and sends no endpoint/provider", async () => {
+  dialog.credentials = [{ ...key("custom-key", "custom"), endpoint: "https://approved.test/v1" }];
+  dialog.models = [];
+  await open();
+  await chooseKey("custom-key");
+  expect(document.querySelector('button[aria-label="Explanation Model"]')).toBeNull();
+  const input = document.querySelector('input[placeholder="Model ID"]') as HTMLInputElement;
+  const type = async (value: string) =>
+    act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        dialog.browser.HTMLInputElement.prototype,
+        "value",
+      )?.set;
+      setter?.call(input, value);
+      input.dispatchEvent(new dialog.browser.Event("input", { bubbles: true }) as unknown as Event);
+    });
+  await type("   ");
+  expect(explainButton()?.disabled).toBe(true);
+  await type("  vendor/my-custom-model  ");
+  await submitExplanation();
+  expect(posts()[0]?.body).toEqual({
+    runId: "run-one",
+    taskId: "task-one",
+    harness: "codex",
+    explanation: { credentialId: "custom-key", model: "vendor/my-custom-model" },
+  });
+});
+
+test("subscription and sandbox credentials are excluded; no compatible key links to Manage Credentials", async () => {
+  dialog.credentials = [
+    key("chatgpt", "openai", "codex-login"),
+    key("claude", "anthropic", "claude-login"),
+    ...(["e2b", "modal", "daytona", "vercel"] as const).map((kind) => key(kind, kind)),
+  ];
+  await open();
   expect(explainButton()).toBeUndefined();
-  await open(failedRun(true), true);
+  expect(document.body.textContent).toContain("No compatible saved model API keys");
+  expect(document.querySelector('a[href="/settings/credentials"]')?.textContent).toBe(
+    "Manage Credentials",
+  );
+  expect(posts()).toEqual([]);
+});
+
+test("keys without a compatible catalog route are not offered", async () => {
+  dialog.credentials = [key("anthropic-key", "anthropic")];
+  dialog.models = [catalogModel("openai-model", "openai")];
+  await open();
+  expect(document.body.textContent).toContain("No compatible saved model API keys");
+  expect(posts()).toEqual([]);
+});
+
+test("explained, passed and signed-out trials do not load explanation metadata or make calls", async () => {
+  await open(failedRun(true));
   expect(explainButton()).toBeUndefined();
   const passed = failedRun();
   Object.assign(passed.trials[0] ?? {}, { rewards: { reward: 1 } });
-  await open(passed, true);
+  await open(passed);
+  await open(failedRun(), false, false);
   expect(explainButton()).toBeUndefined();
-  expect(requests).toEqual([]);
+  expect(dialog.requests).toEqual([]);
+});
+
+test("unavailable evidence/cooldown reason is shown without starting a request", async () => {
+  dialog.explainState = { available: false, running: false, reason: "Try again in a few minutes." };
+  await open();
+  expect(document.body.textContent).toContain("Try again in a few minutes.");
+  expect(explainButton()).toBeUndefined();
+  expect(dialog.requests).toHaveLength(1);
+});
+
+test("an already running explanation polls by identity and shows its summary without needing a key", async () => {
+  dialog.credentials = [];
+  const answer = globalThis.fetch;
+  let checks = 0;
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    if (url.includes("/explain?") && checks++ === 0) {
+      dialog.requests.push({ url });
+      return Response.json({ available: false, running: true });
+    }
+    return answer(url, init);
+  }) as typeof fetch;
+  await open();
+  expect(document.body.textContent).toContain(SUMMARY.text);
+  expect(posts()).toEqual([]);
+  const checksMade = dialog.requests.filter((request) => request.url.includes("/explain?"));
+  expect(checksMade).toHaveLength(2);
+  for (const request of checksMade) {
+    const params = new URL(request.url, "https://selfbench.test").searchParams;
+    expect([...params.keys()].sort()).toEqual(["harness", "runId", "taskId"]);
+  }
 });
 
 test("a trial explained after the page read its run shows its explanation on opening", async () => {
-  explainState = { available: false, running: false, explained: true };
-  await open(failedRun(), true);
-  await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+  dialog.explainState = { available: false, running: false, explained: true };
+  await open();
   expect(document.body.textContent).toContain(SUMMARY.text);
   expect(explainButton()).toBeUndefined();
+  expect(posts()).toEqual([]);
 });
 
-test("a request refused because the trial was explained meanwhile shows the explanation, not the refusal", async () => {
-  await open(failedRun(), true);
-  explainState = { available: false, running: false, explained: true };
+test("a refused request refreshes state; a newly written explanation replaces the refusal", async () => {
+  await open();
+  await chooseKey("openai-key");
+  await chooseModel("openai-model");
+  dialog.explainState = { available: false, running: false, explained: true };
   const refusal = "Only a trial that failed its tests and has no explanation yet can be explained.";
   const answer = globalThis.fetch;
   globalThis.fetch = (async (url: string, init?: RequestInit) =>
     url.endsWith("/explain")
       ? Response.json({ error: refusal }, { status: 409 })
       : answer(url, init)) as typeof fetch;
+  await submitExplanation();
+  expect(document.body.textContent).toContain(SUMMARY.text);
+  expect(document.body.textContent).not.toContain(refusal);
+});
+
+test("deleted credential/refused requests show server error without automatically retrying a paid request", async () => {
+  await open();
+  await chooseKey("openai-key");
+  await chooseModel("openai-model");
+  const answer = globalThis.fetch;
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    if (!url.endsWith("/explain")) return answer(url, init);
+    dialog.requests.push({ url, body: JSON.parse(String(init?.body)) });
+    return Response.json({ error: "Credential not found" }, { status: 400 });
+  }) as typeof fetch;
+  await submitExplanation();
+  expect(document.body.textContent).toContain("Credential not found");
+  expect(posts()).toHaveLength(1);
+});
+
+test("metadata failures are visible and cannot start paid calls", async () => {
+  const answer = globalThis.fetch;
+  globalThis.fetch = (async (url: string, init?: RequestInit) =>
+    url.endsWith("/catalog")
+      ? Response.json({ error: "Catalog unavailable" }, { status: 503 })
+      : answer(url, init)) as typeof fetch;
+  await open();
+  expect(document.body.textContent).toContain("Catalog unavailable");
+  expect(explainButton()).toBeUndefined();
+  expect(posts()).toEqual([]);
+});
+
+test("a pending POST disables controls and repeated clicks cannot start another paid call", async () => {
+  await open();
+  await chooseKey("openai-key");
+  await chooseModel("openai-model");
+  const answer = globalThis.fetch;
+  let finish!: (response: Response) => void;
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    if (!url.endsWith("/explain")) return answer(url, init);
+    dialog.requests.push({ url, body: JSON.parse(String(init?.body)) });
+    return new Promise<Response>((resolve) => {
+      finish = resolve;
+    });
+  }) as typeof fetch;
   const button = explainButton();
   if (!button) throw new Error("Missing Explain Failure");
   await act(async () => button.click());
-  await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+  expect(button.disabled).toBe(true);
+  expect(document.querySelector("fieldset")?.disabled).toBe(true);
+  await act(async () => button.click());
+  expect(posts()).toHaveLength(1);
+  await act(async () => finish(Response.json({}, { status: 202 })));
   expect(document.body.textContent).toContain(SUMMARY.text);
-  expect(document.body.textContent).not.toContain(refusal);
+});
+
+test("a completed attempt without a summary never automatically retries", async () => {
+  dialog.explainedResult = false;
+  await open();
+  await chooseKey("openai-key");
+  await chooseModel("openai-model");
+  await submitExplanation();
+  expect(document.body.textContent).toContain("No explanation came back");
+  expect(posts()).toHaveLength(1);
+});
+
+test("the sole compatible key is preselected but even a sole model needs an explicit choice", async () => {
+  dialog.credentials = [key("openai-key", "openai"), key("subscription", "openai", "codex-login")];
+  await open();
+  expect((document.querySelector("select") as HTMLSelectElement).value).toBe("openai-key");
+  expect(explainButton()?.disabled).toBe(true);
+  await chooseModel("openai-model");
+  expect(explainButton()?.disabled).toBe(false);
+  expect(posts()).toEqual([]);
+});
+
+test("the dialog shows the run alone, with View Task opening the task's page in a new tab", async () => {
+  await open();
+  expect(document.querySelector('[role="tab"]')).toBeNull();
+  const view = [...document.querySelectorAll("a")].find((link) => link.textContent === "View Task");
+  expect(view?.getAttribute("href")).toBe("/repos/avyay/repo/tasks/run-one/task-one");
+  expect(view?.getAttribute("target")).toBe("_blank");
 });

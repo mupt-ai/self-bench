@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
+import { materialKey } from "../src/evaluation/failure-material.js";
 import { evaluationPrefix, initialEvaluation, saveEvaluation } from "../src/evaluation/store.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";
 import { evaluationEnv, evaluationInput, evaluationServer } from "./support/evaluation-fixture.js";
@@ -190,7 +191,63 @@ test("Explain Failure starts one explanation for a trial that failed its tests",
   }
 });
 
-test("Explain Failure needs managed models and the bundle the trial ran", async () => {
+test("Explain Failure uses a saved API key without managed offering", async () => {
+  const vault = memoryVault();
+  const fixture = await evaluationServer(
+    vault,
+    {},
+    { ...evaluationEnv, SELFBENCH_MANAGED_OFFERING: "false" },
+  );
+  try {
+    const input = { ...evaluationInput(), repoId: fixture.repo.id };
+    const run = initialEvaluation(input, input.modelName);
+    Object.assign(run.trials[0] ?? {}, { status: "completed", rewards: { reward: 0 } });
+    await saveEvaluation(fixture.artifacts, run);
+    await fixture.artifacts.put(
+      materialKey({ repoId: fixture.repo.id, id: run.id, index: 0 }),
+      Buffer.from("Real retained tests and changes"),
+      "text/markdown",
+    );
+    const create = (orgId: number, kind: "openai" | "e2b") =>
+      vault.credentials.create(
+        orgId,
+        { name: kind, kind, auth: "api-key", value: "sk-test-own-key" },
+        {},
+      );
+    const own = await create(fixture.repo.orgId, "openai");
+    const foreign = await create(fixture.repo.orgId + 100, "openai");
+    const sandbox = await create(fixture.repo.orgId, "e2b");
+    const trial = { runId: "run-one", taskId: "task-one", harness: "codex" };
+    const post = (explanation?: unknown) =>
+      fixture.request(`${fixture.base}/${run.id}/explain`, {
+        method: "POST",
+        body: JSON.stringify({ ...trial, ...(explanation ? { explanation } : {}) }),
+      });
+    const state = await fixture.request(
+      `${fixture.base}/${run.id}/explain?${new URLSearchParams(trial)}`,
+    );
+    expect(await state.json()).toEqual({ available: true, running: false });
+    expect((await post()).status).toBe(400);
+    expect((await post({ credentialId: foreign.id, model: "gpt-6-sol" })).status).toBe(400);
+    expect((await post({ credentialId: sandbox.id, model: "gpt-6-sol" })).status).toBe(400);
+    expect((await post({ credentialId: own.id, model: "not-a-catalog-model" })).status).toBe(400);
+    expect((await post({ credentialId: own.id, model: "gpt-6-sol", orgId: 999 })).status).toBe(400);
+    expect((await post({ credentialId: own.id, model: "gpt-6-sol" })).status).toBe(202);
+    expect(fixture.explains).toEqual([
+      {
+        repoId: fixture.repo.id,
+        id: run.id,
+        index: 0,
+        explanation: { orgId: fixture.repo.orgId, credentialId: own.id, model: "gpt-6-sol" },
+      },
+    ]);
+    expect(JSON.stringify(fixture.explains)).not.toContain("sk-test-own-key");
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("Explain Failure needs the bundle or retained material the trial ran", async () => {
   const managed = {
     ...evaluationEnv,
     SELFBENCH_MANAGED_OFFERING: "true",

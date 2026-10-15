@@ -12,7 +12,12 @@ import { createTaskStore } from "../db/tasks.js";
 import { createUsageStore } from "../db/usage.js";
 import { createUserStore } from "../db/users.js";
 import { createVault } from "../db/vault.js";
-import { evaluationStarter, evaluationStopper, failureExplainer } from "../evaluation/start.js";
+import {
+  evaluationStarter,
+  evaluationStopper,
+  failureExplainer,
+  taskAuditor,
+} from "../evaluation/start.js";
 import { keepRunSummaries } from "../evaluation/store.js";
 import { createGenerationBatches } from "../generation/batches/service.js";
 import { loadStripeConfig } from "../generation/billing/config.js";
@@ -141,6 +146,7 @@ export async function openSite(
       start: evaluationStarter(client, config.temporal.taskQueue),
       stop: evaluationStopper(client),
       explain: failureExplainer(client, config.temporal.taskQueue),
+      audit: taskAuditor(client, config.temporal.taskQueue),
       githubApiUrl: auth.githubApiUrl,
     }),
     github: createGitHubRepoRoutes({ config: auth, users }),

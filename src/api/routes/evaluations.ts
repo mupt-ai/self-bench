@@ -26,7 +26,7 @@ import {
   dispatchComparison,
 } from "../../evaluation/comparisons.js";
 import { listRuns } from "../../evaluation/run-list.js";
-import type { FailureExplainer } from "../../evaluation/start.js";
+import type { FailureExplainer, TaskAuditor } from "../../evaluation/start.js";
 import { evaluationPrefix, getEvaluation } from "../../evaluation/store.js";
 import type { EvaluationInput } from "../../evaluation/types.js";
 import { managedHarborEnvironment, managedOffer } from "../../generation/billing/managed.js";
@@ -36,11 +36,12 @@ import { track } from "../../lib/telemetry/posthog.js";
 import { lookupRepositoryById } from "../../public/release-sources.js";
 import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
+import { auditTaskRoute } from "./audit-task.js";
 import { credentialRoutes } from "./credentials.js";
 import { explainTrial } from "./explain-trial.js";
 
 const route =
-  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/evaluations(?:\/(options|catalog|comparisons|[a-f0-9-]{36}))?(?:\/(artifacts|[a-f0-9-]{36}))?(?:\/(resume|cancel|explain))?$/;
+  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/evaluations(?:\/(options|catalog|comparisons|audit|[a-f0-9-]{36}))?(?:\/(artifacts|[a-f0-9-]{36}))?(?:\/(resume|cancel|explain))?$/;
 
 export interface EvaluationRoutesOptions {
   users: UserStore;
@@ -52,6 +53,8 @@ export interface EvaluationRoutesOptions {
   stop: StopEvaluation;
   /** Explains failed trials on request (explainTrial); without it, none can be asked for. */
   explain?: FailureExplainer;
+  /** Audits tasks on request (auditTaskRoute); without it, none can be asked for. */
+  audit?: TaskAuditor;
   env?: NodeJS.ProcessEnv;
   /** Reaches OpenRouter for a gateway model's vendor list price (runPricing), and GitHub. */
   fetch?: typeof fetch;
@@ -208,6 +211,11 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
           user,
           env,
         });
+        request.resume();
+        return true;
+      }
+      if (section === "audit" && !id && !action && ["GET", "POST"].includes(request.method ?? "")) {
+        await auditTaskRoute(options, request, url, response, { repo, user, env });
         request.resume();
         return true;
       }

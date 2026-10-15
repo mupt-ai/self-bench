@@ -15,6 +15,7 @@ import { trialTimeouts } from "../contracts/agent-limit.js";
 import { MAX_PENDING_TRIAL_WORKFLOWS } from "../contracts/config/execution-limits.js";
 import { whenSandboxFree } from "../temporal/sandbox-capacity.js";
 import type { EvaluationActivities } from "./activities.js";
+import type { TaskAuditRequest } from "./task-audit.js";
 import { preparesTaskImages, trialInput } from "./trial-input.js";
 import type { EvaluationInput, FailedTrial } from "./types.js";
 
@@ -154,7 +155,21 @@ export async function selfBenchSolverTrialWorkflow(
  * by the trial itself, or by the app (failureExplainer), under the same workflow ID.
  */
 export async function selfBenchFailedTrialWorkflow(trial: FailedTrial): Promise<void> {
-  await explaining.explainSolverTrial(trial);
+  const activity = trial.explanation
+    ? proxyActivities<EvaluationActivities>({
+        startToCloseTimeout: "10 minutes",
+        retry: { maximumAttempts: 1 },
+      })
+    : explaining;
+  await activity.explainSolverTrial(trial);
+}
+
+/** Audits whether a task is fair from its failed attempts (task-audit.ts), on the app's request. */
+export async function selfBenchTaskAuditWorkflow(request: TaskAuditRequest): Promise<void> {
+  await proxyActivities<EvaluationActivities>({
+    startToCloseTimeout: "10 minutes",
+    retry: { maximumAttempts: 1 },
+  }).auditSolverTask(request);
 }
 
 /**

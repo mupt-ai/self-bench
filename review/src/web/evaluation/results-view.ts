@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useState } from "react";
 import type { EvaluationRun, EvaluationTrial } from "./api";
 import type { ConfigurationColumn } from "./configuration-facets";
 import type { RunState } from "./ResultsMarks";
-import type { Outcome } from "./results-model";
+import type { Configuration, Outcome } from "./results-model";
 
 /**
  * What the Results table shows, kept for the browser tab's session so leaving the page and coming
@@ -36,6 +36,36 @@ export interface ResultsView {
   sorts: Record<string, Sort>;
   /** How many runs each open configuration lists, by key, when more than the first few. */
   runLimits: Record<string, number>;
+  /** The configurations as a task grid instead of the table. */
+  layout?: "grid";
+}
+
+/** A legacy run link reveals that run in the table instead of opening a second results page. */
+export function revealRun(
+  view: ResultsView,
+  configurations: readonly Configuration[],
+  runId: string,
+): ResultsView | undefined {
+  const matching = configurations.filter((configuration) =>
+    configuration.batches.some((batch) => batch.id === runId),
+  );
+  if (!matching.length) return undefined;
+  const keys = matching.map((configuration) => configuration.key);
+  const batches = matching.map((configuration) => `${configuration.key}\n${runId}`);
+  return {
+    ...view,
+    states: [],
+    facets: {},
+    configurations: [...new Set([...view.configurations, ...keys])],
+    batches: [...new Set([...view.batches, ...batches])],
+    shown: Object.fromEntries(Object.entries(view.shown).filter(([key]) => !batches.includes(key))),
+    runLimits: {
+      ...view.runLimits,
+      ...Object.fromEntries(
+        matching.map((configuration) => [configuration.key, configuration.batches.length]),
+      ),
+    },
+  };
 }
 
 const initial: ResultsView = {
@@ -74,6 +104,7 @@ function restore(key: string): ResultsView {
       shown: saved.shown && typeof saved.shown === "object" ? saved.shown : {},
       sorts: saved.sorts && typeof saved.sorts === "object" ? saved.sorts : {},
       runLimits: saved.runLimits && typeof saved.runLimits === "object" ? saved.runLimits : {},
+      ...(saved.layout === "grid" ? { layout: "grid" as const } : {}),
     };
   } catch {
     return initial;

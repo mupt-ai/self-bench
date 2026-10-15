@@ -10,6 +10,31 @@ interface PickableModel {
   label: string;
 }
 
+/** The list's tallest, as max-h-72; less where the window has less room. */
+const LIST_HEIGHT = 288;
+/** The search box above the list, and the panel's padding. */
+const SEARCH_HEIGHT = 56;
+
+/**
+ * Where the open list goes: fixed to the window under the trigger, or over it when there is more
+ * room above, so a dialog's or a pane's scrolling edge never cuts it off.
+ */
+function placement(trigger: HTMLElement): { panel: React.CSSProperties; list: number } {
+  const box = trigger.getBoundingClientRect();
+  const width = Math.max(box.width, 288);
+  const left = Math.max(8, Math.min(box.left, window.innerWidth - width - 8));
+  const below = window.innerHeight - box.bottom - 12;
+  const above = box.top - 12;
+  const up = below < LIST_HEIGHT + SEARCH_HEIGHT && above > below;
+  const list = Math.max(120, Math.min(LIST_HEIGHT, (up ? above : below) - SEARCH_HEIGHT));
+  return {
+    panel: up
+      ? { left, width, bottom: window.innerHeight - box.top + 4 }
+      : { left, width, top: box.bottom + 4 },
+    list,
+  };
+}
+
 /** The models whose name or id has a word starting with each word of `query`, in list order. */
 export function matchingModels<Model extends PickableModel>(
   models: Model[],
@@ -43,6 +68,7 @@ export function ModelPicker<Model extends PickableModel>({
   const trigger = React.useRef<HTMLButtonElement>(null);
   const list = React.useRef<HTMLDivElement>(null);
   const listId = React.useId();
+  const [place, setPlace] = React.useState<ReturnType<typeof placement>>();
   const shown = matchingModels(models, query);
   const selected = models.find((model) => model.id === value);
 
@@ -65,6 +91,19 @@ export function ModelPicker<Model extends PickableModel>({
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [open, close]);
+  React.useLayoutEffect(() => {
+    if (!open) return;
+    const position = () => {
+      if (trigger.current) setPlace(placement(trigger.current));
+    };
+    position();
+    window.addEventListener("scroll", position, true);
+    window.addEventListener("resize", position);
+    return () => {
+      window.removeEventListener("scroll", position, true);
+      window.removeEventListener("resize", position);
+    };
+  }, [open]);
   React.useEffect(() => {
     if (open)
       list.current
@@ -101,7 +140,7 @@ export function ModelPicker<Model extends PickableModel>({
         <ChevronDown aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
       </button>
       {open && (
-        <div className="panel absolute top-[calc(100%+4px)] left-0 z-30 w-full min-w-72 bg-background p-1 font-normal">
+        <div className="panel fixed z-50 bg-background p-1 font-normal" style={place?.panel}>
           <SearchInput
             autoFocus
             role="combobox"
@@ -134,7 +173,8 @@ export function ModelPicker<Model extends PickableModel>({
             role="listbox"
             tabIndex={-1}
             aria-label="Models"
-            className="mt-1 max-h-72 overflow-y-auto"
+            className="mt-1 overflow-y-auto"
+            style={{ maxHeight: place?.list ?? LIST_HEIGHT }}
           >
             {shown.map((model, index) => (
               <button

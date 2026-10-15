@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router";
-import { FAILURE_SUMMARY_MODEL, findModel } from "../../../../src/contracts/models";
+import { findModel } from "../../../../src/contracts/models";
 import { harnessLabels } from "../../../../src/evaluation/models";
 import { Dialog, DialogHeader } from "../Dialog";
 import { ListSkeleton } from "../LoadingSkeleton";
 import { useSession } from "../session";
-import { Button, buttonStyles, Notice } from "../ui";
+import { Notice } from "../ui";
 import { type EvaluationRun, type EvaluationTrial, evaluationRequest } from "./api";
 import { dollars } from "./benchmark";
+import { FailureExplanationForm } from "./FailureExplanationForm";
 import { OutcomeCircle } from "./ResultsMarks";
 import { outcomeOf } from "./results-model";
 import { routeLabel, taskParts } from "./results-presentation";
@@ -18,6 +18,12 @@ import { useFailureExplanation } from "./useFailureExplanation";
 type TrialIdentity = Pick<EvaluationTrial, "runId" | "taskId" | "harness">;
 const sameTrial = (a: TrialIdentity, b: TrialIdentity) =>
   a.runId === b.runId && a.taskId === b.taskId && a.harness === b.harness;
+
+/** The task's own page, which the dialog opens in a new tab. */
+export const taskPage = (
+  repo: string,
+  { runId, taskId }: Pick<EvaluationTrial, "runId" | "taskId">,
+) => `/repos/${repo}/tasks/${encodeURIComponent(runId)}/${encodeURIComponent(taskId)}`;
 
 /** The model's catalog name, or a custom endpoint's typed name, as the table names it. */
 function modelName(run: EvaluationRun): string {
@@ -31,28 +37,37 @@ function modelName(run: EvaluationRun): string {
  * and keeps it fresh while it runs. A trial that failed its tests without an explanation offers
  * Explain Failure where the server can explain it (useFailureExplanation).
  */
-export function TrialDialog({
-  run: known,
-  trial: chosen,
-  loaded = false,
-  showRun = false,
-  baseUrl,
-  repo,
-  onClose,
-  onExplained,
-}: {
+export function TrialDialog(props: TrialDialogProps) {
+  const { run, trial, baseUrl } = props;
+  return (
+    <TrialDialogContent
+      key={`${baseUrl}/${run.id}/${trial.runId}/${trial.taskId}/${trial.harness}`}
+      {...props}
+    />
+  );
+}
+
+type TrialDialogProps = {
   run: EvaluationRun;
   trial: EvaluationTrial;
   /** Whether `run` already has every trial's transcript and logs. */
   loaded?: boolean;
-  /** Whether to link to the run's page. */
-  showRun?: boolean;
   baseUrl: string;
   repo: string;
   onClose(): void;
   /** The run, once it carries the explanation this dialog asked for. */
   onExplained?(run: EvaluationRun): void;
-}) {
+};
+
+function TrialDialogContent({
+  run: known,
+  trial: chosen,
+  loaded = false,
+  baseUrl,
+  repo,
+  onClose,
+  onExplained,
+}: TrialDialogProps) {
   const close = useRef<HTMLButtonElement>(null);
   const { session } = useSession();
   const [fetched, setFetched] = useState<EvaluationRun>();
@@ -87,7 +102,7 @@ export function TrialDialog({
     baseUrl,
     evaluationId: known.id,
     trial,
-    enabled: !!run && session.status === "signed-in" && session.managedOffering,
+    enabled: !!run && session.status === "signed-in",
     onExplained: useCallback(
       (latest: EvaluationRun) => {
         setExplained(latest);
@@ -106,6 +121,7 @@ export function TrialDialog({
       initialFocus={close}
       onDismiss={onClose}
       size="wide"
+      className="min-w-0 font-sans [&_header_h2]:break-words"
       aria-labelledby="trial-title"
       // The app's dialogs ignore Escape (closedby="none"); this one closes on it.
       onKeyDown={(event) => {
@@ -120,9 +136,7 @@ export function TrialDialog({
           <>
             {task.name}
             {task.title && (
-              <span className="ml-2 font-mono text-base font-normal text-muted-foreground">
-                {task.title}
-              </span>
+              <span className="ml-2 text-base font-normal text-muted-foreground">{task.title}</span>
             )}
           </>
         }
@@ -148,30 +162,27 @@ export function TrialDialog({
             {dollars(trial.apiCostUsd)}
           </span>
         )}
-        <span className="ml-auto flex flex-wrap gap-2">
-          {explanation.offered && (
-            <Button
-              disabled={explanation.explaining}
-              onClick={() => void explanation.explain()}
-              title={`Sends this trial's tests, reference solution and the solver's work to ${findModel(FAILURE_SUMMARY_MODEL)?.label ?? FAILURE_SUMMARY_MODEL} through SelfBench.`}
-            >
-              {explanation.explaining ? "Explaining…" : "Explain Failure"}
-            </Button>
-          )}
-          {showRun && (
-            <Link className={buttonStyles.secondary} to={`?run=${encodeURIComponent(known.id)}`}>
-              Open Run
-            </Link>
-          )}
-          <Link
-            className={buttonStyles.secondary}
-            to={`/repos/${repo}/tasks/${encodeURIComponent(trial.runId)}/${encodeURIComponent(trial.taskId)}`}
-          >
-            View Task ↗
-          </Link>
-        </span>
+        <a
+          className="ml-auto text-sm font-medium underline decoration-foreground/25 underline-offset-4 hover:decoration-foreground"
+          href={taskPage(repo, trial)}
+          target="_blank"
+          rel="noopener"
+        >
+          View Task
+        </a>
       </div>
-      <div className="p-4 sm:p-6">
+      <div className="min-w-0 p-4 sm:p-6">
+        {explanation.offered && (
+          <FailureExplanationForm
+            key={`${baseUrl}/${known.id}/${trial.runId}/${trial.taskId}/${trial.harness}`}
+            baseUrl={baseUrl}
+            explaining={explanation.explaining}
+            onExplain={explanation.explain}
+          />
+        )}
+        {explanation.reason && (
+          <p className="mb-4 text-sm text-muted-foreground">{explanation.reason}</p>
+        )}
         {explanation.error && <Notice className="mb-4">{explanation.error}</Notice>}
         {error ? (
           <Notice>{error}</Notice>

@@ -1,4 +1,5 @@
 import { ChevronDown } from "lucide-react";
+import type { ReactNode } from "react";
 import { cn } from "../primitives/cn";
 import {
   DropdownMenu,
@@ -125,9 +126,10 @@ function FacetMenu({
 
 /**
  * Above the table: a filter per facet (vendor, provider, reasoning, harness), then toggles for
- * each configuration state.
+ * each configuration state. `end` sits at the right of the filters.
  */
 export function ConfigurationToolbar({
+  end,
   configurations,
   states,
   chosenStates,
@@ -136,6 +138,7 @@ export function ConfigurationToolbar({
   onToggleFacet,
   onClearFacet,
 }: {
+  end?: ReactNode;
   configurations: readonly Configuration[];
   /** The state of each configuration the facets leave, for the toggles' counts. */
   states: readonly RunState[];
@@ -170,9 +173,39 @@ export function ConfigurationToolbar({
             Clear Filters
           </button>
         )}
+        {end && <div className="ml-auto">{end}</div>}
       </div>
       <RunStateFilter states={states} selected={chosenStates} onToggle={onToggleState} />
     </div>
+  );
+}
+
+/** Picks how the configurations show: the table of their runs, or the grid of their tasks. */
+export function LayoutToggle({
+  layout,
+  onChange,
+}: {
+  layout: "table" | "grid";
+  onChange(layout: "table" | "grid"): void;
+}) {
+  return (
+    <fieldset className="flex h-8 border border-border bg-card text-xs font-semibold [&>button+button]:border-l [&>button+button]:border-border">
+      <legend className="sr-only">Layout</legend>
+      {(["table", "grid"] as const).map((option) => (
+        <button
+          key={option}
+          type="button"
+          aria-pressed={layout === option}
+          className={cn(
+            "px-3 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/15",
+            layout === option && "bg-foreground/[0.06] text-foreground",
+          )}
+          onClick={() => onChange(option)}
+        >
+          {option === "table" ? "Table" : "Grid"}
+        </button>
+      ))}
+    </fieldset>
   );
 }
 

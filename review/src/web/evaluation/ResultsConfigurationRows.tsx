@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
+import type { EvaluationRun } from "./api";
 import { dollars } from "./benchmark";
 import type { AcceptedTask } from "./RepoRuns";
 import { BatchHeading, ResultGroupRows, startersOf } from "./ResultsBatchRows";
@@ -19,25 +20,25 @@ const flipped = <T,>(list: readonly T[], item: T) =>
   list.includes(item) ? list.filter((entry) => entry !== item) : [...list, item];
 
 /**
- * A configuration's row and, while it's open, its Cumulative Results (each task's latest result,
- * and optionally the accepted tasks it hasn't run) and then its runs, newest first.
+ * A configuration's summary and, while it's open, its runs, newest first.
  */
 export function ConfigurationRows({
   configuration,
   accepted,
-  unsolved,
   view,
   setView,
   onOpenTask,
+  baseUrl,
+  onChanged,
 }: {
   configuration: Configuration;
-  /** The repository's accepted tasks, for the ones the cumulative results haven't run. */
+  /** Accepted tasks for the configuration's coverage count. */
   accepted: readonly AcceptedTask[] | undefined;
-  /** Accepted tasks no configuration passed, though enough ran them, by task key. */
-  unsolved: ReadonlyMap<string, number>;
   view: ResultsView;
   setView: Dispatch<SetStateAction<ResultsView>>;
   onOpenTask(result: TaskResult): void;
+  baseUrl?: string;
+  onChanged?(run: EvaluationRun): void;
 }) {
   const open = view.configurations.includes(configuration.key);
   const missing = missingTasks(configuration, accepted);
@@ -108,18 +109,6 @@ export function ConfigurationRows({
           )}
         </td>
       </tr>
-      {open && (
-        <ResultGroupRows
-          name="the Cumulative Results"
-          heading={<b className="font-semibold">Cumulative Results</b>}
-          results={configuration.latest}
-          statusOf={[...configuration.latest, ...configuration.underway]}
-          cumulative
-          missing={missing}
-          unsolved={unsolved}
-          {...group(`${configuration.key}\nlatest`)}
-        />
-      )}
       {open &&
         runs
           .slice(0, limit)
@@ -129,6 +118,9 @@ export function ConfigurationRows({
               name={`the ${momentLabel(batch.createdAt)} Run`}
               heading={<BatchHeading batch={batch} />}
               results={batch.results}
+              run={batch.results[0]?.run}
+              {...(baseUrl ? { baseUrl } : {})}
+              {...(onChanged ? { onChanged } : {})}
               {...group(`${configuration.key}\n${batch.id}`)}
             />
           ))}

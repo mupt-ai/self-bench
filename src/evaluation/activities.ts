@@ -11,6 +11,7 @@ import { failEvaluation, failTrial, finishEvaluation, startEvaluation } from "./
 import { environmentSecrets, redactOutput } from "./output.js";
 import { prepareTaskImages } from "./prepare.js";
 import { executeTrial, type RunnerOptions } from "./runner.js";
+import { auditTask, type TaskAuditRequest } from "./task-audit.js";
 import type { EvaluationInput, FailedTrial } from "./types.js";
 
 export interface EvaluationActivities {
@@ -19,6 +20,7 @@ export interface EvaluationActivities {
   prepareTaskImages(input: EvaluationInput): Promise<string>;
   runSolverTrial(input: EvaluationInput, index: number): Promise<void>;
   explainSolverTrial(trial: FailedTrial): Promise<void>;
+  auditSolverTask(request: TaskAuditRequest): Promise<void>;
   failSolverTrial(input: EvaluationInput, index: number): Promise<void>;
   finishSolverEvaluation(input: EvaluationInput): Promise<void>;
   failSolverEvaluation(input: EvaluationInput): Promise<void>;
@@ -74,6 +76,14 @@ export function createEvaluationActivities(
     explainSolverTrial: (trial) =>
       explainTrialFailure(store, trial, {
         command: runCommand,
+        ...(vault ? { vault } : {}),
+        redact: (text) => redactOutput(text, environmentSecrets(process.env)),
+        signal: Context.current().cancellationSignal,
+      }),
+    auditSolverTask: (request) =>
+      auditTask(store, request, {
+        command: runCommand,
+        ...(vault ? { vault } : {}),
         redact: (text) => redactOutput(text, environmentSecrets(process.env)),
         signal: Context.current().cancellationSignal,
       }),
