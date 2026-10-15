@@ -1,4 +1,4 @@
-import { harborCost } from "../harnesses/harbor/cost.js";
+import { harborCallsCost, harborCallUsage } from "../harnesses/harbor/cost.js";
 import { record } from "./output.js";
 import { type RequestUsage, sameUsage, sumUsage } from "./request-cost.js";
 import type { TokenUsage } from "./types.js";
@@ -83,10 +83,11 @@ export function measureHarborAgentCost(
     sameUsage(sumUsage(calls), usage)
       ? calls
       : undefined;
+  const harborCalls = harborCallUsage(trajectory);
+  const reportedCost = harborCallsCost(harborCalls, usage, totals.cost_usd);
   const largestPrompt = requests
     ? Math.max(0, ...requests.map((call) => call.input + call.cacheRead))
     : undefined;
-  const reportedCost = harborCost(trajectory, usage, totals.cost_usd);
   return {
     modelVerified,
     tokenUsage: usage,
