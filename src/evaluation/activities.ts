@@ -2,18 +2,24 @@ import { Context, type Info } from "@temporalio/activity";
 import type { ArtifactStore } from "../artifacts/index.js";
 import type { Vault } from "../db/vault.js";
 import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
+import { runCommand } from "../lib/process.js";
 import { withCredentialCapacity } from "../sandbox/capacity-wait.js";
 import { credentialsCapacity } from "../sandbox/credential-capacity.js";
+import { explainTrialFailure } from "./failure-summary.js";
 import { failEvaluation, failTrial, finishEvaluation, startEvaluation } from "./lifecycle.js";
+import { environmentSecrets, redactOutput } from "./output.js";
 import { prepareTaskImages } from "./prepare.js";
 import { executeTrial, type RunnerOptions } from "./runner.js";
-import type { EvaluationInput } from "./types.js";
+import { auditTask, type TaskAuditRequest } from "./task-audit.js";
+import type { EvaluationInput, FailedTrial } from "./types.js";
 
 export interface EvaluationActivities {
   startSolverEvaluation(input: EvaluationInput): Promise<number>;
   /** Builds the one task in `input`'s images before its trials; returns what it built. */
   prepareTaskImages(input: EvaluationInput): Promise<string>;
   runSolverTrial(input: EvaluationInput, index: number): Promise<void>;
+  explainSolverTrial(trial: FailedTrial): Promise<void>;
+  auditSolverTask(request: TaskAuditRequest): Promise<void>;
   failSolverTrial(input: EvaluationInput, index: number): Promise<void>;
   finishSolverEvaluation(input: EvaluationInput): Promise<void>;
   failSolverEvaluation(input: EvaluationInput): Promise<void>;
@@ -71,6 +77,20 @@ export function createEvaluationActivities(
           executeTrial(store, input, index, { ...options, retry: retries(Context.current().info) }),
         ),
       ),
+    explainSolverTrial: (trial) =>
+      explainTrialFailure(store, trial, {
+        command: runCommand,
+        ...(vault ? { vault } : {}),
+        redact: (text) => redactOutput(text, environmentSecrets(process.env)),
+        signal: Context.current().cancellationSignal,
+      }),
+    auditSolverTask: (request) =>
+      auditTask(store, request, {
+        command: runCommand,
+        ...(vault ? { vault } : {}),
+        redact: (text) => redactOutput(text, environmentSecrets(process.env)),
+        signal: Context.current().cancellationSignal,
+      }),
     failSolverTrial: (input, index) => failTrial(store, input, index),
     finishSolverEvaluation: (input) => finishEvaluation(store, input),
     failSolverEvaluation: (input) =>

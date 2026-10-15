@@ -1,14 +1,16 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
+import { passShade } from "../ResultsMatrix";
 import type { EvaluationRun } from "./api";
 import { ConfigurationRows } from "./ResultsConfigurationRows";
 import { ResultsStatus } from "./ResultsMarks";
 import { ResultsTable } from "./ResultsTable";
-import { missingTasks, unsolvedOf } from "./results-coverage";
+import { missingTasks } from "./results-coverage";
 import { at, credentials, errored, NOW, passed, run, type TrialSpec } from "./results-fixture";
 import { configurationsOf } from "./results-model";
 import { momentLabel } from "./results-presentation";
+import { outcomeGridTasks, TaskOutcomeGrid } from "./TaskOutcomeGrid";
 
 test("a batch's circle fills once it's done, and turns red only when a task errored", () => {
   const circle = (status: EvaluationRun["status"], trials: TrialSpec[]) => {
@@ -64,12 +66,12 @@ test("the table starts closed, opening to batches and then to tasks", () => {
   // Every task passed or failed, so no asterisk beside the count.
   expect(html).not.toContain("finished:");
   // Closed: no batch or task rows yet, and no alerts or flags anywhere.
-  for (const text of ["started by", "PR #7371", "Flags", "Needs Attention"]) {
+  for (const text of ["started by", "Flags", "Needs Attention"]) {
     expect(html).not.toContain(text);
   }
 });
 
-test("an open configuration lists its cumulative results, then its five newest runs, then more", () => {
+test("an open configuration lists its five newest runs, then more", () => {
   const runs = Array.from({ length: 7 }, (_, index) =>
     run(`run-${index}`, { comparisonId: `c${index}`, createdAt: at(700 - index * 60) }, [
       passed("task-1"),
@@ -90,7 +92,6 @@ test("an open configuration lists its cumulative results, then its five newest r
               // Accepted after the last run.
               { runId: "batch-1", taskId: "task-3", difficulty: "easy", acceptedAt: at(1) },
             ]}
-            unsolved={new Map()}
             view={{
               states: [],
               facets: {},
@@ -107,9 +108,7 @@ test("an open configuration lists its cumulative results, then its five newest r
       </table>
     </MemoryRouter>,
   );
-  expect(html).toContain("Cumulative Results");
-  // Two accepted tasks never ran: one left out, one accepted since.
-  expect(html).toContain("1 passed · 1 left out · 1 added later");
+  expect(html).not.toContain("Cumulative Results");
   expect(html.match(/Show Tasks for the [^"]* Run"/g)).toHaveLength(5);
   // Newest first: the last run listed is the third newest of the seven.
   const labels = [...html.matchAll(/Show Tasks for the ([^"]*) Run"/g)].map((match) => match[1]);
@@ -140,55 +139,55 @@ test("a task accepted before a re-run of old tasks, but after the last new ones,
   expect(missingTasks(picked, [accepted("task-9", 200)])[0]?.outcome).toBe("unrun");
 });
 
-test("an accepted task three configurations ran and none passed is flagged Unsolved", () => {
+test("the task grid shades one box per task by its pass rate and marks a never-run task with X", () => {
   const failed = (taskId: string): TrialSpec => ({ ...passed(taskId), rewards: { reward: 0 } });
-  const unverified = (taskId: string): TrialSpec => ({ ...failed(taskId), modelVerified: false });
   const runs = [
     run("low", { thinking: "low" }, [failed("task-1"), failed("task-2"), failed("task-3")]),
-    run("medium", { thinking: "medium" }, [failed("task-1"), passed("task-2"), failed("task-3")]),
-    run("high", { thinking: "high" }, [failed("task-1"), failed("task-2"), unverified("task-3")]),
-    run("custom", { credential: "gpu-a" }, [failed("task-4")]),
+    run("low-retry", { thinking: "low", createdAt: at(100) }, [passed("task-1"), passed("task-2")]),
+    run("low-third", { thinking: "low", createdAt: at(50) }, [
+      passed("task-2"),
+      errored("task-3", "Harbor exited with code 137"),
+    ]),
+    run("custom", { credential: "gpu-a" }, [
+      failed("task-4"),
+      errored("task-5", "Harbor exited with code 137"),
+    ]),
   ];
   const configurations = configurationsOf(runs, credentials, NOW);
-  const accepted = ["task-1", "task-2", "task-3"].map((taskId) => ({
-    runId: "batch-1",
-    taskId,
-    difficulty: "easy",
-  }));
-  // task-2 was passed once, and task-3 has only two usable results.
-  const unsolved = unsolvedOf(configurations, accepted);
-  expect([...unsolved]).toEqual([["batch-1/task-1", 3]]);
-  // Only accepted tasks count.
-  expect(unsolvedOf(configurations, []).size).toBe(0);
-
-  const configuration = configurations.find((entry) => entry.thinking === "low");
-  if (!configuration) throw new Error("No configuration");
   const html = renderToStaticMarkup(
     <MemoryRouter>
-      <table>
-        <tbody>
-          <ConfigurationRows
-            configuration={configuration}
-            accepted={accepted}
-            unsolved={unsolved}
-            view={{
-              states: [],
-              facets: {},
-              configurations: [configuration.key],
-              batches: [`${configuration.key}\nlatest`],
-              shown: {},
-              sorts: {},
-              runLimits: {},
-            }}
-            setView={() => {}}
-            onOpenTask={() => {}}
-          />
-        </tbody>
-      </table>
+      <TaskOutcomeGrid
+        configurations={configurations}
+        tasks={outcomeGridTasks(configurations)}
+        onOpenTask={() => {}}
+        onOpenAudit={() => {}}
+      />
     </MemoryRouter>,
   );
-  expect(html.match(/>Unsolved</g)).toHaveLength(1);
-  expect(html).toContain(
-    "None of the 3 configurations with an eligible result on this task passed it.",
-  );
+  // One box per task, whatever the number of attempts.
+  expect(html).toContain("GPT-6 on task-1: 1 of 2 Passed");
+  expect(html).toContain("GPT-6 on task-2: 2 of 3 Passed");
+  expect(html).toContain("GPT-6 on task-3: 0 of 1 Passed, 1 Errored");
+  expect(html).not.toContain("attempt");
+  expect(html).toContain(passShade(1, 2));
+  expect(html).toContain(passShade(2, 3));
+  // The custom configuration never ran task-1.
+  expect(html).toContain("llama-70b never ran task-1");
+  expect(html).toContain("All Failed");
+  expect(html).toContain("Never Ran");
+  expect(html).not.toContain("Select a box");
+  // A task whose only attempts errored is a dark box crossed out.
+  expect(html).toMatch(/aria-label="llama-70b on task-5: 1 Errored"[^>]*bg-foreground\/80[^>]*>×</);
+  expect(html).toContain(">Errored<");
+  // Each column's tick opens the task's own dialog.
+  expect(html).toContain('aria-label="Audit task-1"');
+});
+
+test("pass-rate shades reach the ends only when every attempt passed or failed", () => {
+  expect(passShade(0, 8)).toBe("bg-foreground/10");
+  expect(passShade(1, 8)).toBe("bg-foreground/25");
+  expect(passShade(4, 8)).toBe("bg-foreground/40");
+  expect(passShade(6, 8)).toBe("bg-foreground/55");
+  expect(passShade(7, 8)).toBe("bg-foreground/70");
+  expect(passShade(8, 8)).toBe("bg-foreground/80");
 });

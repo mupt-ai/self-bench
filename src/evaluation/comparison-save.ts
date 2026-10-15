@@ -20,6 +20,11 @@ export interface ComparisonOwner {
   orgId: number;
   tenant: string;
   login: string;
+  /**
+   * Whether the repository is private on GitHub. A public repository's failed trials are
+   * explained; unset for a benchmark and anything not confirmed public.
+   */
+  privateRepo?: boolean;
 }
 
 /**
@@ -151,6 +156,9 @@ export async function saveComparison(
           startedBy: owner.login,
           createdAt,
           ...(pricing ? { pricing } : {}),
+          ...(owner.scope.repoId !== undefined && (owner.privateRepo === false || managedModel)
+            ? { explainFailures: true }
+            : {}),
           credentialOrgId: owner.orgId,
           comparisonId: selection.id,
           credentials: {

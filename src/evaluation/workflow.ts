@@ -1,3 +1,4 @@
+import { WorkflowExecutionAlreadyStartedError } from "@temporalio/common";
 import {
   ActivityCancellationType,
   CancellationScope,
@@ -7,14 +8,16 @@ import {
   ParentClosePolicy,
   patched,
   proxyActivities,
+  startChild,
   workflowInfo,
 } from "@temporalio/workflow";
 import { trialTimeouts } from "../contracts/agent-limit.js";
 import { MAX_PENDING_TRIAL_WORKFLOWS } from "../contracts/config/execution-limits.js";
 import { whenSandboxFree } from "../temporal/sandbox-capacity.js";
 import type { EvaluationActivities } from "./activities.js";
+import type { TaskAuditRequest } from "./task-audit.js";
 import { preparesTaskImages, trialInput } from "./trial-input.js";
-import type { EvaluationInput } from "./types.js";
+import type { EvaluationInput, FailedTrial } from "./types.js";
 
 // A RepeatSpendError is final: retrying it cannot succeed and must not try to.
 const REFUSED = ["RepeatSpendError"];
@@ -43,6 +46,11 @@ const prepare = () =>
 const records = proxyActivities<EvaluationActivities>({
   startToCloseTimeout: "1 minute",
   retry: { maximumAttempts: 5, nonRetryableErrorTypes: REFUSED },
+});
+// One Pi call, which gives up after five minutes, and the write of what it said.
+const explaining = proxyActivities<EvaluationActivities>({
+  startToCloseTimeout: "10 minutes",
+  retry: { maximumAttempts: 2 },
 });
 
 /**
@@ -109,7 +117,11 @@ export function taskImagesReady(
   };
 }
 
-/** One trial of an evaluation: its Harbor activity, and its failure when it recorded none. */
+/**
+ * One trial of an evaluation: its Harbor activity, and its failure when it recorded none. In an
+ * evaluation that explains failures, the trial then starts `<trial workflow ID>/explain` and ends
+ * without waiting for it, so the explanation never holds the evaluation's place for another trial.
+ */
 export async function selfBenchSolverTrialWorkflow(
   input: EvaluationInput,
   index: number,
@@ -123,6 +135,41 @@ export async function selfBenchSolverTrialWorkflow(
     },
     records,
   );
+  if (input.explainFailures && input.repoId !== undefined && patched("explain-failed-trials")) {
+    const bundleKey = input.tasks[0]?.bundleKey;
+    try {
+      await startChild(selfBenchFailedTrialWorkflow, {
+        workflowId: `${workflowInfo().workflowId}/explain`,
+        args: [{ repoId: input.repoId, id: input.id, index, ...(bundleKey ? { bundleKey } : {}) }],
+        parentClosePolicy: ParentClosePolicy.ABANDON,
+      });
+    } catch (error) {
+      // Someone asked for this trial's explanation already (Explain Failure in the app).
+      if (!(error instanceof WorkflowExecutionAlreadyStartedError)) throw error;
+    }
+  }
+}
+
+/**
+ * Explains why a trial failed its tests (failure-summary.ts), after the trial has ended: started
+ * by the trial itself, or by the app (failureExplainer), under the same workflow ID.
+ */
+export async function selfBenchFailedTrialWorkflow(trial: FailedTrial): Promise<void> {
+  const activity = trial.explanation
+    ? proxyActivities<EvaluationActivities>({
+        startToCloseTimeout: "10 minutes",
+        retry: { maximumAttempts: 1 },
+      })
+    : explaining;
+  await activity.explainSolverTrial(trial);
+}
+
+/** Audits whether a task is fair from its failed attempts (task-audit.ts), on the app's request. */
+export async function selfBenchTaskAuditWorkflow(request: TaskAuditRequest): Promise<void> {
+  await proxyActivities<EvaluationActivities>({
+    startToCloseTimeout: "10 minutes",
+    retry: { maximumAttempts: 1 },
+  }).auditSolverTask(request);
 }
 
 /**

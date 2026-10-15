@@ -110,34 +110,3 @@ export function DataTable({ className, ...props }: ComponentProps<"table">) {
     </section>
   );
 }
-
-const runStatusLabels: Record<string, string> = {
-  queued: "Queued",
-  pending: "Pending",
-  running: "Running",
-  completed: "Completed",
-  failed: "Failed",
-  cancelled: "Cancelled",
-  canceled: "Cancelled",
-};
-
-export function RunStatus({ value }: { value: string }) {
-  const color =
-    value === "completed"
-      ? "text-success"
-      : value === "failed"
-        ? "text-destructive"
-        : value === "running"
-          ? "text-brand-foreground"
-          : "text-muted-foreground";
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 text-xs font-semibold before:size-1.5 before:rounded-full before:bg-current",
-        color,
-      )}
-    >
-      {runStatusLabels[value] ?? value}
-    </span>
-  );
-}

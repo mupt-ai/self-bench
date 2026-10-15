@@ -1,9 +1,12 @@
 import { useRef } from "react";
 import { Link } from "react-router";
+import { ResultsMatrix, type ResultsMatrixRow } from "../../web/ResultsMatrix";
+
+export { resultMark } from "../../web/ResultsMatrix";
+
 import type { PublicRelease } from "../contract";
 import { revealGroup } from "../effects/marks";
 import { harnessLabel, reasoningLabel, settingLabel, vendorColor } from "../format";
-import { PANEL } from "../frame";
 import { resultsGrid } from "../results-grid";
 import { useSource } from "../source-context";
 import { type OpenedTask, useNear, useReleaseTasks } from "./TaskList";
@@ -16,14 +19,8 @@ const traceSearch = (taskId: string, settingId: string) =>
   `?trace=${encodeURIComponent(taskId)}&setting=${encodeURIComponent(settingId)}`;
 
 /**
- * A result's mark, in the text color: strong where it passed, a faint tint where it failed.
- * Lightness, not hue, tells them apart, so they read the same with red-green color blindness.
- */
-export const resultMark = (passed: boolean) => (passed ? "bg-foreground/80" : "bg-foreground/10");
-
-/**
  * Every setting's result on every task of a release that published its trials: settings down the
- * side, tasks across, a solid box where it passed and a hollow one where it did not. A box opens
+ * side, tasks across, a strong box where it passed and a faint one where it did not. A box opens
  * that attempt's transcript in the trace viewer. Read as the section nears the screen, from the
  * same task list the Tasks section reads.
  */
@@ -39,32 +36,25 @@ export function ResultsGrid({
   const section = useRef<HTMLElement>(null);
   const { tasks, failed, retry } = useReleaseTasks(release, useNear(section));
   const grid = tasks && resultsGrid(release.settings, tasks);
-  // A release whose tasks carry no results has nothing to draw.
   if (tasks && !grid) return null;
-  // A transcript is large and kept for the visit, so only a press reads one ahead; pointing at or
-  // focusing a box only fetches the viewer itself.
-  const readAhead = (taskId: string, settingId: string) => {
-    void loadTraceViewer();
-    void source.getTrial(release.releaseId, taskId, settingId).catch(() => undefined);
-  };
+
+  const rows: ResultsMatrixRow[] = (grid?.settings ?? release.settings).map((setting) => ({
+    id: setting.id,
+    label: settingLabel(setting, release.settings),
+    detail: `${harnessLabel(setting)} · ${reasoningLabel(setting)}`,
+    color: vendorColor(setting),
+    active: setting.id === activeId,
+    ...(grid
+      ? {
+          metric: `${grid.tasks.filter((task) => task.passed[setting.id]).length}/${grid.tasks.length}`,
+        }
+      : {}),
+  }));
+
   return (
     <section ref={section} className="flex min-w-0 flex-col gap-3" {...revealGroup}>
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 className="text-sm font-medium">Results by Task</h2>
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <span aria-hidden="true" className={`size-2.5 ${resultMark(true)}`} />
-            Passed
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span aria-hidden="true" className={`size-2.5 ${resultMark(false)}`} />
-            Failed
-          </span>
-          <span>Select a box to read its transcript.</span>
-        </p>
-      </div>
       {failed ? (
-        <p className={`flex flex-wrap items-center gap-3 px-3 py-3 text-sm ${PANEL}`}>
+        <p className="flex flex-wrap items-center gap-3 px-3 py-3 text-sm panel">
           <span className="text-muted-foreground">The results didn't load.</span>
           <button
             type="button"
@@ -75,86 +65,35 @@ export function ResultsGrid({
           </button>
         </p>
       ) : (
-        // One scroller for every row, so the boxes of a task stay in one column however far
-        // across it is scrolled; the names stay pinned at its left edge.
-        <div className={`overflow-x-auto ${PANEL}`} aria-busy={!grid}>
-          <ul className="w-max min-w-full divide-y divide-border">
-            {(grid?.settings ?? release.settings).map((setting) => {
-              const solved = grid?.tasks.filter((task) => task.passed[setting.id]).length;
-              return (
-                <li
-                  key={setting.id}
-                  className={`flex items-center ${setting.id === activeId ? "bg-(--row-mark)" : ""}`}
-                >
-                  {/* Above the boxes that scroll under it, and below the page's pinned bars (z-7). */}
-                  <div className="sticky left-0 z-[1] flex w-60 shrink-0 items-baseline gap-2 self-stretch border-r border-border bg-card px-3 py-2 text-sm compact:w-40">
-                    <span
-                      aria-hidden="true"
-                      className="size-2 shrink-0"
-                      style={{ background: vendorColor(setting) }}
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block font-medium wrap-anywhere">
-                        {settingLabel(setting, release.settings)}
-                      </span>
-                      <span className="block text-xs text-muted-foreground compact:text-[11px]">
-                        {harnessLabel(setting)} · {reasoningLabel(setting)}
-                      </span>
-                    </span>
-                    {solved !== undefined && (
-                      <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
-                        {solved}/{grid?.tasks.length}
-                      </span>
-                    )}
-                  </div>
-                  {/* The boxes share the row's width, down to a box each, past which the row
-                      scrolls. On touch a box is 24px, the smallest target WCAG allows, short of
-                      the site's 44px: at 44px a phone showed only a few tasks per screen. */}
-                  <div
-                    data-phone-ok="tap"
-                    className="grid min-w-0 flex-1 gap-0.5 px-3 py-2 [--box:1rem] touch:[--box:1.5rem]"
-                    style={{
-                      gridTemplateColumns: `repeat(${grid?.tasks.length ?? Math.min(release.tasks, 24)}, minmax(var(--box), 1fr))`,
-                    }}
-                  >
-                    {grid
-                      ? grid.tasks.map((task) => {
-                          const passed = task.passed[setting.id];
-                          if (passed === undefined)
-                            return <span key={task.id} className="h-5 touch:h-6" />;
-                          const label = `${settingLabel(setting, release.settings)} on ${task.id}: ${passed ? "Passed" : "Failed"}`;
-                          return (
-                            <Link
-                              key={task.id}
-                              to={{ search: traceSearch(task.id, setting.id) }}
-                              state={{ fromList: true } satisfies OpenedTask}
-                              preventScrollReset
-                              aria-label={label}
-                              title={label}
-                              onPointerEnter={() => void loadTraceViewer()}
-                              onPointerDown={() => readAhead(task.id, setting.id)}
-                              onFocus={() => void loadTraceViewer()}
-                              className={`h-5 outline-offset-1 transition-colors focus-visible:outline-2 focus-visible:outline-foreground touch:h-6 ${resultMark(passed)} ${
-                                passed ? "hover:bg-foreground" : "hover:bg-foreground/25"
-                              }`}
-                            />
-                          );
-                        })
-                      : // Placeholders the height of a row, so the page does not jump when it lands.
-                        Array.from({ length: Math.min(release.tasks, 24) }, (_, index) => (
-                          <span
-                            // biome-ignore lint/suspicious/noArrayIndexKey: placeholders have no identity
-                            key={index}
-                            aria-hidden="true"
-                            className="h-5 animate-pulse bg-muted touch:h-6"
-                          />
-                        ))}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
+        <ResultsMatrix
+          rows={rows}
+          tasks={grid?.tasks ?? null}
+          placeholders={Math.min(release.tasks, 24)}
+          cell={(settingId, taskId) => {
+            const passed = grid?.tasks.find((task) => task.id === taskId)?.passed[settingId];
+            return passed === undefined
+              ? undefined
+              : { passed: passed ? 1 : 0, failed: passed ? 0 : 1 };
+          }}
+          // A transcript is large and kept for the visit, so only a press reads one ahead; pointing
+          // at or focusing a box only fetches the viewer itself.
+          renderBox={({ rowId: settingId, task, className, label }) => (
+            <Link
+              to={{ search: traceSearch(task.id, settingId) }}
+              state={{ fromList: true } satisfies OpenedTask}
+              preventScrollReset
+              aria-label={label}
+              title={label}
+              onPointerEnter={() => void loadTraceViewer()}
+              onPointerDown={() => {
+                void loadTraceViewer();
+                void source.getTrial(release.releaseId, task.id, settingId).catch(() => undefined);
+              }}
+              onFocus={() => void loadTraceViewer()}
+              className={className}
+            />
+          )}
+        />
       )}
     </section>
   );

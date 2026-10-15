@@ -2,7 +2,9 @@
 
 export {
   selfBenchEvaluationRunWorkflow,
+  selfBenchFailedTrialWorkflow,
   selfBenchSolverTrialWorkflow,
+  selfBenchTaskAuditWorkflow,
 } from "../evaluation/workflow.js";
 export { selfBenchBatchWorkflow } from "../generation/batches/workflow.js";
 export * from "../generation/pipeline/workflows.js";
