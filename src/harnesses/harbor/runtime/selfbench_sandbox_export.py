@@ -16,13 +16,16 @@ from selfbench_export import LayerUpload, push_image
 
 ARCHIVE = "/tmp/selfbench-rootfs.tar.gz"
 SANDBOX_LIFETIME_SECS = 2 * 60 * 60
+E2B_LIFETIME_SECS = 60 * 60
 CHUNK = 1024 * 1024
 # Tar's 1 means a file changed while it was read, which an idle sandbox does not care about.
 PACK = (
     "tar --one-file-system --numeric-owner -C / -cf - --exclude=./proc --exclude=./sys "
     f"--exclude=./dev --exclude=.{ARCHIVE} . | gzip -1 > {ARCHIVE}; "
-    't=${PIPESTATUS[0]}; g=${PIPESTATUS[1]}; '
-    '[ "$g" = 0 ] && { [ "$t" = 0 ] || [ "$t" = 1 ]; } || { echo "tar $t gzip $g" >&2; exit 1; }'
+    # One assignment: any command, even `t=…`, resets PIPESTATUS for the next.
+    's=("${PIPESTATUS[@]}"); '
+    '[ "${s[1]}" = 0 ] && { [ "${s[0]}" = 0 ] || [ "${s[0]}" = 1 ]; } '
+    '|| { echo "tar ${s[0]} gzip ${s[1]}" >&2; exit 1; }'
 )
 
 
@@ -46,7 +49,8 @@ class Gunzip:
 async def stream_e2b(template: str, layer: LayerUpload) -> None:
     from e2b import AsyncSandbox
 
-    sandbox = await AsyncSandbox.create(template=template, timeout=SANDBOX_LIFETIME_SECS)
+    # E2B's Hobby plan refuses sandboxes past an hour; one pack and download fits well inside it.
+    sandbox = await AsyncSandbox.create(template=template, timeout=E2B_LIFETIME_SECS)
     try:
         await sandbox.commands.run(f"bash -c {quote(PACK)}", user="root", timeout=0)
         output = Gunzip(layer)

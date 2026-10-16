@@ -127,6 +127,29 @@ assert "packed" in events and "killed" in events, events
   });
 }
 
+test("the pack script tolerates tar's changed-file status and fails on any other", async () => {
+  const root = await temporary();
+  const runtime = fileURLToPath(new URL("../../src/harnesses/harbor/runtime/", import.meta.url));
+  const script = `
+import os, subprocess, sys, types
+sys.modules["modal"] = types.SimpleNamespace(App=None, Image=None, Sandbox=None)
+sys.path.insert(0, sys.argv[1])
+from selfbench_sandbox_export import PACK
+bin_dir = sys.argv[2]
+def status(tar_code, gzip_code):
+    for name, code in [("tar", tar_code), ("gzip", gzip_code)]:
+        path = os.path.join(bin_dir, name)
+        open(path, "w").write(f"#!/bin/sh\\ncat >/dev/null 2>&1 <&0 & exit {code}\\n")
+        os.chmod(path, 0o755)
+    env = {**os.environ, "PATH": bin_dir + ":/bin:/usr/bin"}
+    return subprocess.run(["bash", "-c", PACK], env=env, capture_output=True).returncode
+# Tar's 1 (a file changed while read) is fine; every other failure, tar's or gzip's, is not.
+print([status(0, 0), status(1, 0), status(2, 0), status(0, 1)])
+`;
+  const result = await runCommand("python3", ["-I", "-c", script, runtime, root]);
+  expect(result.stdout.trim()).toBe("[0, 0, 1, 1]");
+});
+
 test("a failed pack still removes the sandbox and ends the export instead of hanging", async () => {
   const root = await temporary();
   const tokenFile = join(root, "registry-token");
