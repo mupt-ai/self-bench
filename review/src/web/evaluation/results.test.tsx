@@ -65,6 +65,31 @@ test("a started run whose tasks are all still queued is running: it's preparing"
   ]);
 });
 
+test("configurations default to most finished non-error results, keeping recency for ties", () => {
+  const configurations = configurationsOf(
+    [
+      run("recent-error", { createdAt: at(1) }, [errored("task-1", "worker failed")]),
+      run("older-unscored", { createdAt: at(10), thinking: "low" }, [
+        { ...passed("task-1"), rewards: {} },
+        { ...passed("task-2"), rewards: { reward: 0 } },
+      ]),
+      run("recent-tie", { createdAt: at(2), thinking: "medium" }, [
+        passed("task-1"),
+        errored("task-2", "worker failed"),
+        { taskId: "task-3", status: "running" },
+        { taskId: "task-4", status: "queued" },
+      ]),
+      run("older-tie", { createdAt: at(20), thinking: "xhigh" }, [passed("task-1")]),
+    ],
+    credentials,
+    NOW,
+  );
+
+  const ordered = orderedConfigurations(configurations, undefined);
+  expect(ordered.map((entry) => entry.thinking)).toEqual(["low", "medium", "xhigh", "high"]);
+  expect(ordered.map((entry) => entry.finished - entry.counts.error)).toEqual([2, 1, 1, 0]);
+});
+
 test("configurations narrow by facet and sort by any column", () => {
   const configurations = configurationsOf(
     [
