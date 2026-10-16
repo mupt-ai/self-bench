@@ -51,13 +51,20 @@ export function TaskAuditDialog({
   );
   const scored = rows.filter(({ result }) => ["passed", "failed"].includes(result.outcome));
   const failed = scored.filter(({ result }) => result.outcome === "failed").length;
+  const auditableFailures = scored.filter(
+    ({ result }) =>
+      result.outcome === "failed" &&
+      result.trial.status === "completed" &&
+      result.trial.modelVerified !== false &&
+      result.trial.rewards.reward === 0,
+  ).length;
   const parts = taskParts(task.id);
   const last = state?.audit;
-  // Offered from the failures shown here, without waiting for the audit's state to load.
-  const offered = auditing || (enabled && failed > 0 && state?.available !== false);
+  // Offered from the failures the server can audit, without waiting for state to load.
+  const offered = auditing || (enabled && auditableFailures > 0 && state?.available !== false);
   const reason =
     state?.reason ??
-    (failed ? undefined : "No attempt failed this task, so there is nothing to audit.");
+    (auditableFailures ? undefined : "No verified failed attempt is available to audit.");
   return (
     <Dialog
       initialFocus={close}
