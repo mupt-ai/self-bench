@@ -9,7 +9,7 @@ node dist/maintenance/recompute-cost.js <repoId> <evaluationId> [--apply] [--aut
 node dist/maintenance/reprice-vendor-rates.js <repoId> <evaluationId> [--apply]
 node dist/maintenance/reprice-dari-router.js <repoId> <evaluationId> [--apply]
 node dist/maintenance/reprice-openrouter.js <repoId> <evaluationId> [--apply]
-node dist/maintenance/backfill-agent-timeouts.js <repoId>... [--apply] [--auth=codex-login|api-key]
+node dist/maintenance/backfill-timeouts.js <repoId | benchmark:<id>>... [--apply] [--auth=codex-login|api-key]
 node dist/maintenance/records-migration.js [--apply]
 ```
 

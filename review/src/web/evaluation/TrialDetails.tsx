@@ -23,6 +23,7 @@ export type TrialTranscript = Pick<EvaluationTrial, "steps"> &
       EvaluationTrial,
       | "error"
       | "agentTimedOut"
+      | "verifierTimedOut"
       | "failureSummary"
       | "log"
       | "artifacts"
@@ -65,6 +66,11 @@ export function TrialDetails({
         <p className="mb-4 text-sm text-muted-foreground">
           The agent reached its {agentMinutes ?? AGENT_MINUTES.default}-minute limit, so it was
           scored on the work it had done by then.
+        </p>
+      )}
+      {trial.verifierTimedOut && (
+        <p className="mb-4 text-sm text-muted-foreground">
+          The tests ran past the task's time limit, so the trial failed.
         </p>
       )}
       {trial.failureSummary && (

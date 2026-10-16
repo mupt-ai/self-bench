@@ -118,6 +118,7 @@ export interface PublishedTrial
     | "startedAt"
     | "finishedAt"
     | "agentTimedOut"
+    | "verifierTimedOut"
     | "failureSummary"
     | "apiCostUsd"
     | "costIncomplete"

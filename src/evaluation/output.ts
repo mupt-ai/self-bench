@@ -1,6 +1,7 @@
 import { constants } from "node:fs";
 import { lstat, open, readdir } from "node:fs/promises";
 import { join } from "node:path";
+import type { EvaluationTrial } from "./types.js";
 
 /** The values of the worker's secret variables, to redact from anything it records. */
 export function environmentSecrets(env: NodeJS.ProcessEnv): string[] {
@@ -41,6 +42,21 @@ export function verifierRewards(result: unknown): Record<string, number> {
 /** Whether Harbor's trial result says it stopped the agent at its time limit. */
 export function agentTimedOut(result: unknown): boolean {
   return record(record(result).exception_info).exception_type === "AgentTimeoutError";
+}
+/**
+ * The scores of a trial Harbor stopped at a time limit, which is part of the task, as in Harbor's
+ * own scores: a stopped agent is scored on what it left, if scored, and tests that run past theirs
+ * fail. Undefined for a trial stopped for anything else, or not stopped.
+ */
+export function timeLimitScores(
+  result: unknown,
+): Pick<EvaluationTrial, "rewards" | "agentTimedOut" | "verifierTimedOut"> | undefined {
+  const stopped = record(record(result).exception_info).exception_type;
+  if (stopped === "VerifierTimeoutError") return { rewards: { reward: 0 }, verifierTimedOut: true };
+  const rewards = verifierRewards(result);
+  if (agentTimedOut(result) && Object.keys(rewards).length > 0)
+    return { rewards, agentTimedOut: true };
+  return undefined;
 }
 export function completeLines(text: string): string {
   return text.slice(0, text.lastIndexOf("\n") + 1);

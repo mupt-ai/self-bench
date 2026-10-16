@@ -17,12 +17,12 @@ interface FailureEvidence {
   readonly jobs: string;
   /** The trial's collected output by name (collectOutput), already redacted. */
   readonly files: ReadonlyMap<string, string>;
-  readonly trial: Pick<EvaluationTrial, "rewards" | "agentTimedOut">;
+  readonly trial: Pick<EvaluationTrial, "rewards" | "agentTimedOut" | "verifierTimedOut">;
 }
 
 /** What the summary model reads about one failed trial; any part may be missing. */
 interface MaterialParts {
-  readonly trial: Pick<EvaluationTrial, "rewards" | "agentTimedOut">;
+  readonly trial: Pick<EvaluationTrial, "rewards" | "agentTimedOut" | "verifierTimedOut">;
   readonly instruction?: string | undefined;
   readonly tests?: string | undefined;
   readonly reference?: string | undefined;
@@ -134,11 +134,7 @@ function materialFrom({
   const sections: [string, string | undefined, number][] = [
     ["instruction", instruction, 10_000],
     ["verifier_checks", JSON.stringify(trial.rewards), 2_000],
-    [
-      "time_limit",
-      trial.agentTimedOut ? "The agent was stopped at its time limit." : undefined,
-      200,
-    ],
+    ["time_limit", timeLimit(trial), 200],
     ["verifier_output", output, 60_000],
     ["held_out_tests", tests, 30_000],
     ["agent_changes", changes === "" ? "The agent changed no files." : changes, 30_000],
@@ -188,4 +184,12 @@ async function agentPatch(jobs: string): Promise<string | undefined> {
     if (patch !== undefined) return patch;
   }
   return undefined;
+}
+
+/** Which time limit, if any, ended a failed trial, for the models that read about it. */
+export function timeLimit(
+  trial: Pick<EvaluationTrial, "agentTimedOut" | "verifierTimedOut">,
+): string | undefined {
+  if (trial.verifierTimedOut) return "The tests ran past their time limit and were stopped.";
+  return trial.agentTimedOut ? "The agent was stopped at its time limit." : undefined;
 }

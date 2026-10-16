@@ -1,7 +1,7 @@
 import type { ArtifactStore } from "../artifacts/index.js";
 import { expandBundle } from "../generation/runs/bundle.js";
 import { explanationModel } from "./explanation-model.js";
-import { excerpt, VERIFIER_FILE } from "./failure-material.js";
+import { excerpt, timeLimit, VERIFIER_FILE } from "./failure-material.js";
 import { askModel, type FailureSummaryOptions } from "./failure-summary.js";
 import { harnessLabels } from "./models.js";
 import { redactOutput } from "./output.js";
@@ -264,7 +264,7 @@ async function auditMaterial(
         return [
           `<failed_attempt configuration="${configurationOf(attempt)}">`,
           section("verifier_checks", JSON.stringify(attempt.trial.rewards), 1_000),
-          attempt.trial.agentTimedOut ? "The agent was stopped at its time limit." : "",
+          timeLimit(attempt.trial) ?? "",
           section("verifier_output", output.join("\n\n"), 12_000),
           section("explanation", attempt.trial.failureSummary?.text, 2_000),
           "</failed_attempt>",

@@ -161,6 +161,7 @@ export function publishedTrial(
     ...(trial.startedAt ? { startedAt: trial.startedAt } : {}),
     ...(trial.finishedAt ? { finishedAt: trial.finishedAt } : {}),
     ...(trial.agentTimedOut ? { agentTimedOut: true } : {}),
+    ...(trial.verifierTimedOut ? { verifierTimedOut: true } : {}),
     ...(run.agentMinutes !== undefined ? { agentMinutes: run.agentMinutes } : {}),
     ...(trial.apiCostUsd !== undefined ? { apiCostUsd: trial.apiCostUsd } : {}),
     ...(trial.costIncomplete ? { costIncomplete: true as const } : {}),
