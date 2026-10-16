@@ -1,6 +1,7 @@
 import {
   type ActivityOptions,
   defineQuery,
+  deprecatePatch,
   isCancellation,
   patched,
   proxyActivities,
@@ -98,13 +99,9 @@ const workflowActivities: SelfBenchActivities = {
   compileAndVerify: async (input) => {
     const compiled = await whenSandboxFree(() => compile.compileTask(input));
     const finished = await finish.finishCompile({ ...input, compiled });
-    return await whenSandboxFree(() =>
-      harbor().verifyCompiled({
-        ...input,
-        compiled: finished,
-        ...(patched("portable-task-images") ? { portableImages: true } : {}),
-      }),
-    );
+    // Histories that built portable images before verification recorded this marker.
+    deprecatePatch("portable-task-images");
+    return await whenSandboxFree(() => harbor().verifyCompiled({ ...input, compiled: finished }));
   },
 };
 
@@ -233,7 +230,7 @@ export async function executeCandidate(
       if (verdict.kind === "accepted") {
         // A failed export only means other providers build the task's Dockerfiles, as before.
         const kept = await activities.exportTaskImages({ run, task }).catch((error: unknown) => {
-          if (isCancellation(error) || task.images?.provider === "oci") throw error;
+          if (isCancellation(error)) throw error;
           return task;
         });
         return { progress: update({ status: "accepted" }), task: kept, report: verified.reportRef };

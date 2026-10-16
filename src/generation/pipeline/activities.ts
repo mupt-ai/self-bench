@@ -117,8 +117,7 @@ export function createActivities(
       runtime(
         input.run,
         "author",
-        (_sandbox, harbor, run) =>
-          verifyCompiled(store, harbor, { ...input, run }, callback, config.taskImages?.repository),
+        (_sandbox, harbor, run) => verifyCompiled(store, harbor, { ...input, run }, callback),
         "harbor",
       ),
     startReviewRound: (input) =>

@@ -21,7 +21,8 @@ class RateLimitException(SandboxException):
     def __init__(self, message): super().__init__(message, 429)
 e2b.SandboxException, e2b.RateLimitException = SandboxException, RateLimitException
 def load():
-    import importlib.util
+    import importlib.util, pathlib
+    sys.path.insert(0, str(pathlib.Path(sys.argv[1]).parent))
     spec = importlib.util.spec_from_file_location("selfbench_e2b", sys.argv[1])
     module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
     return module

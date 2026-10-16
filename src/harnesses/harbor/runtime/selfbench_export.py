@@ -1,11 +1,14 @@
-"""Exports one image a task's verification ran on, from Modal, into SelfBench's task repository.
+"""Exports one image a task's verification ran on into SelfBench's task repository.
 
     python selfbench_export.py <modal image id> <image name>
+    python selfbench_export.py <modal|e2b|daytona|vercel> <provider image> <image name>
 
-A Modal image cannot be pulled, so this starts a sandbox from it, streams its root filesystem out
-as one tar layer (gzipped and hashed on the way), and pushes that layer with an image config and
-manifest to the repository, by digest and untagged so it can be deleted with its task, so every
-other provider can start from exactly what passed. The environment carries where and how:
+A provider's verified image cannot be pulled, so this starts a sandbox from it with the run's own
+credentials, streams its root filesystem out as one tar layer (gzipped and hashed on the way), and
+pushes that layer with an image config and manifest to the repository, by digest and untagged so it
+can be deleted with its task, so every other provider can start from exactly what passed. Modal
+streams the tar directly; the others go through a file (selfbench_sandbox_export.py). The
+environment carries where and how:
 
 - SELFBENCH_EXPORT_REGISTRY: the repository's registry API, `https://<host>/v2/<path>`
 - SELFBENCH_EXPORT_TOKEN_FILE: a file holding an access token that may push there (Artifact
@@ -85,18 +88,26 @@ class LayerUpload:
     """Gzips a tar stream into one streamed blob upload, hashing both sides for the image.
 
     Artifact Registry takes a blob in a single PATCH (as `docker push` sends it), so a thread
-    streams the request body from a bounded queue while the sandbox's tar is read.
+    streams the request body from a bounded queue while the sandbox's tar is read. The upload
+    opens only with the first bytes: packing a large sandbox first can outlast the request's
+    idle timeout.
     """
 
     def __init__(self, registry: Registry, name: str):
         self.registry = registry
-        self.location = registry.start_upload(name)
+        self.name = name
         self.compressor = zlib.compressobj(6, zlib.DEFLATED, 31)
         self.raw = hashlib.sha256()
         self.gzipped = hashlib.sha256()
         self.size = 0
         self.chunks: queue.Queue[bytes | None] = queue.Queue(maxsize=8)
-        self.upload = asyncio.ensure_future(asyncio.to_thread(self._patch))
+        self.upload: asyncio.Future[str] | None = None
+
+    def _open(self) -> asyncio.Future[str]:
+        if self.upload is None:
+            self.location = self.registry.start_upload(self.name)
+            self.upload = asyncio.ensure_future(asyncio.to_thread(self._patch))
+        return self.upload
 
     def _body(self):
         while (chunk := self.chunks.get()) is not None:
@@ -109,9 +120,10 @@ class LayerUpload:
         return headers.get("Location", self.location)
 
     async def _queue(self, chunk: bytes | None) -> None:
+        upload = self._open()
         while True:
-            if self.upload.done():
-                self.upload.result()
+            if upload.done():
+                upload.result()
                 raise RuntimeError("the layer upload ended before the layer did")
             try:
                 await asyncio.to_thread(self.chunks.put, chunk, True, 5)
@@ -129,10 +141,24 @@ class LayerUpload:
             self.size += len(data)
             await self._queue(data)
 
+    def abort(self) -> None:
+        """Ends the request body early so the upload thread returns and the process can exit."""
+        if self.upload is None:
+            return
+        while True:
+            try:
+                self.chunks.put_nowait(None)
+                return
+            except queue.Full:
+                try:
+                    self.chunks.get_nowait()
+                except queue.Empty:
+                    pass
+
     async def finish(self) -> tuple[str, str, int]:
         await self._send(self.compressor.flush())
         await self._queue(None)
-        location = await self.upload
+        location = await self._open()
         digest = f"sha256:{self.gzipped.hexdigest()}"
         self.registry.finish_upload(location, digest)
         return digest, f"sha256:{self.raw.hexdigest()}", self.size
@@ -154,28 +180,40 @@ async def stream_root(sandbox, layer: LayerUpload) -> None:
 
 
 async def export(image_id: str, name: str) -> str:
+    async def stream_modal(layer: LayerUpload) -> None:
+        # Harbor's Modal environment builds in its default app, so its images live there.
+        app = await App.lookup.aio(name="__harbor__", create_if_missing=True)
+        sandbox = await Sandbox.create.aio(
+            "sleep", "infinity", app=app, image=Image.from_id(image_id), timeout=SANDBOX_LIFETIME_SECS
+        )
+        try:
+            await stream_root(sandbox, layer)
+        finally:
+            await sandbox.terminate.aio()
+
+    return await push_image(name, stream_modal, f"Modal image {image_id}")
+
+
+async def push_image(name: str, stream, source: str) -> str:
+    """Pushes the root filesystem `stream` writes into a LayerUpload as a one-layer image."""
     registry = Registry(
         os.environ["SELFBENCH_EXPORT_REGISTRY"], os.environ["SELFBENCH_EXPORT_TOKEN_FILE"]
     )
     config = json.loads(os.environ["SELFBENCH_EXPORT_CONFIG"])
-    # Harbor's Modal environment builds in its default app, so its images live there.
-    app = await App.lookup.aio(name="__harbor__", create_if_missing=True)
-    sandbox = await Sandbox.create.aio(
-        "sleep", "infinity", app=app, image=Image.from_id(image_id), timeout=SANDBOX_LIFETIME_SECS
-    )
+    layer = LayerUpload(registry, name)
     try:
-        layer = LayerUpload(registry, name)
-        await stream_root(sandbox, layer)
-        layer_digest, diff_id, layer_size = await layer.finish()
-    finally:
-        await sandbox.terminate.aio()
+        await stream(layer)
+    except BaseException:
+        layer.abort()
+        raise
+    layer_digest, diff_id, layer_size = await layer.finish()
     image_config = json.dumps(
         {
             "architecture": "amd64",
             "os": "linux",
             "config": config,
             "rootfs": {"type": "layers", "diff_ids": [diff_id]},
-            "history": [{"created_by": f"SelfBench export of Modal image {image_id}"}],
+            "history": [{"created_by": f"SelfBench export of {source}"}],
         },
         separators=(",", ":"),
     ).encode()
@@ -210,4 +248,10 @@ async def export(image_id: str, name: str) -> str:
 
 
 if __name__ == "__main__":
-    print(asyncio.run(export(*sys.argv[1:3])), flush=True)
+    if len(sys.argv) == 3 or sys.argv[1] == "modal":
+        image, name = sys.argv[-2:]
+        print(asyncio.run(export(image, name)), flush=True)
+    else:
+        from selfbench_sandbox_export import export_sandbox
+
+        print(asyncio.run(export_sandbox(*sys.argv[1:4])), flush=True)

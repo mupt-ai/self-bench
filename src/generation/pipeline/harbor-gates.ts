@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ArtifactStore } from "../../artifacts/index.js";
@@ -17,8 +17,7 @@ import {
   harborRunArguments,
 } from "../../harnesses/harbor/command.js";
 import { authoredImageBuildFailure } from "../../harnesses/harbor/image-build.js";
-import { recordedImages } from "../../harnesses/harbor/pinned-images.js";
-import { startFromExportedImages } from "../../harnesses/harbor/registry-pull.js";
+import { imageRecordKwargs, recordedImages } from "../../harnesses/harbor/pinned-images.js";
 import {
   type HarborJobResult,
   harborInfrastructureError,
@@ -31,7 +30,6 @@ import { providerEnvironment } from "../../sandbox/provider-environment.js";
 import { type HarborLiveRun, harborLiveFeed, providerSecrets } from "./harbor-live.js";
 import { activityAttempt } from "./helpers.js";
 import { fetchSnapshotInBuild, type RemoteGate, unpackTask } from "./remote-gate.js";
-import type { SandboxCallback } from "./sandbox-job.js";
 import { smokeLog, smokeResult } from "./smoke-result.js";
 import { nopGatePassed, oracleGatePassed } from "./verify-report.js";
 
@@ -63,7 +61,6 @@ export async function runHarborGates(
   prefix: string,
   signal: AbortSignal,
   remote?: RemoteGate,
-  callback?: SandboxCallback,
 ): Promise<HarborGates & { images?: TaskImages }> {
   const root = await mkdtemp(join(tmpdir(), `selfbench-${task.taskId}-`));
   try {
@@ -83,6 +80,10 @@ export async function runHarborGates(
     const gates = notRunGates();
 
     const live = (run: HarborLiveRun) => ({ store, prefix, run });
+    // Both runs record into the same directory: Daytona's snapshot must exist before the nop run
+    // builds, so the oracle reuses it rather than building again.
+    const imageRecord = join(root, "images");
+    const recording = imageRecordKwargs(harborEnvironment, imageRecord);
     const first = await harborRun(
       directory,
       root,
@@ -91,9 +92,7 @@ export async function runHarborGates(
       harborEnvironment,
       signal,
       live("nop"),
-      {},
-      task.images,
-      callback,
+      recording,
     );
     await storeResult(store, `${gateOutputs}/smoke-nop`, first);
     const smoke = smokeResult(first.trial);
@@ -123,8 +122,8 @@ export async function runHarborGates(
     };
     if (!gates.nop.ok) return gates;
 
-    // The oracle's sandboxes start from exactly the images a trial would build.
-    const imageRecord = join(root, "images");
+    // The oracle's sandboxes start from exactly the images a trial would build; its record wins.
+    await rm(imageRecord, { recursive: true, force: true });
     const oracle = await harborRun(
       directory,
       root,
@@ -133,11 +132,7 @@ export async function runHarborGates(
       harborEnvironment,
       signal,
       live("oracle"),
-      harborEnvironment === "modal" && !task.images?.registry
-        ? { image_record_dir: imageRecord }
-        : {},
-      task.images,
-      callback,
+      recording,
     );
     await storeResult(store, `${gateOutputs}/oracle`, oracle);
     const oracleError = trialError(oracle.trial);
@@ -151,9 +146,8 @@ export async function runHarborGates(
         oracleError ? failureText(oracleError, oracle) : verifierOutput(oracle),
       )),
     };
-    if (task.images?.registry) return { ...gates, images: task.images };
-    if (!gates.oracle.ok || harborEnvironment !== "modal") return gates;
-    const images = await recordedImages(imageRecord);
+    if (!gates.oracle.ok) return gates;
+    const images = await recordedImages(imageRecord, harborEnvironment);
     return images ? { ...gates, images } : gates;
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -171,8 +165,6 @@ export async function harborRun(
   /** Where to publish progress snapshots while the run is in flight. */
   live?: { store: ArtifactStore; prefix: string; run: HarborLiveRun },
   environmentKwargs: Readonly<Record<string, string>> = {},
-  images?: TaskImages,
-  callback?: SandboxCallback,
 ): Promise<HarborJobResult> {
   const jobsDirectory = join(root, "jobs");
   const agent = run === "nop" ? SMOKE_AGENT : "oracle";
@@ -184,25 +176,12 @@ export async function harborRun(
     signal,
   });
   assertHarborVersion(version.stdout);
-  const taskConfig = await readFile(join(taskDirectory, "task.toml"));
   const harbor = await prepareHarborRun(taskDirectory, root, env, signal).catch(refuseWithoutRetry);
-  const pull = await startFromExportedImages(
-    taskDirectory,
-    images,
-    environment,
-    {
-      env: executionEnvironment(),
-      ...(callback ? { callback } : {}),
-    },
-    root,
-  );
-  if (images?.provider === "oci" && !pull.SELFBENCH_REGISTRY_PASSWORD)
-    throw new Error("Portable image verification requires registry pull configuration");
   const feed =
     live &&
     harborLiveFeed(live.store, live.prefix, live.run, join(jobsDirectory, jobName), {
       attempt: activityAttempt(),
-      secrets: providerSecrets({ ...env, ...pull }),
+      secrets: providerSecrets(env),
     });
   const trial = runCommand(
     "harbor",
@@ -217,7 +196,7 @@ export async function harborRun(
     }),
     {
       allowFailure: true,
-      env: { ...harbor.env, ...pull },
+      env: harbor.env,
       timeoutMs: HARBOR_PROCESS_TIMEOUT_MS.gate,
       signal: harbor.guard.signal,
       ...(feed ? { onOutput: feed.push } : {}),
@@ -226,11 +205,7 @@ export async function harborRun(
   const exited = await harbor.guard
     .watch(trial)
     .catch(refuseWithoutRetry)
-    .finally(async () => {
-      await feed?.close();
-      // The next gate rechecks the original untrusted task before applying trusted image fields.
-      await writeFile(join(taskDirectory, "task.toml"), taskConfig);
-    });
+    .finally(() => feed?.close());
   if (exited.exitCode !== 0) {
     throw new Error(
       `Harbor ${run} exited ${exited.exitCode} for ${taskId}:\n${tail(`${exited.stdout}\n${exited.stderr}`.trim())}`,

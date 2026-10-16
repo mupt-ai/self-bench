@@ -66,17 +66,14 @@ const path = require('node:path');
 const args = process.argv.slice(2);
 if (args[0] === '--version') { console.log('0.23.0'); process.exit(0); }
 fs.appendFileSync(${JSON.stringify(capture)}, JSON.stringify(args) + '\\n');
-if (process.env.SELFBENCH_REGISTRY_HOST) {
-  const toml = fs.readFileSync(path.join(args[args.indexOf('--path') + 1], 'task.toml'), 'utf8');
-  if (!toml.includes('docker_image') || !toml.includes(process.env.SELFBENCH_REGISTRY_HOST)) throw new Error('gate did not use portable images');
-}
 const agent = args[args.indexOf('--agent') + 1];
 const record = args.find((arg) => arg.startsWith('image_record_dir='));
 if (record) {
+  // The nop run records too; only the oracle's record may reach the task.
   const directory = record.slice('image_record_dir='.length);
   fs.mkdirSync(directory, { recursive: true });
-  fs.writeFileSync(path.join(directory, 'agent'), 'im-Agent1\\n');
-  fs.writeFileSync(path.join(directory, 'verifier'), 'im-Verifier1');
+  fs.writeFileSync(path.join(directory, 'agent'), agent === 'oracle' ? 'im-Agent1\\n' : 'im-NopAgent');
+  if (agent === 'oracle') fs.writeFileSync(path.join(directory, 'verifier'), 'im-Verifier1');
 }
 const smoke = agent !== 'oracle';
 const rewards = smoke
@@ -92,8 +89,9 @@ fs.writeFileSync(path.join(job, 'trial', 'result.json'), JSON.stringify({ verifi
   return capture;
 }
 
-for (const environment of ["modal", "e2b"] as const) {
-  test(`a ${environment} verification ${environment === "modal" ? "pins" : "does not pin"} the images its oracle ran on`, async () => {
+for (const environment of ["modal", "e2b", "daytona", "vercel", "docker"] as const) {
+  const records = environment !== "docker";
+  test(`a ${environment} verification ${records ? "records" : "does not record"} the images its oracle ran on`, async () => {
     const root = await temporary();
     const store = new LocalArtifactStore(join(root, "store"));
     const bundle = await storedTask(store, false);
@@ -121,65 +119,19 @@ for (const environment of ["modal", "e2b"] as const) {
       "harbor_smoke:SmokeAgent",
       "oracle",
     ]);
-    if (environment === "modal") {
-      expect(result.images).toEqual(images);
-      // Only the oracle, which runs the task's real test.sh, records what trials will start from.
-      expect(calls.map((args) => args.includes("--ek"))).toEqual([false, true]);
-      expect(calls[1]?.[calls[1].indexOf("--env") + 1]).toBe(
-        "selfbench_modal:SelfBenchModalEnvironment",
-      );
-    } else {
+    const kwargs = calls.map((args) =>
+      args.flatMap((arg, index) => (args[index - 1] === "--ek" ? [arg.split("=")[0]] : [])),
+    );
+    if (!records) {
       expect(result.images).toBeUndefined();
       expect(calls.flat()).not.toContain("--ek");
+      return;
     }
-  });
-}
-
-for (const environment of ["docker", "modal", "e2b", "daytona", "vercel"] as const) {
-  test(`portable ${environment} gates run the same digest pair without rebuilding source`, async () => {
-    const root = await temporary();
-    const store = new LocalArtifactStore(join(root, "store"));
-    const bundle = await storedTask(store, false);
-    const capture = await fakeHarbor(root);
-    const registry = {
-      agent: `us-central1-docker.pkg.dev/p/tasks/task@sha256:${"a".repeat(64)}`,
-      verifier: `us-central1-docker.pkg.dev/p/tasks/task@sha256:${"b".repeat(64)}`,
-    };
-    const task: AuthoredTask = {
-      candidateId: "cand-1",
-      taskId: "portable",
-      definition: bundle,
-      sourceBundle: bundle,
-      bundle,
-      images: { provider: "oci", registry },
-    };
-    const result = await withExecutionEnvironment(
-      {
-        PATH: `${join(root, "bin")}:/usr/bin:/bin`,
-        SELFBENCH_TASK_IMAGE_REPOSITORY: "us-central1-docker.pkg.dev/p/tasks",
-      },
-      () =>
-        runHarborGates(
-          store,
-          task,
-          environment,
-          `${COMPILE}/portable`,
-          new AbortController().signal,
-          undefined,
-          {
-            url: "https://app.selfbench.test",
-            secret: "s".repeat(32),
-          },
-        ),
-    );
-    expect(result.oracle.ok).toBe(true);
-    expect(result.images).toEqual(task.images);
-    const calls = (await readFile(capture, "utf8"))
-      .trim()
-      .split("\n")
-      .map((line) => JSON.parse(line) as string[]);
-    expect(calls).toHaveLength(2);
-    expect(calls.flat().some((arg) => arg.startsWith("image_record_dir="))).toBe(false);
+    // The oracle runs the task's real test.sh, so its record is what an export starts from.
+    expect(result.images).toEqual({ ...images, provider: environment });
+    // Daytona snapshots its image from the first run on, so the oracle starts from that snapshot.
+    const expected = ["image_record_dir", ...(environment === "daytona" ? ["auto_snapshot"] : [])];
+    expect(kwargs).toEqual([expected, expected]);
   });
 }
 
