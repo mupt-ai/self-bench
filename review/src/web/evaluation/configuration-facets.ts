@@ -111,7 +111,10 @@ export function orderedConfigurations(
   /** How many tasks the Done column counts against: those run, unless told every accepted one. */
   total: (configuration: Configuration) => number = (configuration) => configuration.latest.length,
 ): Configuration[] {
-  if (!order) return [...configurations];
+  if (!order)
+    return [...configurations].sort(
+      (a, b) => b.finished - b.counts.error - (a.finished - a.counts.error),
+    );
   return [...configurations].sort((a, b) => {
     const [x, y] = [columnValue(a, order.by, total), columnValue(b, order.by, total)];
     if (x === undefined || y === undefined) return x === y ? 0 : x === undefined ? 1 : -1;
