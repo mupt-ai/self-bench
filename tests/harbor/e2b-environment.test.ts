@@ -79,12 +79,13 @@ class DockerfileParser:
     def __init__(self, path, env_replace=True, parent_env=None):
         parsed.append((path, parent_env))
         self.baseimage = bases[path]
+        self.structure = [{"instruction": "FROM"}] * (2 if path == "/multi/Dockerfile" else 1)
         # dockerfile_parse expands the Dockerfile's own ENV against the inherited values.
         self.envs = {"PATH": "/opt/venv/bin:" + (parent_env or {}).get("PATH", ""), "VIRTUAL_ENV": "/opt/venv"}
 sys.modules["dockerfile_parse"].DockerfileParser = DockerfileParser
 harbor_e2b.E2BEnvironment = object
 module = load()
-bases = {"/task/Dockerfile": "python:3.12", "/scratch/Dockerfile": "scratch"}
+bases = {"/task/Dockerfile": "python:3.12", "/scratch/Dockerfile": "scratch", "/multi/Dockerfile": "runtime"}
 async def image_config(image, grant=None):
     assert (image, grant) == ("python:3.12", None), (image, grant)
     return {"Env": ["PATH=/usr/local/bin:/usr/bin", "LANG=C.UTF-8"]}
@@ -95,6 +96,13 @@ async def check():
     assert parsed[-1] == ("/task/Dockerfile", {"PATH": "/usr/local/bin:/usr/bin", "LANG": "C.UTF-8"}), parsed
     # An image from scratch inherits nothing.
     assert await module.dockerfile_env("/scratch/Dockerfile") == {"PATH": "/opt/venv/bin:", "VIRTUAL_ENV": "/opt/venv"}
+    # Like E2B's Dockerfile parser, multi-stage builds fail before a stage alias is read as an image.
+    try:
+        await module.dockerfile_env("/multi/Dockerfile")
+    except ValueError as error:
+        assert str(error) == "Multi-stage Dockerfiles are not supported", error
+    else:
+        raise AssertionError("multi-stage Dockerfiles must be rejected")
 asyncio.run(check())
 `,
     ENVIRONMENT,

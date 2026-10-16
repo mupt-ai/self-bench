@@ -235,8 +235,11 @@ def image_env(config: dict) -> dict[str, str]:
 
 
 async def dockerfile_env(path: str) -> dict[str, str]:
-    """The ENV a Dockerfile's container starts with: its base image's, then its own, expanded."""
-    base = DockerfileParser(path).baseimage
+    """The ENV a single-stage Dockerfile's container starts with, expanded against its base."""
+    parsed = DockerfileParser(path)
+    if sum(instruction["instruction"] == "FROM" for instruction in parsed.structure) > 1:
+        raise ValueError("Multi-stage Dockerfiles are not supported")
+    base = parsed.baseimage
     inherited = image_env(await image_config(base)) if base and base != "scratch" else {}
     own = DockerfileParser(path, env_replace=True, parent_env=inherited).envs
     return {**inherited, **own}
