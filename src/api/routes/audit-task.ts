@@ -12,6 +12,7 @@ import { readBody, sendJson, trustedMutation } from "../http.js";
 import type { EvaluationRoutesOptions } from "./evaluations.js";
 import { trialTaskFiles } from "./trial-task.js";
 
+const UNAVAILABLE = "Task audits are unavailable on this deployment.";
 const taskSchema = z.object({ runId: z.string().min(1), taskId: z.string().min(1) }).strict();
 
 type Options = Pick<EvaluationRoutesOptions, "artifacts" | "vault" | "publicUrl" | "audit">;
@@ -23,8 +24,8 @@ interface Context {
 
 /**
  * `…/evaluations/audit`, for one task named by its batch and id (Audit Task in the app). GET tells
- * how many attempts failed it, whether an audit is running, and the last audit; POST starts one
- * through a saved key and model, which is explicit consent to send the task's failures there.
+ * whether audits are offered, whether one is running, and the last audit; POST starts one through a
+ * saved key and model, which is explicit consent to send the task's failures there.
  */
 export async function auditTaskRoute(
   options: Options,
@@ -54,32 +55,35 @@ export async function auditTaskRoute(
     return;
   }
   const ref = { repoId: repo.id, ...task };
-  const attempts = taskAttempts(
-    await listEvaluations(options.artifacts, { repoId: repo.id }),
-    task,
-  );
-  const failures = attempts.filter(failedAttempt);
-  const { audit, failure } = await readTaskAudit(options.artifacts, ref);
-  const running = options.audit ? (await options.audit.state(ref)).running : false;
-  const reason = !options.audit
-    ? "Task audits are unavailable on this deployment."
-    : !failures.length
-      ? "No attempt failed this task, so there is nothing to audit."
-      : undefined;
   if (request.method === "GET") {
+    // Only the audit's own record and workflow: the page counts the task's failed attempts from
+    // the results it already shows, so opening a task never reads every evaluation of the repo.
+    const [{ audit, failure }, running] = await Promise.all([
+      readTaskAudit(options.artifacts, ref),
+      options.audit ? options.audit.state(ref).then((state) => state.running) : false,
+    ]);
     sendJson(response, 200, {
-      available: !reason,
+      available: !!options.audit,
       running,
-      attempts: attempts.length,
-      failures: failures.length,
-      ...(reason ? { reason } : {}),
+      ...(options.audit ? {} : { reason: UNAVAILABLE }),
       ...(audit ? { audit } : {}),
       ...(failure ? { failure } : {}),
     });
     return;
   }
-  if (reason || !options.audit || !selection) {
-    sendJson(response, 409, { error: reason ?? "Task audits are unavailable." });
+  if (!options.audit || !selection) {
+    sendJson(response, 409, { error: UNAVAILABLE });
+    return;
+  }
+  const [runs, { running }] = await Promise.all([
+    listEvaluations(options.artifacts, { repoId: repo.id }),
+    options.audit.state(ref),
+  ]);
+  const attempts = taskAttempts(runs, task);
+  if (!attempts.some(failedAttempt)) {
+    sendJson(response, 409, {
+      error: "No attempt failed this task, so there is nothing to audit.",
+    });
     return;
   }
   if (running) {

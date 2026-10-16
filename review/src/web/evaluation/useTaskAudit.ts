@@ -5,10 +5,9 @@ import type { ExplanationSelection } from "./useFailureExplanation";
 
 /** What the server says of one task's audit (src/api/routes/audit-task.ts). */
 interface AuditState {
+  /** Whether this deployment audits tasks at all; the page knows which tasks failed. */
   available: boolean;
   running: boolean;
-  attempts: number;
-  failures: number;
   reason?: string;
   audit?: TaskAudit;
   /** Why the latest audit gave no answer, when it is newer than `audit`. */
@@ -19,7 +18,8 @@ const POLL_MS = 4000;
 
 /**
  * Audit Task for one task: whether the server offers it, its last audit, asking for another, and
- * waiting while it runs, polling only the audit's state.
+ * waiting while it runs, polling only the audit's state. The form never waits on the first state:
+ * an audit can be asked for while it loads.
  */
 export function useTaskAudit({
   baseUrl,
@@ -49,7 +49,9 @@ export function useTaskAudit({
     let disposed = false;
     evaluationRequest<AuditState>(stateUrl).then(
       (answer) => {
-        if (!disposed) setState(answer);
+        // An audit started before this answer came back keeps showing as running.
+        if (!disposed)
+          setState((current) => ({ ...answer, running: answer.running || !!current?.running }));
       },
       (cause) => {
         if (!disposed)
@@ -91,11 +93,11 @@ export function useTaskAudit({
   }, [auditing, stateUrl, state?.audit?.auditedAt, state?.failure?.failedAt]);
 
   const audit = async (selection: ExplanationSelection) => {
-    if (auditing || !state?.available) return;
+    if (auditing || state?.available === false) return;
     setError("");
     try {
       await evaluationRequest(`${baseUrl}/audit`, { runId, taskId, audit: selection });
-      setState((current) => current && { ...current, running: true });
+      setState((current) => ({ available: true, ...current, running: true }));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not start the audit");
       await check().catch(() => undefined);
