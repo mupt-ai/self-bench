@@ -70,7 +70,7 @@ try {
     "dist/temporal/worker-main.js",
     "dist/maintenance/recompute-cost.js",
     "dist/maintenance/reprice-vendor-rates.js",
-    "dist/maintenance/backfill-agent-timeouts.js",
+    "dist/maintenance/backfill-timeouts.js",
     "dist/maintenance/records-migration.js",
     "dist/harnesses/harbor/runtime/harbor_gateway.py",
     "dist/harnesses/harbor/runtime/harbor_dari.py",
@@ -101,7 +101,7 @@ try {
   for (const [program, usage] of [
     ["recompute-cost", "Usage: recompute-cost.js"],
     ["reprice-vendor-rates", "Usage: reprice-vendor-rates.js"],
-    ["backfill-agent-timeouts", "Usage: backfill-agent-timeouts.js"],
+    ["backfill-timeouts", "Usage: backfill-timeouts.js"],
     ["records-migration", "Set SELFBENCH_DATABASE_URL and SELFBENCH_EVAL_CREDENTIAL_KEY"],
   ] as const) {
     const child = Bun.spawn(["node", join(installedRoot, "dist/maintenance", `${program}.js`)], {

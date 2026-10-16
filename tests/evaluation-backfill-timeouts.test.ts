@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { backfillAgentTimeouts } from "../maintenance/backfill-agent-timeouts.js";
+import { backfillTimeouts } from "../maintenance/backfill-timeouts.js";
 import { LocalArtifactStore } from "../src/artifacts/index.js";
 import { eligibleTrial } from "../src/evaluation/eligible.js";
 import {
@@ -20,7 +20,7 @@ afterEach(async () => {
   );
 });
 
-test("timed-out trials recorded as failures are scored from their stored artifacts", async () => {
+test("stopped agents' trials recorded as failures are scored from their stored artifacts", async () => {
   const directory = await mkdtemp(join(tmpdir(), "backfill-timeouts-"));
   directories.push(directory);
   const store = new LocalArtifactStore(directory);
@@ -89,11 +89,11 @@ test("timed-out trials recorded as failures are scored from their stored artifac
   Object.assign(run.trials[2] ?? {}, measured);
   await saveEvaluation(store, run);
 
-  const dry = await backfillAgentTimeouts(store, Number(run.repoId), false);
+  const dry = await backfillTimeouts(store, { repoId: Number(run.repoId) }, false);
   expect(dry).toMatchObject({ scored: 2, eligible: 2, skipped: 1, applied: false });
   expect((await getEvaluation(store, run, run.id))?.revision).toBe(run.revision);
 
-  expect(await backfillAgentTimeouts(store, Number(run.repoId), true)).toMatchObject({
+  expect(await backfillTimeouts(store, { repoId: Number(run.repoId) }, true)).toMatchObject({
     applied: true,
   });
   const saved = await getEvaluation(store, run, run.id);
@@ -111,8 +111,62 @@ test("timed-out trials recorded as failures are scored from their stored artifac
   expect(unscored?.status).toBe("failed");
   expect(saved?.status).toBe("failed");
   // Applied once, a second pass finds nothing left to score.
-  expect(await backfillAgentTimeouts(store, Number(run.repoId), true)).toMatchObject({
+  expect(await backfillTimeouts(store, { repoId: Number(run.repoId) }, true)).toMatchObject({
     scored: 0,
     applied: false,
   });
+});
+
+test("a benchmark's trials whose tests ran past their limit fail with a reward of 0", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "backfill-timeouts-"));
+  directories.push(directory);
+  const store = new LocalArtifactStore(directory);
+  const { repoId: _, ...input } = evaluationInput();
+  const run = initialEvaluation(
+    {
+      ...input,
+      benchmarkId: 1,
+      harnesses: ["claude-code"],
+      tasks: [{ runId: "harbor:sha256:abc", taskId: "datacurve/hung", bundleKey: "tasks/hung" }],
+    },
+    "Test",
+  );
+  run.status = "failed";
+  const measured = {
+    modelVerified: true,
+    apiCostUsd: 0.54,
+    tokenUsage: { input: 1, output: 1, cacheRead: 1, cacheWrite: 1 },
+    costSource: "reference-rates" as const,
+  };
+  Object.assign(run.trials[0] ?? {}, measured, {
+    status: "failed",
+    error: "Verifier execution timed out after 1800.0 seconds",
+    artifacts: ["0/solver/task__1/result.json"],
+  });
+  await store.put(
+    `${evaluationPrefix(run, run.id)}artifacts/0/solver/task__1/result.json`,
+    Buffer.from(
+      JSON.stringify({
+        exception_info: { exception_type: "VerifierTimeoutError" },
+        verifier_result: null,
+      }),
+    ),
+    "application/json",
+  );
+  await saveEvaluation(store, run);
+
+  expect(await backfillTimeouts(store, { benchmarkId: 1 }, true)).toMatchObject({
+    scored: 1,
+    eligible: 1,
+    applied: true,
+  });
+  const saved = await getEvaluation(store, run, run.id);
+  expect(saved?.trials[0]).toMatchObject({
+    status: "completed",
+    verifierTimedOut: true,
+    rewards: { reward: 0 },
+    ...measured,
+  });
+  expect(saved?.trials[0]?.error).toBeUndefined();
+  expect(saved?.status).toBe("completed");
 });

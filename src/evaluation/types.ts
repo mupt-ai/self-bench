@@ -118,6 +118,11 @@ export interface EvaluationTrial {
    * any other agent, so the trial completes with that score.
    */
   agentTimedOut?: boolean;
+  /**
+   * The task's tests ran past their time limit, so the trial failed (reward 0) rather than
+   * erroring, as Harbor scores it: a solution that hangs its tests is the agent's.
+   */
+  verifierTimedOut?: boolean;
   /** Why a completed trial failed its tests, in plain language (failure-summary.ts). */
   failureSummary?: FailureSummary;
   modelVerified?: boolean;

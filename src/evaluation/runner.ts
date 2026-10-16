@@ -18,13 +18,13 @@ import { dariTrialCost, isDariRun } from "./dari/cost.js";
 import { failureMaterial, keepFailureMaterial } from "./failure-material.js";
 import { billedTrialCost } from "./gateway-cost.js";
 import {
-  agentTimedOut,
   collectOutput,
   completeLines,
   environmentSecrets,
   piFailure,
   record,
   redactOutput,
+  timeLimitScores,
   trialLog,
   verifierRewards,
   wholeTranscripts,
@@ -122,6 +122,7 @@ export async function executeTrial(
     // A timed-out agent's trial can still fail after its scores were read (Harbor's exit status).
     Object.assign(trial, { status: "failed", error: failure.message });
     delete trial.agentTimedOut;
+    delete trial.verifierTimedOut;
   } finally {
     try {
       if (!retrying) {
@@ -214,9 +215,8 @@ async function runTrial(context: {
         trial.artifacts.push(name);
       }
       trial.rewards = verifierRewards(parsed);
-      // The time limit is part of the task: a stopped agent is scored on what it left, if scored.
-      const timedOut = agentTimedOut(parsed) && Object.keys(trial.rewards).length > 0;
-      if (timedOut) trial.agentTimedOut = true;
+      const stopped = timeLimitScores(parsed);
+      if (stopped) Object.assign(trial, stopped);
       else if (parsed.exception_info)
         throw new Error(
           String(record(parsed.exception_info).exception_message ?? "Harbor trial failed"),

@@ -191,6 +191,14 @@ export function TaskRow({ entry, onOpen }: { entry: TaskEntry; onOpen(result: Ta
             Timed Out
           </span>
         )}
+        {result.trial.verifierTimedOut && (
+          <span
+            className="ml-2 border border-current px-1 py-px text-[10px] leading-none"
+            title="The tests ran past the task's time limit, so the trial failed"
+          >
+            Tests Timed Out
+          </span>
+        )}
       </td>
       <td />
       <td className="text-right font-mono tabular-nums">

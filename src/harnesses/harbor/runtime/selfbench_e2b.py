@@ -7,12 +7,22 @@ build: every later trial skipped the build and failed to start with "404: tag 'd
 exist". Here a template counts as existing only when its ``default`` build is ready; otherwise it
 is built again under the same name, which moves the tag to the new build.
 
+E2B keeps an image's files but not its config, keeps a Dockerfile's ENV for the build only, and
+runs commands in login shells that reset PATH. Harbor's own E2B environment leaves it there, so a
+task whose tests need its image's PATH, virtualenv or caches could not find them (DeepSWE's
+verifiers exited with "missing pytest" and scored -1). Here every template gives its sandboxes the
+environment Docker gives a container: the image's ENV, or a Dockerfile's base image ENV followed
+by its own, goes into /etc/profile.d. Variables Harbor sets for a sandbox or command still win, as
+`docker run -e` does, except PATH, which the login shell has already reset. A `docker_image`'s
+USER and WORKDIR go onto the template too. Templates built before this have the same content hash,
+so these take a new name. One difference remains: E2B boots the image with systemd before any
+build step runs, which empties /tmp, so whatever an image left there is gone.
+
 A task whose images SelfBench built into its registry gets them as Harbor's `docker_image`,
 served by the API's registry endpoint; its template is made from that image with the run's pull
-grant (SELFBENCH_REGISTRY_*), which Harbor's own E2B environment does not pass. E2B keeps an
-image's files but not its config, and its commands run in login shells that reset PATH, so the
-image's ENV goes into /etc/profile.d and its USER and WORKDIR onto the template. Harbor's content
-hash covers `docker_image`, so the template is named after the image.
+grant (SELFBENCH_REGISTRY_*), which Harbor's own E2B environment does not pass. Any other image's
+config is read anonymously, as E2B pulls it. Harbor's content hash covers `docker_image`, so the
+template is named after the image.
 
 Harbor starts every sandbox with a 24-hour lifetime. E2B's Hobby plan caps sandboxes at an hour
 and refuses with "400: Timeout cannot be greater than 1 hours", which left a trial failing with no
@@ -43,6 +53,7 @@ from collections.abc import Awaitable, Callable
 from typing import TypeVar
 
 import httpx
+from dockerfile_parse import DockerfileParser
 from e2b import (
     AsyncSandbox,
     AsyncTemplate,
@@ -63,6 +74,9 @@ CAPACITY_WAIT_SECS = (15, 120)
 PLAN_LIMIT = re.compile(r"Timeout cannot be greater than (\d+) hours?")
 MEMORY_LIMIT = re.compile(r"Memory can't be higher than (\d+) MiB")
 IMAGE_ENV = "/etc/profile.d/selfbench-image-env.sh"
+# Keeps templates built without IMAGE_ENV from being reused.
+TEMPLATE_SUFFIX = "__env"
+DOCKER_HUB = "registry-1.docker.io"
 MANIFEST_TYPES = ", ".join(
     [
         "application/vnd.oci.image.index.v1+json",
@@ -103,6 +117,16 @@ class SelfBenchE2BEnvironment(E2BEnvironment):
     def __init__(self, *args, image_record_dir: str | None = None, **kwargs):
         super().__init__(*args, **kwargs)
         self._selfbench_record = image_record_dir
+        self._template_name += TEMPLATE_SUFFIX
+
+    def _registry_grant(self) -> tuple[str, str] | None:
+        """The run's pull grant, when the task's image is in SelfBench's registry."""
+        image = self.task_env_config.docker_image
+        host = os.environ.get("SELFBENCH_REGISTRY_HOST")
+        password = os.environ.get("SELFBENCH_REGISTRY_PASSWORD")
+        if not image or not host or not password or not image.startswith(f"{host}/"):
+            return None
+        return os.environ.get("SELFBENCH_REGISTRY_USERNAME", "selfbench"), password
 
     async def start(self, force_build: bool):
         await super().start(force_build)
@@ -171,18 +195,22 @@ class SelfBenchE2BEnvironment(E2BEnvironment):
 
     async def _build_template(self):
         image = self.task_env_config.docker_image
-        host = os.environ.get("SELFBENCH_REGISTRY_HOST")
-        password = os.environ.get("SELFBENCH_REGISTRY_PASSWORD")
-        if not image or not host or not password or not image.startswith(f"{host}/"):
-            return await super()._create_template()
-        username = os.environ.get("SELFBENCH_REGISTRY_USERNAME", "selfbench")
-        config = await image_config(image, username, password)
-        template = Template().from_image(image=image, username=username, password=password)
-        envs = [entry.split("=", 1) for entry in config.get("Env") or [] if "=" in entry]
-        if envs:
-            script = "".join(f"export {name}={shlex.quote(value)}\n" for name, value in envs)
+        grant = self._registry_grant()
+        config: dict = {}
+        if image:
+            username, password = grant or (None, None)
+            config = await image_config(image, grant)
+            template = Template().from_image(image=image, username=username, password=password)
+            env = image_env(config)
+        else:
+            dockerfile = str(self._environment_definition_path)
+            template = Template(file_context_path=str(self.environment_dir)).from_dockerfile(
+                dockerfile_content_or_path=dockerfile
+            )
+            env = await dockerfile_env(dockerfile)
+        if env:
             template = template.run_cmd(
-                f"printf %s {shlex.quote(script)} > {IMAGE_ENV}", user="root"
+                f"printf %s {shlex.quote(profile_script(env))} > {IMAGE_ENV}", user="root"
             )
         if config.get("User"):
             template = template.set_user(config["User"])
@@ -201,22 +229,68 @@ def mib(amount: int) -> str:
     return f"{amount // 1024} GiB" if amount % 1024 == 0 else f"{amount} MiB"
 
 
-async def image_config(image: str, username: str, password: str) -> dict:
-    """The linux/amd64 config (Env, User, WorkingDir, ...) of `host/name@sha256:...`."""
-    host, reference = image.split("/", 1)
-    name, digest = reference.split("@", 1)
+def image_env(config: dict) -> dict[str, str]:
+    """An image config's ENV, in order."""
+    return dict(entry.split("=", 1) for entry in config.get("Env") or [] if "=" in entry)
+
+
+async def dockerfile_env(path: str) -> dict[str, str]:
+    """The ENV a Dockerfile's container starts with: its base image's, then its own, expanded."""
+    base = DockerfileParser(path).baseimage
+    inherited = image_env(await image_config(base)) if base and base != "scratch" else {}
+    own = DockerfileParser(path, env_replace=True, parent_env=inherited).envs
+    return {**inherited, **own}
+
+
+def profile_script(env: dict[str, str]) -> str:
+    """Exports `env` in a login shell, leaving variables the sandbox or command set, except PATH."""
+    return "".join(
+        f"export {name}={shlex.quote(value)}\n"
+        if name == "PATH"
+        else f'[ -n "${{{name}+set}}" ] || export {name}={shlex.quote(value)}\n'
+        for name, value in env.items()
+    )
+
+
+def image_parts(image: str) -> tuple[str, str, str]:
+    """`image`'s registry host, repository and tag or digest, with Docker Hub's defaults."""
+    name, _, digest = image.partition("@")
+    first, _, rest = name.partition("/")
+    if rest and ("." in first or ":" in first or first == "localhost"):
+        host, repository = first, rest
+    else:
+        host, repository = DOCKER_HUB, name
+    if host in ("docker.io", "index.docker.io", DOCKER_HUB):
+        host = DOCKER_HUB
+        if "/" not in repository:
+            repository = f"library/{repository}"
+    tag = "latest"
+    if ":" in repository.rsplit("/", 1)[-1]:
+        repository, tag = repository.rsplit(":", 1)
+    return host, repository, digest or tag
+
+
+async def image_config(image: str, grant: tuple[str, str] | None = None) -> dict:
+    """
+    The linux/amd64 config (Env, User, WorkingDir, ...) of `image`, read with `grant` or, for a
+    registry that asks for a token, the anonymous token anyone pulling it gets.
+    """
+    host, repository, reference = image_parts(image)
     async with httpx.AsyncClient(
-        base_url=f"https://{host}/v2/{name}",
-        auth=(username, password),
-        follow_redirects=True,
-        timeout=60,
+        base_url=f"https://{host}/v2/{repository}", follow_redirects=True, timeout=60
     ) as client:
+        headers: dict[str, str] = {}
 
-        async def manifest(at: str) -> dict:
-            response = await client.get(f"/manifests/{at}", headers={"accept": MANIFEST_TYPES})
-            return response.raise_for_status().json()
+        async def get(path: str, accept: str | None = None) -> httpx.Response:
+            extra = {"accept": accept} if accept else {}
+            response = await client.get(path, headers={**headers, **extra}, auth=grant)
+            challenge = response.headers.get("www-authenticate", "")
+            if response.status_code == 401 and challenge.lower().startswith("bearer "):
+                headers["authorization"] = f"Bearer {await token(challenge, repository, grant)}"
+                response = await client.get(path, headers={**headers, **extra})
+            return response.raise_for_status()
 
-        found = await manifest(digest)
+        found = (await get(f"/manifests/{reference}", MANIFEST_TYPES)).json()
         if "manifests" in found:
             platform = next(
                 child
@@ -224,6 +298,17 @@ async def image_config(image: str, username: str, password: str) -> dict:
                 if child.get("platform", {}).get("os") == "linux"
                 and child.get("platform", {}).get("architecture") == "amd64"
             )
-            found = await manifest(platform["digest"])
-        response = await client.get(f"/blobs/{found['config']['digest']}")
-        return response.raise_for_status().json().get("config") or {}
+            found = (await get(f"/manifests/{platform['digest']}", MANIFEST_TYPES)).json()
+        return (await get(f"/blobs/{found['config']['digest']}")).json().get("config") or {}
+
+
+async def token(challenge: str, repository: str, grant: tuple[str, str] | None) -> str:
+    """A pull token from the realm a registry's `WWW-Authenticate: Bearer ...` challenge names."""
+    fields = dict(re.findall(r'(\w+)="([^"]*)"', challenge))
+    params = {"scope": fields.get("scope") or f"repository:{repository}:pull"}
+    if fields.get("service"):
+        params["service"] = fields["service"]
+    async with httpx.AsyncClient(follow_redirects=True, timeout=60) as client:
+        response = await client.get(fields["realm"], params=params, auth=grant)
+        body = response.raise_for_status().json()
+    return body.get("token") or body["access_token"]

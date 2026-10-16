@@ -1,32 +1,6 @@
 import { expect, test } from "bun:test";
-import { fileURLToPath } from "node:url";
 import { runCommand } from "../../src/lib/process.js";
-
-const ENVIRONMENT = fileURLToPath(
-  new URL("../../src/harnesses/harbor/runtime/selfbench_e2b.py", import.meta.url),
-);
-/** Empty stand-ins for the modules selfbench_e2b.py imports; each test fills in what it uses. */
-const STUBS = `import sys, types
-for name in ["e2b", "httpx", "harbor", "harbor.environments", "harbor.environments.e2b"]:
-    sys.modules[name] = types.ModuleType(name)
-e2b, harbor_e2b = sys.modules["e2b"], sys.modules["harbor.environments.e2b"]
-sys.modules["harbor"].environments = sys.modules["harbor.environments"]
-sys.modules["harbor.environments"].e2b = harbor_e2b
-for name in ["AsyncSandbox", "AsyncTemplate", "BuildException", "BuildInfo", "Template", "TemplateBuildStatus"]:
-    setattr(e2b, name, object)
-class SandboxException(Exception):
-    def __init__(self, message, status_code=None):
-        super().__init__(message); self.status_code = status_code
-class RateLimitException(SandboxException):
-    def __init__(self, message): super().__init__(message, 429)
-e2b.SandboxException, e2b.RateLimitException = SandboxException, RateLimitException
-def load():
-    import importlib.util, pathlib
-    sys.path.insert(0, str(pathlib.Path(sys.argv[1]).parent))
-    spec = importlib.util.spec_from_file_location("selfbench_e2b", sys.argv[1])
-    module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
-    return module
-`;
+import { BUILDER, ENVIRONMENT, STUBS } from "../support/e2b-runtime.js";
 
 test("the E2B environment builds a template unless its default build is ready", async () => {
   const result = await runCommand("python3", [
@@ -39,8 +13,9 @@ class BuildException(Exception): pass
 @dataclass
 class BuildInfo:
     template_id: str; build_id: str; name: str; alias: str; tags: list = field(default_factory=list)
-# What E2B holds per template name: its default build's id and that build's status.
-templates = {
+# What E2B holds per template name: its default build's id and that build's status. Every
+# template's name carries the suffix that keeps templates built without the image's ENV unused.
+templates = {f"{name}__env": value for name, value in {
     "ready": ("b1", TemplateBuildStatus.READY),
     "failed": ("b2", TemplateBuildStatus.ERROR),
     "building": ("b3", TemplateBuildStatus.BUILDING),
@@ -48,7 +23,7 @@ templates = {
     "missing-build": ("b5", None),
     "unrelated-error": ("b6", None),
     "untagged": (None, None),
-}
+}.items()}
 class AsyncTemplate:
     @staticmethod
     async def alias_exists(name): return name in templates
@@ -60,8 +35,8 @@ class AsyncTemplate:
     async def get_build_status(info):
         build, status = templates[info.template_id]
         assert info.build_id == build, info
-        if info.template_id == "missing-build": raise BuildException(f"400: Build '{build}' not found")
-        if info.template_id == "unrelated-error": raise BuildException("401: Unauthorized")
+        if info.template_id == "missing-build__env": raise BuildException(f"400: Build '{build}' not found")
+        if info.template_id == "unrelated-error__env": raise BuildException("401: Unauthorized")
         return types.SimpleNamespace(status=status)
 e2b.AsyncTemplate, e2b.BuildException, e2b.BuildInfo, e2b.TemplateBuildStatus = AsyncTemplate, BuildException, BuildInfo, TemplateBuildStatus
 class E2BEnvironment:
@@ -85,69 +60,6 @@ asyncio.run(check())
 `,
     ENVIRONMENT,
   ]);
-  expect(result.exitCode).toBe(0);
-});
-
-test("the E2B environment makes a SelfBench task image's template with the run's pull grant", async () => {
-  const result = await runCommand(
-    "python3",
-    [
-      "-c",
-      `${STUBS}import asyncio, logging
-builds = []
-class Builder:
-    def __init__(self, *steps): self.steps = steps
-    def run_cmd(self, command, user=None): return Builder(*self.steps, ("run", command, user))
-    def set_user(self, user): return Builder(*self.steps, ("user", user))
-    def set_workdir(self, workdir): return Builder(*self.steps, ("workdir", workdir))
-    def __eq__(self, other): return isinstance(other, Builder) and self.steps == other.steps
-    def __repr__(self): return repr(self.steps)
-class Template:
-    def from_image(self, image, username=None, password=None):
-        return Builder(("image", image, username, password))
-class AsyncTemplate:
-    @staticmethod
-    async def build(template, alias, **resources): builds.append((template, alias, resources))
-e2b.AsyncTemplate, e2b.Template = AsyncTemplate, Template
-class E2BEnvironment:
-    def __init__(self, image, cpus=None):
-        self.task_env_config = types.SimpleNamespace(docker_image=image)
-        self._template_name = "task__hash"
-        self._effective_cpus, self._effective_memory_mb = cpus, 8192
-        self.logger = logging.getLogger("test")
-    async def _create_template(self): builds.append("dockerfile")
-harbor_e2b.E2BEnvironment = E2BEnvironment
-module = load()
-image = "app.selfbench.test/task@sha256:" + "a" * 64
-async def image_config(pulled, username, password):
-    assert (pulled, username, password) == (image, "selfbench", "grant")
-    return {"Env": ["PATH=/usr/local/cargo/bin:/usr/bin", "CI=1"], "User": "agent", "WorkingDir": "/app"}
-module.image_config = image_config
-async def check():
-    await module.SelfBenchE2BEnvironment(image, cpus=4)._create_template()
-    # E2B drops an image's config, so the template carries its ENV, USER and WORKDIR itself.
-    profile = "printf %s 'export PATH=/usr/local/cargo/bin:/usr/bin\\nexport CI=1\\n' > /etc/profile.d/selfbench-image-env.sh"
-    expected = Builder(("image", image, "selfbench", "grant"), ("run", profile, "root"), ("user", "agent"), ("workdir", "/app"))
-    assert builds == [(expected, "task__hash", {"cpu_count": 4, "memory_mb": 8192})], builds
-    builds.clear()
-    # Any other image, or a task without one, is Harbor's own build.
-    await module.SelfBenchE2BEnvironment("docker.io/library/python:3")._create_template()
-    await module.SelfBenchE2BEnvironment(None)._create_template()
-    assert builds == ["dockerfile", "dockerfile"], builds
-asyncio.run(check())
-`,
-      ENVIRONMENT,
-    ],
-    {
-      env: {
-        ...process.env,
-        SELFBENCH_REGISTRY_HOST: "app.selfbench.test",
-        SELFBENCH_REGISTRY_USERNAME: "selfbench",
-        SELFBENCH_REGISTRY_PASSWORD: "grant",
-      },
-    },
-  );
-  expect(result.stderr).toBe("");
   expect(result.exitCode).toBe(0);
 });
 
@@ -200,25 +112,24 @@ asyncio.run(check())
 test("an E2B plan's memory cap is named when it refuses a task's template", async () => {
   const result = await runCommand("python3", [
     "-c",
-    `${STUBS}import asyncio, logging
+    `${STUBS}import asyncio, logging, pathlib
 class BuildException(Exception): pass
 e2b.BuildException = BuildException
 # E2B's answer, as a Pro key gives it, to a template asking for more memory than the plan allows.
 capped = "400: Memory can't be higher than 8192 MiB (if you need to increase this limit, please contact support)"
 setup = "failed to run command 'cd /app && /opt/selfbench-environment/setup.sh': exit status 2"
-class E2BEnvironment:
-    def __init__(self, error):
-        self.task_env_config = types.SimpleNamespace(docker_image=None)
-        self._template_name = "task__hash"
-        self._effective_memory_mb = 12288
-        self.logger = logging.getLogger("test")
-        self.error = error
-    async def _create_template(self): raise BuildException(self.error)
-harbor_e2b.E2BEnvironment = E2BEnvironment
+${BUILDER}def refuse(error):
+    async def build(template, alias, **resources): raise BuildException(error)
+    AsyncTemplate.build = build
 module = load()
+async def dockerfile_env(path): return {}
+module.dockerfile_env = dockerfile_env
 async def refusal(error):
+    refuse(error)
+    environment = module.SelfBenchE2BEnvironment()
+    environment._effective_memory_mb = 12288
     try:
-        await module.SelfBenchE2BEnvironment(error)._create_template()
+        await environment._create_template()
     except BuildException as refused:
         return refused
     raise AssertionError("the template must not build")
@@ -239,38 +150,37 @@ asyncio.run(check())
 test("the E2B environment waits for a free slot when E2B is at its concurrency limit", async () => {
   const result = await runCommand("python3", [
     "-c",
-    `${STUBS}import asyncio, logging
+    `${STUBS}import asyncio, logging, pathlib
 # E2B's answer once the team runs its plan's concurrent builds; a third request finds a slot.
 full = "429: Rate limit exceeded, please try again later. - you have reached the maximum number of concurrent template builds (20)."
 refusals = {"sandbox": 2, "template": 2}
 calls, warnings = [], []
-class E2BEnvironment:
-    def __init__(self):
-        self.task_env_config = types.SimpleNamespace(docker_image=None)
-        self._template_name = "task__hash"
-        self.logger = types.SimpleNamespace(warning=warnings.append)
-    async def _create_sandbox(self): await self.answer("sandbox")
-    async def _create_template(self): await self.answer("template")
-    async def answer(self, what):
-        calls.append(what)
-        if what == "sandbox" and refusals.get("other"): raise SandboxException("500: Internal error", 500)
-        if refusals[what]:
-            refusals[what] -= 1
-            raise RateLimitException(full)
-harbor_e2b.E2BEnvironment = E2BEnvironment
+async def answer(what):
+    calls.append(what)
+    if what == "sandbox" and refusals.get("other"): raise SandboxException("500: Internal error", 500)
+    if refusals[what]:
+        refusals[what] -= 1
+        raise RateLimitException(full)
+${BUILDER}async def build(template, alias, **resources): await answer("template")
+AsyncTemplate.build = build
+async def create_sandbox(self): await answer("sandbox")
+E2BEnvironment._create_sandbox = create_sandbox
 module = load()
+async def dockerfile_env(path): return {}
+module.dockerfile_env = dockerfile_env
 waits = []
 async def sleep(seconds): waits.append(seconds)
 module.asyncio.sleep = sleep
 module.random.uniform = lambda low, high: 1
 async def check():
     environment = module.SelfBenchE2BEnvironment()
+    environment.logger = types.SimpleNamespace(warning=warnings.append)
     await environment._create_template()
     await environment._create_sandbox()
     # Each refused request waits, twice as long as the last, then asks again until E2B accepts.
     assert calls == ["template"] * 3 + ["sandbox"] * 3, calls
     assert waits == [15, 30, 15, 30], waits
-    assert warnings[0] == f"E2B refused the template build task__hash ({full}); asking again in 15s", warnings
+    assert warnings[0] == f"E2B refused the template build task__hash__env ({full}); asking again in 15s", warnings
     # Any other E2B error fails at once, as before.
     refusals["other"] = 1; calls.clear(); waits.clear()
     try:

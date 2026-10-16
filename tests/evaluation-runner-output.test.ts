@@ -116,3 +116,46 @@ test("an agent stopped at its time limit completes on Harbor's scores, or fails 
   expect(unscored?.error).toBe(timeout.exception_message);
   expect(unscored?.agentTimedOut).toBeUndefined();
 });
+test("tests that run past their time limit fail the trial instead of erroring it", async () => {
+  const { store, input, vault } = await runnerFixture(undefined, (input) => {
+    input.harnesses = ["pi"];
+  });
+  const command: typeof runCommand = async (_name, args) => {
+    if (args[0] === "--version") return { stdout: HARBOR_VERSION, stderr: "", exitCode: 0 };
+    const trial = join(args[args.indexOf("--jobs-dir") + 1] ?? "", "solver", "task__123");
+    await mkdir(join(trial, "agent"), { recursive: true });
+    await writeFile(
+      join(trial, "agent", "pi.txt"),
+      `${JSON.stringify({
+        type: "message_end",
+        message: {
+          role: "assistant",
+          provider: "openai",
+          model: "test-model",
+          usage: { input: 100, output: 10, cacheRead: 0, cacheWrite: 0 },
+        },
+      })}\n`,
+    );
+    // Harbor's result when the verifier hangs: no scores, only its timeout.
+    await writeFile(
+      join(trial, "result.json"),
+      JSON.stringify({
+        verifier_result: null,
+        exception_info: {
+          exception_type: "VerifierTimeoutError",
+          exception_message: "Verifier execution timed out after 1800.0 seconds",
+        },
+      }),
+    );
+    return { stdout: "", stderr: "", exitCode: 0 };
+  };
+  await runEvaluation(store, input, { env: {}, vault, command, pollMs: 5, progressMs: 0 });
+  const trial = (await getEvaluation(store, input, input.id))?.trials[0];
+  expect(trial).toMatchObject({
+    status: "completed",
+    verifierTimedOut: true,
+    rewards: { reward: 0 },
+    modelVerified: true,
+  });
+  expect(trial?.error).toBeUndefined();
+});

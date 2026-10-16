@@ -11,7 +11,7 @@ const result = await Bun.build({
     "reprice-vendor-rates",
     "reprice-dari-router",
     "reprice-openrouter",
-    "backfill-agent-timeouts",
+    "backfill-timeouts",
     "records-migration",
   ].map((name) => join(root, "maintenance/bin", `${name}.ts`)),
   outdir,
