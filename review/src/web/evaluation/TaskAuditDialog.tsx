@@ -36,11 +36,12 @@ export function TaskAuditDialog({
   const close = useRef<HTMLButtonElement>(null);
   const { session } = useSession();
   const auditable = !pages.startsWith("/benchmarks/");
+  const enabled = auditable && session.status === "signed-in";
   const { state, auditing, error, audit } = useTaskAudit({
     baseUrl,
     runId: task.runId,
     taskId: task.id,
-    enabled: auditable && session.status === "signed-in",
+    enabled,
   });
   const rows = configurations.flatMap((configuration) =>
     configuration.batches
@@ -50,8 +51,20 @@ export function TaskAuditDialog({
   );
   const scored = rows.filter(({ result }) => ["passed", "failed"].includes(result.outcome));
   const failed = scored.filter(({ result }) => result.outcome === "failed").length;
+  const auditableFailures = scored.filter(
+    ({ result }) =>
+      result.outcome === "failed" &&
+      result.trial.status === "completed" &&
+      result.trial.modelVerified !== false &&
+      result.trial.rewards.reward === 0,
+  ).length;
   const parts = taskParts(task.id);
   const last = state?.audit;
+  // Offered from the failures the server can audit, without waiting for state to load.
+  const offered = auditing || (enabled && auditableFailures > 0 && state?.available !== false);
+  const reason =
+    state?.reason ??
+    (auditableFailures ? undefined : "No verified failed attempt is available to audit.");
   return (
     <Dialog
       initialFocus={close}
@@ -107,7 +120,7 @@ export function TaskAuditDialog({
                 </p>
               </div>
             )}
-            {state?.available || auditing ? (
+            {offered ? (
               <FailureExplanationForm
                 baseUrl={baseUrl}
                 explaining={auditing}
@@ -115,7 +128,7 @@ export function TaskAuditDialog({
                 labels={last ? { ...AUDIT, action: "Audit Again" } : AUDIT}
               />
             ) : (
-              state?.reason && <p className="text-sm text-muted-foreground">{state.reason}</p>
+              reason && <p className="text-sm text-muted-foreground">{reason}</p>
             )}
             {error && <Notice>{error}</Notice>}
           </section>

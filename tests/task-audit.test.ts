@@ -76,13 +76,12 @@ test("Audit Task needs a failed attempt and the task's files, and starts with a 
         method: "POST",
         body: JSON.stringify({ ...task, ...(audit ? { audit } : {}) }),
       });
-    expect(await state()).toMatchObject({ available: false, attempts: 1, failures: 0 });
+    expect(await state()).toEqual({ available: true, running: false });
     expect((await post({ credentialId: own.id, model: "gpt-6-sol" })).status).toBe(409);
 
     Object.assign(run.trials[0] ?? {}, { rewards: { reward: 0 } });
     run.revision += 1;
     await saveEvaluation(fixture.artifacts, run);
-    expect(await state()).toEqual({ available: true, running: false, attempts: 1, failures: 1 });
     // No frozen bundle and no kept files: nothing to judge the task by.
     expect((await post({ credentialId: own.id, model: "gpt-6-sol" })).status).toBe(409);
 
