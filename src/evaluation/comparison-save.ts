@@ -156,7 +156,8 @@ export async function saveComparison(
           startedBy: owner.login,
           createdAt,
           ...(pricing ? { pricing } : {}),
-          ...(owner.scope.repoId !== undefined && (owner.privateRepo === false || managedModel)
+          // A benchmark is a public Harbor registry dataset, so its failures may be explained.
+          ...(owner.scope.benchmarkId !== undefined || owner.privateRepo === false || managedModel
             ? { explainFailures: true }
             : {}),
           credentialOrgId: owner.orgId,

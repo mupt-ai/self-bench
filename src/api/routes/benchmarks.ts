@@ -11,13 +11,14 @@ import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
 import { handleScopedEvaluations } from "./evaluation-scope.js";
 import type { EvaluationRoutesOptions } from "./evaluations.js";
+import { explainTrial } from "./explain-trial.js";
 
 const NAME = "[A-Za-z0-9][A-Za-z0-9._-]{0,98}";
 /** `/api/orgs/<org>/benchmarks`, or one benchmark (`<org>/<name>`) and what follows it. */
 const route = new RegExp(`^/api/orgs/([A-Za-z0-9_.-]+)/benchmarks(?:/(${NAME}/${NAME})(/.*)?)?$`);
 /** What follows a benchmark for its evaluations, as a repository's evaluations take it. */
 const evaluationsRoute =
-  /^\/evaluations(?:\/(catalog|comparisons|[a-f0-9-]{36}))?(?:\/(artifacts|[a-f0-9-]{36}))?(?:\/(resume|cancel))?$/;
+  /^\/evaluations(?:\/(catalog|comparisons|[a-f0-9-]{36}))?(?:\/(artifacts|[a-f0-9-]{36}))?(?:\/(resume|cancel|explain))?$/;
 
 const addSchema = z.strictObject({ reference: z.string() });
 
@@ -66,6 +67,18 @@ export async function benchmarkRoutes(
   if (!benchmark) return send([404, { error: "Benchmark not found" }]);
   const evaluations = evaluationsRoute.exec(rest);
   if (!evaluations) return send(await member(context, benchmark, rest));
+  const [, section, id, action] = evaluations;
+  if (section && !id && action === "explain" && ["GET", "POST"].includes(request.method ?? "")) {
+    await explainTrial(options, request, url, response, {
+      scope: { benchmarkId: benchmark.id },
+      orgId: tenant.id,
+      evaluationId: section,
+      user,
+      env: options.env ?? process.env,
+    });
+    request.resume();
+    return true;
+  }
   await handleScopedEvaluations(options, {
     request,
     url,
@@ -80,9 +93,9 @@ export async function benchmarkRoutes(
     },
     benchmark,
     tenant,
-    section: evaluations[1],
-    id: evaluations[2],
-    action: evaluations[3],
+    section,
+    id,
+    action,
   });
   return true;
 }

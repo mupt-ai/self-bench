@@ -50,6 +50,18 @@ test.each([false, true])(
   },
 );
 
+test("a benchmark's trial offers Explain Failure with the org's saved keys", async () => {
+  const run = failedRun();
+  const baseUrl = "/api/orgs/avyay/benchmarks/terminal-bench/dataset/evaluations";
+  await open(run, false, true, { baseUrl, pages: "/benchmarks/terminal-bench/dataset" });
+  expect(dialog.requests).toContainEqual({ url: "/api/orgs/avyay/credentials" });
+  expect(dialog.requests).toContainEqual({ url: `${baseUrl}/catalog` });
+  await chooseKey("openai-key");
+  await chooseModel("openai-model");
+  await submitExplanation();
+  expect(posts()[0]?.url).toBe(`${baseUrl}/${run.id}/explain`);
+});
+
 test.each(["router-key", "vercel-key", "anthropic-key"])(
   "%s uses compatible catalog IDs, not provider IDs",
   async (id) => {

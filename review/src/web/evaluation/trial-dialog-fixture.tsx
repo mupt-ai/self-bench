@@ -23,6 +23,7 @@ export const dialog = {
 };
 
 export const BASE = "/api/orgs/avyay/repos/avyay/repo/evaluations";
+const REPO = { baseUrl: BASE, pages: "/repos/avyay/repo" };
 export const SUMMARY = { text: "The parser still drops trailing commas.", model: "gpt-6-luna" };
 export const key = (
   id: string,
@@ -119,7 +120,12 @@ export function setupTrialDialogTests() {
   });
 }
 
-export async function open(run = failedRun(), managedOffering = false, signedIn = true) {
+export async function open(
+  run = failedRun(),
+  managedOffering = false,
+  signedIn = true,
+  { baseUrl, pages } = REPO,
+) {
   const session: SessionState = signedIn
     ? {
         status: "signed-in",
@@ -138,8 +144,8 @@ export async function open(run = failedRun(), managedOffering = false, signedIn 
             run={run}
             trial={trial}
             loaded
-            baseUrl={BASE}
-            pages="/repos/avyay/repo"
+            baseUrl={baseUrl}
+            pages={pages}
             onClose={() => {}}
           />
         </MemoryRouter>

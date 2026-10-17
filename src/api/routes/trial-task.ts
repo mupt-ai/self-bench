@@ -1,6 +1,7 @@
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { ConnectedRepo } from "../../db/repos.js";
 import type { Vault } from "../../db/vault.js";
+import { type EvaluationScope, sameScope } from "../../evaluation/scope.js";
 import { evaluationPrefix } from "../../evaluation/store.js";
 import { trialInput } from "../../evaluation/trial-input.js";
 import type { EvaluationRun } from "../../evaluation/types.js";
@@ -8,13 +9,13 @@ import type { EvaluationRun } from "../../evaluation/types.js";
 /** Only the task frozen for this evaluation, never the dataset's current replacement. */
 export async function frozenTrialBundle(
   vault: Vault | undefined,
-  repo: ConnectedRepo,
+  owner: { scope: EvaluationScope; orgId: number },
   run: EvaluationRun,
   index: number,
 ): Promise<string | undefined> {
   const record = run.comparisonId ? await vault?.comparisons.find(run.comparisonId) : undefined;
   const frozen =
-    record?.scope.repoId === repo.id && record.orgId === repo.orgId
+    record && sameScope(record.scope, owner.scope) && record.orgId === owner.orgId
       ? record.inputs.find((input) => input.id === run.id)
       : undefined;
   return frozen && trialInput(frozen, index).tasks[0]?.bundleKey;
@@ -31,7 +32,12 @@ export async function trialTaskFiles(
   run: EvaluationRun,
   index: number,
 ): Promise<{ bundleKey: string } | { filesKey: string } | undefined> {
-  const bundleKey = await frozenTrialBundle(vault, repo, run, index);
+  const bundleKey = await frozenTrialBundle(
+    vault,
+    { scope: { repoId: repo.id }, orgId: repo.orgId },
+    run,
+    index,
+  );
   if (bundleKey && (await artifacts.stat(bundleKey))) return { bundleKey };
   const filesKey = `${evaluationPrefix({ repoId: repo.id }, run.id)}tasks/${index}.json`;
   return (await artifacts.stat(filesKey)) ? { filesKey } : undefined;
