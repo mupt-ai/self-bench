@@ -59,11 +59,13 @@ export function ResultsTable({
   const configurations = useMemo(() => configurationsOf(runs, credentials), [runs, credentials]);
   const selectedRun = search.get("run");
   const revealed = useRef("");
+  // Not on `view`: the router takes `run` out of the address in a transition, which every new
+  // view would interrupt, so revealing from `view` would replace the address until the browser
+  // refuses.
   useEffect(() => {
-    if (!selectedRun || !configurations.length) return;
-    const next = revealRun(view, configurations, selectedRun);
-    if (!next) return;
-    setView(next);
+    if (!selectedRun || !configurations.some((c) => c.batches.some((b) => b.id === selectedRun)))
+      return;
+    setView((current) => revealRun(current, configurations, selectedRun) ?? current);
     setSearch(
       (previous) => {
         const params = new URLSearchParams(previous);
@@ -73,7 +75,7 @@ export function ResultsTable({
       { replace: true },
     );
     revealed.current = selectedRun;
-  }, [selectedRun, configurations, view, setView, setSearch]);
+  }, [selectedRun, configurations, setView, setSearch]);
   useEffect(() => {
     if (!revealed.current || !view.batches.length) return;
     const row = [...document.querySelectorAll<HTMLElement>("[data-run-id]")].find(
