@@ -54,8 +54,8 @@ export interface EvaluationInput extends EvaluationScope {
   pricing?: ModelPricing;
   /**
    * Failed trials are explained (failure-summary.ts), which sends their material to the summary
-   * model through SelfBench's account: set for a public repository, or one already running on
-   * managed model access.
+   * model through SelfBench's account: set for a public repository, a benchmark (a public Harbor
+   * registry dataset), or one already running on managed model access.
    */
   explainFailures?: boolean;
   credentialOwnerId?: number;
@@ -77,8 +77,7 @@ export interface SolverStep {
   tools: { id: string; name: string; input: string; output: string }[];
 }
 /** One trial to explain (failure-summary.ts): its evaluation, its place there, and its task. */
-export interface FailedTrial {
-  repoId: number;
+export interface FailedTrial extends EvaluationScope {
   id: string;
   index: number;
   /** The task's bundle, to rebuild the trial's material from when it kept none. */

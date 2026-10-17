@@ -93,7 +93,8 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
         const methods = ["GET", "POST"].includes(request.method ?? "");
         if (section && section !== "audit" && !id && action === "explain" && methods) {
           await explainTrial(options, request, url, response, {
-            repo,
+            scope: { repoId: repo.id },
+            orgId: repo.orgId,
             evaluationId: section,
             user,
             env,

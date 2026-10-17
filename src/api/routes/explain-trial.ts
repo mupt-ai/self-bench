@@ -1,6 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { z } from "zod";
-import type { ConnectedRepo } from "../../db/repos.js";
 import type { User } from "../../db/users.js";
 import {
   explanationModel,
@@ -9,6 +8,7 @@ import {
 import { materialKey } from "../../evaluation/failure-material.js";
 import { explainable } from "../../evaluation/failure-summary.js";
 import { harnessIds } from "../../evaluation/models.js";
+import type { EvaluationScope } from "../../evaluation/scope.js";
 import { getEvaluation } from "../../evaluation/store.js";
 import type { FailedTrial } from "../../evaluation/types.js";
 import { managedOffer } from "../../generation/billing/managed.js";
@@ -25,7 +25,9 @@ const trialSchema = z
 
 type Options = Pick<EvaluationRoutesOptions, "artifacts" | "vault" | "publicUrl" | "explain">;
 interface Context {
-  repo: ConnectedRepo;
+  /** The repository's or benchmark's evaluations, and the org that owns them. */
+  scope: EvaluationScope;
+  orgId: number;
   evaluationId: string;
   user: User;
   env: NodeJS.ProcessEnv;
@@ -89,7 +91,7 @@ export async function explainTrial(
   if (!running) {
     if (selection) {
       const credential = await options.vault?.credentials.find(
-        context.repo.orgId,
+        context.orgId,
         selection.credentialId,
       );
       try {
@@ -101,7 +103,7 @@ export async function explainTrial(
         });
         return;
       }
-      trial.explanation = { ...selection, orgId: context.repo.orgId };
+      trial.explanation = { ...selection, orgId: context.orgId };
     } else if (!managedOffer(context.env).models) {
       sendJson(response, 400, { error: "Choose a saved model API key and explanation model." });
       return;
@@ -113,7 +115,7 @@ export async function explainTrial(
 
 async function explainableTrial(
   options: Options,
-  { repo, evaluationId }: Context,
+  { scope, orgId, evaluationId }: Context,
   identity: z.infer<typeof trialSchema>,
 ): Promise<
   | { trial: FailedTrial; explainer: NonNullable<Options["explain"]> }
@@ -124,7 +126,7 @@ async function explainableTrial(
       status: 409,
       error: "Failure explanations are unavailable on this deployment.",
     };
-  const run = await getEvaluation(options.artifacts, { repoId: repo.id }, evaluationId);
+  const run = await getEvaluation(options.artifacts, scope, evaluationId);
   const index =
     run?.trials.findIndex(
       (trial) =>
@@ -140,8 +142,8 @@ async function explainableTrial(
       error: "Only a trial that failed its tests and has no explanation yet can be explained.",
       ...(trial.failureSummary ? { explained: true } : {}),
     };
-  const bundleKey = await frozenTrialBundle(options.vault, repo, run, index);
-  const failed = { repoId: repo.id, id: run.id, index };
+  const bundleKey = await frozenTrialBundle(options.vault, { scope, orgId }, run, index);
+  const failed = { ...scope, id: run.id, index };
   if (!bundleKey && !(await options.artifacts.stat(materialKey(failed))))
     return { status: 409, error: "This trial's task was not recorded, so it can't be explained." };
   return { trial: { ...failed, ...(bundleKey ? { bundleKey } : {}) }, explainer: options.explain };

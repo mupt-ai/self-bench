@@ -160,7 +160,7 @@ async function judge(
 ): Promise<boolean> {
   const environment = options.env ?? process.env;
   const { orgId, credentialId, model } = request.audit;
-  if ((await options.vault?.repoOrg?.(request.repoId)) !== orgId)
+  if ((await options.vault?.scopeOrg?.({ repoId: request.repoId })) !== orgId)
     throw new Error("Audit repository is unavailable in this organization.");
   const credential = await options.vault?.credentials.find(orgId, credentialId);
   if (!credential) throw new Error("Audit API key is unavailable.");

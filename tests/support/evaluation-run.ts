@@ -3,6 +3,7 @@ import { explainTrialFailure } from "../../src/evaluation/failure-summary.js";
 import { failTrial, finishEvaluation, startEvaluation } from "../../src/evaluation/lifecycle.js";
 import { environmentSecrets, redactOutput } from "../../src/evaluation/output.js";
 import { executeTrial, type RunnerOptions } from "../../src/evaluation/runner.js";
+import { scopeOf } from "../../src/evaluation/scope.js";
 import { trialInput } from "../../src/evaluation/trial-input.js";
 import type { EvaluationInput } from "../../src/evaluation/types.js";
 import { runEvaluationTrials } from "../../src/evaluation/workflow.js";
@@ -31,7 +32,7 @@ export function runEvaluation(
       if (input.explainFailures)
         await explainTrialFailure(
           store,
-          { repoId: Number(input.repoId), id: input.id, index },
+          { ...scopeOf(input), id: input.id, index },
           {
             command: options.command ?? runCommand,
             env: options.env,

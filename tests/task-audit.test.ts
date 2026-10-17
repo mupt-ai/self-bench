@@ -124,7 +124,7 @@ test("an audit keeps the model's verdict, or why the model gave none, through th
     ),
     "application/json",
   );
-  const vault = { ...memoryVault(), repoOrg: async () => 7 };
+  const vault = { ...memoryVault(), scopeOrg: async () => 7 };
   const key = "byok-audit-provider-secret";
   const credential = await vault.credentials.create(
     7,

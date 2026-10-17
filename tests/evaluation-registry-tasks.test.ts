@@ -169,10 +169,9 @@ test("an org adds registry datasets as benchmarks and runs each apart from its r
     expect((await fixture.request(fixture.benchmarks, {}, 2)).status).toBe(404);
 
     const base = `${fixture.benchmarks}/terminal-bench/dataset/evaluations`;
+    const modelCredential = await credential("openai");
     const selection = {
-      models: [
-        { catalogId: "gpt-6-sol", credentialId: await credential("openai"), harnesses: ["codex"] },
-      ],
+      models: [{ catalogId: "gpt-6-sol", credentialId: modelCredential, harnesses: ["codex"] }],
       sandbox: "e2b",
       sandboxCredentialId: await credential("e2b"),
     };
@@ -213,7 +212,10 @@ test("an org adds registry datasets as benchmarks and runs each apart from its r
     expect(input.agentMinutes).toBeUndefined();
     expect(input.taskMinutes).toBe(14);
     expect(await fixture.artifacts.stat(input.tasks[0]?.bundleKey ?? "")).toBeDefined();
-    await saveEvaluation(fixture.artifacts, initialEvaluation(input, input.modelName));
+    // A benchmark is a public dataset, so its failures are explained like a public repository's.
+    expect(input.explainFailures).toBe(true);
+    const run = initialEvaluation(input, input.modelName);
+    await saveEvaluation(fixture.artifacts, run);
     expect(await getEvaluation(fixture.artifacts, input, input.id)).toBeDefined();
     expect(evaluationPrefix(input, input.id)).toStartWith(
       `evaluations/benchmarks/${input.benchmarkId}/`,
@@ -234,6 +236,29 @@ test("an org adds registry datasets as benchmarks and runs each apart from its r
     expect((await fixture.request(`${base}/comparisons/${id}`, {}, 2)).status).toBe(404);
     const boxesNow = (await (await fixture.request(fixture.benchmarks)).json()).benchmarks;
     expect(boxesNow[0].runs).toBe(1);
+
+    // Explain Failure works on a benchmark's failed trial, from the task frozen for its run.
+    const [failed] = run.trials;
+    if (!failed) throw new Error("Missing trial");
+    Object.assign(failed, { status: "completed", rewards: { reward: 0 } });
+    await saveEvaluation(fixture.artifacts, run);
+    const trial = { runId: failed.runId, taskId: failed.taskId, harness: failed.harness };
+    const explainUrl = `${base}/${input.id}/explain`;
+    const state = await fixture.request(`${explainUrl}?${new URLSearchParams(trial)}`);
+    expect(await state.json()).toEqual({ available: true, running: false });
+    expect((await fixture.request(`${other}/${input.id}/explain`, post(trial))).status).toBe(404);
+    const explanation = { credentialId: modelCredential, model: "gpt-6-sol" };
+    const asked = await fixture.request(explainUrl, post({ ...trial, explanation }));
+    expect(asked.status).toBe(202);
+    expect(fixture.explains).toEqual([
+      {
+        benchmarkId: input.benchmarkId,
+        id: input.id,
+        index: 0,
+        bundleKey: input.tasks[0]?.bundleKey ?? "",
+        explanation: { orgId: fixture.repo.orgId, ...explanation },
+      },
+    ]);
 
     // A box with unfinished runs stays, so they can still be followed and cancelled.
     const busy = await fixture.request(`${fixture.benchmarks}/terminal-bench/dataset`, {

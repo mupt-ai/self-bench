@@ -38,9 +38,14 @@ async function evaluate(
   reward: number,
   pi: CommandResult = { stdout: "", stderr: "", exitCode: 0 },
   explainFailures = true,
+  benchmarkId?: number,
 ) {
   const consent = (input: EvaluationInput) => {
     if (explainFailures) input.explainFailures = true;
+    if (benchmarkId !== undefined) {
+      delete input.repoId;
+      input.benchmarkId = benchmarkId;
+    }
   };
   const { store, input, vault } = await runnerFixture(undefined, consent, TASK_FILES);
   const calls: PiCall[] = [];
@@ -143,6 +148,13 @@ test("a trial that fails its tests is explained by Pi running GPT-6 Luna on the 
   expect(call.material).not.toContain(testModelSecret);
 });
 
+test("a benchmark's failed trial is explained and kept under the benchmark's evaluations", async () => {
+  const { trial, calls, store, input } = await evaluate(MANAGED, 0, LUNA, true, 3);
+  expect(trial?.failureSummary?.text).toStartWith("The agent reversed the chunks");
+  expect(calls[0]?.material).toContain("+chunks.reverse()");
+  expect(await store.stat(`evaluations/benchmarks/3/${input.id}/failures/0.md`)).toBeDefined();
+});
+
 test("a summary never holds up or changes a trial's result", async () => {
   const cases = [
     { name: "a passing trial", env: MANAGED, reward: 1, runs: 0 },
@@ -177,7 +189,7 @@ test("a summary never holds up or changes a trial's result", async () => {
 
 test("BYOK explanations resolve the selected key in the worker, redact it, and never fall back", async () => {
   const { calls, store, input } = await evaluate(MANAGED, 0, LUNA, false);
-  const vault = { ...memoryVault(), repoOrg: async () => 7 };
+  const vault = { ...memoryVault(), scopeOrg: async () => 7 };
   const key = "byok-sensitive-provider-secret";
   const credential = await vault.credentials.create(
     7,

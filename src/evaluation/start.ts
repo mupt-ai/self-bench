@@ -49,7 +49,7 @@ export function failureExplainer(
   env: NodeJS.ProcessEnv = process.env,
 ): FailureExplainer {
   const workflowId = (trial: FailedTrial) =>
-    `${evaluationWorkflowId({ repoId: trial.repoId }, trial.id)}/trial/${trial.index}/explain`;
+    `${evaluationWorkflowId(trial, trial.id)}/trial/${trial.index}/explain`;
   return {
     async start(trial) {
       try {
