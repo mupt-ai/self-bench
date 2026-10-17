@@ -61,9 +61,13 @@ export function ResultsTable({
   const revealed = useRef("");
   useEffect(() => {
     if (!selectedRun || !configurations.length) return;
-    const next = revealRun(view, configurations, selectedRun);
-    if (!next) return;
-    setView(next);
+    if (
+      !configurations.some((configuration) =>
+        configuration.batches.some((batch) => batch.id === selectedRun),
+      )
+    )
+      return;
+    setView((current) => revealRun(current, configurations, selectedRun) ?? current);
     setSearch(
       (previous) => {
         const params = new URLSearchParams(previous);
@@ -73,7 +77,7 @@ export function ResultsTable({
       { replace: true },
     );
     revealed.current = selectedRun;
-  }, [selectedRun, configurations, view, setView, setSearch]);
+  }, [selectedRun, configurations, setView, setSearch]);
   useEffect(() => {
     if (!revealed.current || !view.batches.length) return;
     const row = [...document.querySelectorAll<HTMLElement>("[data-run-id]")].find(

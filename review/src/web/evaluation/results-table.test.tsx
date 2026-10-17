@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
+import { Window } from "happy-dom";
+import { act } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MemoryRouter } from "react-router";
+import { createMemoryRouter, MemoryRouter, RouterProvider, useLocation } from "react-router";
 import { passShade } from "../ResultsMatrix";
 import type { EvaluationRun } from "./api";
 import { ConfigurationRows } from "./ResultsConfigurationRows";
@@ -39,6 +42,66 @@ test("a batch's circle fills once it's done, and turns red only when a task erro
     /text-destructive".*r="4.25" fill="currentColor"/,
   );
   expect(circle("queued", [{ taskId: "task-1" }])).toContain(">Queued<");
+});
+
+test("a legacy run query is removed after revealing its row without a rerender loop", async () => {
+  const browser = new Window({ url: "https://selfbench.test/repos/o/r/results?run=one" });
+  const globals = {
+    window: browser,
+    document: browser.document,
+    HTMLElement: browser.HTMLElement,
+    IS_REACT_ACT_ENVIRONMENT: true,
+  };
+  const previous = Object.keys(globals).map(
+    (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const,
+  );
+  for (const [key, value] of Object.entries(globals))
+    Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+  const router = createMemoryRouter(
+    [
+      {
+        path: "/repos/o/r/results",
+        element: (
+          <>
+            <ResultsTable
+              runs={[run("one", {}, [passed("task-1")])]}
+              credentials={credentials}
+              baseUrl="/api/evaluations"
+              pages="/repos/o/r"
+            />
+            <Location />
+          </>
+        ),
+      },
+    ],
+    { initialEntries: ["/repos/o/r/results?run=one"] },
+  );
+  function Location() {
+    const location = useLocation();
+    return (
+      <output data-testid="location">
+        {location.pathname}
+        {location.search}
+      </output>
+    );
+  }
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  try {
+    await act(async () => root.render(<RouterProvider router={router} />));
+    expect(container.querySelector('[data-testid="location"]')?.textContent).toBe(
+      "/repos/o/r/results",
+    );
+    expect(container.querySelector('[aria-expanded="true"]')).not.toBeNull();
+  } finally {
+    await act(async () => root.unmount());
+    for (const [key, descriptor] of previous) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else Reflect.deleteProperty(globalThis, key);
+    }
+    await browser.happyDOM.close();
+  }
 });
 
 test("the table starts closed, opening to batches and then to tasks", () => {
