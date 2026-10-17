@@ -72,14 +72,13 @@ test("custom Codex endpoints preserve namespaced models through the HTTPS adapte
   expect(solverAgent("pi", "custom", model)).toBe("harbor_dari:DariPi");
 });
 
-test("Claude Code installs into an agent-owned cache without Node on non-Alpine images", async () => {
+test("Codex and Claude Code install without system Node on non-Alpine images", async () => {
   expect(
     solverArguments("task", "jobs", "claude-code", "anthropic/claude-opus-5-5", "modal"),
   ).toContain("harbor_gateway:SelfBenchClaudeCode");
   const result = await runCommand("python3", [
     "-c",
     `import asyncio, importlib.util, sys, types
-sys.modules["harbor.agents.installed.codex"] = types.SimpleNamespace(Codex=object)
 sys.modules["harbor.agents.installed.pi"] = types.SimpleNamespace(Pi=object, PiOptions=object)
 sys.modules["harbor.agents.model_connection"] = types.SimpleNamespace(ModelConnectionSpec=dict)
 module = types.ModuleType("harbor.agents.installed.claude_code")
@@ -96,6 +95,7 @@ class ClaudeCode:
         self.ensured = dependencies
 module.ClaudeCode = ClaudeCode
 sys.modules[module.__name__] = module
+sys.modules["harbor.agents.installed.codex"] = types.SimpleNamespace(Codex=ClaudeCode)
 spec = importlib.util.spec_from_file_location("adapter", sys.argv[1])
 adapter = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(adapter)
@@ -113,6 +113,10 @@ async def check():
         assert agent.installed and agent.root == []
     await agent.ensure_system_dependencies(None, DEPENDENCIES)
     assert agent.ensured == DEPENDENCIES
+    # Debian's npm conflicts with an image's NodeSource Node, so Codex installs only what it runs.
+    codex = adapter.SelfBenchCodex("apt-get")
+    await codex.ensure_system_dependencies(None, ("curl", "bash", "nodejs", "npm", "ripgrep"))
+    assert codex.ensured == ("curl", "bash", "ripgrep"), codex.ensured
 asyncio.run(check())
 `,
     fileURLToPath(new URL("../src/harnesses/harbor/runtime/harbor_gateway.py", import.meta.url)),

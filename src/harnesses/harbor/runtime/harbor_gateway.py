@@ -1,5 +1,5 @@
-"""Isolate Codex installation, preserve gateway model IDs, make Claude Code install reliably, and
-pass Pi its gateway key and model."""
+"""Isolate Codex installation, preserve gateway model IDs, make Codex and Claude Code install
+reliably, and pass Pi its gateway key and model."""
 import json
 import shlex
 from typing import Any
@@ -9,7 +9,20 @@ from harbor.agents.installed.pi import Pi, PiOptions
 from harbor.agents.model_connection import ModelConnectionSpec
 
 
-class SelfBenchCodex(Codex):
+class SkipsSystemNode:
+    async def ensure_system_dependencies(self, environment, dependencies):
+        # Codex and Claude Code use the system's Node and npm only for their Alpine npm install;
+        # elsewhere they install through nvm or a native installer that needs curl and bash.
+        # Harbor 0.23 installs every listed package once one command is missing, and Debian's npm
+        # conflicts with an image's NodeSource Node ("held broken packages"), so Codex never ran on
+        # DeepSWE images that lack only rg. Skipping them also spares images without Node an
+        # apt-get run, which fails on expired snapshot mirrors and can outlast the setup time.
+        if await self._get_system_package_manager(environment) != "apk":
+            dependencies = tuple(name for name in dependencies if name not in ("nodejs", "npm"))
+        await super().ensure_system_dependencies(environment, dependencies)
+
+
+class SelfBenchCodex(SkipsSystemNode, Codex):
     async def exec_as_agent(self, environment, command, **kwargs):
         command = 'export NVM_DIR="$HOME/.nvm"; ' + command
         return await super().exec_as_agent(environment, command=command, **kwargs)
@@ -44,7 +57,7 @@ class GatewayCodex(SelfBenchCodex):
         return await super().exec_as_agent(environment, command=command, **kwargs)
 
 
-class SelfBenchClaudeCode(ClaudeCode):
+class SelfBenchClaudeCode(SkipsSystemNode, ClaudeCode):
     async def install(self, environment):
         # Modal starts Python images with HOME's .cache/uv created as root, so a non-root agent
         # cannot create the .cache/claude the native installer writes to.
@@ -59,14 +72,6 @@ class SelfBenchClaudeCode(ClaudeCode):
                 ),
             )
         await super().install(environment)
-
-    async def ensure_system_dependencies(self, environment, dependencies):
-        # Node and npm serve only the Alpine npm install; the native installer needs curl and
-        # bash. Skipping them spares images that lack Node an apt-get run, which fails on
-        # expired snapshot mirrors and can outlast the agent's setup time.
-        if await self._get_system_package_manager(environment) != "apk":
-            dependencies = tuple(name for name in dependencies if name not in ("nodejs", "npm"))
-        await super().ensure_system_dependencies(environment, dependencies)
 
     def _resolve_auth_env(self):
         # Harbor sends any key as ANTHROPIC_API_KEY (x-api-key). A key given as ANTHROPIC_AUTH_TOKEN
