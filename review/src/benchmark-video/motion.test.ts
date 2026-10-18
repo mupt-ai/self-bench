@@ -1,6 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import type { PublicSetting } from "../public-site/contract";
-import { focusSetting, HOLD, labelSpot, MORPH, momentAt, pointsAt, type VideoRepo } from "./motion";
+import {
+  chartable,
+  focusSetting,
+  HOLD,
+  labelSpot,
+  MORPH,
+  momentAt,
+  pointsAt,
+  type VideoRepo,
+} from "./motion";
 
 const setting = (id: string, accuracy: number, costPerTaskUsd: number) =>
   ({ id, accuracy, costPerTaskUsd }) as PublicSetting;
@@ -21,6 +30,17 @@ describe("focusSetting", () => {
     expect(focusSetting(r, "deepseek/flash")?.id).toBe("deepseek/flash|pi|high");
     expect(focusSetting(r, "deepseek/flash-1017")?.id).toBe("deepseek/flash-1017|pi|high");
     expect(focusSetting(r, "deepseek/flash-2")).toBeUndefined();
+  });
+});
+
+describe("chartable", () => {
+  test("drops settings whose cost is incomplete or zero, as the site's chart does", () => {
+    const r = repo(
+      setting("a|x|high", 50, 0.1),
+      { ...setting("b|x|high", 60, 0.2), costIncomplete: true },
+      setting("c|x|high", 70, 0),
+    );
+    expect(chartable(r).settings.map((s) => s.id)).toEqual(["a|x|high"]);
   });
 });
 

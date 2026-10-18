@@ -31,7 +31,7 @@ interface VideoRepo {
   name: string;
   avatar: string;
   tasks: number;
-  settings: { id: string }[];
+  settings: { id: string; costPerTaskUsd: number; costIncomplete?: true }[];
 }
 
 const FPS = 25;
@@ -72,8 +72,11 @@ async function release(name: string): Promise<VideoRepo> {
     settings: VideoRepo["settings"];
   };
   if (!shown) throw new Error(`${name} has no release`);
-  if (!shown.settings.some((setting) => setting.id.split("|")[0] === model))
-    throw new Error(`${model} is not on ${name}'s current release`);
+  // The page charts only settings with a complete, nonzero cost (motion.ts, chartable).
+  const charted = (setting: VideoRepo["settings"][number]) =>
+    !setting.costIncomplete && setting.costPerTaskUsd > 0;
+  if (!shown.settings.some((setting) => setting.id.split("|")[0] === model && charted(setting)))
+    throw new Error(`${model} has no setting with a complete cost on ${name}'s current release`);
   return {
     name: shown.repository.fullName,
     avatar: shown.repository.ownerAvatarUrl,

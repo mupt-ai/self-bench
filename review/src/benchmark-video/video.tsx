@@ -13,6 +13,7 @@ import {
 } from "../public-site/format";
 import {
   catalogModel,
+  chartable,
   focusSetting,
   labelSpot,
   momentAt,
@@ -29,8 +30,13 @@ import {
  */
 
 const CONFIG = (window as unknown as { VIDEO: VideoConfig }).VIDEO;
-const { model, repos } = CONFIG;
+const { model } = CONFIG;
+const repos = CONFIG.repos.map(chartable);
 const extras = new Map(CONFIG.extras.map((extra) => [extra.model, extra]));
+
+/** A labeled point's note: an extra's own note, otherwise its reasoning level. */
+const noteOf = (setting: PublicSetting) =>
+  extras.get(catalogModel(setting))?.note ?? setting.reasoningLevel;
 
 /** Named on the chart and left undimmed: the highlighted model, the frontier and the extras. */
 const labeled = (setting: PublicSetting) =>
@@ -45,6 +51,12 @@ function shot(index: number): { repo: VideoRepo; focus: PublicSetting } {
 }
 const FOCUS = shot(0).focus;
 const FOCUS_LABEL = FOCUS.model.label;
+
+/** The repository the header shows at second t, and the highlighted setting there. */
+function shotAt(t: number) {
+  const { from, to, p } = momentAt(t, repos.length);
+  return shot(p < 0.5 ? from : to);
+}
 
 function Header({ repo, focus, alpha }: { repo: VideoRepo; focus: PublicSetting; alpha: number }) {
   const rank = [...repo.settings].sort((a, b) => b.accuracy - a.accuracy).indexOf(focus) + 1;
@@ -77,17 +89,17 @@ function Header({ repo, focus, alpha }: { repo: VideoRepo; focus: PublicSetting;
 
 function Frame({ t }: { t: number }) {
   const { from, to, p, morphing, focusIn } = momentAt(t, repos.length);
+  const { repo, focus } = shotAt(t);
+  // The highlighted setting draws last, so placeFocusLabel finds its mark at the end.
   const shown = pointsAt(shot(from).repo, shot(to).repo, p, (setting) =>
-    catalogModel(setting) === model ? 2 : labeled(setting) ? 1 : 0,
+    setting.id === focus.id ? 2 : labeled(setting) ? 1 : 0,
   );
-  const { repo, focus } = shot(p < 0.5 ? from : to);
   const fade = morphing ? Math.abs(1 - 2 * p) : 1;
   const points: ParetoPoint[] = shown.map(({ setting, x, y }) => {
-    const extra = extras.get(catalogModel(setting));
     return {
       id: setting.id,
       label: labeled(setting) ? setting.model.label : "",
-      note: labeled(setting) ? (extra?.note ?? setting.reasoningLevel) : undefined,
+      note: labeled(setting) ? noteOf(setting) : undefined,
       x,
       y,
       ...vendorPoint(setting, setting.custom ? setting.model.label : undefined),
@@ -171,10 +183,12 @@ const number = (element: Element, name: string) => Number(element.getAttribute(n
  * The plot places every label as if all were one size, so the enlarged highlighted label is
  * moved to the spot around its point that collides with the least.
  */
-function placeFocusLabel() {
+function placeFocusLabel(focus: PublicSetting) {
   const svg = document.querySelector<SVGSVGElement>(".plot");
   const labels = [...document.querySelectorAll<SVGTextElement>(".plot .pareto-point-label")];
-  const label = labels.find((l) => l.textContent?.startsWith(FOCUS_LABEL));
+  // The plot writes a label as "<label> (<note>)"; the whole text tells the setting apart.
+  const text = `${focus.model.label} (${noteOf(focus)})`;
+  const label = labels.find((l) => l.textContent === text);
   for (const l of labels) l.classList.toggle("focus", l === label);
   const circles = [...document.querySelectorAll(".plot g.pareto-point circle:not(.pareto-hit)")];
   const point = circles.at(-1);
@@ -210,6 +224,6 @@ Object.assign(window, {
   DURATION: SEGMENT * repos.length,
   renderAt(t: number) {
     flushSync(() => root.render(<Frame t={t} />));
-    placeFocusLabel();
+    placeFocusLabel(shotAt(t).focus);
   },
 });

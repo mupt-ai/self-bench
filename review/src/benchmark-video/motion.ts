@@ -34,6 +34,17 @@ export const SEGMENT = HOLD + MORPH;
 /** A setting id is "<catalog model>|<harness>|<reasoning>". */
 export const catalogModel = (setting: Pick<PublicSetting, "id">) => setting.id.split("|")[0] ?? "";
 
+/**
+ * The repository with only the settings the site's chart plots: an incomplete cost is only a
+ * lower bound, possibly zero, which a log axis cannot place (ResultsChart drops them too).
+ */
+export function chartable(repo: VideoRepo): VideoRepo {
+  return {
+    ...repo,
+    settings: repo.settings.filter((s) => !s.costIncomplete && s.costPerTaskUsd > 0),
+  };
+}
+
 /** The highlighted model's best setting in a repository, if it ran there. */
 export function focusSetting(repo: VideoRepo, model: string): PublicSetting | undefined {
   return repo.settings
