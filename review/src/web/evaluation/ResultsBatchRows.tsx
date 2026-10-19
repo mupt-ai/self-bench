@@ -4,6 +4,7 @@ import { cn } from "../primitives/cn";
 import type { EvaluationRun } from "./api";
 import { CancelEvaluation } from "./CancelEvaluation";
 import { CostValue } from "./CostValue";
+import { DeleteRun } from "./DeleteRun";
 import { OutcomeFilter } from "./ResultsFilters";
 import { NoValue, ResultsStatus } from "./ResultsMarks";
 import { DoneCell, sortedEntries, TaskHeadings, TaskRow, taskEntries } from "./ResultsTaskRows";
@@ -72,6 +73,7 @@ export function ResultGroupRows({
   onChanged?(run: EvaluationRun): void;
 }) {
   const totals = tally(results);
+  const live = run?.status === "running" || run?.status === "queued";
   const entries = taskEntries(results);
   const tasks = sortedEntries(
     entries.filter((entry) => shown.has(entry.outcome)),
@@ -114,28 +116,33 @@ export function ResultGroupRows({
       </tr>
       {open && (
         <>
-          {run &&
-            (run.error ||
-              ((run.status === "running" || run.status === "queued") && baseUrl && onChanged)) && (
-              <tr>
-                <td colSpan={6} className={TASK_INDENT}>
-                  <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-                    <span className="text-muted-foreground">
-                      {run.error ?? `${run.sandbox} · started by ${run.startedBy}`}
-                    </span>
-                    {(run.status === "running" || run.status === "queued") &&
-                      baseUrl &&
-                      onChanged && (
+          {run && (run.error || (baseUrl && onChanged)) && (
+            <tr>
+              <td colSpan={6} className={TASK_INDENT}>
+                <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+                  <span className="text-muted-foreground">
+                    {run.error ?? `${run.sandbox} · started by ${run.startedBy}`}
+                  </span>
+                  {baseUrl && onChanged && (
+                    <span className="flex flex-wrap gap-2">
+                      {live && (
                         <CancelEvaluation<EvaluationRun>
                           endpoint={`${baseUrl}/${encodeURIComponent(run.id)}/cancel`}
                           subject="Run"
                           onCancelled={onChanged}
                         />
                       )}
-                  </div>
-                </td>
-              </tr>
-            )}
+                      <DeleteRun
+                        endpoint={`${baseUrl}/${encodeURIComponent(run.id)}/delete`}
+                        live={live}
+                        onDeleted={onChanged}
+                      />
+                    </span>
+                  )}
+                </div>
+              </td>
+            </tr>
+          )}
           <tr>
             <td colSpan={6} className={cn("relative", TASK_INDENT)}>
               <OutcomeFilter

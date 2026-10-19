@@ -147,4 +147,10 @@ export interface EvaluationRun extends Omit<EvaluationInput, "tasks"> {
   trials: EvaluationTrial[];
   finishedAt?: string;
   error?: string;
+  /**
+   * When someone deleted the run (deleteEvaluation): lists of runs, the chart and new releases
+   * leave it out, but its record stays, for releases that already show its trials.
+   */
+  deletedAt?: string;
+  deletedBy?: string;
 }

@@ -54,6 +54,42 @@ test("cancelling a live run fails its unfinished trials and stops its workflow",
   }
 });
 
+test("deleting a run stops it and takes it out of the list, keeping its record", async () => {
+  const fixture = await evaluationServer();
+  try {
+    const input: EvaluationInput = { ...evaluationInput(), repoId: fixture.repo.id };
+    const run = initialEvaluation(input, "Model");
+    run.status = "running";
+    await saveEvaluation(fixture.artifacts, run);
+    const url = `${fixture.base}/${input.id}/delete`;
+    const listed = async () =>
+      ((await (await fixture.request(fixture.base)).json()).runs as { id: string }[]).map(
+        (entry) => entry.id,
+      );
+    expect(await listed()).toEqual([input.id]);
+
+    expect(
+      (await fixture.request(url, { ...post({}), headers: { origin: "https://evil.test" } }))
+        .status,
+    ).toBe(403);
+    const response = await fixture.request(url, post({}));
+    expect(response.status).toBe(200);
+    const deleted = await response.json();
+    expect(deleted.deletedBy).toBe("avyay");
+    expect(deleted.status).toBe("failed");
+    expect(fixture.stops).toEqual([`evaluation/${fixture.repo.id}/${input.id}`]);
+
+    expect(await listed()).toEqual([]);
+    // A published release may still show its trials.
+    expect(
+      (await getEvaluation(fixture.artifacts, { repoId: fixture.repo.id }, input.id))?.deletedAt,
+    ).toBe(deleted.deletedAt);
+    expect((await fixture.request(url, post({}))).status).toBe(404);
+  } finally {
+    await fixture.close();
+  }
+});
+
 test("cancelling a comparison stops its runs and keeps resume from submitting the rest", async () => {
   const records = memoryVault();
   const fixture = await evaluationServer(records);

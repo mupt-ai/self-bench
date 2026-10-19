@@ -18,7 +18,7 @@ const NAME = "[A-Za-z0-9][A-Za-z0-9._-]{0,98}";
 const route = new RegExp(`^/api/orgs/([A-Za-z0-9_.-]+)/benchmarks(?:/(${NAME}/${NAME})(/.*)?)?$`);
 /** What follows a benchmark for its evaluations, as a repository's evaluations take it. */
 const evaluationsRoute =
-  /^\/evaluations(?:\/(catalog|comparisons|[a-f0-9-]{36}))?(?:\/(artifacts|[a-f0-9-]{36}))?(?:\/(resume|cancel|explain))?$/;
+  /^\/evaluations(?:\/(catalog|comparisons|[a-f0-9-]{36}))?(?:\/(artifacts|[a-f0-9-]{36}))?(?:\/(resume|cancel|delete|explain))?$/;
 
 const addSchema = z.strictObject({ reference: z.string() });
 
