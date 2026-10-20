@@ -201,10 +201,7 @@ export function solverAgent(harness: Harness, provider?: string, model?: string)
     : "harbor_gateway:SelfBenchCodex";
 }
 
-/**
- * The solver's Harbor agent arguments: its thinking level, Pi's custom endpoint API, and
- * a gateway's models.json when its harborPi adapter needs one.
- */
+/** Harbor arguments for thinking, Pi's endpoint API, and a gateway's models.json. */
 export function solverAgentArguments(
   harness: Harness,
   provider: string | undefined,
@@ -213,8 +210,7 @@ export function solverAgentArguments(
 ): string[] {
   const levels = thinkingArguments(harness, thinking);
   if (harness !== "pi") return levels;
-  // Custom credentials are OpenAI-compatible Chat Completions endpoints. Harbor requires
-  // an explicit API style before it will write Pi's isolated custom-provider config.
+  // Harbor needs an explicit API style for custom and Dari Chat Completions endpoints.
   if (provider === "custom" || provider === "dari")
     return [...levels, "--agent-kwarg", "model_api=openai-completions"];
   // Meta recommends Responses: Chat Completions drops reasoning between turns.
