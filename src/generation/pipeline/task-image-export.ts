@@ -72,11 +72,13 @@ export interface TaskImageExportOptions {
  * repository (see runtime/selfbench_export.py), and returns the task with them by digest beside
  * its provider images. A task without them, or already exported, is returned as it is.
  */
-export async function exportTaskImages(
+export async function exportTaskImages<
+  T extends Pick<AuthoredTask, "taskId" | "bundle" | "images">,
+>(
   store: ArtifactStore,
-  task: AuthoredTask,
+  task: T,
   options: TaskImageExportOptions,
-): Promise<AuthoredTask> {
+): Promise<Omit<T, "images"> & Pick<AuthoredTask, "images">> {
   const images = task.images;
   if (!images || images.registry) return task;
   const command = options.command ?? runCommand;
