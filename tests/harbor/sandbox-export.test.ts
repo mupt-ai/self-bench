@@ -33,7 +33,9 @@ def check(command):
     events.append("packed")
 class E2BSandbox:
     @staticmethod
-    async def create(template=None, timeout=None):
+    async def create(template=None, timeout=None, http_version=None):
+        # HTTP/2 downloads end early on too_many_data_frames.
+        assert http_version == "1.1", http_version
         events.append(("e2b", template)); return E2BSandbox()
     def __init__(self):
         async def run(cmd, user=None, timeout=None): assert user == "root"; check(cmd)
