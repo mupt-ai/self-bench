@@ -21,7 +21,7 @@ test("catalog is populated without keys and only exposes supported provider fami
     expect(response.status).toBe(200);
     expect(body.models.length).toBeGreaterThan(4);
     expect(new Set(body.models.map((model: { provider: string }) => model.provider))).toEqual(
-      new Set(["openai", "anthropic", "meta", "openrouter"]),
+      new Set(["dari", "openai", "anthropic", "meta", "openrouter"]),
     );
     expect(body.sandboxes).not.toContain("docker");
     expect((await fixture.request(`${fixture.base}/catalog`, {}, null)).status).toBe(401);
