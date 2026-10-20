@@ -3,9 +3,9 @@ import {
   type CredentialInfo,
   type CredentialSecret,
   type CredentialStore,
+  credentialEndpoint,
   credentialSchema,
   maxSandboxesSchema,
-  validateEndpoint,
 } from "../../src/db/credentials.js";
 import { type EncryptedRecordStore, RecordStoreError } from "../../src/db/encrypted-records.js";
 import type { Vault } from "../../src/db/vault.js";
@@ -58,7 +58,7 @@ export function memoryVault(records: EncryptedRecordStore = new MemoryRecords())
     },
     async create(orgId, draft, env, id = crypto.randomUUID()) {
       const parsed = credentialSchema.parse(draft);
-      const endpoint = parsed.endpoint ? validateEndpoint(parsed.endpoint, env) : undefined;
+      const endpoint = credentialEndpoint(parsed, env);
       const existing = rows.get(id);
       if (existing) {
         if (existing.orgId !== orgId) throw new RecordStoreError(409, "Credential ID already used");

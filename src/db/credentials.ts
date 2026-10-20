@@ -173,6 +173,18 @@ export function validateEndpoint(endpoint: string, env: NodeJS.ProcessEnv): stri
   return url.toString().replace(/\/$/, "");
 }
 
+/**
+ * The endpoint a credential is saved with, as its kind reads it: a Dari credential's router, or a
+ * custom endpoint on an operator-approved host. Other kinds keep none.
+ */
+export function credentialEndpoint(
+  parsed: Pick<CredentialDraft, "kind" | "endpoint">,
+  env: NodeJS.ProcessEnv,
+): string | undefined {
+  if (parsed.kind === "dari") return parsed.endpoint ? dariEndpoint(parsed.endpoint) : undefined;
+  return parsed.endpoint ? validateEndpoint(parsed.endpoint, env) : undefined;
+}
+
 const CREDENTIAL_LIMIT = 200;
 
 /** Organization credentials; the secret column is sealed with the evaluation credential key. */
@@ -227,12 +239,7 @@ export function createCredentialStore(db: Database, key: string) {
       id: string = randomUUID(),
     ): Promise<CredentialInfo> {
       const parsed = credentialSchema.parse(draft);
-      const endpoint =
-        parsed.kind === "dari"
-          ? parsed.endpoint && dariEndpoint(parsed.endpoint)
-          : parsed.endpoint
-            ? validateEndpoint(parsed.endpoint, env)
-            : undefined;
+      const endpoint = credentialEndpoint(parsed, env);
       const existing = await find(orgId, id);
       if (existing) return existing;
       const [total] = await db
