@@ -17,7 +17,7 @@ import { providerCredentialEnvironment, providerEnvironment } from "../src/sandb
 type SavedTask = Pick<typeof tasks.$inferSelect, "id" | "runId" | "taskId" | "bundleKey" | "images">;
 
 /** Resolve only the original verification account; historical model access is irrelevant. */
-export async function exportEnvironment(
+async function exportEnvironment(
   vault: Pick<Vault, "records" | "credentials">,
   runId: string,
   provider: TaskImages["provider"],
