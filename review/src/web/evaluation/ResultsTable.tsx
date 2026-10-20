@@ -59,6 +59,9 @@ export function ResultsTable({
   const configurations = useMemo(() => configurationsOf(runs, credentials), [runs, credentials]);
   const selectedRun = search.get("run");
   const revealed = useRef("");
+  // Not on `view`: the router takes `run` out of the address in a transition, which every new
+  // view would interrupt, so revealing from `view` would replace the address until the browser
+  // refuses.
   useEffect(() => {
     if (!selectedRun || !configurations.length) return;
     if (
