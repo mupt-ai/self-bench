@@ -50,7 +50,7 @@ export interface CatalogModel {
 export const dariRouter: CatalogModel = {
   id: "dari/routing",
   provider: "dari",
-  model: "dari/routing",
+  model: "routing",
   label: "Dari Router",
   harnesses: ["pi"],
   source: "https://dari.dev",

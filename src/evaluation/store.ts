@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { ArtifactStore } from "../artifacts/index.js";
 import type { RunSummaryStore } from "../db/evaluation-summaries.js";
 import { reportError } from "../lib/telemetry/sentry.js";
+import { dariRouter } from "./catalog.js";
 import { type EvaluationScope, scopeOf } from "./scope.js";
 import type { EvaluationInput, EvaluationRun } from "./types.js";
 
@@ -26,7 +27,7 @@ export function initialEvaluation(input: EvaluationInput, modelLabel: string): E
         ),
       )
       .digest("hex"),
-    modelLabel,
+    modelLabel: input.credentials?.provider === "dari" ? dariRouter.label : modelLabel,
     status: "queued",
     trials: tasks.flatMap((task) =>
       input.harnesses.map((harness) => ({
