@@ -50,7 +50,11 @@ async def stream_e2b(template: str, layer: LayerUpload) -> None:
     from e2b import AsyncSandbox
 
     # E2B's Hobby plan refuses sandboxes past an hour; one pack and download fits well inside it.
-    sandbox = await AsyncSandbox.create(template=template, timeout=E2B_LIFETIME_SECS)
+    # Over HTTP/2, envd sends a file as many small DATA frames, which the h2 client in the SDK
+    # (pyqwest, from h2 0.4.16) ends a few MB in as too_many_data_frames; HTTP/1.1 has no frames.
+    sandbox = await AsyncSandbox.create(
+        template=template, timeout=E2B_LIFETIME_SECS, http_version="1.1"
+    )
     try:
         await sandbox.commands.run(f"bash -c {quote(PACK)}", user="root", timeout=0)
         output = Gunzip(layer)
