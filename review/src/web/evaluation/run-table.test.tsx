@@ -139,6 +139,7 @@ test("Add Provider offers only model providers and keeps secrets hidden", () => 
   expect(html).toContain("Max Concurrent Sandboxes");
   expect(html).toContain("Lower it if the provider rate-limits you.");
   expect(options(html)).toEqual([
+    "dari",
     "openai",
     "anthropic",
     "meta",
@@ -241,6 +242,7 @@ test("replacement keeps the original credential category regardless of the defau
   expect(options(sandbox)).toEqual(["e2b", "modal", "daytona", "vercel"]);
   const provider = credentialEditor("modal", { ...previous, kind: "anthropic" });
   expect(options(provider)).toEqual([
+    "dari",
     "openai",
     "anthropic",
     "meta",

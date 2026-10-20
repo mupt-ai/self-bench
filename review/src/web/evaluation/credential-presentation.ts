@@ -2,6 +2,7 @@ import type { CredentialInfo } from "../../../../src/db/credentials";
 import { gatewayIds, gateways } from "../../../../src/gateways/index";
 
 export const providers = [
+  { id: "dari", label: "Dari" },
   { id: "openai", label: "OpenAI" },
   { id: "anthropic", label: "Anthropic" },
   { id: "meta", label: "Meta" },

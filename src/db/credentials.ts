@@ -9,6 +9,7 @@ import { credentials } from "./schema.js";
 
 const sandboxKinds = ["e2b", "modal", "daytona", "vercel"] as const;
 const credentialKinds = [
+  "dari",
   "openai",
   "anthropic",
   "meta",

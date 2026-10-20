@@ -2,7 +2,10 @@ import type { EvaluationRun, EvaluationTrial } from "../types.js";
 import { DARI_BILLING, responseBill } from "./billing.js";
 
 export function isDariRun(run: EvaluationRun): boolean {
-  return run.credentials?.provider === "custom" && run.modelName === "openai/dari/routing";
+  return (
+    run.credentials?.provider === "dari" ||
+    (run.credentials?.provider === "custom" && run.modelName === "openai/dari/routing")
+  );
 }
 
 /** Use only prices returned by Dari; missing or incomplete request evidence is unknown. */

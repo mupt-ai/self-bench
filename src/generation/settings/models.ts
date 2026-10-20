@@ -28,7 +28,14 @@ export function generationModel(id: string): CatalogModel | undefined {
   // so it is rebuilt only when a refresh replaces a listing.
   const listings = gatewayIds.map(listedModels);
   if (!indexed || listings.some((listing, index) => listing !== indexed?.listings[index]))
-    indexed = { listings, models: new Map(evaluationCatalog().map((model) => [model.id, model])) };
+    indexed = {
+      listings,
+      models: new Map(
+        evaluationCatalog()
+          .filter((model) => model.provider !== "dari")
+          .map((model) => [model.id, model]),
+      ),
+    };
   return indexed.models.get(id);
 }
 
@@ -68,7 +75,12 @@ export function generationModelRoute(
   const route = runs ? routeFor(model, credential?.kind ?? "openrouter") : undefined;
   // Catalog models never route to a custom endpoint, nor run Pi on Meta's own key
   // (generationCredentialRuns); the check narrows the provider.
-  if (!route || route.provider === "custom" || route.provider === "meta")
+  if (
+    !route ||
+    route.provider === "custom" ||
+    route.provider === "meta" ||
+    route.provider === "dari"
+  )
     throw new Error(`${model.label} cannot run on this credential`);
   return {
     provider: credential?.auth === "codex-login" ? "openai-codex" : route.provider,

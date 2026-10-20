@@ -24,7 +24,7 @@ import type { Harness } from "./models.js";
 
 export { catalogVersion } from "../contracts/models.js";
 
-export type CatalogProvider = "openai" | "anthropic" | "meta" | GatewayId | "custom";
+export type CatalogProvider = "openai" | "anthropic" | "meta" | GatewayId | "dari" | "custom";
 
 /** Evaluation's view of a catalog model: the credential it runs on and its native harnesses. */
 export interface CatalogModel {
@@ -46,6 +46,16 @@ export interface CatalogModel {
   gatewayThinking?: Partial<Record<GatewayId, ThinkingLevel[]>>;
   pricing?: ModelPricing;
 }
+
+export const dariRouter: CatalogModel = {
+  id: "dari/routing",
+  provider: "dari",
+  model: "routing",
+  label: "Dari Router",
+  harnesses: ["pi"],
+  source: "https://dari.dev",
+  gateways: {},
+};
 
 const nativeHarnesses: Record<NonNullable<Model["vendor"]>, Harness[]> = {
   openai: ["codex", "pi"],
@@ -150,7 +160,7 @@ export function evaluationCatalog(): CatalogModel[] {
       merged.set(id, model);
     }
   }
-  return [...merged.values(), ...curated.values()];
+  return [dariRouter, ...merged.values(), ...curated.values()];
 }
 
 /** A name as gateways spell it either way: "Qwen3-14B" is "Qwen3 14B". */

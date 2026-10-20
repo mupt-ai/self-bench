@@ -114,6 +114,7 @@ export function signInRefusal(
  * (compatibleEndpoints). Muse Code speaks only Meta's API.
  */
 const providerHarnesses: Partial<Record<CatalogModel["provider"], Harness[]>> = {
+  dari: ["pi"],
   openai: ["codex", "pi", "mini-swe-agent", "terminus-2"],
   anthropic: ["claude-code", "pi", "mini-swe-agent", "terminus-2"],
   meta: ["muse-code", ...openHarnesses],
