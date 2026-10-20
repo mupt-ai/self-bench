@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { ApplicationFailure } from "@temporalio/common";
 import type { ThinkingLevel } from "../contracts/models.js";
-import { validateEndpoint } from "../db/credentials.js";
+import { dariEndpoint, validateEndpoint } from "../db/credentials.js";
 import type { Vault } from "../db/vault.js";
 import { gateways, isGateway, modelApiKeyVariable, piModels } from "../gateways/index.js";
 import {
@@ -121,9 +121,9 @@ export async function credentialExecution(
   } else {
     child[modelApiKeyVariable(info.kind)] = modelSecret;
   }
-  if (info.kind === "dari") child.OPENAI_BASE_URL = "https://routing.dari.dev/v1";
-  if (info.kind === "custom")
-    child.OPENAI_BASE_URL = validateEndpoint("endpoint" in info ? (info.endpoint ?? "") : "", env);
+  const endpoint = "endpoint" in info ? info.endpoint : undefined;
+  if (info.kind === "dari") child.OPENAI_BASE_URL = dariEndpoint(endpoint);
+  if (info.kind === "custom") child.OPENAI_BASE_URL = validateEndpoint(endpoint ?? "", env);
   Object.assign(
     child,
     providerCredentialEnvironment(input.sandbox, { ...sandboxSecret, domain: managedE2B?.domain }),

@@ -84,8 +84,16 @@ export const credentialSchema = z
       value.kind === "vercel" ? !value.teamId || !value.projectId : value.teamId || value.projectId
     )
       issue("Vercel requires a team ID and project ID; other providers do not accept them");
-    if ((value.kind === "custom") !== !!value.endpoint)
-      issue("Only custom providers require an endpoint");
+    if (value.kind === "custom" && !value.endpoint) issue("Custom providers require an endpoint");
+    if (value.kind === "dari" && value.endpoint) {
+      try {
+        dariEndpoint(value.endpoint);
+      } catch (cause) {
+        issue(cause instanceof Error ? cause.message : "Invalid Dari router");
+      }
+    }
+    if (value.kind !== "custom" && value.kind !== "dari" && value.endpoint)
+      issue("Only custom and Dari providers accept an endpoint");
   });
 export type CredentialDraft = z.infer<typeof credentialSchema>;
 
@@ -117,6 +125,36 @@ export interface CredentialSecret {
   tokenId?: string;
   teamId?: string;
   projectId?: string;
+}
+
+/** Dari's routing host; a credential may name one of its routers instead of the default. */
+const DARI_HOST = "https://routing.dari.dev";
+
+/**
+ * The Dari base URL a credential runs against: its default router (`/v1`) when the credential
+ * names none, else the router it names, as `/rtr_…`. A URL copied from a request address keeps
+ * only its router, since the harness appends the API method itself.
+ */
+export function dariEndpoint(endpoint?: string): string {
+  const base = `${DARI_HOST}/v1`;
+  if (!endpoint) return base;
+  const url = new URL(endpoint);
+  const path = url.pathname
+    .replace(/\/(chat\/completions|completions|responses)$/, "")
+    .replace(/\/+$/, "");
+  if (
+    `${url.protocol}//${url.host}` !== DARI_HOST ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash
+  )
+    throw new Error("A Dari router URL must be on routing.dari.dev");
+  if (path === "" || path === "/v1") return base;
+  const router = path.slice(1);
+  if (router.includes("/") || !/^[A-Za-z0-9_-]+$/.test(router))
+    throw new Error("Use routing.dari.dev/<router_id>, without an API method");
+  return `${DARI_HOST}/${router}`;
 }
 
 export function validateEndpoint(endpoint: string, env: NodeJS.ProcessEnv): string {
@@ -189,7 +227,12 @@ export function createCredentialStore(db: Database, key: string) {
       id: string = randomUUID(),
     ): Promise<CredentialInfo> {
       const parsed = credentialSchema.parse(draft);
-      const endpoint = parsed.endpoint ? validateEndpoint(parsed.endpoint, env) : undefined;
+      const endpoint =
+        parsed.kind === "dari"
+          ? parsed.endpoint && dariEndpoint(parsed.endpoint)
+          : parsed.endpoint
+            ? validateEndpoint(parsed.endpoint, env)
+            : undefined;
       const existing = await find(orgId, id);
       if (existing) return existing;
       const [total] = await db
