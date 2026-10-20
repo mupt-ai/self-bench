@@ -84,7 +84,8 @@ test("deleting a run stops it and takes it out of the list, keeping its record",
     expect(
       (await getEvaluation(fixture.artifacts, { repoId: fixture.repo.id }, input.id))?.deletedAt,
     ).toBe(deleted.deletedAt);
-    expect((await fixture.request(url, post({}))).status).toBe(404);
+    expect((await fixture.request(url, post({}))).status).toBe(200);
+    expect(fixture.stops).toHaveLength(2);
   } finally {
     await fixture.close();
   }

@@ -171,7 +171,8 @@ export async function handleScopedEvaluations(
     const trusted = trustedMutation(request, options.publicUrl, user);
     const run = trusted ? await getEvaluation(artifacts, scope, section) : undefined;
     if (!trusted) sendJson(response, 403, { error: "Same-origin JSON request required" });
-    else if (!run || run.deletedAt) sendJson(response, 404, { error: "Evaluation not found" });
+    else if (!run || (action === "cancel" && run.deletedAt))
+      sendJson(response, 404, { error: "Evaluation not found" });
     else if (action === "delete")
       sendJson(
         response,
