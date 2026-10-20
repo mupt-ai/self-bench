@@ -23,11 +23,11 @@ const REQUIRED_FILES = [
  * exported, the delivered task needs only native Harbor files and digest-backed Dockerfiles.
  * Hidden tests stay in the separate verifier; neither tests nor solution enter the agent build.
  */
-export async function publishExecutionBundle(
+export async function publishExecutionBundle<T extends Pick<AuthoredTask, "bundle" | "images">>(
   store: ArtifactStore,
-  task: AuthoredTask,
+  task: T,
   signal: AbortSignal,
-): Promise<AuthoredTask> {
+): Promise<T> {
   const images = task.images?.registry;
   if (!images?.agent || !images.verifier) return task;
   if (task.bundle.uri.endsWith(`/${EXECUTION_BUNDLE_NAME}`)) return task;

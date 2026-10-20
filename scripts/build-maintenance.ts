@@ -12,6 +12,7 @@ const result = await Bun.build({
     "reprice-dari-router",
     "reprice-openrouter",
     "backfill-timeouts",
+    "backfill-execution-bundles",
     "records-migration",
   ].map((name) => join(root, "maintenance/bin", `${name}.ts`)),
   outdir,

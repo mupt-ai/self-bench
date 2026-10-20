@@ -11,7 +11,27 @@ node dist/maintenance/reprice-dari-router.js <repoId> <evaluationId> [--apply]
 node dist/maintenance/reprice-openrouter.js <repoId> <evaluationId> [--apply]
 node dist/maintenance/backfill-timeouts.js <repoId | benchmark:<id>>... [--apply] [--auth=codex-login|api-key]
 node dist/maintenance/records-migration.js [--apply]
+node dist/maintenance/backfill-execution-bundles.js <repoId>... [--apply]
 ```
+
+## Historical Task Execution Bundles
+
+`backfill-execution-bundles` moves existing accepted, nondeleted tasks onto the current
+registry-backed delivery path. It exports the original verified E2B templates, Modal images,
+Daytona snapshots or Vercel images, then publishes a small `execution-task.tar.gz` with
+pinned `FROM` lines instead of repository archives. Already exported images are reused.
+It resolves the original verification account from saved generation settings, without needing
+historical model access. Missing image pairs are skipped; inaccessible provider images fail
+without rebuilding a different environment or changing the task row.
+
+Run in the worker environment with artifact settings, `SELFBENCH_DATABASE_URL`,
+`SELFBENCH_EVAL_CREDENTIAL_KEY`, `SELFBENCH_TASK_IMAGE_REPOSITORY`, registry push permission,
+and managed provider keys where applicable. Dry runs only list planned changes; `--apply`
+starts provider sandboxes and uploads images, which can incur provider/storage costs.
+The task's bundle and image fields switch only after both images and the new bundle exist,
+with a concurrent-change guard. Original bundles, frozen comparisons and published releases
+remain unchanged. New evaluations and releases use the updated task row. Rerunning skips
+completed tasks; failed exports leave the original task runnable.
 
 ## OpenRouter Pricing
 
