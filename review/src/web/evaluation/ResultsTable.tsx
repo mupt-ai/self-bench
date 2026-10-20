@@ -63,7 +63,12 @@ export function ResultsTable({
   // view would interrupt, so revealing from `view` would replace the address until the browser
   // refuses.
   useEffect(() => {
-    if (!selectedRun || !configurations.some((c) => c.batches.some((b) => b.id === selectedRun)))
+    if (!selectedRun || !configurations.length) return;
+    if (
+      !configurations.some((configuration) =>
+        configuration.batches.some((batch) => batch.id === selectedRun),
+      )
+    )
       return;
     setView((current) => revealRun(current, configurations, selectedRun) ?? current);
     setSearch(

@@ -58,7 +58,7 @@ export function FailureExplanationForm({
   const inFlight = useRef(false);
   useEffect(() => {
     let disposed = false;
-    const orgUrl = baseUrl.split("/repos/")[0];
+    const orgUrl = baseUrl.split(/\/(?:repos|benchmarks)\//)[0];
     Promise.all([
       evaluationRequest<{ credentials: CredentialInfo[] }>(`${orgUrl}/credentials`),
       evaluationRequest<{ models: CatalogModel[] }>(`${baseUrl}/catalog`),

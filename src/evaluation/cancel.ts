@@ -41,6 +41,28 @@ export async function cancelEvaluation(
   if (run.status !== "completed") await stop(scope, id);
 }
 
+/**
+ * Deletes a run: cancels it if it is unfinished, then marks it deleted, which takes it out of
+ * lists of runs (listRuns, listEvaluations). The record is kept, since a published release may
+ * show its trials.
+ */
+export async function deleteEvaluation(
+  store: ArtifactStore,
+  scope: EvaluationScope,
+  id: string,
+  login: string,
+  stop: StopEvaluation,
+): Promise<EvaluationRun> {
+  const run = await updateEvaluation(store, scope, id, (run) => {
+    if (run.deletedAt) return false;
+    markCancelled(run, login);
+    run.deletedAt = new Date().toISOString();
+    run.deletedBy = login;
+  });
+  if (run.status !== "completed") await stop(scope, id);
+  return run;
+}
+
 /** Cancels every unfinished run of a comparison, including runs never submitted. */
 export async function cancelComparison(
   store: ArtifactStore,

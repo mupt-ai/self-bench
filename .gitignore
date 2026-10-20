@@ -6,6 +6,8 @@ dist/
 .env.*
 !.env.example
 jobs/
+# bun run video's default output.
+/video-out/
 .pi-subagents/
 
 # Terraform state, saved plans, credentials, and environment-specific configuration.

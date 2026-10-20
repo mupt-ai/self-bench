@@ -29,6 +29,7 @@ import {
   verifierRewards,
   wholeTranscripts,
 } from "./output.js";
+import { scopeOf } from "./scope.js";
 import { solverArguments } from "./solver-arguments.js";
 import { evaluationPrefix, RepeatSpendError } from "./store.js";
 import { transcriptSteps } from "./transcript.js";
@@ -94,9 +95,8 @@ export async function executeTrial(
     const solver = { store, run, trial, index, save, command, redact, options };
     const material = await runTrial({ ...solver, ...ready });
     // Kept before the trial is saved completed, so no explanation can start without it.
-    // Only a repository's evaluation explains failures (comparison-save.ts).
-    if (material !== undefined && input.repoId !== undefined)
-      await keepFailureMaterial(store, { repoId: input.repoId, id: input.id, index }, material);
+    if (material !== undefined)
+      await keepFailureMaterial(store, { ...scopeOf(input), id: input.id, index }, material);
   } catch (error) {
     // This attempt lost its claim (or its evaluation stopped); the trial's holder records it.
     if (error instanceof RepeatSpendError) {

@@ -60,6 +60,7 @@
     "test:phone": "playwright test -c review/playwright.phone.config.ts",
     "record:transitions": "PHONE_RECORD=1 playwright test -c review/playwright.phone.config.ts",
     "typecheck:review": "tsc --noEmit -p review/tsconfig.json",
+    "video": "bun scripts/benchmark-video.ts",
     "validate": "bun run check && bun run test && bun run build && bun run verify:package",
     "check:unused": "knip"
   },

@@ -49,6 +49,35 @@ function cellOf(attempts: readonly TaskResult[]): ResultsMatrixCell | undefined 
 }
 
 /**
+ * The share of some attempts that passed, counting errors as failures, or undefined when none has
+ * finished: running, queued, cancelled and unscored attempts don't count.
+ */
+function passShare(attempts: Iterable<readonly TaskResult[]>): number | undefined {
+  let passed = 0;
+  let counted = 0;
+  for (const list of attempts)
+    for (const { outcome } of list) {
+      if (outcome === "passed") passed += 1;
+      if (outcome === "passed" || outcome === "failed" || outcome === "error") counted += 1;
+    }
+  return counted ? passed / counted : undefined;
+}
+
+/** `entries` by their share, highest first or lowest first, those without one last; ties keep their order. */
+function byShare<T>(
+  entries: readonly T[],
+  shareOf: (entry: T) => number | undefined,
+  highest: boolean,
+) {
+  const shares = new Map(entries.map((entry) => [entry, shareOf(entry)]));
+  const key = (entry: T) => {
+    const share = shares.get(entry);
+    return share === undefined ? Number.POSITIVE_INFINITY : highest ? -share : share;
+  };
+  return [...entries].sort((a, b) => key(a) - key(b));
+}
+
+/**
  * The attempt a box opens: the latest failure, since that is the one worth explaining, else the
  * latest pass, else the latest attempt of any kind.
  */
@@ -58,10 +87,13 @@ function attemptToOpen(attempts: readonly TaskResult[]): TaskResult | undefined 
   return latest("failed") ?? latest("passed") ?? attempts.at(-1);
 }
 
-/** Every configuration's attempts at every task, one box each, shaded by how many passed. */
+/**
+ * Every configuration's attempts at every task, one box each, shaded by how many passed. The
+ * configurations that passed most come first, and the tasks passed least: the hardest at the left.
+ */
 export function TaskOutcomeGrid({
-  configurations,
-  tasks,
+  configurations: listed,
+  tasks: given,
   onOpenTask,
   onOpenAudit,
 }: {
@@ -71,12 +103,25 @@ export function TaskOutcomeGrid({
   /** Opens a task's own dialog, from its column's tick. */
   onOpenAudit(task: OutcomeGridTask): void;
 }) {
-  if (!tasks.length) return null;
+  if (!given.length) return null;
   const attempts = new Map(
-    configurations.map((configuration) => [
+    listed.map((configuration) => [
       configuration.key,
-      new Map(tasks.map((task) => [task.key, attemptsAt(configuration, task.key)])),
+      new Map(given.map((task) => [task.key, attemptsAt(configuration, task.key)])),
     ]),
+  );
+  const configurations = byShare(
+    listed,
+    (configuration) => passShare(attempts.get(configuration.key)?.values() ?? []),
+    true,
+  );
+  const tasks = byShare(
+    given,
+    (task) =>
+      passShare(
+        listed.map((configuration) => attempts.get(configuration.key)?.get(task.key) ?? []),
+      ),
+    false,
   );
   const rows: ResultsMatrixRow[] = configurations.map((configuration) => ({
     id: configuration.key,

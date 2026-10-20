@@ -1,0 +1,43 @@
+<!doctype html>
+<html data-theme="light">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<link rel="stylesheet" href="palette.css">
+<style>
+  * { box-sizing: border-box; transition: none !important; animation: none !important; }
+  html, body { margin: 0; background: var(--background); color: var(--foreground); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  .frame { width: 960px; height: 640px; padding: 26px 32px 20px; display: flex; flex-direction: column; gap: 14px; }
+  .head { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; }
+  .brand { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 13px; color: var(--muted-fg); letter-spacing: .02em; }
+  .brand img { width: 18px; height: 18px; }
+  h1 { margin: 8px 0 10px; font-family: var(--chart-sans); font-weight: 700; font-size: 28px; letter-spacing: -.01em; }
+  .focus { color: var(--focus); }
+  .repo { display: flex; align-items: center; gap: 9px; font-size: 14px; }
+  .repo img { width: 22px; height: 22px; border-radius: 5px; }
+  .repo .name { font-family: var(--mono); font-weight: 600; font-size: 15px; }
+  .repo .tasks { color: var(--muted-fg); }
+  .stat { text-align: right; }
+  .stat .big { font-family: var(--chart-sans); font-weight: 800; font-size: 40px; line-height: 1; color: var(--focus); }
+  .stat .small { margin-top: 6px; font-size: 13px; color: var(--muted-fg); }
+  .stat .small span { font-weight: 600; }
+  .panel { padding: 8px; border: 1.5px solid var(--panel-border); background: var(--card); box-shadow: 0 1px 2px rgb(0 0 0/.05), 0 2px 8px -2px rgb(0 0 0/.06); }
+  .plot { display: block;
+    --pareto-background: var(--card); --pareto-tooltip-background: var(--card);
+    --pareto-foreground: var(--foreground); --pareto-muted: var(--muted-fg);
+    --pareto-grid: var(--border); --pareto-point: var(--faint);
+    --pareto-frontier: var(--foreground); --pareto-frontier-line: var(--chart-frontier);
+    --pareto-frontier-dash: none; --pareto-frontier-width: 2px;
+    --pareto-font-family: var(--chart-mono); --pareto-label-font-family: var(--chart-sans);
+    font-family: var(--chart-mono); }
+  /* The rest of the frontier is named small and quiet; the highlighted model, big and in its color. */
+  .plot .pareto-point-label { font-size: 10px; font-weight: 500; fill: var(--muted-fg); }
+  .plot .pareto-point-label.focus { font-size: 20px; font-weight: 700; fill: var(--focus); }
+  footer { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted-fg); }
+  footer .url { font-family: var(--mono); color: var(--foreground); }
+</style>
+</head>
+<body><div id="root"></div>
+<script src="video-config.js"></script>
+<script type="module" src="video.js"></script>
+</body></html>

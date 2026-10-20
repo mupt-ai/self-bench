@@ -15,6 +15,7 @@ import { trialTimeouts } from "../contracts/agent-limit.js";
 import { MAX_PENDING_TRIAL_WORKFLOWS } from "../contracts/config/execution-limits.js";
 import { whenSandboxFree } from "../temporal/sandbox-capacity.js";
 import type { EvaluationActivities } from "./activities.js";
+import { scopeOf } from "./scope.js";
 import type { TaskAuditRequest } from "./task-audit.js";
 import { preparesTaskImages, trialInput } from "./trial-input.js";
 import type { EvaluationInput, FailedTrial } from "./types.js";
@@ -135,12 +136,12 @@ export async function selfBenchSolverTrialWorkflow(
     },
     records,
   );
-  if (input.explainFailures && input.repoId !== undefined && patched("explain-failed-trials")) {
+  if (input.explainFailures && patched("explain-failed-trials")) {
     const bundleKey = input.tasks[0]?.bundleKey;
     try {
       await startChild(selfBenchFailedTrialWorkflow, {
         workflowId: `${workflowInfo().workflowId}/explain`,
-        args: [{ repoId: input.repoId, id: input.id, index, ...(bundleKey ? { bundleKey } : {}) }],
+        args: [{ ...scopeOf(input), id: input.id, index, ...(bundleKey ? { bundleKey } : {}) }],
         parentClosePolicy: ParentClosePolicy.ABANDON,
       });
     } catch (error) {

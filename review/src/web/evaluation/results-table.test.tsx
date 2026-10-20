@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
+import { Window } from "happy-dom";
+import { act } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MemoryRouter } from "react-router";
+import { createMemoryRouter, MemoryRouter, RouterProvider, useLocation } from "react-router";
 import { passShade } from "../ResultsMatrix";
 import type { EvaluationRun } from "./api";
 import { ConfigurationRows } from "./ResultsConfigurationRows";
@@ -39,6 +42,66 @@ test("a batch's circle fills once it's done, and turns red only when a task erro
     /text-destructive".*r="4.25" fill="currentColor"/,
   );
   expect(circle("queued", [{ taskId: "task-1" }])).toContain(">Queued<");
+});
+
+test("a legacy run query is removed after revealing its row without a rerender loop", async () => {
+  const browser = new Window({ url: "https://selfbench.test/repos/o/r/results?run=one" });
+  const globals = {
+    window: browser,
+    document: browser.document,
+    HTMLElement: browser.HTMLElement,
+    IS_REACT_ACT_ENVIRONMENT: true,
+  };
+  const previous = Object.keys(globals).map(
+    (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const,
+  );
+  for (const [key, value] of Object.entries(globals))
+    Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+  const router = createMemoryRouter(
+    [
+      {
+        path: "/repos/o/r/results",
+        element: (
+          <>
+            <ResultsTable
+              runs={[run("one", {}, [passed("task-1")])]}
+              credentials={credentials}
+              baseUrl="/api/evaluations"
+              pages="/repos/o/r"
+            />
+            <Location />
+          </>
+        ),
+      },
+    ],
+    { initialEntries: ["/repos/o/r/results?run=one"] },
+  );
+  function Location() {
+    const location = useLocation();
+    return (
+      <output data-testid="location">
+        {location.pathname}
+        {location.search}
+      </output>
+    );
+  }
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  try {
+    await act(async () => root.render(<RouterProvider router={router} />));
+    expect(container.querySelector('[data-testid="location"]')?.textContent).toBe(
+      "/repos/o/r/results",
+    );
+    expect(container.querySelector('[aria-expanded="true"]')).not.toBeNull();
+  } finally {
+    await act(async () => root.unmount());
+    for (const [key, descriptor] of previous) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else Reflect.deleteProperty(globalThis, key);
+    }
+    await browser.happyDOM.close();
+  }
 });
 
 test("the table starts closed, opening to batches and then to tasks", () => {
@@ -181,6 +244,39 @@ test("the task grid shades one box per task by its pass rate and marks a never-r
   expect(html).toContain(">Errored<");
   // Each column's tick opens the task's own dialog.
   expect(html).toContain('aria-label="Audit task-1"');
+});
+
+test("the task grid puts the configurations that passed most first and the hardest tasks left", () => {
+  const failed = (taskId: string): TrialSpec => ({ ...passed(taskId), rewards: { reward: 0 } });
+  const crash = (taskId: string) => errored(taskId, "Harbor exited with code 137");
+  const model = (name: string) => ({ credential: "gpu-a", modelName: `openai/${name}` });
+  const runs = [
+    // Passes only task-1.
+    run("alpha", model("alpha"), [passed("task-1"), failed("task-2"), failed("task-3")]),
+    // Passes task-1 and task-2; its error on task-3 counts as a failure.
+    run("beta", model("beta"), [passed("task-1"), passed("task-2"), crash("task-3")]),
+    // Passes all three.
+    run("gamma", model("gamma"), [passed("task-1"), passed("task-2"), passed("task-3")]),
+  ];
+  const configurations = configurationsOf(runs, credentials, NOW);
+  const html = renderToStaticMarkup(
+    <MemoryRouter>
+      <TaskOutcomeGrid
+        configurations={configurations}
+        tasks={outcomeGridTasks(configurations)}
+        onOpenTask={() => {}}
+        onOpenAudit={() => {}}
+      />
+    </MemoryRouter>,
+  );
+  const order = (pattern: RegExp) => [...html.matchAll(pattern)].map((match) => match[1]);
+  // task-3 passed once in three (the error a failure), task-2 twice, task-1 every time.
+  expect([...new Set(order(/aria-label="Audit (task-\d)"/g))]).toEqual([
+    "task-3",
+    "task-2",
+    "task-1",
+  ]);
+  expect(order(/aria-label="([^"]+) on task-1:/g)).toEqual(["gamma", "beta", "alpha"]);
 });
 
 test("pass-rate shades reach the ends only when every attempt passed or failed", () => {

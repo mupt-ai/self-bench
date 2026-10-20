@@ -67,7 +67,7 @@ export async function failureMaterial(
  */
 export async function storedFailureMaterial(
   store: ArtifactStore,
-  { repoId, id }: Pick<FailedTrial, "repoId" | "id">,
+  failed: FailedTrial,
   bundleKey: string,
   trial: EvaluationTrial,
 ): Promise<string> {
@@ -75,7 +75,7 @@ export async function storedFailureMaterial(
     ({ files }) => new Map(files.flatMap((file) => (file.text ? [[file.path, file.text]] : []))),
     () => new Map<string, string>(),
   );
-  const artifacts = `${evaluationPrefix({ repoId }, id)}artifacts/`;
+  const artifacts = `${evaluationPrefix(failed, failed.id)}artifacts/`;
   const verifier = new Map(
     await Promise.all(
       trial.artifacts
@@ -100,14 +100,14 @@ export async function storedFailureMaterial(
 }
 
 /** Where a failed trial's material waits for explainTrialFailure, beside its other artifacts. */
-export function materialKey({ repoId, id, index }: Pick<FailedTrial, "repoId" | "id" | "index">) {
-  return `${evaluationPrefix({ repoId }, id)}failures/${index}.md`;
+export function materialKey(trial: Pick<FailedTrial, "repoId" | "benchmarkId" | "id" | "index">) {
+  return `${evaluationPrefix(trial, trial.id)}failures/${trial.index}.md`;
 }
 
 /** Keeps a saved trial's failure material for explainTrialFailure; a failure only loses it. */
 export async function keepFailureMaterial(
   store: ArtifactStore,
-  trial: Pick<FailedTrial, "repoId" | "id" | "index">,
+  trial: Pick<FailedTrial, "repoId" | "benchmarkId" | "id" | "index">,
   material: string,
 ): Promise<void> {
   await store

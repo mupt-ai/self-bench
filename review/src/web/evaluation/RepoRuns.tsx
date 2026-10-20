@@ -18,7 +18,10 @@ interface RepoRuns {
   error: string;
   /** Whether the Results page is the one showing. */
   onResults: boolean;
-  /** Puts a freshly fetched run in place of its older copy, or first if the list lacks it. */
+  /**
+   * Puts a freshly fetched run in place of its older copy, or first if the list lacks it; a
+   * deleted run leaves the list.
+   */
   update(run: EvaluationRun): void;
 }
 
@@ -145,9 +148,11 @@ export function RepoRunsProvider({
   const update = React.useCallback(
     (run: EvaluationRun) =>
       setRuns((history) =>
-        history.some((entry) => entry.id === run.id)
-          ? history.map((entry) => (entry.id === run.id ? run : entry))
-          : [run, ...history],
+        run.deletedAt
+          ? history.filter((entry) => entry.id !== run.id)
+          : history.some((entry) => entry.id === run.id)
+            ? history.map((entry) => (entry.id === run.id ? run : entry))
+            : [run, ...history],
       ),
     [],
   );

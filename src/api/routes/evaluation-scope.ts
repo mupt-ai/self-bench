@@ -5,7 +5,7 @@ import type { ComparisonRecord } from "../../db/comparisons.js";
 import { RecordStoreError } from "../../db/encrypted-records.js";
 import { runnable } from "../../db/task-record.js";
 import type { User } from "../../db/users.js";
-import { cancelComparison, cancelEvaluation } from "../../evaluation/cancel.js";
+import { cancelComparison, cancelEvaluation, deleteEvaluation } from "../../evaluation/cancel.js";
 import {
   catalogVersion,
   evaluationCatalog,
@@ -25,7 +25,7 @@ import {
 } from "../../evaluation/comparisons.js";
 import { listRuns } from "../../evaluation/run-list.js";
 import { sameScope } from "../../evaluation/scope.js";
-import { evaluationPrefix, getEvaluation } from "../../evaluation/store.js";
+import { evaluationPrefix, getEvaluation, live } from "../../evaluation/store.js";
 import { managedHarborEnvironment, managedOffer } from "../../generation/billing/managed.js";
 import { track } from "../../lib/telemetry/posthog.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
@@ -167,11 +167,18 @@ export async function handleScopedEvaluations(
     request.resume();
     return;
   }
-  if (section && !id && action === "cancel" && request.method === "POST") {
-    if (!trustedMutation(request, options.publicUrl, user))
-      sendJson(response, 403, { error: "Same-origin JSON request required" });
-    else if (!(await getEvaluation(artifacts, scope, section)))
+  if (section && !id && (action === "cancel" || action === "delete") && request.method === "POST") {
+    const trusted = trustedMutation(request, options.publicUrl, user);
+    const run = trusted ? await getEvaluation(artifacts, scope, section) : undefined;
+    if (!trusted) sendJson(response, 403, { error: "Same-origin JSON request required" });
+    else if (!run || (action === "cancel" && run.deletedAt))
       sendJson(response, 404, { error: "Evaluation not found" });
+    else if (action === "delete")
+      sendJson(
+        response,
+        200,
+        await deleteEvaluation(artifacts, scope, section, user.login, options.stop),
+      );
     else {
       await cancelEvaluation(artifacts, scope, section, user.login, options.stop);
       sendJson(response, 200, await getEvaluation(artifacts, scope, section));
@@ -209,7 +216,7 @@ export async function handleScopedEvaluations(
     const have = /^(?:W\/)?"([^"]+)"$/.exec(request.headers["if-none-match"] ?? "")?.[1];
     const { tag, runs } = await listRuns(artifacts, scope, have);
     response.setHeader("etag", `"${tag}"`);
-    if (runs) sendJson(response, 200, { runs });
+    if (runs) sendJson(response, 200, { runs: runs.filter(live) });
     else response.writeHead(304).end();
   }
 }

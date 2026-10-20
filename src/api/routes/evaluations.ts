@@ -22,7 +22,7 @@ import { handleScopedEvaluations } from "./evaluation-scope.js";
 import { explainTrial } from "./explain-trial.js";
 
 const repoRoute =
-  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/evaluations(?:\/(options|catalog|comparisons|audit|[a-f0-9-]{36}))?(?:\/(artifacts|[a-f0-9-]{36}))?(?:\/(resume|cancel|explain))?$/;
+  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/evaluations(?:\/(options|catalog|comparisons|audit|[a-f0-9-]{36}))?(?:\/(artifacts|[a-f0-9-]{36}))?(?:\/(resume|cancel|delete|explain))?$/;
 export interface EvaluationRoutesOptions {
   users: UserStore;
   repos: RepoStore;
@@ -93,7 +93,8 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
         const methods = ["GET", "POST"].includes(request.method ?? "");
         if (section && section !== "audit" && !id && action === "explain" && methods) {
           await explainTrial(options, request, url, response, {
-            repo,
+            scope: { repoId: repo.id },
+            orgId: repo.orgId,
             evaluationId: section,
             user,
             env,

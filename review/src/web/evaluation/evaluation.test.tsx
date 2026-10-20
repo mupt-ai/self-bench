@@ -36,7 +36,7 @@ test("results distinguish zero rewards from missing scores and show the last sol
   expect(html).toMatch(/Why It Failed<\/h4><p[^>]*>The parser still drops trailing commas\.<\/p>/);
   expect(html).toContain("Summarized by GPT-6 Luna");
 });
-test("only a live run offers cancellation", () => {
+test("only a live run offers cancellation, and every run deletion", () => {
   const run = initialEvaluation(evaluationInput(), "Test model");
   const render = () =>
     renderToStaticMarkup(
@@ -64,6 +64,8 @@ test("only a live run offers cancellation", () => {
     );
   run.status = "running";
   expect(render()).toContain("Cancel Run");
+  expect(render()).toContain("Delete Run");
   run.status = "failed";
   expect(render()).not.toContain("Cancel Run");
+  expect(render()).toContain("Delete Run");
 });

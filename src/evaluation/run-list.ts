@@ -5,7 +5,7 @@ import {
   evaluationPrefix,
   getEvaluation,
   keepSummary,
-  listEvaluations,
+  readEvaluations,
   runSummariesOf,
   runSummary,
   savedSince,
@@ -21,6 +21,9 @@ import type { EvaluationRun } from "./types.js";
  * that is missing or behind (a run from before summaries, a worker on older code, a write that
  * failed) is rebuilt from the run's record, and saved for the next read. A summary is trusted to
  * come from this bucket: a database belongs to one bucket, whose records are never rewritten.
+ *
+ * Deleted runs are listed too, for the comparisons that started them; lists people see filter them
+ * out (`live` in store.ts).
  */
 export interface RunList {
   /** Names the runs' revisions: the same tag means the same list. */
@@ -73,7 +76,7 @@ export async function listRuns(
   const summaries = runSummariesOf(store);
   if (!summaries) {
     // No database here (a local run): every record is read, as before summaries.
-    const runs = (await listEvaluations(store, scope)).map(runSummary);
+    const runs = (await readEvaluations(store, scope)).map(runSummary);
     const tag = tagOf(runs.map((run) => [run.id, run.revision]));
     return tag === have ? { tag } : { tag, runs };
   }

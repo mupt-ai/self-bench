@@ -11,6 +11,7 @@ import { projectRoot } from "../lib/project-paths.js";
 import { explanationModel } from "./explanation-model.js";
 import { materialKey, storedFailureMaterial } from "./failure-material.js";
 import { redactOutput } from "./output.js";
+import { scopeOf } from "./scope.js";
 import { getEvaluation, updateEvaluation } from "./store.js";
 import type { EvaluationTrial, FailedTrial, FailureSummary } from "./types.js";
 
@@ -57,15 +58,15 @@ export async function explainTrialFailure(
   options: FailureSummaryOptions,
 ): Promise<void> {
   const environment = options.env ?? process.env;
-  const run = await getEvaluation(store, { repoId: request.repoId }, request.id);
+  const run = await getEvaluation(store, request, request.id);
   const trial = run?.trials[request.index];
   if (!trial || !explainable(trial)) return;
   let key: string | undefined;
   let selected: ReturnType<typeof explanationModel> | undefined;
   if (request.explanation) {
     const { orgId, credentialId, model } = request.explanation;
-    if ((await options.vault?.repoOrg?.(request.repoId)) !== orgId)
-      throw new Error("Explanation repository is unavailable in this organization.");
+    if ((await options.vault?.scopeOrg?.(scopeOf(request))) !== orgId)
+      throw new Error("Explanation repository or benchmark is unavailable in this organization.");
     const credential = await options.vault?.credentials.find(orgId, credentialId);
     if (!credential) throw new Error("Explanation API key is unavailable.");
     selected = explanationModel(credential, model, environment);
@@ -93,7 +94,7 @@ export async function explainTrialFailure(
     selected,
   );
   if (!summary) return;
-  await updateEvaluation(store, { repoId: request.repoId }, request.id, (latest) => {
+  await updateEvaluation(store, request, request.id, (latest) => {
     const current = latest.trials[request.index];
     if (!current || !explainable(current)) return false;
     current.failureSummary = summary;
