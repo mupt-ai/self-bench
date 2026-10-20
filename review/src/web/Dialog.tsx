@@ -103,7 +103,15 @@ export function DialogHeader({
 }
 
 export function DialogBody({ className, ...props }: ComponentProps<"div">) {
-  return <div {...props} className={cn("space-y-4 p-4 sm:p-6", className)} />;
+  return (
+    <div
+      {...props}
+      className={cn(
+        "min-w-0 space-y-4 whitespace-normal [overflow-wrap:anywhere] p-4 sm:p-6",
+        className,
+      )}
+    />
+  );
 }
 
 export function DialogFooter({ className, ...props }: ComponentProps<"footer">) {

@@ -8,7 +8,7 @@ import { runnable, taskState } from "../db/task-record.js";
 import { createTaskStore } from "../db/tasks.js";
 import { evaluationTaskKey } from "../evaluation/models.js";
 import { listRuns } from "../evaluation/run-list.js";
-import { evaluationPrefix, getEvaluation } from "../evaluation/store.js";
+import { evaluationPrefix, getEvaluation, live } from "../evaluation/store.js";
 import type { EvaluationRun } from "../evaluation/types.js";
 import { apiHeaders, GitHubOAuthError } from "../third_party/github/oauth.js";
 import type { ReleaseInputs } from "./release-build.js";
@@ -71,7 +71,7 @@ export async function releaseInputs(
 ): Promise<ReleaseInputs> {
   const [taskList, runs, credentialFacts] = await Promise.all([
     releaseTasks(db, scope.repoId),
-    listRuns(artifacts, { repoId: scope.repoId }).then(({ runs = [] }) => runs),
+    listRuns(artifacts, { repoId: scope.repoId }).then(({ runs = [] }) => runs.filter(live)),
     releaseCredentials(db, scope.orgId),
   ]);
   const head = headOf(rows);

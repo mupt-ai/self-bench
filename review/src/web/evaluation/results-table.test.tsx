@@ -246,6 +246,39 @@ test("the task grid shades one box per task by its pass rate and marks a never-r
   expect(html).toContain('aria-label="Audit task-1"');
 });
 
+test("the task grid puts the configurations that passed most first and the hardest tasks left", () => {
+  const failed = (taskId: string): TrialSpec => ({ ...passed(taskId), rewards: { reward: 0 } });
+  const crash = (taskId: string) => errored(taskId, "Harbor exited with code 137");
+  const model = (name: string) => ({ credential: "gpu-a", modelName: `openai/${name}` });
+  const runs = [
+    // Passes only task-1.
+    run("alpha", model("alpha"), [passed("task-1"), failed("task-2"), failed("task-3")]),
+    // Passes task-1 and task-2; its error on task-3 counts as a failure.
+    run("beta", model("beta"), [passed("task-1"), passed("task-2"), crash("task-3")]),
+    // Passes all three.
+    run("gamma", model("gamma"), [passed("task-1"), passed("task-2"), passed("task-3")]),
+  ];
+  const configurations = configurationsOf(runs, credentials, NOW);
+  const html = renderToStaticMarkup(
+    <MemoryRouter>
+      <TaskOutcomeGrid
+        configurations={configurations}
+        tasks={outcomeGridTasks(configurations)}
+        onOpenTask={() => {}}
+        onOpenAudit={() => {}}
+      />
+    </MemoryRouter>,
+  );
+  const order = (pattern: RegExp) => [...html.matchAll(pattern)].map((match) => match[1]);
+  // task-3 passed once in three (the error a failure), task-2 twice, task-1 every time.
+  expect([...new Set(order(/aria-label="Audit (task-\d)"/g))]).toEqual([
+    "task-3",
+    "task-2",
+    "task-1",
+  ]);
+  expect(order(/aria-label="([^"]+) on task-1:/g)).toEqual(["gamma", "beta", "alpha"]);
+});
+
 test("pass-rate shades reach the ends only when every attempt passed or failed", () => {
   expect(passShade(0, 8)).toBe("bg-foreground/10");
   expect(passShade(1, 8)).toBe("bg-foreground/25");

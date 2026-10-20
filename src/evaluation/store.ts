@@ -195,7 +195,19 @@ export async function getEvaluation(
   const bytes = latest ? await store.getByKey(latest.key) : undefined;
   return bytes ? (JSON.parse(Buffer.from(bytes).toString("utf8")) as EvaluationRun) : undefined;
 }
+/** The scope's runs, newest first, leaving out deleted ones. */
 export async function listEvaluations(
+  store: ArtifactStore,
+  scope: EvaluationScope,
+): Promise<EvaluationRun[]> {
+  return (await readEvaluations(store, scope)).filter(live);
+}
+
+/** Whether a run has not been deleted (deleteEvaluation). */
+export const live = (run: Pick<EvaluationRun, "deletedAt">): boolean => !run.deletedAt;
+
+/** Every run of the scope, deleted ones included, newest first. */
+export async function readEvaluations(
   store: ArtifactStore,
   scope: EvaluationScope,
 ): Promise<EvaluationRun[]> {
