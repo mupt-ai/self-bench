@@ -17,7 +17,7 @@ import { providerCredentialEnvironment, providerEnvironment } from "../src/sandb
 type SavedTask = Pick<typeof tasks.$inferSelect, "id" | "runId" | "taskId" | "bundleKey" | "images">;
 
 /** Resolve only the original verification account; historical model access is irrelevant. */
-async function exportEnvironment(
+export async function exportEnvironment(
   vault: Pick<Vault, "records" | "credentials">,
   runId: string,
   provider: TaskImages["provider"],
@@ -34,8 +34,7 @@ async function exportEnvironment(
     const secret = managedSandboxCredentials(base);
     return { ...runtime, E2B_API_KEY: secret.apiKey, E2B_DOMAIN: secret.domain };
   }
-  const orgId = reference.orgId;
-  if (!orgId) throw new Error("Original generation has no credential organization");
+  const orgId = reference.orgId ?? reference.ownerId;
   const original = settings.harborEnvironment ?? settings.sandbox;
   if (original !== provider) throw new Error("Saved verification provider does not match the task's images");
   const id = settings.harborEnvironment ? settings.harborCredentialId : settings.sandboxCredentialId;
