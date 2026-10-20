@@ -12,6 +12,8 @@
     "src/harnesses/pi/extensions/{authoring,discovery,reviewer}.ts!",
     "src/sandbox/programs/{author,check,verifier,compiler,task-operation,job}.ts!",
     "review/src/main.tsx!",
+    // scripts/benchmark-video.ts bundles the video page by path.
+    "review/src/benchmark-video/video.tsx!",
     "scripts/*.ts!",
     "tests/**/*.test.ts",
     "review/src/**/*.test.{ts,tsx}"
@@ -26,6 +28,8 @@
   // The phone checks (review/src/public-site/AGENTS.md); the plugin reads their files from it.
   "playwright": { "config": ["review/playwright.phone.config.ts"] },
   "includeEntryExports": true,
+  // bun run video encodes with the system's ffmpeg.
+  "ignoreBinaries": ["ffmpeg"],
   "ignoreIssues": {
     // These exports are registration interfaces for the external loaders.
     "src/temporal/workflows.ts": ["exports"],
