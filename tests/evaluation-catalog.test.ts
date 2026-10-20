@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import {
   type CatalogModel,
   catalog,
-  evaluationCatalog,
+  evaluationCatalog as fullEvaluationCatalog,
   withReferencePricing,
 } from "../src/evaluation/catalog.js";
 import {
@@ -18,6 +18,10 @@ import {
   type ListedModel,
   setGatewayListing,
 } from "../src/gateways/index.js";
+
+// These tests cover the gateway catalog; Dari is a separate built-in direct route.
+const evaluationCatalog = () =>
+  fullEvaluationCatalog().filter((model) => model.provider !== "dari");
 
 afterEach(() => {
   for (const gateway of gatewayIds) setGatewayListing(gateway, { models: [], rates: new Map() });

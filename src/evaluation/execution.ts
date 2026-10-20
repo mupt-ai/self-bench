@@ -121,6 +121,7 @@ export async function credentialExecution(
   } else {
     child[modelApiKeyVariable(info.kind)] = modelSecret;
   }
+  if (info.kind === "dari") child.OPENAI_BASE_URL = "https://routing.dari.dev/v1";
   if (info.kind === "custom")
     child.OPENAI_BASE_URL = validateEndpoint("endpoint" in info ? (info.endpoint ?? "") : "", env);
   Object.assign(
@@ -189,7 +190,8 @@ export function solverAgent(harness: Harness, provider?: string, model?: string)
   if (harness === "claude-code") return "harbor_gateway:SelfBenchClaudeCode";
   if (harness === "muse-code") return "harbor_muse:SelfBenchMuseCode";
   if (harness === "pi") {
-    if (provider === "custom" && model === "openai/dari/routing") return "harbor_dari:DariPi";
+    if (provider === "dari" || (provider === "custom" && model === "openai/dari/routing"))
+      return "harbor_dari:DariPi";
     return isGateway(provider) ? gateways[provider].harborPi : harness;
   }
   if (harness !== "codex") return harness;
@@ -213,7 +215,8 @@ export function solverAgentArguments(
   if (harness !== "pi") return levels;
   // Custom credentials are OpenAI-compatible Chat Completions endpoints. Harbor requires
   // an explicit API style before it will write Pi's isolated custom-provider config.
-  if (provider === "custom") return [...levels, "--agent-kwarg", "model_api=openai-completions"];
+  if (provider === "custom" || provider === "dari")
+    return [...levels, "--agent-kwarg", "model_api=openai-completions"];
   // Meta recommends Responses: Chat Completions drops reasoning between turns.
   if (harness === "pi" && compatibleEndpoint(provider, harness))
     return [...levels, "--agent-kwarg", "model_api=openai-responses"];
@@ -247,7 +250,11 @@ export function gatewayTrial(
   if (endpoint) return endpointTrial(endpoint, provider, harness, model, env);
   if (!isGateway(provider)) {
     const child = { ...env };
-    return { model, child, extraAllowedHosts: providerHosts(provider, child) };
+    return {
+      model: provider === "dari" ? "openai/dari/routing" : model,
+      child,
+      extraAllowedHosts: providerHosts(provider, child),
+    };
   }
   const gateway = gateways[provider];
   const key = env[gateway.keyVariable];

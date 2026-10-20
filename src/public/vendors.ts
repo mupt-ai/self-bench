@@ -30,6 +30,7 @@ const VENDOR_COLORS: Record<string, string> = {
   moonshotai: "#c0457a",
   meta: "#0ea5e9",
   typesafe: "#b08a20",
+  dari: "#b84bd1",
   custom: "#8a8580",
 };
 
@@ -50,6 +51,7 @@ const VENDOR_NAMES: Record<string, string> = {
   moonshotai: "Moonshot AI",
   meta: "Meta",
   typesafe: "TypeSafe",
+  dari: "Dari",
   custom: CUSTOM_VENDOR,
 };
 
