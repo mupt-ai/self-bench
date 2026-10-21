@@ -6,6 +6,7 @@ import { Button, fieldStyles, Input, Select } from "../ui";
 import { ClaudeSignIn } from "./ClaudeSignIn";
 import { CredentialSecret } from "./CredentialSecret";
 import { isSandbox, providers, sandboxes, signIns } from "./credential-presentation";
+import { DariRouterField } from "./DariRouterField";
 import { DeviceSignIn } from "./DeviceSignIn";
 import { SandboxLimitField } from "./SandboxLimit";
 
@@ -190,6 +191,12 @@ export function CredentialEditor({
             />
           ) : (
             <fieldset className="space-y-5" disabled={busy}>
+              {draft.kind === "dari" && (
+                <DariRouterField
+                  value={draft.endpoint}
+                  onChange={(endpoint) => setDraft({ ...draft, endpoint })}
+                />
+              )}
               {draft.kind === "custom" && (
                 <label className={fieldStyles} htmlFor="credential-endpoint">
                   Endpoint

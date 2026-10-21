@@ -139,6 +139,15 @@ export interface TaskItem {
   startedBy?: string;
   startedAt?: string;
   cost?: GenerationCost;
+  /** The task feedback revised into this one. */
+  revisedFrom?: { runId: string; taskId: string };
+  feedback?: string;
+}
+
+/** One task as its page shows it: the task, and the revisions feedback started from it. */
+export interface TaskDetail {
+  task: TaskItem;
+  revisions: TaskItem[];
 }
 
 export async function addPullRequest(
@@ -188,12 +197,30 @@ export async function fetchTask(
   fullName: string,
   runId: string,
   taskId: string,
+): Promise<TaskDetail> {
+  const body = await requestJson<{ task: TaskItem; revisions?: TaskItem[] }>(
+    `${repoPath(org, fullName)}/tasks/${encodeURIComponent(runId)}/${encodeURIComponent(taskId)}`,
+  );
+  return { task: body.task, revisions: body.revisions ?? [] };
+}
+
+/** Starts an agent that revises the task from the feedback; the revision is a new task. */
+export async function sendTaskFeedback(
+  org: string,
+  fullName: string,
+  task: { runId: string; taskId: string },
+  feedback: string,
+  generation?: import("../../../src/generation/settings/settings").GenerationSettings,
 ): Promise<TaskItem> {
-  return (
-    await requestJson<{ task: TaskItem }>(
-      `${repoPath(org, fullName)}/tasks/${encodeURIComponent(runId)}/${encodeURIComponent(taskId)}`,
-    )
-  ).task;
+  const body = await requestJson<{ task: TaskItem }>(
+    `${repoPath(org, fullName)}/tasks/${encodeURIComponent(task.runId)}/${encodeURIComponent(task.taskId)}/feedback`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ feedback, ...(generation ? { generation } : {}) }),
+    },
+  );
+  return body.task;
 }
 
 export async function cancelTaskGeneration(

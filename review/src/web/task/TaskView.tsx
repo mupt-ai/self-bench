@@ -8,10 +8,21 @@ import { EnvironmentSheet } from "../../sheets/EnvironmentSheet";
 import type { TaskSource } from "../../sources/types";
 import type { TaskFiles, TaskRow } from "../../types";
 
-type Tab = "file" | "environment" | "pipeline";
+type Tab = "file" | "environment" | "pipeline" | "feedback";
 
-/** The file review: bundle tree on the left, file / environment / pipeline on the right. */
-export function TaskView({ source, row }: { source: TaskSource; row: TaskRow }) {
+/**
+ * The file review: bundle tree on the left, file / environment / pipeline on the right, and
+ * feedback where the page can revise the task.
+ */
+export function TaskView({
+  source,
+  row,
+  feedback,
+}: {
+  source: TaskSource;
+  row: TaskRow;
+  feedback?: React.ReactNode;
+}) {
   const [files, setFiles] = React.useState<TaskFiles | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [tab, setTab] = React.useState<Tab>("file");
@@ -79,6 +90,7 @@ export function TaskView({ source, row }: { source: TaskSource; row: TaskRow }) 
     ["file", openFile ? `File · ${openFile.path.split("/").pop()}` : "File"],
     ["environment", "Environment"],
     ["pipeline", "Pipeline"],
+    ...(feedback ? ([["feedback", "Feedback"]] as [Tab, string][]) : []),
   ];
 
   return (
@@ -125,7 +137,9 @@ export function TaskView({ source, row }: { source: TaskSource; row: TaskRow }) 
             </button>
           ))}
         </div>
-        {error && tab !== "pipeline" ? (
+        {tab === "feedback" && feedback ? (
+          feedback
+        ) : error && tab !== "pipeline" ? (
           <p className={`${notice} !text-destructive`}>{error}</p>
         ) : tab === "pipeline" ? (
           <AgentWorkSheet source={source} row={row} />

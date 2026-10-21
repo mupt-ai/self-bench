@@ -45,6 +45,8 @@ export interface TaskListItem {
   readonly startedBy?: string;
   readonly startedAt?: string;
   readonly cost?: GenerationCost;
+  readonly revisedFrom?: TaskRecord["revisedFrom"];
+  readonly feedback?: string;
 }
 
 export interface TaskRoutesOptions {
@@ -172,7 +174,8 @@ export function createTaskRoutes(options: TaskRoutesOptions): TaskRoutes {
         const cost = options.cost
           ? await options.cost(runId, tenant.id, task.candidateId, liveCost)
           : undefined;
-        sendJson(response, 200, { task: taskItem(task, cost) });
+        const revisions = (await tasks.revisionsOf(task.id)).map((revision) => taskItem(revision));
+        sendJson(response, 200, { task: taskItem(task, cost), revisions });
         return true;
       }
       const task = found;
@@ -225,6 +228,8 @@ export function taskItem(task: TaskRecord, cost?: GenerationCost): TaskListItem 
     ...(task.startedBy ? { startedBy: task.startedBy } : {}),
     ...(task.startedAt ? { startedAt: task.startedAt } : {}),
     ...(cost ? { cost } : {}),
+    ...(task.revisedFrom ? { revisedFrom: task.revisedFrom } : {}),
+    ...(task.feedback ? { feedback: task.feedback } : {}),
   };
 }
 

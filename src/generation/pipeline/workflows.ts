@@ -158,8 +158,10 @@ export async function executeCandidate(
     progress: update({ status, reason }),
   });
   update({});
+  // A revision restores the task it revises and hands the person's feedback to the first turn.
+  const maintainerFeedback = input.revision?.feedback;
   let session: ArtifactRef | undefined;
-  let draft: AuthoredTaskDraft | undefined;
+  let draft: AuthoredTaskDraft | undefined = input.revision?.draft;
   let lastReport: ArtifactRef | undefined;
   let feedback: string | undefined;
   let lastSummary = "no verification report";
@@ -180,6 +182,7 @@ export async function executeCandidate(
           ...(draft ? { draft } : {}),
           ...(turnReport ? { report: turnReport } : {}),
           ...(feedback && turn === 1 ? { feedback } : {}),
+          ...(maintainerFeedback && round === 1 && turn === 1 ? { maintainerFeedback } : {}),
         });
         if (authored.kind === "rejected") return finish("rejected", authored.reason);
         session = authored.session;
@@ -226,6 +229,7 @@ export async function executeCandidate(
         task,
         report: verified.reportRef,
         round: reviews,
+        ...(maintainerFeedback ? { maintainerFeedback } : {}),
       });
       if (verdict.kind === "accepted") {
         // A failed export only means other providers build the task's Dockerfiles, as before.
