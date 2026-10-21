@@ -7,6 +7,13 @@ import { routeFor } from "../src/evaluation/models.js";
 import { initialEvaluation } from "../src/evaluation/store.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";
 
+test("a cleared endpoint field saves no endpoint, so a Dari credential runs the default router", () => {
+  expect(
+    credentialSchema.parse({ name: "Dari", kind: "dari", value: "test-key", endpoint: "" })
+      .endpoint,
+  ).toBeUndefined();
+});
+
 test("Dari Router is built in and needs only a Dari API key", () => {
   expect(evaluationCatalog().find((model) => model.id === "dari/routing")).toEqual(dariRouter);
   expect(

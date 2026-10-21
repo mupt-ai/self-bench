@@ -49,7 +49,7 @@ export const credentialSchema = z
       .optional(),
     teamId: providerId.optional(),
     projectId: providerId.optional(),
-    endpoint: z.url().optional(),
+    endpoint: z.preprocess((value) => (value === "" ? undefined : value), z.url().optional()),
     maxSandboxes: maxSandboxesSchema.optional(),
   })
   .strict()
