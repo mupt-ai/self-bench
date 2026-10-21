@@ -92,6 +92,27 @@ describe("task routes", () => {
     ).toBe(404);
   });
 
+  test("reviews and deletions tell the image workflow, and its failures never fail them", async () => {
+    const changed: number[] = [];
+    const fixture = await seededTaskSite({
+      reviewChanged: async (taskRowId) => {
+        changed.push(taskRowId);
+        throw new Error("Temporal is down");
+      },
+    });
+    server = fixture.site;
+    const { site, headers, ingest } = fixture;
+    await ingest();
+    const path = `${REPO}/tasks/run-one/task-good`;
+    const approve = { method: "PUT", headers, body: JSON.stringify({ decision: "approve" }) };
+    expect((await site.request(`${path}/review`, approve)).status).toBe(200);
+    expect((await site.request(`${path}/review`, { method: "DELETE", headers })).status).toBe(200);
+    expect((await site.request(path, { method: "DELETE", headers })).status).toBe(200);
+    expect((await site.request(path, { method: "DELETE", headers })).status).toBe(200);
+    expect(changed).toHaveLength(3);
+    expect(new Set(changed).size).toBe(1);
+  });
+
   test("serves a task's artifacts only for synced tasks", async () => {
     const { site, headers, ingest } = await signedIn();
     expect(

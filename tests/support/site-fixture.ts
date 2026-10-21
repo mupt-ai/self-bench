@@ -148,6 +148,7 @@ export interface AuthServerOptions {
   readonly artifacts?: ArtifactStore;
   readonly start?: WorkflowStarter;
   readonly status?: TaskStatusSource;
+  readonly reviewChanged?: (taskRowId: number) => Promise<void>;
   readonly now?: () => Date;
   readonly managedOffering?: boolean;
 }
@@ -185,6 +186,7 @@ export async function startAuthServer(options: AuthServerOptions = {}): Promise<
         tasks,
         artifacts: options.artifacts,
         ...(options.status ? { status: options.status } : {}),
+        ...(options.reviewChanged ? { reviewChanged: options.reviewChanged } : {}),
       })
     : undefined;
   const pullRequestRoutes =

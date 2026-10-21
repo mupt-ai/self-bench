@@ -91,9 +91,11 @@ const workflowActivities: SelfBenchActivities = {
       ...input,
       outcome: await whenSandboxFree(() => agents.startReviewRound(input)),
     }),
-  // Workflows that accepted a task before exports existed replay without one.
+  // Images are now exported once a person approves the task (selfBenchTaskImagesWorkflow).
+  // Workflows that accepted a task before that replay their export; those from before exports
+  // existed replay without one.
   exportTaskImages: async (input) =>
-    patched("export-task-images")
+    !patched("export-after-approval") && patched("export-task-images")
       ? await whenSandboxFree(() => exporter().exportTaskImages(input))
       : input.task,
   compileAndVerify: async (input) => {

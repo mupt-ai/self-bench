@@ -206,7 +206,7 @@ const exportedImagesSchema = z
  * the separate verifier's (from `tests/`, absent for tasks with services), in the account that
  * verified the task. Modal trials there start from Modal IDs instead of building the Dockerfiles.
  *
- * `registry` holds the same images exported, once the task was accepted, into SelfBench's task
+ * `registry` holds the same images exported, once a person approved the task, into SelfBench's task
  * image repository by digest, so other providers and accounts start from exactly what
  * verification ran on too.
  */
