@@ -23,6 +23,8 @@ export interface ReviewRoundInput {
   readonly task: AuthoredTask;
   readonly report: ArtifactRef;
   readonly round: number;
+  /** A revision's: what the person asked to change, which the reviewer reads as part of the request. */
+  readonly maintainerFeedback?: string;
 }
 
 const VERDICT = "/work/verdict/verdict.json";
@@ -87,6 +89,9 @@ export async function startReviewRound(
       taskId: task.taskId,
       instruction: definition.prompt.trim(),
       report: renderVerifyReport(report).trim(),
+      maintainer: input.maintainerFeedback
+        ? renderPrompt("review-feedback", { feedback: input.maintainerFeedback.trim() })
+        : "",
     }),
     files: [
       bundle,

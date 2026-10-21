@@ -6,6 +6,7 @@ export function taskFrom(row: {
   task: typeof tasks.$inferSelect;
   reviewedBy: string | null;
   startedBy: string | null;
+  origin: { runId: string; taskId: string } | null;
 }): TaskRecord {
   const { task } = row;
   return {
@@ -38,6 +39,8 @@ export function taskFrom(row: {
     ...(task.workflowId ? { workflowId: task.workflowId } : {}),
     ...(row.startedBy ? { startedBy: row.startedBy } : {}),
     ...(task.startedAt ? { startedAt: task.startedAt.toISOString() } : {}),
+    ...(row.origin ? { revisedFrom: row.origin } : {}),
+    ...(task.feedback ? { feedback: task.feedback } : {}),
   };
 }
 

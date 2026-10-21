@@ -5,6 +5,7 @@ import { fetchTask, type TaskItem } from "../api";
 import { pageGutter } from "../layout";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
+import { FeedbackSheet } from "../task/FeedbackSheet";
 import { LiveTaskState } from "../task/LiveTaskState";
 import { ReviewBar } from "../task/ReviewBar";
 import {
@@ -34,6 +35,9 @@ function TaskPageContent() {
   const { owner = "", name = "", runId = "", taskId = "" } = useParams();
   const fullName = `${owner}/${name}`;
   const [task, setTask] = React.useState<TaskItem | null | undefined>(undefined);
+  const [revisions, setRevisions] = React.useState<TaskItem[]>([]);
+  // Sending feedback starts a revision, which the page then follows until it finishes.
+  const [followed, setFollowed] = React.useState(0);
   const title = taskTitle(task ?? { taskId });
   useDocumentTitle(`${title} · SelfBench`);
   const [error, setError] = React.useState<string | null>(null);
@@ -41,7 +45,8 @@ function TaskPageContent() {
   const refresh = React.useCallback(async () => {
     try {
       const found = await fetchTask(org.login, fullName, runId, taskId);
-      setTask(found);
+      setTask(found.task);
+      setRevisions(found.revisions);
       setError(null);
       return found;
     } catch (cause) {
@@ -50,20 +55,24 @@ function TaskPageContent() {
     }
   }, [org.login, fullName, runId, taskId]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a sent revision restarts the polling.
   React.useEffect(() => {
     let disposed = false;
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
       const found = await refresh();
-      if (!disposed && (!found || found.state === "in_progress"))
-        timer = setTimeout(() => void poll(), 3000);
+      const active =
+        !found ||
+        found.task.state === "in_progress" ||
+        found.revisions.some((revision) => revision.state === "in_progress");
+      if (!disposed && active) timer = setTimeout(() => void poll(), 3000);
     };
     void poll();
     return () => {
       disposed = true;
       clearTimeout(timer);
     };
-  }, [refresh]);
+  }, [refresh, followed]);
 
   const source = React.useMemo(
     () => (task ? siteTaskSource(org.login, fullName, task) : null),
@@ -194,7 +203,19 @@ function TaskPageContent() {
             )}
         </div>
       </header>
-      <TaskView source={source} row={rowFor(task)} />
+      <TaskView
+        source={source}
+        row={rowFor(task)}
+        feedback={
+          <FeedbackSheet
+            org={org.login}
+            fullName={fullName}
+            task={task}
+            revisions={revisions}
+            onSent={() => setFollowed((count) => count + 1)}
+          />
+        }
+      />
     </div>
   );
 }

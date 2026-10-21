@@ -1,10 +1,11 @@
-import { and, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { TaskImages } from "../contracts/index.js";
 import { TaskNotFoundError, tombstoneTask } from "../generation/tasks/deletion.js";
 import { reserveTaskStart } from "../generation/tasks/start-reservation.js";
 import type { Database } from "./client.js";
 import { tasks, users } from "./schema.js";
+import { taskCountsForRepos } from "./task-counts.js";
 import { taskFrom } from "./task-record.js";
 
 export type PipelineStatus = (typeof tasks.$inferSelect)["pipelineStatus"];
@@ -39,18 +40,30 @@ export interface TaskRecord {
   readonly workflowId?: string;
   readonly startedBy?: string;
   readonly startedAt?: string;
+  /** The task a person's feedback revised into this one. */
+  readonly revisedFrom?: { readonly runId: string; readonly taskId: string };
+  readonly feedback?: string;
 }
 
 /** What a sync writes; identity is (runId, candidateId), reviews are never touched by a sync. */
 export type TaskUpsert = Omit<
   TaskRecord,
-  "id" | "review" | "syncedAt" | "workflowId" | "startedBy" | "startedAt"
+  | "id"
+  | "review"
+  | "syncedAt"
+  | "workflowId"
+  | "startedBy"
+  | "startedAt"
+  | "revisedFrom"
+  | "feedback"
 >;
 
 /** A task the site just started: no verdict yet, a workflow to watch. */
 interface TaskStart extends TaskUpsert {
   readonly workflowId: string;
   readonly startedBy: number;
+  /** A revision: the row it revises and the feedback it addresses. */
+  readonly revision?: { readonly from: number; readonly feedback: string };
 }
 
 interface TaskProgressPatch {
@@ -82,6 +95,8 @@ export interface TaskStore {
   listWithDeleted(repoId: number): Promise<(TaskRecord & { readonly deleted: boolean })[]>;
   /** By the agent's task id or the candidate id, within one run. */
   find(repoId: number, runId: string, taskOrCandidateId: string): Promise<TaskRecord | undefined>;
+  /** The visible tasks feedback revised this one into, oldest first. */
+  revisionsOf(taskRowId: number): Promise<TaskRecord[]>;
   /** Atomically tombstones a terminal task. Repeating a deletion succeeds. */
   deleteTask(
     repoId: number,
@@ -98,15 +113,22 @@ export interface TaskStore {
 
 const reviewers = alias(users, "reviewers");
 const starters = alias(users, "starters");
+const origins = alias(tasks, "origins");
 
 export function createTaskStore(db: Database, options: { now?: () => Date } = {}): TaskStore {
   const now = options.now ?? (() => new Date());
   const select = () =>
     db
-      .select({ task: tasks, reviewedBy: reviewers.login, startedBy: starters.login })
+      .select({
+        task: tasks,
+        reviewedBy: reviewers.login,
+        startedBy: starters.login,
+        origin: { runId: origins.runId, taskId: origins.taskId },
+      })
       .from(tasks)
       .leftJoin(reviewers, eq(reviewers.id, tasks.reviewedBy))
-      .leftJoin(starters, eq(starters.id, tasks.startedBy));
+      .leftJoin(starters, eq(starters.id, tasks.startedBy))
+      .leftJoin(origins, eq(origins.id, tasks.revisedFrom));
   const byId = async (id: number, visibleOnly = false): Promise<TaskRecord> => {
     const [row] = await select().where(
       and(eq(tasks.id, id), visibleOnly ? isNull(tasks.deletedAt) : undefined),
@@ -167,7 +189,14 @@ export function createTaskStore(db: Database, options: { now?: () => Date } = {}
     },
     async reserveStarted(row) {
       return byId(
-        await reserveTaskStart(db, { ...values(row), startedBy: row.startedBy, startedAt: now() }),
+        await reserveTaskStart(db, {
+          ...values(row),
+          startedBy: row.startedBy,
+          startedAt: now(),
+          ...(row.revision
+            ? { revisedFrom: row.revision.from, feedback: row.revision.feedback }
+            : {}),
+        }),
       );
     },
     async inProgress(repoId) {
@@ -221,6 +250,12 @@ export function createTaskStore(db: Database, options: { now?: () => Date } = {}
         .limit(1);
       return rows[0] ? taskFrom(rows[0]) : undefined;
     },
+    async revisionsOf(taskRowId) {
+      const rows = await select()
+        .where(and(eq(tasks.revisedFrom, taskRowId), isNull(tasks.deletedAt)))
+        .orderBy(tasks.id);
+      return rows.map(taskFrom);
+    },
     deleteTask: (repoId, runId, taskId) => tombstoneTask(db, repoId, runId, taskId, now),
     async review(taskRowId, verdict) {
       await db
@@ -241,34 +276,6 @@ export function createTaskStore(db: Database, options: { now?: () => Date } = {}
         .where(and(eq(tasks.id, taskRowId), isNull(tasks.deletedAt)));
       return byId(taskRowId, true);
     },
-    async countsForRepos(repoIds) {
-      if (repoIds.length === 0) return [];
-      const count = (condition: ReturnType<typeof sql>) =>
-        sql<number>`count(*) filter (where ${condition})`.mapWith(Number);
-      const rows = await db
-        .select({
-          repoId: tasks.repoId,
-          total: sql<number>`count(*)`.mapWith(Number),
-          accepted: count(sql`${tasks.reviewDecision} = 'approve'`),
-          needsReview: count(
-            sql`${tasks.reviewDecision} is null and ${tasks.pipelineStatus} = 'accepted'`,
-          ),
-          rejected: count(
-            sql`${tasks.reviewDecision} = 'reject' or (${tasks.reviewDecision} is null and ${tasks.pipelineStatus} in ('rejected', 'infrastructure_failed'))`,
-          ),
-          lastPr: sql<number | null>`max(${tasks.sourcePr})`,
-        })
-        .from(tasks)
-        .where(and(inArray(tasks.repoId, [...repoIds]), isNull(tasks.deletedAt)))
-        .groupBy(tasks.repoId);
-      return rows.map((row) => ({
-        repoId: row.repoId,
-        total: row.total,
-        accepted: row.accepted,
-        needsReview: row.needsReview,
-        rejected: row.rejected,
-        ...(row.lastPr !== null ? { lastPr: Number(row.lastPr) } : {}),
-      }));
-    },
+    countsForRepos: (repoIds) => taskCountsForRepos(db, repoIds),
   };
 }

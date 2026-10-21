@@ -15,6 +15,8 @@ You are turning one merged pull request into a benchmark task. Later, a coding a
 
 /work/provenance.json holds the original request record; use it only to confirm the request.
 
+{{maintainer}}
+
 # What to Produce
 
 Four files in /work/task/:

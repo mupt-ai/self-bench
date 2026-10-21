@@ -22,6 +22,7 @@ test("review migrations preserve batch ownership, tasks, reviews and tombstones"
       // independent of the repo_runs migrations under test, so they are added up front.
       "0014_task_images.sql",
       "0017_repo_agent_minutes.sql",
+      "0021_task_revisions.sql",
     ]) {
       await client.exec(await readFile(join(migrationsFolder(), file), "utf8"));
     }
