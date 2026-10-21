@@ -30,8 +30,8 @@ recorded provider images it:
 Tasks awaiting review, or with no recorded images, are left alone and not reported. It
 resolves the original verification account from saved generation settings, without needing
 historical model access. Inaccessible provider images fail without rebuilding a different
-environment or changing the task row. A removal switches the row before deleting images, so a
-deletion that fails leaves an unreferenced image rather than a task pointing at a missing one.
+environment or changing the task row. A removal deletes its images before switching the row, so a
+failed deletion leaves the row naming them and a rerun deletes them again.
 
 Run in the worker environment with artifact settings, `SELFBENCH_DATABASE_URL`,
 `SELFBENCH_EVAL_CREDENTIAL_KEY`, `SELFBENCH_TASK_IMAGE_REPOSITORY`, registry push permission,

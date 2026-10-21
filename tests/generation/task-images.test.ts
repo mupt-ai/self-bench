@@ -186,7 +186,7 @@ test("a rejected task's images go after its row returns to the compiled bundle",
     }),
   );
   expect(result).toEqual({ status: "removed", bundleKey: compiled });
-  expect(calls).toEqual(["save", registry.agent, registry.verifier]);
+  expect(calls).toEqual([registry.agent, registry.verifier, "save"]);
 });
 
 test("images a comparison or release pinned are kept", async () => {
@@ -198,14 +198,43 @@ test("images a comparison or release pinned are kept", async () => {
   expect(result.status).toBe("kept");
 });
 
-test("a raced removal deletes no images", async () => {
+test("a failed image delete keeps the row's digests for the retry", async () => {
+  let saved = false;
   await expect(
     reconcileTaskImages(
       store,
       { ...exportedTask, reviewDecision: "reject" },
-      deps({ referenced: async () => false, save: async () => false }),
+      deps({
+        referenced: async () => false,
+        removeImage: async () => {
+          throw new Error("registry answered 500");
+        },
+        save: async () => {
+          saved = true;
+          return true;
+        },
+      }),
     ),
-  ).rejects.toThrow("Task changed during removal");
+  ).rejects.toThrow("registry answered 500");
+  expect(saved).toBe(false);
+});
+
+test("a raced removal throws after deleting; the next review reconciles the row", async () => {
+  const deleted: string[] = [];
+  await expect(
+    reconcileTaskImages(
+      store,
+      { ...exportedTask, reviewDecision: "reject" },
+      deps({
+        referenced: async () => false,
+        removeImage: async (image) => {
+          deleted.push(image);
+        },
+        save: async () => false,
+      }),
+    ),
+  ).rejects.toThrow("the next review reconciles it");
+  expect(deleted).toEqual([registry.agent, registry.verifier]);
 });
 
 test("the compiled bundle sits beside its execution bundle", () => {

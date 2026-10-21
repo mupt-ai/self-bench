@@ -132,13 +132,15 @@ async function removeExported(
   const digests = exported.map((image) => image.slice(image.indexOf("@") + 1));
   if (await deps.referenced(digests))
     return { status: "kept", reason: "A comparison or release pins these images" };
-  // Back to the compiled bundle first, so a later approval can export again from it.
   const bundleKey = compiledBundleKey(task.bundleKey as string);
   if (!(await store.stat(bundleKey))) throw new Error("Original compiled bundle is missing");
+  // Delete before the row loses its digests: a failed delete leaves the row naming them, so the
+  // retry deletes them again (a missing image counts as done) rather than forgetting them.
+  for (const image of exported) await deps.removeImage(image);
+  // Back to the compiled bundle, so a later approval can export again from it.
   const { registry: _removed, ...unexported } = images;
   if (!(await deps.save(bundleKey, unexported as TaskImages)))
-    throw new Error("Task changed during removal; images preserved");
-  for (const image of exported) await deps.removeImage(image);
+    throw new Error("Task changed during removal; the next review reconciles it");
   return { status: "removed", bundleKey };
 }
 
