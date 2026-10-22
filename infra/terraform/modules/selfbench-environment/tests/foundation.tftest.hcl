@@ -25,6 +25,10 @@ run "dev_foundation" {
     error_message = "Artifact versions must be retained and destructive bucket deletion disabled."
   }
   assert {
+    condition     = length(google_storage_bucket.artifacts.lifecycle_rule) == 1 && alltrue([for rule in google_storage_bucket.artifacts.lifecycle_rule : alltrue([for condition in rule.condition : condition.days_since_noncurrent_time == 30 && condition.with_state == "ARCHIVED"])])
+    error_message = "Only noncurrent artifact copies expire, 30 days after their delete."
+  }
+  assert {
     condition     = !google_sql_database_instance.app[0].settings[0].ip_configuration[0].ipv4_enabled && google_sql_database_instance.app[0].settings[0].ip_configuration[0].ssl_mode == "ENCRYPTED_ONLY"
     error_message = "Cloud SQL must have no public address and require encrypted connections."
   }

@@ -71,6 +71,14 @@ const exporter = () =>
     taskQueue: `${workflowInfo().taskQueue}-harbor`,
   });
 
+// Compaction streams each green attempt's full bundle once to check it before deleting it.
+const compaction = () =>
+  proxyActivities<Pick<WorkerActivities, "compactCandidateBundles">>({
+    startToCloseTimeout: "2 hours",
+    heartbeatTimeout: "5 minutes",
+    retry: { ...retry, maximumAttempts: 3 },
+  });
+
 /**
  * The workflow's steps. Each starts a sandbox that reports back through the callback API, then
  * reads what it reported; Harbor checks a compiled task on the memory-sized sibling queue.
@@ -118,9 +126,31 @@ export async function selfBenchAuthorWorkflow(
 ): Promise<CandidateWorkflowResult> {
   let current = initialProgress(input.candidate);
   setHandler(candidateStatusQuery, () => current);
-  return executeCandidate(input, workflowActivities, (progress) => {
+  const result = await executeCandidate(input, workflowActivities, (progress) => {
     current = progress;
   });
+  const kept = result.task ? artifactKey(result.task.bundle.uri) : undefined;
+  // Candidates that finished before compaction existed replay without it. A task bundle outside
+  // the run's artifacts is never expected; compaction then leaves everything alone.
+  if (patched("compact-candidate-bundles") && (!result.task || kept)) {
+    // Only storage is at stake: a failure leaves the attempts to the maintenance backfill.
+    await compaction()
+      .compactCandidateBundles({
+        runId: input.run.runId,
+        candidateId: input.candidate.candidateId,
+        kept: kept ? [kept] : [],
+      })
+      .catch((error: unknown) => {
+        if (isCancellation(error)) throw error;
+      });
+  }
+  return result;
+}
+
+/** The store key in an artifact URI (`gs://bucket/<prefix>/runs/...` or `file://.../runs/...`). */
+function artifactKey(uri: string): string | undefined {
+  const index = uri.indexOf("/runs/");
+  return index < 0 ? undefined : uri.slice(index + 1);
 }
 
 function initialProgress(candidate: Candidate): TaskProgress {

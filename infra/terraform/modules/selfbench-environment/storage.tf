@@ -9,7 +9,18 @@ resource "google_storage_bucket" "artifacts" {
   versioning {
     enabled = true
   }
-  # No age-based deletion of live data. Noncurrent copies need a reviewed retention policy.
+  # No age-based deletion of live data. Objects are written once, so noncurrent copies come only
+  # from deletes, such as compaction of superseded task bundles (maintenance/compact-task-bundles):
+  # they stay recoverable for 30 days, then go.
+  lifecycle_rule {
+    condition {
+      days_since_noncurrent_time = 30
+      with_state                 = "ARCHIVED"
+    }
+    action {
+      type = "Delete"
+    }
+  }
   lifecycle {
     prevent_destroy = true
   }

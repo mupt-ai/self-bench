@@ -3,12 +3,13 @@ import { pipeline } from "node:stream/promises";
 import { createGunzip } from "node:zlib";
 import { extract } from "tar-stream";
 import type { ArtifactStore } from "../../artifacts/index.js";
-import { GATE_TASK_FILE, SNAPSHOT_FILE, SNAPSHOT_PATHS } from "../../sandbox/gate-bundle.js";
+import { GATE_TASK_FILE, SNAPSHOT_PATHS } from "../../sandbox/gate-bundle.js";
+import { attemptSnapshot } from "../task/snapshot-store.js";
 import { type BundleFile, isInlineCandidate, taskFilesFromBundle } from "./task-files.js";
 import type { TaskFiles } from "./types.js";
 
 /** All a bundle is read with. */
-type BundleStore = Pick<ArtifactStore, "stat" | "openReadByKey">;
+type BundleStore = Pick<ArtifactStore, "stat" | "openReadByKey" | "getByKey">;
 
 const MAX_BUNDLE_ENTRIES = 20_000;
 const MAX_CACHED_BYTES = 64 * 1024 * 1024;
@@ -88,7 +89,7 @@ async function withoutSnapshots(
   // Optional: any trouble finding the split files only means reading the full bundle.
   const [gate, snapshot] = await Promise.all([
     store.stat(`${directory}/${GATE_TASK_FILE}`).catch(() => undefined),
-    store.stat(`${directory}/${SNAPSHOT_FILE}`).catch(() => undefined),
+    attemptSnapshot(store, directory).catch(() => undefined),
   ]);
   if (!gate || !snapshot) return undefined;
   return {
