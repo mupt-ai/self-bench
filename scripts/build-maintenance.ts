@@ -13,8 +13,11 @@ const result = await Bun.build({
     "reprice-openrouter",
     "backfill-timeouts",
     "backfill-execution-bundles",
+    "compact-task-bundles",
     "records-migration",
   ].map((name) => join(root, "maintenance/bin", `${name}.ts`)),
+  // Pinned, or Bun may pick a higher common directory and nest the outputs under it.
+  root: join(root, "maintenance/bin"),
   outdir,
   target: "node",
   format: "esm",

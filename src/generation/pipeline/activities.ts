@@ -11,6 +11,7 @@ import type { UsageLedger } from "../../db/usage.js";
 import type { Vault } from "../../db/vault.js";
 import { createSandboxExecutor } from "../../sandbox/index.js";
 import type { SandboxJobOutcome } from "../../sandbox/jobs.js";
+import { type Compaction, compactCandidate, keptBundles } from "../runs/compact.js";
 import {
   type AuthoringTurnInput,
   type FinishAuthoringTurnInput,
@@ -23,6 +24,7 @@ import {
   finishDiscoveryShard,
   startDiscoveryShard,
 } from "./discovery.js";
+import { withHeartbeats } from "./helpers.js";
 import {
   type FinishReviewRoundInput,
   finishReviewRound,
@@ -40,6 +42,13 @@ import {
 } from "./verify.js";
 
 export type { DiscoveryShardInput };
+
+/** One finished candidate's compile attempts, and the bundle keys its task still delivers. */
+interface CompactCandidateInput {
+  readonly runId: string;
+  readonly candidateId: string;
+  readonly kept: readonly string[];
+}
 
 /**
  * The steps the workflows take. Each is two activities in sequence: one starts a sandbox that
@@ -66,6 +75,7 @@ export interface WorkerActivities {
   startReviewRound(input: ReviewRoundInput): Promise<SandboxJobOutcome>;
   finishReviewRound(input: FinishReviewRoundInput): Promise<ReviewRoundResult>;
   exportTaskImages(input: ExportTaskImagesInput): Promise<AuthoredTask>;
+  compactCandidateBundles(input: CompactCandidateInput): Promise<Compaction>;
 }
 
 /** Each activity resolves the run's sandbox, credentials, and metering, then does its stage. */
@@ -135,6 +145,13 @@ export function createActivities(
         (_sandbox, harbor) =>
           exportAcceptedTask(store, harbor, input.task, config.taskImages?.repository),
         "harbor",
+      ),
+    compactCandidateBundles: (input) =>
+      withHeartbeats(`compacting ${input.candidateId}'s bundles`, () =>
+        compactCandidate(store, input.runId, input.candidateId, {
+          kept: keptBundles(input.kept),
+          apply: true,
+        }),
       ),
   };
 }

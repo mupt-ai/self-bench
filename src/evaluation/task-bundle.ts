@@ -4,8 +4,9 @@ import type { ArtifactStore } from "../artifacts/index.js";
 import type { ArtifactRef } from "../contracts/index.js";
 import { fetchSnapshotInBuild, unpackTask } from "../generation/pipeline/remote-gate.js";
 import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
+import { attemptSnapshot } from "../generation/task/snapshot-store.js";
 import { extractRegularArchive } from "../lib/archive.js";
-import { GATE_TASK_FILE, SNAPSHOT_FILE } from "../sandbox/gate-bundle.js";
+import { GATE_TASK_FILE } from "../sandbox/gate-bundle.js";
 import { snapshotLinkUrl } from "../sandbox/snapshot-link.js";
 import { refuseTrial } from "./execution.js";
 import type { EvaluationInput } from "./types.js";
@@ -77,15 +78,14 @@ async function splitBundle(
 ): Promise<{ gate: ArtifactRef; snapshot: { key: string; sha256: string } } | undefined> {
   if (!bundleKey.endsWith(COMPILED_BUNDLE)) return undefined;
   const directory = bundleKey.slice(0, -COMPILED_BUNDLE.length);
-  const snapshotKey = `${directory}/${SNAPSHOT_FILE}`;
   const [gate, snapshot] = await Promise.all([
     store.stat(`${directory}/${GATE_TASK_FILE}`),
-    store.stat(snapshotKey),
+    attemptSnapshot(store, directory),
   ]);
   if (!gate || !snapshot) return undefined;
   assertEvaluationBundleSize(gate.sizeBytes);
   return {
     gate: { ...gate, contentType: "application/gzip" },
-    snapshot: { key: snapshotKey, sha256: snapshot.sha256 },
+    snapshot: { key: snapshot.key, sha256: snapshot.sha256 },
   };
 }

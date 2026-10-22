@@ -78,7 +78,7 @@ export interface PublicReleaseRoutesOptions {
   limiter?: RateLimiter;
   now?: () => number;
   /** Where published tasks' files are read from; without it, no release's tasks are served. */
-  artifacts?: Pick<ArtifactStore, "stat" | "openReadByKey">;
+  artifacts?: Pick<ArtifactStore, "stat" | "openReadByKey" | "getByKey">;
   /** Where published trials are read from; without it, no release's trials are served. */
   trials?: PublicTaskRoutesOptions["trials"];
 }

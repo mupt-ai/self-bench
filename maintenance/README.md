@@ -12,6 +12,7 @@ node dist/maintenance/reprice-openrouter.js <repoId> <evaluationId> [--apply]
 node dist/maintenance/backfill-timeouts.js <repoId | benchmark:<id>>... [--apply] [--auth=codex-login|api-key]
 node dist/maintenance/records-migration.js [--apply]
 node dist/maintenance/backfill-execution-bundles.js <repoId>... [--apply]
+node dist/maintenance/compact-task-bundles.js <runId>... | --all [--apply]
 ```
 
 ## Historical Task Execution Bundles
@@ -32,6 +33,29 @@ The task's bundle and image fields switch only after both images and the new bun
 with a concurrent-change guard. Original bundles, frozen comparisons and published releases
 remain unchanged. New evaluations and releases use the updated task row. Rerunning skips
 completed tasks; failed exports leave the original task runnable.
+
+## Task Bundle Compaction
+
+Every compile attempt used to keep its own repository snapshot (`repo.tar.gz`) and a full bundle
+(`harbor-task.tar.gz`) holding that snapshot twice more, so one task's retries stored the same
+repository dozens of times. When a candidate finishes, the worker now compacts its attempts
+(`compactCandidateBundles`):
+
+- each snapshot moves to one shared copy per content, `snapshots/<sha256>.tar.gz`, and the attempt
+  keeps a `repo.json` pointer to it (`git archive` of a commit is the same bytes every time);
+- each full bundle except the accepted task's goes, once its `gate-task.tar.gz` and snapshot are
+  shown to hold exactly its files (paths, modes, contents). Attempts without a gate task (tasks
+  with services, older compiles) keep theirs.
+
+Readers of the snapshot (Modal trials, the run viewer) follow the pointer; the viewer and public
+downloads already read the gate task. `compact-task-bundles` applies the same to finished
+candidates of existing runs. It keeps every bundle an accepted task row (deleted ones included),
+saved comparison or release names, and the compiled bundle beside an execution bundle; candidates
+without a row or still in progress are skipped. The dry run reports what applying frees.
+`--apply` needs the artifact store and `SELFBENCH_DATABASE_URL`, and streams each full bundle it
+deletes once. The bucket is versioned: deleted objects stay noncurrent and recoverable for 30
+days, when its lifecycle rule removes them, so the storage bill drops a month after a run. A Modal
+evaluation running during the backfill may lose its snapshot link and build again on retry.
 
 ## OpenRouter Pricing
 
