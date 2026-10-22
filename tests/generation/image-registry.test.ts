@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { TaskEnvironment } from "../../src/contracts/index.js";
+import { cachedImageConfig } from "../../src/generation/task/image-config.js";
 import {
   parseImageReference,
   pinEnvironmentImages,
@@ -104,16 +105,47 @@ describe("resolving images", () => {
   });
 
   test("a registry that cannot answer is retried, never charged to the author", async () => {
-    const down = (async () => new Response(null, { status: 503 })) as unknown as typeof fetch;
+    let requests = 0;
+    const down = (async () => {
+      requests++;
+      return new Response(null, { status: 503, headers: { "retry-after": "0" } });
+    }) as unknown as typeof fetch;
     await expect(resolveImage("node:22", { fetch: down })).rejects.toBeInstanceOf(
       RegistryUnavailableError,
     );
+    // Waited out three times as the registry asked, then reported.
+    expect(requests).toBe(4);
     const offline = (async () => {
       throw new TypeError("fetch failed");
     }) as unknown as typeof fetch;
     await expect(resolveImage("node:22", { fetch: offline })).rejects.toBeInstanceOf(
       RegistryUnavailableError,
     );
+  });
+
+  test("a rate limit is waited out when the registry asks for a short wait", async () => {
+    const served = registry({ "/v2/library/node:22": digest });
+    let limited = 0;
+    const fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      if (limited++ < 2)
+        return new Response(null, { status: 429, headers: { "retry-after": "0" } });
+      return served(input, init);
+    }) as typeof globalThis.fetch;
+    expect(await resolveImage("node:22", { fetch })).toEqual({
+      ok: true,
+      image: `node:22@${digest}`,
+    });
+
+    // Docker Hub's anonymous limit can ask for hours; that is reported, not slept through.
+    let requests = 0;
+    const exhausted = (async () => {
+      requests++;
+      return new Response(null, { status: 429, headers: { "retry-after": "21600" } });
+    }) as unknown as typeof globalThis.fetch;
+    await expect(resolveImage("node:22", { fetch: exhausted })).rejects.toBeInstanceOf(
+      RegistryUnavailableError,
+    );
+    expect(requests).toBe(1);
   });
 
   test("pins every image in an environment and names the field of each missing one", async () => {
@@ -144,5 +176,26 @@ describe("resolving images", () => {
     expect(pinned.problems).toEqual([
       expect.stringContaining("service cache image redis:nope: docker.io/library/redis"),
     ]);
+  });
+});
+
+describe("image configs", () => {
+  test("each digest's config is read from its registry once", async () => {
+    const real = globalThis.fetch;
+    const requests: string[] = [];
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = new URL(String(input));
+      requests.push(url.pathname);
+      if (url.pathname.includes("/blobs/")) return Response.json({ config: { Env: ["A=1"] } });
+      return Response.json({ config: { digest: other } });
+    }) as typeof fetch;
+    try {
+      const image = `ghcr.io/org/base@${digest}`;
+      expect(await cachedImageConfig(image)).toEqual({ Env: ["A=1"] });
+      expect(await cachedImageConfig(image)).toEqual({ Env: ["A=1"] });
+      expect(requests).toEqual([`/v2/org/base/manifests/${digest}`, `/v2/org/base/blobs/${other}`]);
+    } finally {
+      globalThis.fetch = real;
+    }
   });
 });

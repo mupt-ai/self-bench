@@ -56,7 +56,7 @@ export function notRunGates(): HarborGates {
  */
 export async function runHarborGates(
   store: ArtifactStore,
-  task: AuthoredTask,
+  task: Pick<AuthoredTask, "taskId" | "bundle">,
   harborEnvironment: SelfBenchConfig["harborEnvironment"],
   prefix: string,
   signal: AbortSignal,

@@ -42,3 +42,19 @@ export async function exportEnvironment(
   // Start from the runtime whitelist, not the worker's provider credentials or overrides.
   return { ...runtime, ...providerCredentialEnvironment(provider, secret) };
 }
+
+/**
+ * The provider a run's own account verified its tasks on, read from its saved settings. Managed
+ * runs stamp theirs on the run instead, so they are refused rather than guessed.
+ */
+export async function verificationProvider(
+  vault: Pick<Vault, "records">,
+  runId: string,
+): Promise<TaskImages["provider"]> {
+  const saved = await vault.records.read<GenerationReference>(generationRecordPath(runId));
+  if (!saved) throw new Error("Original generation configuration is missing");
+  const settings = saved.value.settings;
+  if (settings.sandbox === "managed")
+    throw new Error("Managed runs do not save their verification provider");
+  return settings.harborEnvironment ?? settings.sandbox;
+}

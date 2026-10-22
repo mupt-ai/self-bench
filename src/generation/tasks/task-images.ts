@@ -220,7 +220,9 @@ export function taskImageRows(db: Database) {
               ? isNull(tasks.reviewDecision)
               : eq(tasks.reviewDecision, task.reviewDecision),
             task.deletedAt === null ? isNull(tasks.deletedAt) : sql`${tasks.deletedAt} is not null`,
-            sql`${tasks.images} = ${JSON.stringify(task.images)}::jsonb`,
+            task.images === null
+              ? isNull(tasks.images)
+              : sql`${tasks.images} = ${JSON.stringify(task.images)}::jsonb`,
           ),
         )
         .returning({ id: tasks.id });

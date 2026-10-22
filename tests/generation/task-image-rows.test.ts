@@ -154,3 +154,15 @@ test("a rejected or deleted row no longer pins a shared digest", async () => {
   await insert({ reviewDecision: "approve" });
   expect(await rows.referenced([digest], task.id)).toBe(true);
 });
+
+test("images are recorded on a row that had none only while it still has none", async () => {
+  const { db, rows, task } = await seeded();
+  await db.update(tasks).set({ images: null, reviewDecision: null });
+  const bare = await rows.find(task.id);
+  if (!bare) throw new Error("row is gone");
+  const { registry: _registry, ...recorded } = images;
+  expect(await rows.save(bare, bare.bundleKey ?? "", recorded)).toBe(true);
+  expect((await rows.find(task.id))?.images).toEqual(recorded);
+  // A second re-verification racing the first finds images already there.
+  expect(await rows.save(bare, bare.bundleKey ?? "", recorded)).toBe(false);
+});

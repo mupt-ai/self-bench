@@ -13,7 +13,7 @@ import {
 import { googleAccessToken } from "../../lib/google-access-token.js";
 import { runCommand } from "../../lib/process.js";
 import { providerEnvironment } from "../../sandbox/provider-environment.js";
-import { type ImageConfig, imageConfig } from "../task/image-registry.js";
+import { cachedImageConfig, type ImageConfig } from "../task/image-config.js";
 import { publishExecutionBundle } from "./execution-bundle.js";
 import { withHeartbeats } from "./helpers.js";
 import { unpackTask } from "./remote-gate.js";
@@ -104,7 +104,10 @@ export async function exportTaskImages<
       const pin = images[role];
       if (!pin) continue;
       const dockerfile = await readFile(join(directory, context, "Dockerfile"), "utf8");
-      const config = await dockerfileImageConfig(dockerfile, options.configFor ?? imageConfig);
+      const config = await dockerfileImageConfig(
+        dockerfile,
+        options.configFor ?? cachedImageConfig,
+      );
       const result = await command(
         python,
         [join(harborPythonPath(), "selfbench_export.py"), images.provider, pin, name],

@@ -14,6 +14,7 @@ const result = await Bun.build({
     "backfill-timeouts",
     "backfill-execution-bundles",
     "compact-task-bundles",
+    "reverify-task-images",
     "records-migration",
   ].map((name) => join(root, "maintenance/bin", `${name}.ts`)),
   // Pinned, or Bun may pick a higher common directory and nest the outputs under it.

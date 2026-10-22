@@ -13,6 +13,7 @@ node dist/maintenance/backfill-timeouts.js <repoId | benchmark:<id>>... [--apply
 node dist/maintenance/records-migration.js [--apply]
 node dist/maintenance/backfill-execution-bundles.js <repoId>... [--apply]
 node dist/maintenance/compact-task-bundles.js <runId>... | --all [--apply]
+node dist/maintenance/reverify-task-images.js <repoId>... [--row=<taskRowId>]... [--apply]
 ```
 
 ## Historical Task Execution Bundles
@@ -43,6 +44,28 @@ with a concurrent-change guard (bundle, images, review and deletion must all be 
 Removal needs `roles/artifactregistry.repoAdmin` on the task image repository. Original bundles, frozen comparisons and published releases
 remain unchanged. New evaluations and releases use the updated task row. Rerunning skips
 completed tasks; failed exports leave the original task runnable.
+
+Exports read each Dockerfile's base image config from its registry anonymously. Each digest is
+read once per process, and a 429 or 503 is retried as its `Retry-After` asks (up to 30 seconds),
+so a bulk backfill stays inside Docker Hub's anonymous pull limit.
+
+### Tasks Without Recorded Images
+
+Tasks accepted before verification recorded its images (or on E2B before its export existed)
+have nothing to export. `reverify-task-images` gives them images: each accepted, nondeleted task
+without images, unless rejected in review, runs the build, smoke, nop and oracle gates again from
+its own compiled bundle, on the provider and account its run verified with. The images the
+oracle started from are recorded on the row only if every gate passes again; the task's files do
+not change. An approved task is then exported as above; one awaiting review is exported when a
+person approves it. A failed gate leaves the row as it was and names the gate and its outputs
+(`reverify-<time>/` beside the compiled bundle).
+
+The dry run checks each run's verification account is still available. `--apply` starts
+provider sandboxes and builds images. It needs the backfill's settings, enough memory to unpack a
+full bundle (they reach hundreds of MB), and an hour or more per task. Run it as a Cloud Run job
+with several tasks to work in parallel: each takes every `CLOUD_RUN_TASK_COUNT`-th row.
+`--row=<taskRowId>` limits it to named rows, for a pilot. Managed runs are refused, since their
+verification provider is stamped on the run, not saved with its settings.
 
 ## Task Bundle Compaction
 
