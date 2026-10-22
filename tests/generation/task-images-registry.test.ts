@@ -1,10 +1,11 @@
 import { expect, test } from "bun:test";
 import type { Vault } from "../../src/db/vault.js";
-import { exportEnvironment, removeRegistryImage } from "../../src/generation/tasks/task-images.js";
+import { exportEnvironment } from "../../src/generation/tasks/task-image-credentials.js";
+import { removeRegistryImage } from "../../src/generation/tasks/task-image-registry.js";
 
 const registry = {
-  agent: "us-central1-docker.pkg.dev/p/selfbench-tasks/task-1@sha256:" + "b".repeat(64),
-  verifier: "us-central1-docker.pkg.dev/p/selfbench-tasks/task-1@sha256:" + "c".repeat(64),
+  agent: `us-central1-docker.pkg.dev/p/selfbench-tasks/task-1@sha256:${"b".repeat(64)}`,
+  verifier: `us-central1-docker.pkg.dev/p/selfbench-tasks/task-1@sha256:${"c".repeat(64)}`,
 };
 
 test("image removal deletes the Artifact Registry version and tolerates a missing one", async () => {

@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { comparisons, orgs, releases, repos, tasks, users } from "../../src/db/schema.js";
 import { taskImageRows } from "../../src/generation/tasks/task-images.js";
 import { type TestDatabase, testDatabase } from "../support/test-database.js";
@@ -89,8 +90,21 @@ test("saves only when the row still matches what was reconciled", async () => {
 });
 
 test("an image is pinned while a comparison or release names its digest", async () => {
-  const { db, rows, org, user } = await seeded();
-  expect(await rows.referenced([digest])).toBe(false);
+  const { db, rows, org, user, task } = await seeded();
+  expect(await rows.referenced([digest], task.id)).toBe(false);
+  // Another row naming the digest pins it; the task's own row does not.
+  await db.insert(tasks).values({
+    repoId: task.repoId,
+    runId: "run-2",
+    candidateId: "c2",
+    taskId: "task-1",
+    difficulty: "medium",
+    pipelineStatus: "accepted",
+    stage: "accepted",
+    images,
+  });
+  expect(await rows.referenced([digest], task.id)).toBe(true);
+  await db.delete(tasks).where(eq(tasks.runId, "run-2"));
   await db.insert(releases).values({
     id: randomUUID(),
     orgId: org.id,
@@ -103,7 +117,7 @@ test("an image is pinned while a comparison or release names its digest", async 
     payload: {},
     detail: { tasks: [{ images }] },
   });
-  expect(await rows.referenced([`sha256:${"c".repeat(64)}`, digest])).toBe(true);
+  expect(await rows.referenced([`sha256:${"c".repeat(64)}`, digest], task.id)).toBe(true);
   await db.delete(releases);
   await db.insert(comparisons).values({
     id: randomUUID(),
@@ -112,5 +126,5 @@ test("an image is pinned while a comparison or release names its digest", async 
     signature: "s",
     inputs: [{ tasks: [{ images }] }],
   });
-  expect(await rows.referenced([digest])).toBe(true);
+  expect(await rows.referenced([digest], task.id)).toBe(true);
 });

@@ -43,6 +43,7 @@ function deps(overrides: Partial<TaskImageDependencies> = {}): TaskImageDependen
     environment: unexpected,
     save: unexpected,
     referenced: unexpected,
+    imageExists: unexpected,
     removeImage: unexpected,
     exportImages: unexpected,
     publish: unexpected,
@@ -56,19 +57,13 @@ test("only a human review decides what happens to a task's images", () => {
   expect(imageAction({ ...task, reviewDecision: "reject" })).toBeUndefined();
   expect(imageAction({ ...task, pipelineStatus: "rejected" })).toBeUndefined();
   expect(imageAction({ ...task, images: null })).toBeUndefined();
-  expect(imageAction(exportedTask)).toBeUndefined();
+  // A claimed export is checked against the registry before it is trusted.
+  expect(imageAction(exportedTask)).toBe("verify");
   expect(imageAction({ ...exportedTask, reviewDecision: null })).toBeUndefined();
   expect(imageAction({ ...exportedTask, reviewDecision: "reject" })).toBe("remove");
   expect(imageAction({ ...exportedTask, deletedAt: new Date() })).toBe("remove");
-  // Exported at acceptance, before execution bundles: only publication remains.
-  expect(imageAction({ ...exportedTask, bundleKey: compiled })).toBe("export");
-  expect(
-    imageAction({
-      ...exportedTask,
-      bundleKey: compiled,
-      images: { provider: "modal", agent: "im-agent", registry: { agent: registry.agent } },
-    }),
-  ).toBeUndefined();
+  expect(imageAction({ ...exportedTask, bundleKey: compiled })).toBe("verify");
+  expect(imageAction({ ...task, deletedAt: new Date() })).toBeUndefined();
 });
 
 test("a dry run touches nothing", async () => {
@@ -116,6 +111,7 @@ test("already exported images are published without provider access", async () =
     store,
     { ...exportedTask, bundleKey: compiled },
     deps({
+      imageExists: async () => true,
       publish: async (_store, input) => ({
         ...input,
         bundle: { ...bundle, uri: `gs://bucket/${delivered}` },
@@ -150,6 +146,7 @@ test("failed or raced exports leave the row alone", async () => {
       store,
       { ...exportedTask, bundleKey: compiled },
       deps({
+        imageExists: async () => true,
         publish: async (_store, input) => ({
           ...input,
           bundle: { ...bundle, uri: `gs://bucket/${delivered}` },

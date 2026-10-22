@@ -1,5 +1,5 @@
 import { dirname } from "node:path";
-import { and, eq, isNull, or, sql } from "drizzle-orm";
+import { and, eq, isNull, ne, or, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { TaskImages } from "../../contracts/index.js";
@@ -8,16 +8,10 @@ import { comparisons, releases, tasks } from "../../db/schema.js";
 import type { Vault } from "../../db/vault.js";
 import { harborProcessEnvironment } from "../../harnesses/harbor/command.js";
 import { googleAccessToken } from "../../lib/google-access-token.js";
-import {
-  providerCredentialEnvironment,
-  providerEnvironment,
-} from "../../sandbox/provider-environment.js";
-import { managedModalEnvironment, managedSandboxCredentials } from "../billing/managed.js";
 import { publishExecutionBundle } from "../pipeline/execution-bundle.js";
 import { exportTaskImages } from "../pipeline/task-image-export.js";
-import { generationRecordPath } from "../settings/credentials.js";
-import type { GenerationReference } from "../settings/settings.js";
-import { parseImageReference } from "../task/image-registry.js";
+import { exportEnvironment } from "./task-image-credentials.js";
+import { registryImageExists, removeRegistryImage } from "./task-image-registry.js";
 
 const EXECUTION_BUNDLE = "/execution-task.tar.gz";
 const COMPILED_BUNDLE = "/harbor-task.tar.gz";
@@ -35,7 +29,7 @@ export type ReviewedTask = Pick<
 >;
 
 export type TaskImageOutcome =
-  | { readonly status: "planned"; readonly action: "export" | "remove" }
+  | { readonly status: "planned"; readonly action: "export" | "publish" | "remove" }
   | { readonly status: "exported"; readonly bundleKey: string }
   | { readonly status: "removed"; readonly bundleKey: string }
   | { readonly status: "kept"; readonly reason: string }
@@ -48,8 +42,13 @@ export interface TaskImageDependencies {
   readonly environment: (provider: TaskImages["provider"]) => Promise<NodeJS.ProcessEnv>;
   /** Switches the row's bundle and images unless the task changed meanwhile. */
   readonly save: (bundleKey: string, images: TaskImages) => Promise<boolean>;
-  /** Whether a saved comparison or a release names any of these image digests. */
-  readonly referenced: (digests: readonly string[]) => Promise<boolean>;
+  /**
+   * Whether a saved comparison, a release, or another task row names any of these digests. The
+   * task's own row (`exceptTaskId`) does not count.
+   */
+  readonly referenced: (digests: readonly string[], exceptTaskId: number) => Promise<boolean>;
+  /** Whether the registry still holds this image by digest. */
+  readonly imageExists: (image: string) => Promise<boolean>;
   readonly removeImage: (image: string) => Promise<void>;
   readonly signal?: AbortSignal;
   readonly exportImages?: typeof exportTaskImages;
@@ -57,22 +56,26 @@ export interface TaskImageDependencies {
 }
 
 /**
- * What a task's exported images should be, given its human review: a task a person approved has
- * its verified images exported and delivered by digest; one a person rejected or deleted loses
- * them, unless a comparison or release already pinned them. Other tasks are left alone, so a
- * cleared review or a task still awaiting one changes nothing.
+ * What a task's exported images should be, given its human review. A task a person approved should
+ * have its images exported ("export") or, when its row already claims them, verified against the
+ * registry ("verify"). One a person rejected or deleted loses the images its row claims ("remove").
+ * Any other task is left alone, so a cleared review or a task still awaiting one changes nothing.
  */
-export function imageAction(task: ReviewedTask): "export" | "remove" | undefined {
+export function imageAction(task: ReviewedTask): "export" | "verify" | "remove" | undefined {
   const images = task.images;
   if (!images || !task.bundleKey) return undefined;
-  if (images.registry && (task.deletedAt || task.reviewDecision === "reject")) return "remove";
-  const approved =
-    !task.deletedAt && task.pipelineStatus === "accepted" && task.reviewDecision === "approve";
-  // Exported before execution bundles existed: only the bundle is left to publish.
-  const unpublished = !!images.registry?.verifier && !task.bundleKey.endsWith(EXECUTION_BUNDLE);
-  return approved && (!images.registry || unpublished) ? "export" : undefined;
+  if (task.deletedAt || task.reviewDecision === "reject")
+    return images.registry ? "remove" : undefined;
+  const approved = task.pipelineStatus === "accepted" && task.reviewDecision === "approve";
+  if (!approved) return undefined;
+  return images.registry ? "verify" : "export";
 }
 
+/**
+ * Reconciles one task row with the registry. The row is a claim, and a save can fail after the
+ * registry has changed, so "verify" checks the claimed digests exist before trusting them: a
+ * re-approved task whose images a failed removal deleted is exported again.
+ */
 export async function reconcileTaskImages(
   store: ArtifactStore,
   task: ReviewedTask,
@@ -80,19 +83,45 @@ export async function reconcileTaskImages(
 ): Promise<TaskImageOutcome> {
   const action = imageAction(task);
   if (!action) return { status: "skipped", reason: "Nothing to change for this review" };
-  if (!deps.apply) return { status: "planned", action };
-  return action === "export"
-    ? await exportReviewed(store, task, deps)
-    : await removeExported(store, task, deps);
+  if (action === "remove") {
+    if (!deps.apply) return { status: "planned", action };
+    return await removeExported(store, task, deps);
+  }
+  const images = task.images as TaskImages;
+  const present = images.registry ? await allPresent(images.registry, deps) : false;
+  // Exported and in the registry: only a bundle published before execution bundles is left.
+  const unpublished =
+    !!images.registry?.verifier && !(task.bundleKey ?? "").endsWith(EXECUTION_BUNDLE);
+  if (present && !unpublished)
+    return { status: "skipped", reason: "Exported images are in the registry" };
+  if (!deps.apply) return { status: "planned", action: present ? "publish" : "export" };
+  return present
+    ? await exportReviewed(store, task, deps, images, { fresh: false })
+    : await exportReviewed(store, task, deps, withoutRegistry(images), { fresh: true });
+}
+
+async function allPresent(
+  registry: NonNullable<TaskImages["registry"]>,
+  deps: TaskImageDependencies,
+): Promise<boolean> {
+  const images = [registry.agent, ...(registry.verifier ? [registry.verifier] : [])];
+  return (await Promise.all(images.map((image) => deps.imageExists(image)))).every(Boolean);
+}
+
+function withoutRegistry(images: TaskImages): TaskImages {
+  const { registry: _claimed, ...unexported } = images;
+  return unexported as TaskImages;
 }
 
 async function exportReviewed(
   store: ArtifactStore,
   task: ReviewedTask,
   deps: TaskImageDependencies,
+  images: TaskImages,
+  options: { readonly fresh: boolean },
 ): Promise<TaskImageOutcome> {
-  const images = task.images as TaskImages;
-  const bundleKey = task.bundleKey as string;
+  // Exports and publishes from the compiled bundle, which an execution bundle was published beside.
+  const bundleKey = compiledBundleKey(task.bundleKey as string);
   const metadata = await store.stat(bundleKey);
   if (!metadata) throw new Error("Original compiled bundle is missing");
   const original = {
@@ -100,14 +129,14 @@ async function exportReviewed(
     bundle: { ...metadata, contentType: "application/gzip" },
     images,
   };
-  const exported = images.registry
-    ? original
-    : await (deps.exportImages ?? exportTaskImages)(store, original, {
+  const exported = options.fresh
+    ? await (deps.exportImages ?? exportTaskImages)(store, original, {
         repository: deps.repository,
         env: harborProcessEnvironment(await deps.environment(images.provider)),
         token: googleAccessToken,
         signal: deps.signal ?? new AbortController().signal,
-      });
+      })
+    : original;
   if (!exported.images?.registry?.agent) throw new Error("Export produced no agent image");
   // Tasks with services have no separate verifier image and keep their full build bundle.
   const delivered = await (deps.publish ?? publishExecutionBundle)(
@@ -116,9 +145,19 @@ async function exportReviewed(
     deps.signal ?? new AbortController().signal,
   );
   const deliveredKey = artifactKey(delivered.bundle.uri);
-  if (!(await deps.save(deliveredKey, delivered.images as TaskImages)))
-    throw new Error("Task changed during export; original row preserved");
-  return { status: "exported", bundleKey: deliveredKey };
+  if (await deps.save(deliveredKey, delivered.images as TaskImages))
+    return { status: "exported", bundleKey: deliveredKey };
+  // The row did not take the images just pushed, so nothing names them. Remove them, unless a
+  // comparison, a release or another row does, and rethrow so the reconcile runs again.
+  if (options.fresh) {
+    const pushed = [exported.images.registry.agent, exported.images.registry.verifier].filter(
+      (image): image is string => !!image,
+    );
+    const digests = pushed.map((image) => image.slice(image.indexOf("@") + 1));
+    if (!(await deps.referenced(digests, task.id)))
+      for (const image of pushed) await deps.removeImage(image);
+  }
+  throw new Error("Task changed during export; the next review reconciles it");
 }
 
 async function removeExported(
@@ -130,16 +169,16 @@ async function removeExported(
   const registry = images.registry as NonNullable<TaskImages["registry"]>;
   const exported = [registry.agent, ...(registry.verifier ? [registry.verifier] : [])];
   const digests = exported.map((image) => image.slice(image.indexOf("@") + 1));
-  if (await deps.referenced(digests))
-    return { status: "kept", reason: "A comparison or release pins these images" };
+  // Another row or a pin still uses these images: keep them, and keep the row's claim with them.
+  if (await deps.referenced(digests, task.id))
+    return { status: "kept", reason: "A comparison, a release or another task pins these images" };
   const bundleKey = compiledBundleKey(task.bundleKey as string);
   if (!(await store.stat(bundleKey))) throw new Error("Original compiled bundle is missing");
   // Delete before the row loses its digests: a failed delete leaves the row naming them, so the
   // retry deletes them again (a missing image counts as done) rather than forgetting them.
   for (const image of exported) await deps.removeImage(image);
   // Back to the compiled bundle, so a later approval can export again from it.
-  const { registry: _removed, ...unexported } = images;
-  if (!(await deps.save(bundleKey, unexported as TaskImages)))
+  if (!(await deps.save(bundleKey, withoutRegistry(images))))
     throw new Error("Task changed during removal; the next review reconciles it");
   return { status: "removed", bundleKey };
 }
@@ -154,67 +193,6 @@ function artifactKey(uri: string): string {
   const index = uri.indexOf("/runs/");
   if (index < 0) throw new Error("Task bundle has no generation artifact key");
   return uri.slice(index + 1);
-}
-
-/** Resolve only the original verification account; historical model access is irrelevant. */
-export async function exportEnvironment(
-  vault: Pick<Vault, "records" | "credentials">,
-  runId: string,
-  provider: TaskImages["provider"],
-  base: NodeJS.ProcessEnv,
-): Promise<NodeJS.ProcessEnv> {
-  const saved = await vault.records.read<GenerationReference>(generationRecordPath(runId));
-  if (!saved) throw new Error("Original generation configuration is missing");
-  const reference = saved.value;
-  const settings = reference.settings;
-  const runtime = providerEnvironment(base, "docker");
-  if (settings.sandbox === "managed") {
-    if (provider === "modal") return { ...runtime, ...managedModalEnvironment(base) };
-    if (provider !== "e2b") throw new Error("Unexpected managed verification provider");
-    const secret = managedSandboxCredentials(base);
-    return { ...runtime, E2B_API_KEY: secret.apiKey, E2B_DOMAIN: secret.domain };
-  }
-  const orgId = reference.orgId ?? reference.ownerId;
-  const original = settings.harborEnvironment ?? settings.sandbox;
-  if (original !== provider)
-    throw new Error("Saved verification provider does not match the task's images");
-  const id = settings.harborEnvironment
-    ? settings.harborCredentialId
-    : settings.sandboxCredentialId;
-  if (!id) throw new Error("Original verification credential is missing");
-  const credential = await vault.credentials.find(orgId, id);
-  if (!credential || credential.kind !== provider || credential.auth !== "api-key")
-    throw new Error("Original verification credential is unavailable");
-  const secret = await vault.credentials.secret(orgId, id);
-  if (!secret?.value) throw new Error("Original verification credential is unavailable");
-  // Start from the runtime whitelist, not the worker's provider credentials or overrides.
-  return { ...runtime, ...providerCredentialEnvironment(provider, secret) };
-}
-
-/**
- * Deletes one exported image version from Artifact Registry. An image already gone is not an
- * error, so a retried removal finishes.
- */
-export async function removeRegistryImage(
-  image: string,
-  token: () => Promise<string> = googleAccessToken,
-  fetcher: typeof fetch = fetch,
-): Promise<void> {
-  const parsed = parseImageReference(image);
-  const [project, repository, ...name] = parsed?.repository.split("/") ?? [];
-  const location = parsed?.host.replace(/-docker\.pkg\.dev$/, "");
-  if (!parsed?.digest || !project || !repository || !name.length || location === parsed.host)
-    throw new Error("Not an Artifact Registry image by digest");
-  const url =
-    `https://artifactregistry.googleapis.com/v1/projects/${project}/locations/${location}` +
-    `/repositories/${repository}/packages/${encodeURIComponent(name.join("/"))}` +
-    `/versions/${parsed.digest}?force=true`;
-  const response = await fetcher(url, {
-    method: "DELETE",
-    headers: { authorization: `Bearer ${await token()}` },
-  });
-  if (!response.ok && response.status !== 404)
-    throw new Error(`Artifact Registry answered ${response.status} deleting a task image`);
 }
 
 /** The database side of reconciling one task row, guarded against concurrent changes. */
@@ -242,10 +220,16 @@ export function taskImageRows(db: Database) {
         .returning({ id: tasks.id });
       return changed.length === 1;
     },
-    async referenced(digests: readonly string[]): Promise<boolean> {
+    async referenced(digests: readonly string[], exceptTaskId: number): Promise<boolean> {
       const patterns = digests.map((digest) => `%${digest}%`);
       const named = (column: AnyPgColumn) =>
         or(...patterns.map((pattern) => sql`${column}::text like ${pattern}`));
+      const [other] = await db
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(and(ne(tasks.id, exceptTaskId), named(tasks.images)))
+        .limit(1);
+      if (other) return true;
       const [comparison] = await db
         .select({ id: comparisons.id })
         .from(comparisons)
@@ -287,6 +271,7 @@ export function taskImageReconciler(options: {
         exportEnvironment(options.vault, task.runId, provider, options.env ?? process.env),
       save: (bundleKey, images) => rows.save(task, bundleKey, images),
       referenced: rows.referenced,
+      imageExists: (image) => registryImageExists(image),
       removeImage: (image) => removeRegistryImage(image),
     });
 }
