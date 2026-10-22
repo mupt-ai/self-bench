@@ -69,7 +69,7 @@ export interface PublicTaskRoutesOptions {
    */
   releasedResults?(id: string): Promise<ReleasedResults | undefined>;
   trials?: TrialBodiesOptions["trials"];
-  artifacts: Pick<ArtifactStore, "stat" | "openReadByKey">;
+  artifacts: Pick<ArtifactStore, "stat" | "openReadByKey" | "getByKey">;
 }
 
 /**

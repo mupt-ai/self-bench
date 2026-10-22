@@ -26,6 +26,13 @@ export interface ArtifactStore {
    * than `list` when only the names matter.
    */
   folders(prefix: string): Promise<string[]>;
+  /**
+   * Copies the object at `from` to the new key `to`, inside the store. An identical object already
+   * at `to` is fine; a different one is an error.
+   */
+  copy(from: string, to: string): Promise<Omit<ArtifactRef, "contentType">>;
+  /** Deletes the object at `key`; one already gone is fine. */
+  delete(key: string): Promise<void>;
 }
 
 export interface ArtifactUpload {

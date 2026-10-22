@@ -8,18 +8,8 @@ import type { TaskStore } from "../../db/tasks.js";
 import type { User, UserStore } from "../../db/users.js";
 import type { Vault } from "../../db/vault.js";
 import { evaluationCatalog } from "../../evaluation/catalog.js";
-import { managedBillingRefusal } from "../../generation/billing/eligibility.js";
 import { managedOffer } from "../../generation/billing/managed.js";
-import {
-  checkGenerationCredentials,
-  GENERATION_REQUIRED,
-  generationRoutes,
-  saveGenerationRecords,
-} from "../../generation/settings/credentials.js";
-import {
-  type GenerationReference,
-  generationSettingsSchema,
-} from "../../generation/settings/settings.js";
+import { saveGenerationRecords } from "../../generation/settings/credentials.js";
 import {
   startTaskFromPullRequest,
   taskRunId,
@@ -36,6 +26,8 @@ import { listMergedPullRequests, MAX_PR_PAGE } from "../../third_party/github/pu
 import type { AuthConfig } from "../auth/config.js";
 import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson } from "../http.js";
+import { requestedGeneration } from "./generation-request.js";
+import { taskFeedbackRoute } from "./task-feedback.js";
 import { taskItem } from "./tasks.js";
 
 const route =
@@ -52,6 +44,8 @@ export interface PullRequestRoutesOptions {
   readonly fetchImpl?: typeof fetch;
   readonly vault?: Vault;
   readonly billing?: BillingStore;
+  /** Where set, a browser's feedback must come from this origin (trustedMutation). */
+  readonly publicUrl?: string;
 }
 
 export interface PullRequestRoutes {
@@ -63,12 +57,17 @@ export interface PullRequestRoutes {
   ): Promise<boolean>;
 }
 
-/** POST …/tasks/from-pr {pr}: one merged PR becomes one task, built by its own workflow. */
+/**
+ * POST …/tasks/from-pr {pr}: one merged PR becomes one task, built by its own workflow. POST
+ * …/tasks/<run>/<task>/feedback revises a task the same way (task-feedback.ts).
+ */
 export function createPullRequestRoutes(options: PullRequestRoutesOptions): PullRequestRoutes {
   const { config, auth, users, repos, tasks, artifacts, start } = options;
   const fetchImpl = options.fetchImpl ?? fetch;
   return {
     async handle(request, url, response, user) {
+      if (await taskFeedbackRoute({ ...options, fetchImpl }, request, url, response, user))
+        return true;
       const match = route.exec(url.pathname);
       if (!match?.[1] || !match[2] || !match[3]) return false;
       const listing = match[4] === "pull-requests";
@@ -111,55 +110,16 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
         pr?: unknown;
         generation?: unknown;
       };
-      const parsed =
-        body.generation === undefined
-          ? undefined
-          : generationSettingsSchema.safeParse(body.generation);
-      if (parsed && !parsed.success) {
-        sendJson(response, 400, {
-          error: "Choose valid generation models, reasoning, sandbox, and credentials.",
-        });
+      const requested = await requestedGeneration(
+        options,
+        { orgId: tenant.id, repoId: repo.id },
+        body.generation,
+      );
+      if ("status" in requested) {
+        sendJson(response, requested.status, requested.body);
         return true;
       }
-      const generation: GenerationReference | undefined = parsed?.success
-        ? { ownerId: tenant.id, orgId: tenant.id, repoId: repo.id, settings: parsed.data }
-        : undefined;
-      if (!generation && options.vault) {
-        sendJson(response, 400, { error: GENERATION_REQUIRED });
-        return true;
-      }
-      if (generation) {
-        if (!options.vault) {
-          sendJson(response, 503, { error: "Generation credential storage is not configured." });
-          return true;
-        }
-        try {
-          await checkGenerationCredentials(
-            options.vault.credentials,
-            tenant.id,
-            generation.settings,
-            managedOffer(),
-          );
-          generation.routes = await generationRoutes(
-            options.vault.credentials,
-            tenant.id,
-            generation.settings,
-          );
-        } catch (error) {
-          sendJson(response, 400, {
-            error: error instanceof Error ? error.message : "Credential unavailable",
-          });
-          return true;
-        }
-        const refusal = managedBillingRefusal(
-          generation.settings,
-          options.billing ? await options.billing.status(tenant.id) : undefined,
-        );
-        if (refusal) {
-          sendJson(response, 403, refusal);
-          return true;
-        }
-      }
+      const { generation } = requested;
       const number = parsePullRequestRef(String(body.pr ?? ""), repo.fullName);
       if (!number) {
         sendJson(response, 400, {

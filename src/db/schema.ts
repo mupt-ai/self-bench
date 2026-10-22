@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   bigint,
   bigserial,
   boolean,
@@ -197,6 +198,10 @@ export const tasks = pgTable(
     workflowId: text("workflow_id"),
     startedBy: bigint("started_by", { mode: "number" }).references(() => users.id),
     startedAt: timestamptz("started_at"),
+    /** Set when a person's feedback revised another task into this one. */
+    revisedFrom: bigint("revised_from", { mode: "number" }).references((): AnyPgColumn => tasks.id),
+    /** The feedback this revision addressed. */
+    feedback: text("feedback"),
     /** Retained across sync and run detachment; artifacts and historical results stay intact. */
     deletedAt: timestamptz("deleted_at"),
     syncedAt: timestamptz("synced_at").notNull().defaultNow(),
@@ -207,6 +212,7 @@ export const tasks = pgTable(
     uniqueIndex("tasks_workflow_id").on(table.workflowId),
     index("tasks_repo_id").on(table.repoId),
     index("tasks_repo_pr").on(table.repoId, table.sourcePr),
+    index("tasks_revised_from").on(table.revisedFrom),
   ],
 );
 

@@ -1,6 +1,6 @@
 import type { ArtifactRef, Difficulty } from "./common.js";
 import type { RunRequest } from "./run.js";
-import type { AuthoredTask, Candidate } from "./task.js";
+import type { AuthoredTask, AuthoredTaskDraft, Candidate } from "./task.js";
 import type { PipelineStage } from "./verify.js";
 
 export type RunPhase =
@@ -87,6 +87,14 @@ export interface RunStatus {
 export interface CandidateWorkflowInput {
   readonly run: RunRequest;
   readonly candidate: Candidate;
+  /** Set when a person's feedback revises an existing task instead of authoring a new one. */
+  readonly revision?: TaskRevision;
+}
+
+/** The draft a revision starts from, and what the person asked to change in it. */
+export interface TaskRevision {
+  readonly draft: AuthoredTaskDraft;
+  readonly feedback: string;
 }
 
 /** Authoritative outcome of one candidate child workflow; `task` is present only when accepted. */

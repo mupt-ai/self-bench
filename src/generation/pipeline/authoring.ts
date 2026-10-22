@@ -35,6 +35,8 @@ export interface AuthoringTurnInput {
   readonly report?: ArtifactRef;
   /** Reviewer suggestions for this round (turn 1 only). */
   readonly feedback?: string;
+  /** A revision's first turn: what a person asked to change in the task restored at /work/task. */
+  readonly maintainerFeedback?: string;
   readonly verifiesLeft: number;
 }
 
@@ -120,6 +122,7 @@ export async function startAuthoringTurn(
             round,
             verifyReport && renderVerifyReport(verifyReport),
             input.feedback,
+            input.maintainerFeedback,
           )
         : verifyResultPrompt(verifyReport, input.verifiesLeft),
     files: [
@@ -196,12 +199,16 @@ export async function finishAuthoringTurn(
   return outcome;
 }
 
-/** Round 1 gets the full brief; later rounds resume the session with the report and any feedback. */
+/**
+ * Round 1 gets the full brief, and a revision also the person's feedback on the restored task;
+ * later rounds resume the session with the report and any feedback.
+ */
 export function authoringPrompt(
   candidate: Candidate,
   round: number,
   report?: string,
   feedback?: string,
+  maintainerFeedback?: string,
 ): string {
   const tiers = Object.entries(difficultyThresholds)
     .map(
@@ -227,6 +234,9 @@ export function authoringPrompt(
       difficulty: candidate.difficulty,
       request: candidate.request,
       tiers,
+      maintainer: maintainerFeedback
+        ? renderPrompt("maintainer-feedback", { feedback: maintainerFeedback.trim() })
+        : "",
     });
   }
   return renderPrompt("revision", {

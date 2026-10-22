@@ -223,6 +223,30 @@ export class GcsArtifactStore implements ArtifactStore {
     return names.sort((left, right) => left.localeCompare(right));
   }
 
+  async copy(from: string, to: string): Promise<Omit<ArtifactRef, "contentType">> {
+    const bucket = this.#storage.bucket(this.#bucket);
+    const original = await this.stat(from);
+    if (!original) throw new Error(`no artifact to copy at ${from}`);
+    // Server-side, keeping the sha256 metadata; never over an existing object.
+    await bucket
+      .file(this.#objectFor(from))
+      .copy(bucket.file(this.#objectFor(to)), { preconditionOpts: { ifGenerationMatch: 0 } })
+      .catch((error: unknown) => {
+        if ((error as { code?: unknown }).code !== 412) throw error;
+      });
+    const copied = await this.stat(to);
+    if (copied?.sha256 !== original.sha256 || copied.sizeBytes !== original.sizeBytes)
+      throw new Error(`artifact already exists with different contents: ${to}`);
+    return copied;
+  }
+
+  async delete(key: string): Promise<void> {
+    await this.#storage
+      .bucket(this.#bucket)
+      .file(this.#objectFor(key))
+      .delete({ ignoreNotFound: true });
+  }
+
   #fileForReference(reference: ArtifactRef) {
     const match = /^gs:\/\/([^/]+)\/(.+)$/.exec(reference.uri);
     if (!match) {

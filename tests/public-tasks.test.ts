@@ -38,6 +38,9 @@ function storeOf(objects: Map<string, Buffer>) {
       const bytes = objects.get(key);
       return bytes ? Readable.from([bytes]) : undefined;
     },
+    async getByKey(key: string) {
+      return objects.get(key);
+    },
   };
 }
 

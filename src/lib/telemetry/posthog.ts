@@ -16,6 +16,7 @@ type ServerEvent =
   | "repo connected"
   | "batch started"
   | "pull request task started"
+  | "task revision started"
   | "comparison started"
   | "benchmark started"
   | "release published";

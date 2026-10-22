@@ -204,6 +204,24 @@ export class LocalArtifactStore implements ArtifactStore {
       .sort((left, right) => left.localeCompare(right));
   }
 
+  async copy(from: string, to: string): Promise<Omit<ArtifactRef, "contentType">> {
+    const source = this.#pathFor(from);
+    await this.#assertRegularFile(source);
+    const target = this.#pathFor(to);
+    await this.#prepareParent(target);
+    await link(source, target).catch((error: unknown) => {
+      if (!hasCode(error, "EEXIST")) throw error;
+    });
+    const [original, copied] = await Promise.all([this.stat(from), this.stat(to)]);
+    if (!original || copied?.sha256 !== original.sha256)
+      throw new Error(`artifact already exists with different contents: ${to}`);
+    return copied;
+  }
+
+  async delete(key: string): Promise<void> {
+    await rm(this.#pathFor(key), { force: true });
+  }
+
   #pathForReference(reference: ArtifactRef): string {
     const url = new URL(reference.uri);
     if (url.protocol !== "file:") {

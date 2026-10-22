@@ -8,6 +8,7 @@ import type { ReleaseTask } from "../src/public/release-rule.js";
 import type { ReleasedResults } from "../src/public/release-trials.js";
 import type { PublishedLine, PublishedTrial } from "../src/public/release-types.js";
 
+const none = async () => undefined;
 const LINE: ReleaseLine = { orgId: 7, githubRepoId: 70107786 };
 const SOL = JSON.stringify(["sol", "codex", "high"]);
 const CUSTOM = JSON.stringify(["custom/qwen", "pi", "default"]);
@@ -123,7 +124,7 @@ async function serve() {
       releasedResults: async () => released,
     },
     {
-      artifacts: { stat: async () => undefined, openReadByKey: async () => undefined },
+      artifacts: { stat: none, openReadByKey: none, getByKey: none },
       trials: {
         run: async (at, evaluationId) => {
           runReads.push(evaluationId);
