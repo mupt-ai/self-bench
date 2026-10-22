@@ -44,6 +44,7 @@ function deps(overrides: Partial<TaskImageDependencies> = {}): TaskImageDependen
     environment: unexpected,
     save: unexpected,
     referenced: unexpected,
+    current: async () => ({ ...exportedTask, images: unexported, bundleKey: compiled }),
     imageExists: unexpected,
     removeImage: unexpected,
     exportImages: unexpected,
@@ -143,4 +144,29 @@ test("the registry check reads the version and fails closed on other answers", a
   await expect(registryImageExists(registry.agent, async () => "t", answer(403))).rejects.toThrow(
     "answered 403",
   );
+});
+
+test("a cleanup never removes an image the row names by the time it runs", async () => {
+  const removed: string[] = [];
+  await expect(
+    reconcileTaskImages(
+      store,
+      { ...exportedTask, bundleKey: compiled, images: unexported },
+      deps({
+        ...freshExport,
+        save: async () => false,
+        // A concurrent reconcile saved the agent image into this row meanwhile.
+        current: async () => ({
+          ...exportedTask,
+          bundleKey: delivered,
+          images: { ...unexported, registry: { agent: registry.agent } },
+        }),
+        referenced: async () => false,
+        removeImage: async (image) => {
+          removed.push(image);
+        },
+      }),
+    ),
+  ).rejects.toThrow("Task changed during export");
+  expect(removed).toEqual([registry.verifier]);
 });

@@ -43,10 +43,12 @@ export interface TaskImageDependencies {
   /** Switches the row's bundle and images unless the task changed meanwhile. */
   readonly save: (bundleKey: string, images: TaskImages) => Promise<boolean>;
   /**
-   * Whether a saved comparison, a release, or another task row names any of these digests. The
-   * task's own row (`exceptTaskId`) does not count.
+   * Whether a saved comparison, a release, or another approved task row names any of these
+   * digests. The task's own row (`exceptTaskId`) does not count, nor do rows nobody approved.
    */
   readonly referenced: (digests: readonly string[], exceptTaskId: number) => Promise<boolean>;
+  /** The row as it is now, so a cleanup never removes what a concurrent save just named. */
+  readonly current: (taskRowId: number) => Promise<ReviewedTask | undefined>;
   /** Whether the registry still holds this image by digest. */
   readonly imageExists: (image: string) => Promise<boolean>;
   readonly removeImage: (image: string) => Promise<void>;
@@ -153,9 +155,13 @@ async function exportReviewed(
     const pushed = [exported.images.registry.agent, exported.images.registry.verifier].filter(
       (image): image is string => !!image,
     );
-    const digests = pushed.map((image) => image.slice(image.indexOf("@") + 1));
-    if (!(await deps.referenced(digests, task.id)))
-      for (const image of pushed) await deps.removeImage(image);
+    // Content-addressed: a concurrent reconcile of this row may have saved the same digests.
+    const row = await deps.current(task.id);
+    const named = new Set([row?.images?.registry?.agent, row?.images?.registry?.verifier]);
+    const orphans = pushed.filter((image) => !named.has(image));
+    const digests = orphans.map((image) => image.slice(image.indexOf("@") + 1));
+    if (orphans.length && !(await deps.referenced(digests, task.id)))
+      for (const image of orphans) await deps.removeImage(image);
   }
   throw new Error("Task changed during export; the next review reconciles it");
 }
@@ -224,10 +230,19 @@ export function taskImageRows(db: Database) {
       const patterns = digests.map((digest) => `%${digest}%`);
       const named = (column: AnyPgColumn) =>
         or(...patterns.map((pattern) => sql`${column}::text like ${pattern}`));
+      // Only a row a person approved, still live, needs its images; a rejected row never does.
       const [other] = await db
         .select({ id: tasks.id })
         .from(tasks)
-        .where(and(ne(tasks.id, exceptTaskId), named(tasks.images)))
+        .where(
+          and(
+            ne(tasks.id, exceptTaskId),
+            eq(tasks.reviewDecision, "approve"),
+            eq(tasks.pipelineStatus, "accepted"),
+            isNull(tasks.deletedAt),
+            named(tasks.images),
+          ),
+        )
         .limit(1);
       if (other) return true;
       const [comparison] = await db
@@ -271,6 +286,7 @@ export function taskImageReconciler(options: {
         exportEnvironment(options.vault, task.runId, provider, options.env ?? process.env),
       save: (bundleKey, images) => rows.save(task, bundleKey, images),
       referenced: rows.referenced,
+      current: rows.find,
       imageExists: (image) => registryImageExists(image),
       removeImage: (image) => removeRegistryImage(image),
     });

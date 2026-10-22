@@ -43,6 +43,7 @@ function deps(overrides: Partial<TaskImageDependencies> = {}): TaskImageDependen
     environment: unexpected,
     save: unexpected,
     referenced: unexpected,
+    current: unexpected,
     imageExists: unexpected,
     removeImage: unexpected,
     exportImages: unexpected,

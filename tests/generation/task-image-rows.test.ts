@@ -102,6 +102,7 @@ test("an image is pinned while a comparison or release names its digest", async 
     pipelineStatus: "accepted",
     stage: "accepted",
     images,
+    reviewDecision: "approve",
   });
   expect(await rows.referenced([digest], task.id)).toBe(true);
   await db.delete(tasks).where(eq(tasks.runId, "run-2"));
@@ -126,5 +127,30 @@ test("an image is pinned while a comparison or release names its digest", async 
     signature: "s",
     inputs: [{ tasks: [{ images }] }],
   });
+  expect(await rows.referenced([digest], task.id)).toBe(true);
+});
+
+test("a rejected or deleted row no longer pins a shared digest", async () => {
+  const { db, rows, task } = await seeded();
+  const other = { ...task, runId: "run-2", candidateId: "c2" };
+  const insert = (fields: { reviewDecision: "approve" | "reject" | null; deletedAt?: Date }) =>
+    db.insert(tasks).values({
+      repoId: task.repoId,
+      runId: other.runId,
+      candidateId: other.candidateId,
+      taskId: "task-1",
+      difficulty: "medium",
+      pipelineStatus: "accepted",
+      stage: "accepted",
+      images,
+      ...fields,
+    });
+  await insert({ reviewDecision: "reject" });
+  expect(await rows.referenced([digest], task.id)).toBe(false);
+  await db.delete(tasks).where(eq(tasks.runId, "run-2"));
+  await insert({ reviewDecision: "approve", deletedAt: new Date() });
+  expect(await rows.referenced([digest], task.id)).toBe(false);
+  await db.delete(tasks).where(eq(tasks.runId, "run-2"));
+  await insert({ reviewDecision: "approve" });
   expect(await rows.referenced([digest], task.id)).toBe(true);
 });
