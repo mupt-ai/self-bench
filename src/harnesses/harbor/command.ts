@@ -1,7 +1,9 @@
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { delimiter, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { HarborEnvironment } from "../../contracts/config/providers.js";
+import { projectRoot } from "../../lib/project-paths.js";
 
 /** Process policy for generation gates, not provider lifetimes; solver trials use trialTimeouts. */
 export const HARBOR_VERSION = "0.23.0";
@@ -123,7 +125,13 @@ export async function harborPython(env: NodeJS.ProcessEnv): Promise<string> {
   throw new Error("Harbor is not installed on this worker");
 }
 
-/** Harbor imports SelfBench's agent adapters (runtime/*.py) from here. */
+/**
+ * Harbor imports SelfBench's agent adapters (runtime/*.py) from here. They sit beside this module
+ * in the sources and the server build; a maintenance program bundles this module into
+ * dist/maintenance, so it finds them where the server build put them.
+ */
 export function harborPythonPath(): string {
-  return fileURLToPath(new URL("./runtime/", import.meta.url));
+  const beside = fileURLToPath(new URL("./runtime/", import.meta.url));
+  if (existsSync(beside)) return beside;
+  return join(projectRoot(import.meta.url), "dist/harnesses/harbor/runtime/");
 }
