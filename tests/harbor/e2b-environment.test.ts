@@ -130,6 +130,7 @@ class Response:
         if self.status_code >= 400: raise RuntimeError(self.status_code)
         return self
     def json(self): return self.body
+refused = []
 challenge = 'Bearer realm="https://public.ecr.aws/token/",service="public.ecr.aws",scope="aws"'
 class AsyncClient:
     def __init__(self, base_url="", **options): self.base_url = base_url
@@ -142,7 +143,10 @@ class AsyncClient:
         if (headers or {}).get("authorization") != "Bearer anonymous": return Response(401, headers={"www-authenticate": challenge})
         if url.endswith("/manifests/v1"):
             return Response(200, {"manifests": [{"platform": {"os": "linux", "architecture": "arm64"}, "digest": "arm"}, {"platform": {"os": "linux", "architecture": "amd64"}, "digest": "amd"}]})
-        if url.endswith("/manifests/amd"): return Response(200, {"config": {"digest": "cfg"}})
+        if url.endswith("/manifests/amd"):
+            # Public ECR's per-IP limit on anonymous pulls refuses the first ask.
+            if not refused: refused.append(url); return Response(429, headers={"retry-after": "0"})
+            return Response(200, {"config": {"digest": "cfg"}})
         if url.endswith("/blobs/cfg"): return Response(200, {"config": {"Env": ["PATH=/opt/venv/bin"]}})
         raise AssertionError(url)
 sys.modules["httpx"].AsyncClient, sys.modules["httpx"].Response = AsyncClient, Response
@@ -154,6 +158,7 @@ async def check():
         (base + "/manifests/v1", None, None, None),
         ("https://public.ecr.aws/token/", None, None, {"scope": "aws", "service": "public.ecr.aws"}),
         (base + "/manifests/v1", "Bearer anonymous", None, None),
+        (base + "/manifests/amd", "Bearer anonymous", None, None),
         (base + "/manifests/amd", "Bearer anonymous", None, None),
         (base + "/blobs/cfg", "Bearer anonymous", None, None),
     ], requests

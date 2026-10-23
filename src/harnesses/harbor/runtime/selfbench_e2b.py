@@ -80,6 +80,9 @@ CAPACITY_WAIT_SECS = (15, 120)
 # Reconnects to a command whose stream dropped, waiting 2, 4, 8, ... seconds before each.
 RECONNECTS = 6
 RECONNECT_WAIT_SECS = 2
+# Asks a registry again after a 429 or 5xx, waiting 2, 4, ... 64 seconds unless it says how long.
+REGISTRY_RETRIES = 6
+REGISTRY_WAIT_SECS = 2
 PLAN_LIMIT = re.compile(r"Timeout cannot be greater than (\d+) hours?")
 MEMORY_LIMIT = re.compile(r"Memory can't be higher than (\d+) MiB")
 IMAGE_ENV = "/etc/profile.d/selfbench-image-env.sh"
@@ -368,11 +371,11 @@ async def image_config(image: str, grant: tuple[str, str] | None = None) -> dict
 
         async def get(path: str, accept: str | None = None) -> httpx.Response:
             extra = {"accept": accept} if accept else {}
-            response = await client.get(path, headers={**headers, **extra}, auth=grant)
+            response = await patient(lambda: client.get(path, headers={**headers, **extra}, auth=grant))
             challenge = response.headers.get("www-authenticate", "")
             if response.status_code == 401 and challenge.lower().startswith("bearer "):
                 headers["authorization"] = f"Bearer {await token(challenge, repository, grant)}"
-                response = await client.get(path, headers={**headers, **extra})
+                response = await patient(lambda: client.get(path, headers={**headers, **extra}))
             return response.raise_for_status()
 
         found = (await get(f"/manifests/{reference}", MANIFEST_TYPES)).json()
@@ -387,6 +390,23 @@ async def image_config(image: str, grant: tuple[str, str] | None = None) -> dict
         return (await get(f"/blobs/{found['config']['digest']}")).json().get("config") or {}
 
 
+async def patient(request: Callable[[], Awaitable[httpx.Response]]) -> httpx.Response:
+    """
+    `request`'s response, asked again while the registry answers 429 or 5xx. Public ECR limits
+    anonymous pulls per IP, and every trial that starts at once reads its image's config, so a
+    large evaluation was refused ("429 Too Many Requests") and failed trials before they began.
+    Waits for the registry's Retry-After, else 2, 4, ... seconds, up to REGISTRY_RETRIES times.
+    """
+    for attempt in range(REGISTRY_RETRIES):
+        response = await request()
+        if response.status_code != 429 and response.status_code < 500:
+            return response
+        after = response.headers.get("retry-after", "")
+        delay = float(after) if after.isdigit() else REGISTRY_WAIT_SECS * 2**attempt
+        await asyncio.sleep(delay * random.uniform(1, 1.25))
+    return await request()
+
+
 async def token(challenge: str, repository: str, grant: tuple[str, str] | None) -> str:
     """A pull token from the realm a registry's `WWW-Authenticate: Bearer ...` challenge names."""
     fields = dict(re.findall(r'(\w+)="([^"]*)"', challenge))
@@ -394,6 +414,6 @@ async def token(challenge: str, repository: str, grant: tuple[str, str] | None) 
     if fields.get("service"):
         params["service"] = fields["service"]
     async with httpx.AsyncClient(follow_redirects=True, timeout=60) as client:
-        response = await client.get(fields["realm"], params=params, auth=grant)
+        response = await patient(lambda: client.get(fields["realm"], params=params, auth=grant))
         body = response.raise_for_status().json()
     return body.get("token") or body["access_token"]
