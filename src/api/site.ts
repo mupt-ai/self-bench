@@ -27,6 +27,11 @@ import { managedOfferingEnabled } from "../generation/billing/managed.js";
 import { startBillingDispatcher } from "../generation/billing/outbox.js";
 import { generationRecordPath } from "../generation/settings/credentials.js";
 import type { GenerationReference } from "../generation/settings/settings.js";
+import {
+  selfBenchTaskImagesWorkflow,
+  taskImagesWorkflowId,
+  taskReviewChanged,
+} from "../generation/tasks/task-images-workflow.js";
 import { temporalStarter, temporalStatus } from "../generation/tasks/workflow-client.js";
 import { projectRoot } from "../lib/project-paths.js";
 import { releasedTrials } from "../public/release-sources.js";
@@ -203,6 +208,18 @@ export async function openSite(
       tasks,
       artifacts,
       status: temporalStatus(client),
+      ...(config.taskImages
+        ? {
+            reviewChanged: async (taskRowId: number) => {
+              await client.workflow.signalWithStart(selfBenchTaskImagesWorkflow, {
+                workflowId: taskImagesWorkflowId(taskRowId),
+                taskQueue: generationQueue ?? config.temporal.taskQueue,
+                args: [taskRowId],
+                signal: taskReviewChanged,
+              });
+            },
+          }
+        : {}),
       ...(generationVault
         ? {
             cost: async (runId, orgId, candidateId, live) => {

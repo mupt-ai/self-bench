@@ -62,6 +62,8 @@ export interface TaskRoutesOptions {
     candidateId: string,
     live?: SandboxCostSnapshot,
   ) => Promise<GenerationCost | undefined>;
+  /** Told after a review changes or a task is deleted, so its exported images follow. */
+  readonly reviewChanged?: (taskRowId: number) => Promise<void>;
 }
 
 export interface TaskRoutes {
@@ -75,6 +77,11 @@ export interface TaskRoutes {
 
 export function createTaskRoutes(options: TaskRoutesOptions): TaskRoutes {
   const { users, repos, tasks, artifacts, status } = options;
+  // The review or deletion already succeeded; images catch up on the next change or a backfill.
+  const reviewChanged = async (taskRowId: number) =>
+    await options.reviewChanged?.(taskRowId).catch((error: unknown) => {
+      console.error(`task ${taskRowId} images were not reconciled:`, error);
+    });
 
   return {
     async handle(request, url, response, user) {
@@ -135,7 +142,9 @@ export function createTaskRoutes(options: TaskRoutesOptions): TaskRoutes {
         return true;
       }
       if (!leaf && request.method === "DELETE") {
+        const existing = await tasks.find(repo.id, runId, taskId);
         const result = await tasks.deleteTask(repo.id, runId, taskId);
+        if (result === "deleted" && existing) await reviewChanged(existing.id);
         if (result === "active") {
           sendJson(response, 409, { error: "Task generation is still in progress" });
         } else if (result === "missing") {
@@ -193,10 +202,12 @@ export function createTaskRoutes(options: TaskRoutesOptions): TaskRoutes {
             userId: user.id,
           }),
         );
+        await reviewChanged(task.id);
         return true;
       }
       if (leaf === "review" && request.method === "DELETE") {
         await sendReview(response, () => tasks.clearReview(task.id));
+        await reviewChanged(task.id);
         return true;
       }
       if (leaf === "artifacts" && request.method === "GET") {

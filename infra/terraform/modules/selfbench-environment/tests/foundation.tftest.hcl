@@ -302,7 +302,7 @@ run "task_images" {
     error_message = "Task image tags must not be overwritten."
   }
   assert {
-    condition     = google_artifact_registry_repository_iam_member.runtime_task_images[0].role == "roles/artifactregistry.writer" && google_artifact_registry_repository_iam_member.api_task_images[0].role == "roles/artifactregistry.reader"
+    condition     = google_artifact_registry_repository_iam_member.runtime_task_images[0].role == "roles/artifactregistry.repoAdmin" && google_artifact_registry_repository_iam_member.api_task_images[0].role == "roles/artifactregistry.reader"
     error_message = "Only the worker writes task images; the API only reads them."
   }
 }

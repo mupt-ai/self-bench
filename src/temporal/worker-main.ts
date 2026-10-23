@@ -13,6 +13,7 @@ import { keepRunSummaries } from "../evaluation/store.js";
 import { keepGatewaysFresh } from "../gateways/refresh.js";
 import { createBatchActivities } from "../generation/batches/activities.js";
 import { createActivities } from "../generation/pipeline/activities.js";
+import { createTaskImageActivities } from "../generation/tasks/task-images-activity.js";
 import { closeSentry, initSentry } from "../lib/telemetry/sentry.js";
 import { checkSandboxBackends } from "../sandbox/index.js";
 import { removeEmptyModalCredentialOverrides } from "../sandbox/providers/modal/auth.js";
@@ -71,6 +72,16 @@ const { runSolverTrial, prepareTaskImages, ...evaluation } = createEvaluationAct
   snapshotSecret && snapshotOrigin ? { secret: snapshotSecret, url: snapshotOrigin } : undefined,
   stopping.signal,
 );
+// Exports and removals follow human reviews; they need the task rows and the verifying account.
+const taskImages =
+  database && vault && config.taskImages
+    ? createTaskImageActivities({
+        db: database.db,
+        vault,
+        store: artifacts,
+        repository: config.taskImages.repository,
+      })
+    : {};
 const harborConcurrency = resolveHarborConcurrency(config.harborConcurrency);
 const idle = idleTracker();
 const workers = await Promise.all([
@@ -97,7 +108,13 @@ const workers = await Promise.all([
           connection,
           namespace: config.temporal.namespace,
           taskQueue: `${config.temporal.taskQueue}-harbor`,
-          activities: { verifyCompiled, exportTaskImages, runSolverTrial, prepareTaskImages },
+          activities: {
+            verifyCompiled,
+            exportTaskImages,
+            runSolverTrial,
+            prepareTaskImages,
+            ...taskImages,
+          },
           maxConcurrentActivityTaskExecutions: harborConcurrency,
           interceptors: { activity: [activityErrorInterceptor(), idle.interceptor] },
           shutdownGraceTime: shutdownGraceMs,

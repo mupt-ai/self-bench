@@ -86,7 +86,7 @@ async function ingestRunOne(site: AuthServer) {
 
 /** Task routes over the `run-one` artifacts, signed in with Mupt-AI/self-bench connected. */
 export async function seededTaskSite(
-  options: Pick<AuthServerOptions, "start"> &
+  options: Pick<AuthServerOptions, "start" | "reviewChanged"> &
     Pick<FakeGitHubOptions, "repos" | "pullRequests"> = {},
 ) {
   const artifacts = await seededStore();
@@ -100,6 +100,7 @@ export async function seededTaskSite(
     artifacts,
     fetchImpl: hub.fetch,
     ...(options.start ? { start: options.start } : {}),
+    ...(options.reviewChanged ? { reviewChanged: options.reviewChanged } : {}),
   });
   const headers = await signedIn(site);
   await connectRepo(site, headers);
