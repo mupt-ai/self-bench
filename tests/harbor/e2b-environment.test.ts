@@ -164,3 +164,92 @@ asyncio.run(check())
   expect(result.stderr).toBe("");
   expect(result.exitCode).toBe(0);
 });
+
+test("a command whose E2B stream drops is waited on again, never run twice", async () => {
+  const result = await runCommand("python3", [
+    "-c",
+    `${STUBS}import asyncio, logging, pathlib
+for name in ["e2b.exceptions", "e2b.sandbox", "e2b.sandbox.commands", "e2b.sandbox.commands.command_handle", "harbor.environments.base"]:
+    sys.modules[name] = types.ModuleType(name)
+class TimeoutException(Exception): pass
+class CommandExitException(Exception):
+    def __init__(self, stdout, stderr, exit_code): self.stdout, self.stderr, self.exit_code = stdout, stderr, exit_code
+class ExecResult:
+    def __init__(self, stdout, stderr, return_code): self.stdout, self.stderr, self.return_code = stdout, stderr, return_code
+sys.modules["e2b.exceptions"].TimeoutException = TimeoutException
+sys.modules["e2b.sandbox.commands.command_handle"].CommandExitException = CommandExitException
+sys.modules["harbor.environments.base"].ExecResult = ExecResult
+class ConnectError(Exception): pass
+class Handle:
+    def __init__(self, pid, outcome, out=""): self.pid, self.outcome, self._stdout_chunks, self._stderr_chunks = pid, outcome, [out], []
+    async def wait(self):
+        if isinstance(self.outcome, Exception): raise self.outcome
+        return self.outcome
+class Commands:
+    def __init__(self, sandbox): self.sandbox = sandbox
+    async def connect(self, pid, timeout):
+        self.sandbox.connects.append((pid, timeout))
+        step = self.sandbox.reconnects.pop(0)
+        if isinstance(step, Exception): raise step
+        return step
+class Files:
+    def __init__(self, sandbox): self.sandbox = sandbox
+    async def exists(self, path): return path in self.sandbox.files_written
+    async def read(self, path): return self.sandbox.files_written[path]
+class Sandbox:
+    def __init__(self, reconnects, exit_after_drop=None):
+        self.reconnects, self.connects, self.files_written = reconnects, [], {}
+        self.exit_after_drop = exit_after_drop
+        self.commands, self.files = Commands(self), Files(self)
+harbor_e2b.effective_exec_cwd = lambda cwd, workdir, default: cwd or default
+class E2BEnvironment:
+    def __init__(self): self._template_name = "t"; self.logger = logging.getLogger("test")
+    def _resolve_user(self, user): return user
+    def _merge_env(self, env): return env
+harbor_e2b.E2BEnvironment = E2BEnvironment
+module = load()
+module.RECONNECT_WAIT_SECS = 0
+# Each drop and failed reconnect is logged; the assertions below cover them.
+logging.getLogger("test").disabled = True
+async def run(sandbox, first):
+    env = module.SelfBenchE2BEnvironment.__new__(module.SelfBenchE2BEnvironment)
+    env.task_env_config, env._workdir, env._sandbox, env.logger = types.SimpleNamespace(workdir=None), "/app", sandbox, logging.getLogger("test")
+    dispatched = []
+    async def dispatch(command, **options):
+        dispatched.append(command)
+        if sandbox.exit_after_drop is not None:
+            sandbox.files_written[command.split("> ")[1].split("'")[0]] = sandbox.exit_after_drop
+        return first
+    env._dispatch_command = dispatch
+    return dispatched, await env.exec("agent run", timeout_sec=600)
+async def check():
+    drop = ConnectError("Error reading content: peer closed connection without sending TLS close_notify")
+    # The stream drops mid-run; the reconnected stream carries the rest and the exit code.
+    sandbox = Sandbox([Handle(7, CommandExitException("rest", "", 3))])
+    dispatched, result = await run(sandbox, Handle(7, drop, "start "))
+    assert len(dispatched) == 1 and dispatched[0].endswith("EXIT\\nagent run"), dispatched
+    assert (result.stdout, result.return_code) == ("start rest", 3), vars(result)
+    assert sandbox.connects[0][0] == 7 and 0 < sandbox.connects[0][1] <= 600, sandbox.connects
+    # The command ended while no stream was open: its trap's file gives the exit code.
+    sandbox = Sandbox([], exit_after_drop="0")
+    dispatched, result = await run(sandbox, Handle(8, drop, "out"))
+    assert (result.stdout, result.return_code, sandbox.connects) == ("out", 0, []), vars(result)
+    # A process that never comes back fails with the drop, after bounded reconnects.
+    sandbox = Sandbox([ConnectError("not found")] * module.RECONNECTS)
+    try:
+        await run(sandbox, Handle(9, drop))
+        raise AssertionError("expected the drop")
+    except ConnectError as error:
+        assert error is drop and len(sandbox.connects) == module.RECONNECTS
+    # A time limit is the command's own outcome, not a dropped stream.
+    try:
+        await run(Sandbox([]), Handle(10, TimeoutException("limit")))
+        raise AssertionError("expected the timeout")
+    except TimeoutException: pass
+asyncio.run(check())
+`,
+    ENVIRONMENT,
+  ]);
+  expect(result.stderr).toBe("");
+  expect(result.exitCode).toBe(0);
+});
