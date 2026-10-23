@@ -139,44 +139,7 @@ export async function pinEnvironmentImages(
   };
 }
 
-/** An image's config as its manifest names it: what a container of it starts with. */
-export interface ImageConfig {
-  readonly Env?: readonly string[];
-  readonly User?: string;
-  readonly WorkingDir?: string;
-}
-
-/**
- * The linux/amd64 config of a digest-pinned image, read anonymously from its registry as
- * {@link resolveImage} reads its manifest.
- */
-export async function imageConfig(
-  image: string,
-  options: RegistryOptions = {},
-): Promise<ImageConfig> {
-  const parsed = parseImageReference(image);
-  if (!parsed?.digest) throw new Error(`${image} is not pinned to a digest`);
-  const json = async (response: Response) => {
-    if (!response.ok) {
-      throw new RegistryUnavailableError(`${parsed.host} answered ${response.status} for ${image}`);
-    }
-    return (await response.json()) as Record<string, unknown>;
-  };
-  let manifest = await json(await manifestRequest(parsed, parsed.digest, "GET", options));
-  if (Array.isArray(manifest.manifests)) {
-    const platform = (
-      manifest.manifests as { digest: string; platform?: Record<string, string> }[]
-    ).find((child) => child.platform?.os === "linux" && child.platform.architecture === "amd64");
-    if (!platform) throw new Error(`${image} has no linux/amd64 image`);
-    manifest = await json(await manifestRequest(parsed, platform.digest, "GET", options));
-  }
-  const config = (manifest.config as { digest?: string } | undefined)?.digest;
-  if (!config) throw new Error(`${image} names no config`);
-  const blob = await json(await registryRequest(parsed, `blobs/${config}`, "GET", {}, options));
-  return (blob.config as ImageConfig | undefined) ?? {};
-}
-
-async function manifestRequest(
+export async function manifestRequest(
   image: ImageReference,
   target: string,
   method: "HEAD" | "GET",
@@ -191,7 +154,7 @@ async function manifestRequest(
   );
 }
 
-async function registryRequest(
+export async function registryRequest(
   image: ImageReference,
   path: string,
   method: "HEAD" | "GET",
@@ -247,13 +210,56 @@ async function manifestDigest(response: Response): Promise<string | undefined> {
   return `sha256:${hex.join("")}`;
 }
 
+/**
+ * One registry request. A rate limit (429) or brief outage (503) is waited out a few times, for
+ * as long as the registry's Retry-After asks up to {@link maxRetryWaitMs}, before the caller sees
+ * it; Docker Hub's anonymous limit can ask for hours, which stays the caller's to report.
+ */
 async function send(url: string, init: RequestInit, options: RegistryOptions): Promise<Response> {
-  const timeout = AbortSignal.timeout(requestTimeoutMs);
-  const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
-  try {
-    return await (options.fetch ?? fetch)(url, { redirect: "error", ...init, signal });
-  } catch (error) {
-    if (options.signal?.aborted) throw error;
-    throw new RegistryUnavailableError(`could not reach ${new URL(url).host}`, { cause: error });
+  for (let attempt = 0; ; attempt++) {
+    const timeout = AbortSignal.timeout(requestTimeoutMs);
+    const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
+    let response: Response;
+    try {
+      response = await (options.fetch ?? fetch)(url, { redirect: "error", ...init, signal });
+    } catch (error) {
+      if (options.signal?.aborted) throw error;
+      throw new RegistryUnavailableError(`could not reach ${new URL(url).host}`, { cause: error });
+    }
+    if (![429, 503].includes(response.status) || attempt >= retries) return response;
+    const wait = retryWait(response.headers.get("retry-after"), attempt);
+    if (wait === undefined) return response;
+    await response.body?.cancel();
+    await sleep(wait, options.signal);
   }
+}
+
+const retries = 3;
+const maxRetryWaitMs = 30_000;
+
+/** Retry-After in seconds or as a date, else 2s, 4s, 8s; undefined when it asks for too long. */
+function retryWait(header: string | null, attempt: number): number | undefined {
+  const seconds = header === null ? Number.NaN : Number(header);
+  const asked = Number.isFinite(seconds)
+    ? seconds * 1000
+    : header
+      ? Date.parse(header) - Date.now()
+      : Number.NaN;
+  const wait = Number.isNaN(asked) ? 2000 * 2 ** attempt : Math.max(0, asked);
+  return wait <= maxRetryWaitMs ? wait : undefined;
+}
+
+function sleep(ms: number, signal: AbortSignal | undefined): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(signal.reason);
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(signal.reason);
+      },
+      { once: true },
+    );
+  });
 }

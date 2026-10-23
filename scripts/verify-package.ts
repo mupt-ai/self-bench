@@ -73,6 +73,7 @@ try {
     "dist/maintenance/backfill-timeouts.js",
     "dist/maintenance/backfill-execution-bundles.js",
     "dist/maintenance/compact-task-bundles.js",
+    "dist/maintenance/reverify-task-images.js",
     "dist/maintenance/records-migration.js",
     "dist/harnesses/harbor/runtime/harbor_gateway.py",
     "dist/harnesses/harbor/runtime/harbor_dari.py",
@@ -106,6 +107,7 @@ try {
     ["backfill-timeouts", "Usage: backfill-timeouts.js"],
     ["backfill-execution-bundles", "Usage: backfill-execution-bundles.js"],
     ["compact-task-bundles", "Usage: compact-task-bundles.js"],
+    ["reverify-task-images", "Usage: reverify-task-images.js"],
     ["records-migration", "Set SELFBENCH_DATABASE_URL and SELFBENCH_EVAL_CREDENTIAL_KEY"],
   ] as const) {
     const child = Bun.spawn(["node", join(installedRoot, "dist/maintenance", `${program}.js`)], {
