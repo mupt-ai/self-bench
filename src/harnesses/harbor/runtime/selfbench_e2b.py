@@ -215,7 +215,9 @@ class SelfBenchE2BEnvironment(E2BEnvironment):
                 code = await self._exit_status(status)
                 if code is not None:
                     return ended(code)
-                remaining = 0 if deadline is None else max(1, deadline - time.monotonic())
+                remaining = 0 if deadline is None else deadline - time.monotonic()
+                if deadline is not None and remaining <= 0:
+                    raise TimeoutException(f"Command exceeded its {timeout_sec}s time limit")
                 try:
                     handle = await self._sandbox.commands.connect(pid, timeout=remaining)
                 except Exception as error:

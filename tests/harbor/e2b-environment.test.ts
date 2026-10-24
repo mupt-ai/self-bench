@@ -251,6 +251,14 @@ async def check():
         await run(Sandbox([]), Handle(10, TimeoutException("limit")))
         raise AssertionError("expected the timeout")
     except TimeoutException: pass
+    # Past the time limit, a dropped stream ends as a timeout instead of reconnecting.
+    sandbox = Sandbox([])
+    module.time = types.SimpleNamespace(monotonic=iter([0, 601]).__next__)
+    try:
+        await run(sandbox, Handle(11, drop))
+        raise AssertionError("expected the timeout")
+    except TimeoutException:
+        assert sandbox.connects == [], sandbox.connects
 asyncio.run(check())
 `,
     ENVIRONMENT,
