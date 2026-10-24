@@ -210,32 +210,31 @@ class SelfBenchE2BEnvironment(E2BEnvironment):
 
         dropped: Exception | None = None
         for attempt in range(RECONNECTS + 1):
-            if handle is not None:
+            if attempt:
+                await asyncio.sleep(RECONNECT_WAIT_SECS * 2 ** (attempt - 1))
+                code = await self._exit_status(status)
+                if code is not None:
+                    return ended(code)
+                remaining = 0 if deadline is None else max(1, deadline - time.monotonic())
                 try:
-                    result = await handle.wait()
-                    return ended(result.exit_code, result.stdout, result.stderr)
-                except CommandExitException as exited:
-                    return ended(exited.exit_code, exited.stdout, exited.stderr)
-                except TimeoutException:
-                    raise
+                    handle = await self._sandbox.commands.connect(pid, timeout=remaining)
                 except Exception as error:
-                    # The SDK keeps what the stream carried before it dropped.
-                    stdout.extend(getattr(handle, "_stdout_chunks", []))
-                    stderr.extend(getattr(handle, "_stderr_chunks", []))
-                    dropped, handle = error, None
-                    self.logger.warning(f"E2B dropped the stream of pid {pid} ({error})")
-            if attempt == RECONNECTS:
-                break
-            await asyncio.sleep(RECONNECT_WAIT_SECS * 2**attempt)
-            code = await self._exit_status(status)
-            if code is not None:
-                return ended(code)
-            remaining = 0 if deadline is None else max(1, deadline - time.monotonic())
+                    # Also what a process that ended since the check above answers.
+                    self.logger.warning(f"Reconnecting to pid {pid} failed ({error})")
+                    continue
             try:
-                handle = await self._sandbox.commands.connect(pid, timeout=remaining)
+                result = await handle.wait()
+                return ended(result.exit_code, result.stdout, result.stderr)
+            except CommandExitException as exited:
+                return ended(exited.exit_code, exited.stdout, exited.stderr)
+            except TimeoutException:
+                raise
             except Exception as error:
-                # Also what a process that ended since the check above answers.
-                self.logger.warning(f"Reconnecting to pid {pid} failed ({error})")
+                # The SDK keeps what the stream carried before it dropped.
+                stdout.extend(getattr(handle, "_stdout_chunks", []))
+                stderr.extend(getattr(handle, "_stderr_chunks", []))
+                dropped = error
+                self.logger.warning(f"E2B dropped the stream of pid {pid} ({error})")
         code = await self._exit_status(status)
         if code is not None:
             return ended(code)
@@ -371,11 +370,15 @@ async def image_config(image: str, grant: tuple[str, str] | None = None) -> dict
 
         async def get(path: str, accept: str | None = None) -> httpx.Response:
             extra = {"accept": accept} if accept else {}
-            response = await patient(lambda: client.get(path, headers={**headers, **extra}, auth=grant))
+
+            def ask(auth: tuple[str, str] | None) -> Callable[[], Awaitable[httpx.Response]]:
+                return lambda: client.get(path, headers={**headers, **extra}, auth=auth)
+
+            response = await patient(ask(grant))
             challenge = response.headers.get("www-authenticate", "")
             if response.status_code == 401 and challenge.lower().startswith("bearer "):
                 headers["authorization"] = f"Bearer {await token(challenge, repository, grant)}"
-                response = await patient(lambda: client.get(path, headers={**headers, **extra}))
+                response = await patient(ask(None))
             return response.raise_for_status()
 
         found = (await get(f"/manifests/{reference}", MANIFEST_TYPES)).json()
