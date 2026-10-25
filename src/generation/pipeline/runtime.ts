@@ -5,8 +5,11 @@ import { loadWorkerConfig, type SelfBenchWorkerConfig } from "../../contracts/co
 import type { RunRequest } from "../../contracts/index.js";
 import type { UsageLedger } from "../../db/usage.js";
 import type { Vault } from "../../db/vault.js";
-import { withCredentialCapacity } from "../../sandbox/capacity-wait.js";
-import { capacityLimitedSandbox, credentialsCapacity } from "../../sandbox/credential-capacity.js";
+import {
+  capacityLimitedSandbox,
+  credentialsCapacity,
+  holdingCapacity,
+} from "../../sandbox/capacity.js";
 import { createSandboxExecutor, type SandboxExecutor } from "../../sandbox/index.js";
 import { prepareSandboxRuntime } from "../../sandbox/runtime-image.js";
 import { stampedManagedHarbor } from "../billing/managed.js";
@@ -157,18 +160,14 @@ export async function withGenerationRuntime<T>(
         try {
           if (work !== "harbor")
             return await action(metered, selected.harborEnvironment, configuredRun);
-          const harborCapacity = await credentialsCapacity(
+          // Harbor creates its own sandboxes outside the JS executor. Hold one shared slot for
+          // the entire check (nop and oracle run sequentially), including build and teardown.
+          return await holdingCapacity(
             vault,
             orgId,
             [settings.harborCredentialId],
+            () => action(metered, selected.harborEnvironment, configuredRun),
             true,
-          );
-          if (!harborCapacity)
-            return await action(metered, selected.harborEnvironment, configuredRun);
-          // Harbor creates its own sandboxes outside the JS executor. Hold one shared slot for
-          // the entire check (nop and oracle run sequentially), including build and teardown.
-          return await withCredentialCapacity(harborCapacity, 72 * 60 * 60_000, () =>
-            action(metered, selected.harborEnvironment, configuredRun),
           );
         } finally {
           metered.close();

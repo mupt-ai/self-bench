@@ -1,6 +1,6 @@
-# Harbor work as jobs: KEDA starts a job pod per 10 Harbor tasks waiting on the queue (or per 2
-# image exports on theirs), and each pod runs up to 10 Harbor checks or solver trials plus 2 exports
-# and exits once it has been idle for 5 minutes.
+# Harbor work as jobs: KEDA starts a job pod per harborSlots Harbor tasks waiting on the queue (or
+# per 2 image exports on theirs), and each pod runs up to harborSlots Harbor checks or solver trials
+# plus 2 exports and exits once it has been idle for 5 minutes.
 # Nothing removes a busy pod: Autopilot caps a pod's termination grace at 10 minutes, far short of
 # a solver evaluation (one unretried activity of up to 72 hours), so pods only ever end themselves.
 # GKE's own system pods (konnectivity-agent, which grows with the node count) preempt whatever
@@ -29,7 +29,7 @@ spec:
         namespace: {{ .Values.temporal.namespace | quote }}
         taskQueue: {{ .Values.temporal.queue | quote }}
         queueTypes: activity
-        targetQueueSize: "10"
+        targetQueueSize: {{ .Values.harborSlots | quote }}
       authenticationRef:
         name: temporal
     # Image exports wait on a queue of their own, two to a pod (TASK_IMAGE_CONCURRENCY), so a burst
@@ -86,7 +86,7 @@ spec:
               - name: SELFBENCH_ENVIRONMENT
                 value: {{ .Values.environment | quote }}
               - name: SELFBENCH_HARBOR_CONCURRENCY
-                value: "10"
+                value: {{ .Values.harborSlots | quote }}
               - name: SELFBENCH_WORKER_IDLE_EXIT_SECONDS
                 value: "300"
               - name: SELFBENCH_WORKER_SHUTDOWN_GRACE_SECONDS

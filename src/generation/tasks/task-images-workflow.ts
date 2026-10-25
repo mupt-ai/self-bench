@@ -1,4 +1,5 @@
 import { defineSignal, proxyActivities, setHandler, workflowInfo } from "@temporalio/workflow";
+import { harborQueue, task } from "../../temporal/activity-options.js";
 import type { TaskImageActivities } from "./task-images-activity.js";
 
 /** Sent by the API after a task's review changes or the task is deleted. */
@@ -15,7 +16,7 @@ export function taskImagesWorkflowId(taskRowId: number): string {
  * retry runs, instead of starving each other's downloads past E2B's one-hour sandbox lifetime.
  */
 export function taskImageQueue(taskQueue: string): string {
-  return `${taskQueue}-harbor-images`;
+  return `${harborQueue(taskQueue)}-images`;
 }
 
 /** Exports one worker runs at once: each streams and hashes a whole filesystem. */
@@ -24,14 +25,7 @@ export const TASK_IMAGE_CONCURRENCY = 2;
 // Exporting a large task's images streams its whole filesystem out of the provider.
 const images = () =>
   proxyActivities<TaskImageActivities>({
-    startToCloseTimeout: "3 hours",
-    heartbeatTimeout: "10 minutes",
-    retry: {
-      initialInterval: "1 minute",
-      backoffCoefficient: 2,
-      maximumInterval: "30 minutes",
-      maximumAttempts: 5,
-    },
+    ...task({ timeout: "3 hours", attempts: 5, heartbeat: "10 minutes" }),
     taskQueue: taskImageQueue(workflowInfo().taskQueue),
   });
 
