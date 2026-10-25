@@ -59,7 +59,7 @@ run "api_on_cloud_run" {
     error_message = "The API reaches private Cloud SQL through the VPC."
   }
   assert {
-    condition     = google_cloud_run_v2_service.api.template[0].containers[0].image == var.image && google_cloud_run_v2_service.api.template[0].containers[0].command == tolist(["node", "dist/api/main.js"]) && length(google_cloud_run_v2_service.api.template[0].volumes) == 0
+    condition     = google_cloud_run_v2_service.api.template[0].containers[0].image == var.image && google_cloud_run_v2_service.api.template[0].containers[0].command == tolist(["bun", "dist/api/main.js"]) && length(google_cloud_run_v2_service.api.template[0].volumes) == 0
     error_message = "The API reads env values directly, with no env-file bundle mounts."
   }
   assert {
