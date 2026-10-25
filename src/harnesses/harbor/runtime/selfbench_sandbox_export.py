@@ -2,15 +2,16 @@
 
 Each starts one sandbox from the template, snapshot or image verification recorded, with the run's
 own credentials, packs its root filesystem into a gzipped tar there, downloads that, and hands the
-uncompressed stream to selfbench_export.push_image. None of these providers streams a command's
-binary output, so the archive goes through a file; it is excluded from itself.
+gzip stream to selfbench_export.push_image as the layer blob itself: the worker only inflates it to
+hash the tar, and never compresses it again. None of these providers streams a command's binary
+output, so the archive goes through a file; it is excluded from itself.
 """
 
 from __future__ import annotations
 
 import os
 import tempfile
-import zlib
+import time
 
 from selfbench_export import LayerUpload, push_image
 
@@ -29,39 +30,31 @@ PACK = (
 )
 
 
-class Gunzip:
-    """Feeds a downloaded gzip stream to the layer uncompressed, as tar wrote it."""
-
-    def __init__(self, layer: LayerUpload):
-        self.layer = layer
-        self.decompressor = zlib.decompressobj(31)
-
-    async def write(self, chunk: bytes) -> None:
-        if chunk:
-            await self.layer.write(self.decompressor.decompress(chunk))
-
-    async def close(self) -> None:
-        await self.layer.write(self.decompressor.flush())
-        if not self.decompressor.eof:
-            raise RuntimeError("the downloaded archive ended early")
-
-
 async def stream_e2b(template: str, layer: LayerUpload) -> None:
     from e2b import AsyncSandbox
 
     # E2B's Hobby plan refuses sandboxes past an hour; one pack and download fits well inside it.
     # Over HTTP/2, envd sends a file as many small DATA frames, which the h2 client in the SDK
     # (pyqwest, from h2 0.4.16) ends a few MB in as too_many_data_frames; HTTP/1.1 has no frames.
+    started = time.monotonic()
     sandbox = await AsyncSandbox.create(
         template=template, timeout=E2B_LIFETIME_SECS, http_version="1.1"
     )
     try:
         await sandbox.commands.run(f"bash -c {quote(PACK)}", user="root", timeout=0)
-        output = Gunzip(layer)
-        stream = await sandbox.files.read(ARCHIVE, format="stream", user="root", request_timeout=0)
-        async for chunk in stream:
-            await output.write(chunk)
-        await output.close()
+        try:
+            stream = await sandbox.files.read(
+                ARCHIVE, format="stream", user="root", request_timeout=0
+            )
+            async for chunk in stream:
+                await layer.write_gzipped(chunk)
+        except Exception as error:
+            # E2B ends the sandbox at its lifetime, which reaches a download only as a reset.
+            if time.monotonic() - started >= E2B_LIFETIME_SECS - 60:
+                raise RuntimeError(
+                    "the E2B sandbox reached its one-hour lifetime before the export downloaded"
+                ) from error
+            raise
     finally:
         await sandbox.kill()
 
@@ -87,11 +80,9 @@ async def stream_daytona(snapshot: str, layer: LayerUpload) -> None:
             with tempfile.TemporaryDirectory(prefix="selfbench-export-") as root:
                 local = os.path.join(root, "rootfs.tar.gz")
                 await sandbox.fs.download_file(ARCHIVE, local, SANDBOX_LIFETIME_SECS)
-                output = Gunzip(layer)
                 with open(local, "rb") as archive:
                     while chunk := archive.read(CHUNK):
-                        await output.write(chunk)
-                await output.close()
+                        await layer.write_gzipped(chunk)
         finally:
             await sandbox.delete()
     finally:
@@ -112,11 +103,9 @@ async def stream_vercel(image: str, layer: LayerUpload) -> None:
         )
         if result.returncode != 0:
             raise RuntimeError(f"packing the filesystem failed: {(result.stderr or '')[-2000:]}")
-        output = Gunzip(layer)
         async with sandbox.fs.open(ARCHIVE, "rb") as reader:
             while chunk := await reader.read(CHUNK):
-                await output.write(chunk)
-        await output.close()
+                await layer.write_gzipped(chunk)
     finally:
         await sandbox.destroy()
 

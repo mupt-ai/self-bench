@@ -9,8 +9,20 @@ export function taskImagesWorkflowId(taskRowId: number): string {
   return `task-images/${taskRowId}`;
 }
 
+/**
+ * The queue exports and removals run on, beside `<queue>-harbor`. Its workers take only a few at a
+ * time (TASK_IMAGE_CONCURRENCY), so a burst of approvals waits in Temporal, where no timeout or
+ * retry runs, instead of starving each other's downloads past E2B's one-hour sandbox lifetime.
+ */
+export function taskImageQueue(taskQueue: string): string {
+  return `${taskQueue}-harbor-images`;
+}
+
+/** Exports one worker runs at once: each streams and hashes a whole filesystem. */
+export const TASK_IMAGE_CONCURRENCY = 2;
+
 // Exporting a large task's images streams its whole filesystem out of the provider.
-const harbor = () =>
+const images = () =>
   proxyActivities<TaskImageActivities>({
     startToCloseTimeout: "3 hours",
     heartbeatTimeout: "10 minutes",
@@ -20,7 +32,7 @@ const harbor = () =>
       maximumInterval: "30 minutes",
       maximumAttempts: 5,
     },
-    taskQueue: `${workflowInfo().taskQueue}-harbor`,
+    taskQueue: taskImageQueue(workflowInfo().taskQueue),
   });
 
 /**
@@ -35,6 +47,6 @@ export async function selfBenchTaskImagesWorkflow(taskRowId: number): Promise<vo
   });
   while (changed) {
     changed = false;
-    await harbor().reconcileTaskImages(taskRowId);
+    await images().reconcileTaskImages(taskRowId);
   }
 }
