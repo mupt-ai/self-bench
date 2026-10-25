@@ -6,6 +6,8 @@ import { workerProcessSettings } from "../contracts/config/worker.js";
 import { createBatchStore } from "../db/batches.js";
 import { openDatabase } from "../db/client.js";
 import { createRunSummaryStore } from "../db/evaluation-summaries.js";
+import { createRunStore } from "../db/runs.js";
+import { createTaskStore } from "../db/tasks.js";
 import { createUsageStore } from "../db/usage.js";
 import { createVault } from "../db/vault.js";
 import { createEvaluationActivities } from "../evaluation/activities.js";
@@ -13,6 +15,7 @@ import { keepRunSummaries } from "../evaluation/store.js";
 import { keepGatewaysFresh } from "../gateways/refresh.js";
 import { createBatchActivities } from "../generation/batches/activities.js";
 import { createActivities } from "../generation/pipeline/activities.js";
+import { createTaskActivities } from "../generation/tasks/activities.js";
 import { createTaskImageActivities } from "../generation/tasks/task-images-activity.js";
 import {
   TASK_IMAGE_CONCURRENCY,
@@ -54,15 +57,23 @@ const vault =
 const usage = vault && database ? createUsageStore(database.db) : undefined;
 const artifacts = createArtifactStore(config.artifact);
 if (database) keepRunSummaries(artifacts, createRunSummaryStore(database.db));
-const { verifyCompiled, exportTaskImages, ...generation } = createActivities(config, vault, usage);
-const batches = database
-  ? createBatchActivities({
-      store: createBatchStore(database.db),
-      artifacts,
-      ...(vault ? { vault } : {}),
-      ...(usage ? { usage } : {}),
-    })
-  : {};
+const { verifyCompiled, ...generation } = createActivities(config, vault, usage);
+// Batches and task rows need the database; candidate workflows write their rows through it.
+const tasks = database ? createTaskStore(database.db) : undefined;
+const batches =
+  database && tasks
+    ? {
+        ...createBatchActivities({
+          store: createBatchStore(database.db),
+          tasks,
+          runs: createRunStore(database.db),
+          artifacts,
+          ...(vault ? { vault } : {}),
+          ...(usage ? { usage } : {}),
+        }),
+        ...createTaskActivities({ tasks, artifacts }),
+      }
+    : {};
 const { secret: snapshotSecret, url: snapshotOrigin } = config.sandboxCallback ?? {};
 // A stopping worker (SIGTERM on a preemption, scale-in or rollout) stops polling at once through
 // Temporal's handler, installed with the connection, and lets in-flight activities finish for
@@ -114,7 +125,6 @@ const workers = await Promise.all([
           taskQueue: `${config.temporal.taskQueue}-harbor`,
           activities: {
             verifyCompiled,
-            exportTaskImages,
             runSolverTrial,
             prepareTaskImages,
             // Still served here for exports scheduled on this queue before taskImageQueue existed.

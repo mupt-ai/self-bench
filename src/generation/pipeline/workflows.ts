@@ -1,11 +1,8 @@
 import {
   type ActivityOptions,
-  defineQuery,
-  deprecatePatch,
+  CancellationScope,
   isCancellation,
-  patched,
   proxyActivities,
-  setHandler,
   workflowInfo,
 } from "@temporalio/workflow";
 import {
@@ -21,10 +18,12 @@ import {
   type TaskProgress,
 } from "../../contracts/index.js";
 import { whenSandboxFree } from "../../temporal/sandbox-capacity.js";
+import type { TaskActivities } from "../tasks/activities.js";
 import type { DiscoveryShardInput, SelfBenchActivities, WorkerActivities } from "./activities.js";
 import { verifyReportSummary } from "./verify-report.js";
 
-export const candidateStatusQuery = defineQuery<TaskProgress>("candidateStatus");
+/** How long a candidate may take, waits for sandbox capacity included, before it gives up. */
+const CANDIDATE_DEADLINE_MS = 14 * 24 * 60 * 60_000;
 
 const retry = { initialInterval: "5 seconds", backoffCoefficient: 2, maximumInterval: "2 minutes" };
 // A started sandbox heartbeats through the callback API every minute until it reports back.
@@ -61,15 +60,8 @@ const harbor = () =>
     taskQueue: `${workflowInfo().taskQueue}-harbor`,
   });
 
-// Exporting a large task's images streams its whole filesystem out of Modal.
-const exporter = () =>
-  proxyActivities<Pick<WorkerActivities, "exportTaskImages">>({
-    startToCloseTimeout: "3 hours",
-    heartbeatTimeout: "10 minutes",
-    cancellationType: "WAIT_CANCELLATION_COMPLETED",
-    retry: { ...retry, maximumAttempts: 3 },
-    taskQueue: `${workflowInfo().taskQueue}-harbor`,
-  });
+// A row write waits out a database outage rather than leave its task unsettled.
+const rows = proxyActivities<TaskActivities>({ startToCloseTimeout: "1 minute", retry });
 
 // Compaction streams each green attempt's full bundle once to check it before deleting it.
 const compaction = () =>
@@ -99,18 +91,9 @@ const workflowActivities: SelfBenchActivities = {
       ...input,
       outcome: await whenSandboxFree(() => agents.startReviewRound(input)),
     }),
-  // Images are now exported once a person approves the task (selfBenchTaskImagesWorkflow).
-  // Workflows that accepted a task before that replay their export; those from before exports
-  // existed replay without one.
-  exportTaskImages: async (input) =>
-    !patched("export-after-approval") && patched("export-task-images")
-      ? await whenSandboxFree(() => exporter().exportTaskImages(input))
-      : input.task,
   compileAndVerify: async (input) => {
     const compiled = await whenSandboxFree(() => compile.compileTask(input));
     const finished = await finish.finishCompile({ ...input, compiled });
-    // Histories that built portable images before verification recorded this marker.
-    deprecatePatch("portable-task-images");
     return await whenSandboxFree(() => harbor().verifyCompiled({ ...input, compiled: finished }));
   },
 };
@@ -122,31 +105,60 @@ export async function selfBenchDiscoveryShardWorkflow(
   return workflowActivities.discoverCandidateShard(input);
 }
 
-/** Authors, verifies, and reviews one candidate. */
+/**
+ * Authors, verifies, and reviews one candidate, and owns its task row: each stage change is
+ * recorded on it, and the workflow settles it however it ends, cancelled or out of time included.
+ */
 export async function selfBenchAuthorWorkflow(
   input: CandidateWorkflowInput,
 ): Promise<CandidateWorkflowResult> {
-  let current = initialProgress(input.candidate);
-  setHandler(candidateStatusQuery, () => current);
-  const result = await executeCandidate(input, workflowActivities, (progress) => {
-    current = progress;
-  });
-  const kept = result.task ? artifactKey(result.task.bundle.uri) : undefined;
-  // Candidates that finished before compaction existed replay without it. A task bundle outside
-  // the run's artifacts is never expected; compaction then leaves everything alone.
-  if (patched("compact-candidate-bundles") && (!result.task || kept)) {
-    // Only storage is at stake: a failure leaves the attempts to the maintenance backfill.
-    await compaction()
-      .compactCandidateBundles({
-        runId: input.run.runId,
-        candidateId: input.candidate.candidateId,
-        kept: kept ? [kept] : [],
-      })
-      .catch((error: unknown) => {
-        if (isCancellation(error)) throw error;
-      });
+  const row = { runId: input.run.runId, candidateId: input.candidate.candidateId };
+  let last = initialProgress(input.candidate);
+  let result: CandidateWorkflowResult;
+  try {
+    result = await CancellationScope.withTimeout(CANDIDATE_DEADLINE_MS, () =>
+      executeCandidate(input, workflowActivities, async (progress) => {
+        last = progress;
+        await rows.recordTaskProgress({ ...row, progress });
+      }),
+    );
+  } catch (error) {
+    if (!isCancellation(error)) throw error;
+    const cancelled = CancellationScope.current().consideredCancelled;
+    result = {
+      progress: {
+        ...last,
+        status: "infrastructure_failed",
+        reason: cancelled ? "Generation cancelled." : "Generation ran out of time (14 days).",
+      },
+    };
+    // A cancelled candidate still records where it stopped, then reports its cancellation.
+    await CancellationScope.nonCancellable(() =>
+      rows.settleTask({ ...row, result, ...(cancelled ? { cancelled } : {}) }),
+    );
+    if (cancelled) throw error;
+    await compact(input, result);
+    return result;
   }
+  await rows.settleTask({ ...row, result });
+  await compact(input, result);
   return result;
+}
+
+/** Drops the candidate's superseded compile attempts. Only storage is at stake, so never fails. */
+async function compact(input: CandidateWorkflowInput, result: CandidateWorkflowResult) {
+  const kept = result.task ? artifactKey(result.task.bundle.uri) : undefined;
+  // A task bundle outside the run's artifacts is never expected; compaction then keeps everything.
+  if (result.task && !kept) return;
+  await compaction()
+    .compactCandidateBundles({
+      runId: input.run.runId,
+      candidateId: input.candidate.candidateId,
+      kept: kept ? [kept] : [],
+    })
+    .catch((error: unknown) => {
+      if (isCancellation(error)) throw error;
+    });
 }
 
 /** The store key in an artifact URI (`gs://bucket/<prefix>/runs/...` or `file://.../runs/...`). */
@@ -176,20 +188,22 @@ function initialProgress(candidate: Candidate): TaskProgress {
 export async function executeCandidate(
   input: CandidateWorkflowInput,
   activities: SelfBenchActivities,
-  report: (progress: TaskProgress) => void,
+  report: (progress: TaskProgress) => Promise<void>,
 ): Promise<CandidateWorkflowResult> {
   const { run, candidate } = input;
   const progress = initialProgress(candidate);
-  const update = (patch: Partial<TaskProgress>): TaskProgress => {
+  // Each change of where the candidate is reaches its row; the verdict is the caller's to settle.
+  let reported = "";
+  const update = async (patch: Partial<TaskProgress>): Promise<void> => {
     Object.assign(progress, patch);
-    const snapshot = { ...progress };
-    report(snapshot);
-    return snapshot;
+    const key = JSON.stringify([progress.status, progress.round, progress.taskId]);
+    if (key === reported) return;
+    reported = key;
+    await report({ ...progress });
   };
   const finish = (status: "rejected" | "infrastructure_failed", reason: string) => ({
-    progress: update({ status, reason }),
+    progress: { ...progress, status, reason },
   });
-  update({});
   // A revision restores the task it revises and hands the person's feedback to the first turn.
   const maintainerFeedback = input.revision?.feedback;
   let session: ArtifactRef | undefined;
@@ -200,7 +214,7 @@ export async function executeCandidate(
   let reviews = 0;
   try {
     for (let round = 1; round <= MAX_AUTHORING_ROUNDS; round += 1) {
-      update({ status: "authoring", stage: "authoring", round });
+      await update({ status: "authoring", stage: "authoring", round });
       let turnReport = lastReport;
       let submitted: AuthoredTaskDraft | undefined;
       for (let turn = 1; ; turn += 1) {
@@ -225,7 +239,7 @@ export async function executeCandidate(
         }
         // The verify tool refuses past the budget; never run checks the budget doesn't cover.
         if (turn > AUTHOR_VERIFY_BUDGET) break;
-        update({ status: "verifying", taskId: authored.task.taskId });
+        await update({ status: "verifying", taskId: authored.task.taskId });
         const checked = await activities.compileAndVerify({
           run,
           candidate,
@@ -235,12 +249,12 @@ export async function executeCandidate(
           turn,
         });
         turnReport = checked.reportRef;
-        update({ status: "authoring" });
+        await update({ status: "authoring" });
       }
       if (!submitted) {
         return finish("rejected", `authoring round ${round}: the agent never submitted a task`);
       }
-      update({ status: "verifying", taskId: submitted.taskId });
+      await update({ status: "verifying", taskId: submitted.taskId });
       const verified = await activities.compileAndVerify({
         run,
         candidate,
@@ -254,7 +268,7 @@ export async function executeCandidate(
       if (!verified.report.green || !verified.task) continue;
       const task: AuthoredTask = verified.task;
       reviews += 1;
-      update({ status: "reviewing", stage: "review", round: reviews });
+      await update({ status: "reviewing", stage: "review", round: reviews });
       const verdict = await activities.runReviewRound({
         run,
         candidate,
@@ -263,14 +277,8 @@ export async function executeCandidate(
         round: reviews,
         ...(maintainerFeedback ? { maintainerFeedback } : {}),
       });
-      if (verdict.kind === "accepted") {
-        // A failed export only means other providers build the task's Dockerfiles, as before.
-        const kept = await activities.exportTaskImages({ run, task }).catch((error: unknown) => {
-          if (isCancellation(error)) throw error;
-          return task;
-        });
-        return { progress: update({ status: "accepted" }), task: kept, report: verified.reportRef };
-      }
+      if (verdict.kind === "accepted")
+        return { progress: { ...progress, status: "accepted" }, task, report: verified.reportRef };
       if (verdict.kind === "rejected") return finish("rejected", verdict.reason);
       feedback = `${verdict.summary}\n\n${verdict.suggestions}`;
       lastSummary = `reviewer requested changes: ${feedback}`;

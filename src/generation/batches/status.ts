@@ -1,6 +1,8 @@
-import type { RunStatus } from "../../contracts/index.js";
+import type { RunStatus, TaskProgress } from "../../contracts/index.js";
+import type { TaskRecord } from "../../db/tasks.js";
 import { generationCost } from "../billing/cost-status.js";
 import type { RunUsageSummary } from "../billing/usage.js";
+import { rowProgress } from "../tasks/activities.js";
 import type { GenerationBatch } from "./types.js";
 
 const EMPTY_USAGE: RunUsageSummary = {
@@ -13,35 +15,18 @@ const EMPTY_USAGE: RunUsageSummary = {
   sandboxSeconds: 0,
 };
 
-export function batchStatus(batch: GenerationBatch): RunStatus {
+/**
+ * A batch as its page shows it. Each candidate stands as its task row says; a batch outside any
+ * repository has no rows, and shows its candidates as the batch record settled them.
+ */
+export function batchStatus(batch: GenerationBatch, rows: readonly TaskRecord[] = []): RunStatus {
   const provider = batch.run.version.executionBackend;
   const model = batch.run.generation?.settings.authorModel ?? batch.run.authoring.model;
-  const tasks = batch.candidates.map((item) =>
-    item.result
-      ? item.result.progress
-      : item.cancelled
-        ? {
-            candidateId: item.candidate.candidateId,
-            taskId: item.candidate.candidateId,
-            difficulty: item.candidate.difficulty,
-            status: "infrastructure_failed" as const,
-            reason: item.error ?? "Generation cancelled.",
-          }
-        : item.error
-          ? {
-              candidateId: item.candidate.candidateId,
-              taskId: item.candidate.candidateId,
-              difficulty: item.candidate.difficulty,
-              status: "infrastructure_failed" as const,
-              reason: item.error,
-            }
-          : (item.progress ?? {
-              candidateId: item.candidate.candidateId,
-              taskId: item.candidate.candidateId,
-              difficulty: item.candidate.difficulty,
-              status: "queued" as const,
-            }),
-  );
+  const byCandidate = new Map(rows.map((row) => [row.candidateId, row]));
+  const tasks = batch.candidates.map((item) => {
+    const row = byCandidate.get(item.candidate.candidateId);
+    return row ? rowProgress(row) : recordedProgress(item);
+  });
   return {
     runId: batch.run.runId,
     phase: batch.phase,
@@ -80,4 +65,17 @@ export function batchStatus(batch: GenerationBatch): RunStatus {
     ...(batch.export ? { export: batch.export } : {}),
     ...(batch.error ? { error: batch.error } : {}),
   };
+}
+
+function recordedProgress(item: GenerationBatch["candidates"][number]): TaskProgress {
+  if (item.result) return item.result.progress;
+  const { candidateId, difficulty } = item.candidate;
+  const base = { candidateId, taskId: candidateId, difficulty };
+  if (item.cancelled || item.error !== undefined)
+    return {
+      ...base,
+      status: "infrastructure_failed",
+      reason: item.error ?? "Generation cancelled.",
+    };
+  return { ...base, status: "queued" };
 }

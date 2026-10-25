@@ -22,6 +22,7 @@ import { releasedTrials } from "../../src/public/release-sources.js";
 import { full, names } from "./release-fixture.js";
 import { type TestDatabase, testAuthConfig, testDatabase } from "./site-fixture.js";
 import { taskBundle } from "./tar.js";
+import { seedTasks } from "./task-rows.js";
 
 /** What the fake GitHub reports for the connected repository; tests change it. */
 interface FakeRepository {
@@ -188,15 +189,14 @@ export async function releaseServer(
     request,
     /** Approves tasks `names` of generation run "gen" on the connected repository. */
     async approve(names: readonly string[]) {
-      await tasks.upsertMany(
+      await seedTasks(
+        database.db,
         names.map((name) => ({
           repoId: repo.id,
           runId: "gen",
           candidateId: `candidate-${name}`,
           taskId: name,
           pipelineStatus: "accepted" as const,
-          stage: "accepted",
-          difficulty: "medium" as const,
           bundleKey: `tasks/${name}.tar.gz`,
         })),
       );

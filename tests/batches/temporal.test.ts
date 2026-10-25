@@ -1,6 +1,5 @@
-import { expect, spyOn, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { type Client, defaultPayloadConverter } from "@temporalio/client";
-import { BATCH_OBSERVE_INTERVAL_MS } from "../../src/contracts/config/execution-limits.js";
 import { batchObserver } from "../../src/generation/batches/temporal.js";
 import type { GenerationBatch } from "../../src/generation/batches/types.js";
 import { candidate, run } from "../support/workflow-fixture.js";
@@ -13,10 +12,9 @@ const cost = {
   updatedAt: "2026-01-01T00:00:00.000Z",
 };
 
-/** A Temporal client whose candidate workflows run, one retrying, and answer progress queries. */
+/** A Temporal client whose candidate workflows run, one of them retrying an activity. */
 function temporal(options: { deadline?: boolean } = {}) {
   const described: string[] = [];
-  const queried: string[] = [];
   const client = {
     options: { namespace: "default" },
     connection: {
@@ -44,16 +42,8 @@ function temporal(options: { deadline?: boolean } = {}) {
         };
       },
     },
-    workflow: {
-      getHandle: (workflowId: string) => ({
-        query: async () => {
-          queried.push(workflowId);
-          return { candidateId: "one", taskId: "one", difficulty: "hard", status: "authoring" };
-        },
-      }),
-    },
   } as unknown as Client;
-  return { client, described, queried };
+  return { client, described };
 }
 
 function authoring(): GenerationBatch {
@@ -75,13 +65,13 @@ function authoring(): GenerationBatch {
   };
 }
 
-test("a running candidate's progress, cost and current activity come from its workflow", async () => {
+test("a running candidate's cost and current activity come from its workflow", async () => {
   const t = temporal();
   const stored = authoring();
   const { batch, activity } = await batchObserver(t.client)(stored);
   expect(t.described).toEqual([`${run.runId}/candidate/one`]);
-  expect(batch.candidates[0]).toMatchObject({ progress: { status: "authoring" }, cost });
-  expect(stored.candidates[0]?.progress).toBeUndefined();
+  expect(batch.candidates[0]).toMatchObject({ cost });
+  expect(stored.candidates[0]?.cost).toBeUndefined();
   expect(activity).toEqual({
     one: {
       state: "queued",
@@ -95,27 +85,10 @@ test("a running candidate's progress, cost and current activity come from its wo
   });
 });
 
-test("progress is queried at most once per interval, however often the page polls", async () => {
-  const t = temporal();
-  const observe = batchObserver(t.client);
-  const now = spyOn(Date, "now").mockReturnValue(1_000_000);
-  try {
-    await observe(authoring());
-    await observe(authoring());
-    expect(t.queried).toHaveLength(1);
-    now.mockReturnValue(1_000_000 + BATCH_OBSERVE_INTERVAL_MS);
-    expect((await observe(authoring())).batch.candidates[0]?.progress?.status).toBe("authoring");
-    expect(t.queried).toHaveLength(2);
-    expect(t.described).toHaveLength(3);
-  } finally {
-    now.mockRestore();
-  }
-});
-
 test("a finished batch reads nothing, and a Temporal deadline leaves the batch as stored", async () => {
   const t = temporal();
   const complete = { ...authoring(), phase: "complete" as const };
-  expect(await batchObserver(t.client)(complete)).toEqual({ batch: complete });
+  expect(await batchObserver(t.client)(complete)).toEqual({ batch: complete, activity: {} });
   expect(t.described).toEqual([]);
   const slow = temporal({ deadline: true });
   const { batch, activity } = await batchObserver(slow.client)(authoring());

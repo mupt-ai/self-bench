@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { repos } from "../../src/db/schema.js";
 import { createTaskStore } from "../../src/db/tasks.js";
-import type { TaskStatusSource } from "../../src/generation/tasks/status.js";
+import type { TaskWorkflows } from "../../src/generation/tasks/workflow-client.js";
 import { connectRepo, signedIn } from "../support/sign-in.js";
 import {
   type AuthServer,
@@ -24,25 +24,18 @@ afterEach(async () => {
 const REPO = "/api/orgs/mupt-ai/repos/Mupt-AI/self-bench";
 
 test("task cancellation is tenant-scoped, race-safe, and idempotent after confirmation", async () => {
-  let cancellationRequested = false;
   let cancelCalls = 0;
-  const status: TaskStatusSource = {
-    snapshot: async () =>
-      cancellationRequested
-        ? { kind: "cancelled" }
-        : {
-            kind: "running",
-            progress: {
-              candidateId: "active",
-              taskId: "task-active",
-              difficulty: "medium",
-              status: "authoring",
-            },
-          },
+  // The cancelled candidate workflow settles its own row, as selfBenchAuthorWorkflow does.
+  const workflows: TaskWorkflows = {
     cancel: async () => {
       cancelCalls += 1;
-      cancellationRequested = true;
+      await createTaskStore(server?.db as AuthServer["db"]).settle("run-active", "active", {
+        pipelineStatus: "infrastructure_failed",
+        stage: "cancelled",
+        reason: "Generation cancelled.",
+      });
     },
+    liveCost: async () => undefined,
   };
   const artifacts = new LocalArtifactStore(await mkdtemp(join(tmpdir(), "task-cancel-")));
   const hub = fakeGitHub({ orgs: ["Mupt-AI"], repos: [{ full_name: "Mupt-AI/self-bench" }] });
@@ -50,7 +43,7 @@ test("task cancellation is tenant-scoped, race-safe, and idempotent after confir
     config: testAuthConfig,
     artifacts,
     fetchImpl: hub.fetch,
-    status,
+    workflows,
   });
   const headers = await signedIn(server);
   await connectRepo(server, headers);
@@ -59,17 +52,17 @@ test("task cancellation is tenant-scoped, race-safe, and idempotent after confir
     .from(repos)
     .where(eq(repos.fullName, "Mupt-AI/self-bench"));
   if (!repo) throw new Error("missing connected repository");
-  await createTaskStore(server.db).insertStarted({
-    repoId: repo.id,
-    runId: "run-active",
-    candidateId: "active",
-    taskId: "task-active",
-    difficulty: "medium",
-    pipelineStatus: "in_progress",
-    stage: "authoring",
-    workflowId: "run-active/candidate/active",
-    startedBy: 1,
-  });
+  await createTaskStore(server.db).plan([
+    {
+      repoId: repo.id,
+      runId: "run-active",
+      candidateId: "active",
+      taskId: "task-active",
+      difficulty: "medium",
+      stage: "authoring",
+      workflowId: "run-active/candidate/active",
+    },
+  ]);
 
   const denied = await server.request(
     "/api/orgs/not-a-tenant/repos/Mupt-AI/self-bench/tasks/run-active/active/cancel",

@@ -2,20 +2,10 @@ import { mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ArtifactStore } from "../../artifacts/index.js";
-import { executionEnvironment } from "../../contracts/config/execution-environment.js";
-import type { HarborEnvironment } from "../../contracts/config/providers.js";
-import type { AuthoredTask, RunRequest } from "../../contracts/index.js";
-import {
-  harborProcessEnvironment,
-  harborPython,
-  harborPythonPath,
-} from "../../harnesses/harbor/command.js";
-import { googleAccessToken } from "../../lib/google-access-token.js";
+import type { AuthoredTask } from "../../contracts/index.js";
+import { harborPython, harborPythonPath } from "../../harnesses/harbor/command.js";
 import { runCommand } from "../../lib/process.js";
-import { providerEnvironment } from "../../sandbox/provider-environment.js";
 import { cachedImageConfig, type ImageConfig } from "../task/image-config.js";
-import { publishExecutionBundle } from "./execution-bundle.js";
-import { withHeartbeats } from "./helpers.js";
 import { unpackTask } from "./remote-gate.js";
 
 const EXPORT_TIMEOUT_MS = 2 * 60 * 60 * 1000;
@@ -24,35 +14,6 @@ const ROLES = [
   { role: "agent", context: "environment" },
   { role: "verifier", context: "tests" },
 ] as const;
-
-export interface ExportTaskImagesInput {
-  readonly run: RunRequest;
-  readonly task: AuthoredTask;
-}
-
-/**
- * The accepted task with its verified images exported, when this deployment has a task image
- * repository and verification recorded the images it ran on (Modal, E2B, Daytona or Vercel);
- * otherwise the task as it is. Runs with the run's own credentials for that provider, which can
- * read the images its verification built.
- */
-export async function exportAcceptedTask(
-  store: ArtifactStore,
-  environment: HarborEnvironment,
-  task: AuthoredTask,
-  repository: string | undefined,
-): Promise<AuthoredTask> {
-  if (!repository || task.images?.provider !== environment) return task;
-  return await withHeartbeats(`exporting ${task.taskId}'s images`, async (signal) => {
-    const exported = await exportTaskImages(store, task, {
-      repository,
-      env: harborProcessEnvironment(providerEnvironment(executionEnvironment(), environment)),
-      token: googleAccessToken,
-      signal,
-    });
-    return publishExecutionBundle(store, exported, signal);
-  });
-}
 
 export interface TaskImageExportOptions {
   /** `<region>-docker.pkg.dev/<project>/<repository>` */

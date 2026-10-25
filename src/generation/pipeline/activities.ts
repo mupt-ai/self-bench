@@ -1,7 +1,6 @@
 import { createArtifactStore } from "../../artifacts/index.js";
 import type { SelfBenchWorkerConfig } from "../../contracts/config/index.js";
 import type {
-  AuthoredTask,
   AuthoringTurnResult,
   DiscoveryResult,
   ReviewRoundResult,
@@ -32,7 +31,6 @@ import {
   startReviewRound,
 } from "./review.js";
 import { withGenerationRuntime } from "./runtime.js";
-import { type ExportTaskImagesInput, exportAcceptedTask } from "./task-image-export.js";
 import {
   type CompileAndVerifyInput,
   compileTask,
@@ -59,8 +57,6 @@ export interface SelfBenchActivities {
   runAuthoringTurn(input: AuthoringTurnInput): Promise<AuthoringTurnResult>;
   compileAndVerify(input: CompileAndVerifyInput): Promise<VerifyOutcome>;
   runReviewRound(input: ReviewRoundInput): Promise<ReviewRoundResult>;
-  /** The accepted task, with its verified images exported when the deployment keeps them. */
-  exportTaskImages(input: ExportTaskImagesInput): Promise<AuthoredTask>;
 }
 
 /** The activities the worker registers. */
@@ -74,7 +70,6 @@ export interface WorkerActivities {
   verifyCompiled(input: VerifyCompiledInput): Promise<VerifyOutcome>;
   startReviewRound(input: ReviewRoundInput): Promise<SandboxJobOutcome>;
   finishReviewRound(input: FinishReviewRoundInput): Promise<ReviewRoundResult>;
-  exportTaskImages(input: ExportTaskImagesInput): Promise<AuthoredTask>;
   compactCandidateBundles(input: CompactCandidateInput): Promise<Compaction>;
 }
 
@@ -137,14 +132,6 @@ export function createActivities(
     finishReviewRound: (input) =>
       runtime(input.run, "verifier", (sandbox, _harbor, run) =>
         finishReviewRound(store, sandbox, { ...input, run }),
-      ),
-    exportTaskImages: (input) =>
-      runtime(
-        input.run,
-        "author",
-        (_sandbox, harbor) =>
-          exportAcceptedTask(store, harbor, input.task, config.taskImages?.repository),
-        "harbor",
       ),
     compactCandidateBundles: (input) =>
       withHeartbeats(`compacting ${input.candidateId}'s bundles`, () =>

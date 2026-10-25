@@ -16,7 +16,7 @@ import { createRepoStore } from "../../src/db/repos.js";
 import { createTaskStore } from "../../src/db/tasks.js";
 import { createUserStore, type UserStore } from "../../src/db/users.js";
 import type { WorkflowStarter } from "../../src/generation/tasks/start.js";
-import type { TaskStatusSource } from "../../src/generation/tasks/status.js";
+import type { TaskWorkflows } from "../../src/generation/tasks/workflow-client.js";
 
 import { testDatabase } from "./test-database.js";
 
@@ -147,7 +147,7 @@ export interface AuthServerOptions {
   readonly fetchImpl?: typeof fetch;
   readonly artifacts?: ArtifactStore;
   readonly start?: WorkflowStarter;
-  readonly status?: TaskStatusSource;
+  readonly workflows?: TaskWorkflows;
   readonly reviewChanged?: (taskRowId: number) => Promise<void>;
   readonly now?: () => Date;
   readonly managedOffering?: boolean;
@@ -185,7 +185,7 @@ export async function startAuthServer(options: AuthServerOptions = {}): Promise<
         repos,
         tasks,
         artifacts: options.artifacts,
-        ...(options.status ? { status: options.status } : {}),
+        ...(options.workflows ? { workflows: options.workflows } : {}),
         ...(options.reviewChanged ? { reviewChanged: options.reviewChanged } : {}),
       })
     : undefined;

@@ -2,7 +2,12 @@ import { randomUUID } from "node:crypto";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import { buildCommit } from "../../contracts/config/build-metadata.js";
 import type { SelfBenchConfig } from "../../contracts/config/index.js";
-import type { Candidate, CandidateWorkflowInput, TaskRevision } from "../../contracts/index.js";
+import {
+  type Candidate,
+  type CandidateWorkflowInput,
+  candidateWorkflowId,
+  type TaskRevision,
+} from "../../contracts/index.js";
 import type { PullRequestCandidate } from "../../third_party/github/pr-candidate.js";
 import type { ProvenanceMessage } from "../../third_party/github/provenance.js";
 import { buildRunRequest, configureGenerationRun } from "../settings/run.js";
@@ -80,7 +85,7 @@ export async function startTaskFromPullRequest(options: TaskStartOptions): Promi
   });
   if (options.generation) configureGenerationRun(run, options.generation, config);
   const candidate: Candidate = { ...pullRequest.candidate, provenance: candidateProvenance };
-  const workflowId = `${runId}/candidate/${candidate.candidateId}`;
+  const workflowId = candidateWorkflowId(runId, candidate.candidateId);
   await options.start(workflowId, {
     run,
     candidate,

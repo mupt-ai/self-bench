@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { evaluationServer } from "./support/evaluation-fixture.js";
 import { memoryVault } from "./support/evaluation-vault.js";
+import { seedTasks } from "./support/task-rows.js";
 
 test("comparisons accept eleven scoped approved tasks without truncation", async () => {
   const fixture = await evaluationServer(memoryVault());
@@ -10,14 +11,15 @@ test("comparisons accept eleven scoped approved tasks without truncation", async
       runId: "large",
       taskId: `task-${index}`,
     }));
-    await fixture.tasks.upsertMany(
+    await seedTasks(
+      fixture.db,
       tasks.map((task) => ({
         ...task,
         repoId: fixture.repo.id,
         candidateId: task.taskId,
-        pipelineStatus: "accepted",
+        pipelineStatus: "accepted" as const,
         stage: "accepted",
-        difficulty: "easy",
+        difficulty: "easy" as const,
         bundleKey: `tasks/${task.taskId}.tar.gz`,
       })),
     );

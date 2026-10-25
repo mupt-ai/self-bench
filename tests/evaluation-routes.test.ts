@@ -4,6 +4,7 @@ import { evaluationPrefix, initialEvaluation, saveEvaluation } from "../src/eval
 import type { EvaluationInput } from "../src/evaluation/types.js";
 import { evaluationEnv, evaluationInput, evaluationServer } from "./support/evaluation-fixture.js";
 import { memoryVault } from "./support/evaluation-vault.js";
+import { seedTasks } from "./support/task-rows.js";
 
 let server: Awaited<ReturnType<typeof evaluationServer>>;
 beforeAll(async () => {
@@ -65,7 +66,7 @@ test("run and artifact lookup remain repository-scoped and reject arbitrary keys
 });
 
 test("generation checks alone never admit tasks to the dataset", async () => {
-  await server.tasks.upsertMany([
+  await seedTasks(server.db, [
     {
       repoId: server.repo.id,
       runId: "run-pending",

@@ -4,7 +4,6 @@ import type {
   CandidateWorkflowResult,
   DiscoveryResult,
   RunRequest,
-  TaskProgress,
 } from "../../contracts/index.js";
 import type { SandboxCostSnapshot } from "../../sandbox/contracts.js";
 import type { DiscoveryShardInput } from "../pipeline/activities.js";
@@ -24,8 +23,6 @@ interface BatchShard extends BatchItem {
 }
 interface BatchCandidate extends BatchItem {
   candidate: Candidate;
-  /** The running workflow's live progress; read from Temporal, never stored. */
-  progress?: TaskProgress;
   result?: CandidateWorkflowResult;
 }
 /** Phases after which a batch never changes again. */
@@ -46,7 +43,8 @@ export const settled = (item: BatchItem) => item.result !== undefined || item.er
 
 /**
  * A batch's record. Its workflow (selfBenchBatchWorkflow) is the only writer, apart from the
- * API marking a cancel; the record carries the plan and settled results, not live progress.
+ * API marking a cancel; the record carries the plan and its children's settled results. Where a
+ * running candidate is lives on its task row.
  */
 export interface GenerationBatch {
   run: RunRequest;

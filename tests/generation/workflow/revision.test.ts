@@ -57,7 +57,7 @@ test("a revision restores the task's draft and hands the feedback to its first t
       revision: { draft: original, feedback: "The tests pin the error wording." },
     },
     activities,
-    () => {},
+    async () => {},
   );
 
   expect(result.progress.status).toBe("accepted");
@@ -86,7 +86,7 @@ test("a new task's workflow passes no feedback", async () => {
     turns.push(input);
     return author(input);
   };
-  await executeCandidate({ run, candidate: value }, activities, () => {});
+  await executeCandidate({ run, candidate: value }, activities, async () => {});
   expect(turns[0]?.draft).toBeUndefined();
   expect(turns[0]?.maintainerFeedback).toBeUndefined();
 });

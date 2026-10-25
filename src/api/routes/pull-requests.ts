@@ -146,9 +146,7 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
         sourcePr: number,
         sourceUrl: pullRequest.candidate.sourceUrl,
         difficulty: pullRequest.candidate.difficulty,
-        pipelineStatus: "in_progress",
         stage: "authoring",
-        workflowId: `${runId}/candidate/${pullRequest.candidate.candidateId}`,
         startedBy: user.id,
       });
       await startTaskFromPullRequest({
