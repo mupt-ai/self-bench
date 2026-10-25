@@ -40,6 +40,10 @@ runs failed most of them in its first minute. Here a refused build, sandbox, or 
 waits for a free slot and asks again, backing off from 15 seconds to two minutes. The caller's
 own limit still bounds the wait: Harbor's environment start timeout in a trial, the process
 timeout in selfbench_prepare.py.
+
+A command's output and exit code reach Harbor over one stream that stays open while it runs. When
+E2B drops that stream, the command keeps running in the sandbox, so `exec` reconnects to it rather
+than failing the trial (see `SelfBenchE2BEnvironment.exec`).
 """
 
 from __future__ import annotations
@@ -49,6 +53,8 @@ import os
 import random
 import re
 import shlex
+import time
+import uuid
 from collections.abc import Awaitable, Callable
 from typing import TypeVar
 
@@ -71,6 +77,12 @@ from registry_auth import record_image
 
 TAG = "default"
 CAPACITY_WAIT_SECS = (15, 120)
+# Reconnects to a command whose stream dropped, waiting 2, 4, 8, ... seconds before each.
+RECONNECTS = 6
+RECONNECT_WAIT_SECS = 2
+# Asks a registry again after a 429 or 5xx, waiting 2, 4, ... 64 seconds unless it says how long.
+REGISTRY_RETRIES = 6
+REGISTRY_WAIT_SECS = 2
 PLAN_LIMIT = re.compile(r"Timeout cannot be greater than (\d+) hours?")
 MEMORY_LIMIT = re.compile(r"Memory can't be higher than (\d+) MiB")
 IMAGE_ENV = "/etc/profile.d/selfbench-image-env.sh"
@@ -165,6 +177,80 @@ class SelfBenchE2BEnvironment(E2BEnvironment):
                 "(support@e2b.dev) to raise the team's memory limit, or run the task on another "
                 "sandbox."
             ) from error
+
+    async def exec(self, command, cwd=None, env=None, timeout_sec=None, user=None):
+        # Harbor waits on one stream for a command's whole run, and fails the trial when E2B
+        # drops it ("Error reading content: ... connection reset", "peer closed connection without
+        # sending TLS close_notify"), though the command is still running in the sandbox. That
+        # failed about one agent run in a thousand, after the solver had spent. Here a dropped
+        # stream reconnects to the same process; a command that ended while no stream was open
+        # left its exit status in a file, written by an EXIT trap. Nothing runs twice.
+        from e2b.exceptions import TimeoutException
+        from e2b.sandbox.commands.command_handle import CommandExitException
+        from harbor.environments.base import ExecResult
+
+        status = f"/tmp/.selfbench-exit-{uuid.uuid4().hex}"
+        user = self._resolve_user(user)
+        handle = await self._dispatch_command(
+            f"trap 'printf %s $? > {status}' EXIT\n{command}",
+            cwd=harbor_e2b.effective_exec_cwd(cwd, self.task_env_config.workdir, self._workdir),
+            env=self._merge_env(env),
+            timeout_sec=timeout_sec,
+            user=str(user) if user is not None else "root",
+        )
+        pid = handle.pid
+        deadline = time.monotonic() + timeout_sec if timeout_sec else None
+        stdout: list[str] = []
+        stderr: list[str] = []
+
+        def ended(code: int, out: str = "", err: str = "") -> ExecResult:
+            return ExecResult(
+                stdout="".join(stdout) + out, stderr="".join(stderr) + err, return_code=code
+            )
+
+        dropped: Exception | None = None
+        for attempt in range(RECONNECTS + 1):
+            if attempt:
+                await asyncio.sleep(RECONNECT_WAIT_SECS * 2 ** (attempt - 1))
+                code = await self._exit_status(status)
+                if code is not None:
+                    return ended(code)
+                remaining = 0 if deadline is None else deadline - time.monotonic()
+                if deadline is not None and remaining <= 0:
+                    raise TimeoutException(f"Command exceeded its {timeout_sec}s time limit")
+                try:
+                    handle = await self._sandbox.commands.connect(pid, timeout=remaining)
+                except Exception as error:
+                    # Also what a process that ended since the check above answers.
+                    self.logger.warning(f"Reconnecting to pid {pid} failed ({error})")
+                    continue
+            try:
+                result = await handle.wait()
+                return ended(result.exit_code, result.stdout, result.stderr)
+            except CommandExitException as exited:
+                return ended(exited.exit_code, exited.stdout, exited.stderr)
+            except TimeoutException:
+                raise
+            except Exception as error:
+                # The SDK keeps what the stream carried before it dropped.
+                stdout.extend(getattr(handle, "_stdout_chunks", []))
+                stderr.extend(getattr(handle, "_stderr_chunks", []))
+                dropped = error
+                self.logger.warning(f"E2B dropped the stream of pid {pid} ({error})")
+        code = await self._exit_status(status)
+        if code is not None:
+            return ended(code)
+        assert dropped is not None
+        raise dropped
+
+    async def _exit_status(self, path: str) -> int | None:
+        """The exit status a command's EXIT trap wrote, or None while it is still running."""
+        try:
+            if not await self._sandbox.files.exists(path):
+                return None
+            return int((await self._sandbox.files.read(path)).strip())
+        except Exception:
+            return None
 
     async def _does_template_exist(self) -> bool:
         return await self._when_free("template lookup", self._template_ready)
@@ -286,11 +372,15 @@ async def image_config(image: str, grant: tuple[str, str] | None = None) -> dict
 
         async def get(path: str, accept: str | None = None) -> httpx.Response:
             extra = {"accept": accept} if accept else {}
-            response = await client.get(path, headers={**headers, **extra}, auth=grant)
+
+            def ask(auth: tuple[str, str] | None) -> Callable[[], Awaitable[httpx.Response]]:
+                return lambda: client.get(path, headers={**headers, **extra}, auth=auth)
+
+            response = await patient(ask(grant))
             challenge = response.headers.get("www-authenticate", "")
             if response.status_code == 401 and challenge.lower().startswith("bearer "):
                 headers["authorization"] = f"Bearer {await token(challenge, repository, grant)}"
-                response = await client.get(path, headers={**headers, **extra})
+                response = await patient(ask(None))
             return response.raise_for_status()
 
         found = (await get(f"/manifests/{reference}", MANIFEST_TYPES)).json()
@@ -305,6 +395,23 @@ async def image_config(image: str, grant: tuple[str, str] | None = None) -> dict
         return (await get(f"/blobs/{found['config']['digest']}")).json().get("config") or {}
 
 
+async def patient(request: Callable[[], Awaitable[httpx.Response]]) -> httpx.Response:
+    """
+    `request`'s response, asked again while the registry answers 429 or 5xx. Public ECR limits
+    anonymous pulls per IP, and every trial that starts at once reads its image's config, so a
+    large evaluation was refused ("429 Too Many Requests") and failed trials before they began.
+    Waits for the registry's Retry-After, else 2, 4, ... seconds, up to REGISTRY_RETRIES times.
+    """
+    for attempt in range(REGISTRY_RETRIES):
+        response = await request()
+        if response.status_code != 429 and response.status_code < 500:
+            return response
+        after = response.headers.get("retry-after", "")
+        delay = float(after) if after.isdigit() else REGISTRY_WAIT_SECS * 2**attempt
+        await asyncio.sleep(delay * random.uniform(1, 1.25))
+    return await request()
+
+
 async def token(challenge: str, repository: str, grant: tuple[str, str] | None) -> str:
     """A pull token from the realm a registry's `WWW-Authenticate: Bearer ...` challenge names."""
     fields = dict(re.findall(r'(\w+)="([^"]*)"', challenge))
@@ -312,6 +419,6 @@ async def token(challenge: str, repository: str, grant: tuple[str, str] | None) 
     if fields.get("service"):
         params["service"] = fields["service"]
     async with httpx.AsyncClient(follow_redirects=True, timeout=60) as client:
-        response = await client.get(fields["realm"], params=params, auth=grant)
+        response = await patient(lambda: client.get(fields["realm"], params=params, auth=grant))
         body = response.raise_for_status().json()
     return body.get("token") or body["access_token"]
