@@ -4,10 +4,11 @@
     python selfbench_export.py <modal|e2b|daytona|vercel> <provider image> <image name>
 
 A provider's verified image cannot be pulled, so this starts a sandbox from it with the run's own
-credentials, streams its root filesystem out as one tar layer (gzipped and hashed on the way), and
+credentials, streams its root filesystem out as one gzipped tar layer (hashed on the way), and
 pushes that layer with an image config and manifest to the repository, by digest and untagged so it
 can be deleted with its task, so every other provider can start from exactly what passed. Modal
-streams the tar directly; the others go through a file (selfbench_sandbox_export.py). The
+streams the tar directly and it is gzipped here; the others gzip it in the sandbox and their bytes
+are the layer blob as downloaded (selfbench_sandbox_export.py). The
 environment carries where and how:
 
 - SELFBENCH_EXPORT_REGISTRY: the repository's registry API, `https://<host>/v2/<path>`
@@ -85,7 +86,12 @@ class Registry:
 
 
 class LayerUpload:
-    """Gzips a tar stream into one streamed blob upload, hashing both sides for the image.
+    """Streams one gzipped tar layer into a blob upload, hashing both sides for the image.
+
+    A layer's digest is the sha256 of its gzipped bytes and its diff_id that of the tar inside.
+    `write` takes the tar and gzips it here, at level 1 like `gzip -1` in the other providers'
+    sandboxes; `write_gzipped` takes a sandbox's own gzip stream, uploads it as it is, and only
+    inflates it to hash the tar, far cheaper on the worker's CPU than compressing it again.
 
     Artifact Registry takes a blob in a single PATCH (as `docker push` sends it), so a thread
     streams the request body from a bounded queue while the sandbox's tar is read. The upload
@@ -96,7 +102,8 @@ class LayerUpload:
     def __init__(self, registry: Registry, name: str):
         self.registry = registry
         self.name = name
-        self.compressor = zlib.compressobj(6, zlib.DEFLATED, 31)
+        self.compressor: zlib._Compress | None = None
+        self.decompressor: zlib._Decompress | None = None
         self.raw = hashlib.sha256()
         self.gzipped = hashlib.sha256()
         self.size = 0
@@ -132,8 +139,27 @@ class LayerUpload:
                 continue
 
     async def write(self, data: bytes) -> None:
+        if self.decompressor is not None:
+            raise RuntimeError("a layer takes either a tar or a gzip stream")
+        if self.compressor is None:
+            self.compressor = zlib.compressobj(1, zlib.DEFLATED, 31)
         self.raw.update(data)
         await self._send(self.compressor.compress(data))
+
+    async def write_gzipped(self, data: bytes) -> None:
+        if self.compressor is not None:
+            raise RuntimeError("a layer takes either a tar or a gzip stream")
+        if self.decompressor is None:
+            self.decompressor = zlib.decompressobj(31)
+        if not data:
+            return
+        if self.decompressor.eof:
+            # A second gzip member would be a different layer than its diff_id describes.
+            raise RuntimeError("the downloaded archive continues past its end")
+        self.raw.update(self.decompressor.decompress(data))
+        if self.decompressor.unused_data:
+            raise RuntimeError("the downloaded archive continues past its end")
+        await self._send(data)
 
     async def _send(self, data: bytes) -> None:
         if data:
@@ -156,7 +182,15 @@ class LayerUpload:
                     pass
 
     async def finish(self) -> tuple[str, str, int]:
-        await self._send(self.compressor.flush())
+        if self.compressor is not None:
+            await self._send(self.compressor.flush())
+        elif self.decompressor is not None:
+            self.raw.update(self.decompressor.flush())
+            if not self.decompressor.eof:
+                raise RuntimeError("the downloaded archive ended early")
+        else:
+            # An empty stream is no filesystem; pushing it would make an image of nothing.
+            raise RuntimeError("the export produced no layer")
         await self._queue(None)
         location = await self._open()
         digest = f"sha256:{self.gzipped.hexdigest()}"
@@ -203,10 +237,10 @@ async def push_image(name: str, stream, source: str) -> str:
     layer = LayerUpload(registry, name)
     try:
         await stream(layer)
+        layer_digest, diff_id, layer_size = await layer.finish()
     except BaseException:
         layer.abort()
         raise
-    layer_digest, diff_id, layer_size = await layer.finish()
     image_config = json.dumps(
         {
             "architecture": "amd64",

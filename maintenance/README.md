@@ -19,8 +19,10 @@ node dist/maintenance/reverify-task-images.js <repoId>... [--row=<taskRowId>]...
 ## Historical Task Execution Bundles
 
 The worker exports a task's verified images once a person approves it, and deletes them once a
-person rejects or deletes it (`selfBenchTaskImagesWorkflow`, started by the review routes).
-`backfill-execution-bundles` applies the same rule to existing tasks. For each task with
+person rejects or deletes it (`selfBenchTaskImagesWorkflow`, started by the review routes, on
+the `<task queue>-harbor-images` queue, two exports per worker).
+`backfill-execution-bundles` applies the same rule to existing tasks, one task at a time in its
+own process. For each task with
 recorded provider images it:
 
 - exports a human-approved task's original verified E2B templates, Modal images, Daytona
