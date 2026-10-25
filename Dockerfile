@@ -20,6 +20,8 @@ RUN apt-get update \
   && env UV_PYTHON_INSTALL_DIR=/opt/uv-python UV_TOOL_DIR=/opt/uv-tools UV_TOOL_BIN_DIR=/usr/local/bin uv tool install --python 3.12 --with-executables-from modal "harbor[e2b,daytona,modal,vercel]==${HARBOR_VERSION}" \
   && modal --version \
   && chmod -R a+rX /opt/uv-python /opt/uv-tools
+# The API runs on Bun; the Temporal worker stays on Node, which its SDK requires.
+COPY --from=build /usr/local/bin/bun /usr/local/bin/bun
 COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=docker-cli /usr/local/libexec/docker/cli-plugins /usr/local/libexec/docker/cli-plugins
 
@@ -38,4 +40,4 @@ COPY package.json ./package.json
 COPY --from=build /app/Dockerfile.sandbox ./Dockerfile.sandbox
 
 USER node
-CMD ["node", "dist/api/main.js"]
+CMD ["bun", "dist/api/main.js"]
