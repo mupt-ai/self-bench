@@ -41,7 +41,7 @@ resource "google_artifact_registry_repository_iam_member" "api_task_images" {
 
 # Builds run the task's setup steps, which are code from the repository under test, so they run as
 # an account of their own that may only push task and cache images, read the Docker Hub mirror and
-# write build logs; never as the worker.
+# keep build logs in their bucket; never as the worker.
 resource "google_service_account" "task_builder" {
   count        = var.task_images ? 1 : 0
   project      = var.project_id
@@ -112,8 +112,10 @@ resource "google_artifact_registry_repository_iam_member" "builder_dockerhub" {
   member     = "serviceAccount:${google_service_account.task_builder[0].email}"
 }
 
-# Build logs, which the worker reads to give the author a failed build's output. The builder may
-# only add objects; logs go after two weeks.
+# Build logs, which the worker reads to give the author a failed build's output; they go after two
+# weeks. Cloud Build streams a log by rewriting its object, and documents Storage Admin on the bucket
+# for a build's own account. Only this bucket: the build's task steps run in BuildKit's containers,
+# off the network Cloud Build serves the account's token on.
 resource "google_storage_bucket" "task_builds" {
   count                       = var.task_images ? 1 : 0
   project                     = var.project_id
@@ -136,7 +138,7 @@ resource "google_storage_bucket" "task_builds" {
 resource "google_storage_bucket_iam_member" "builder_logs" {
   count  = var.task_images ? 1 : 0
   bucket = google_storage_bucket.task_builds[0].name
-  role   = "roles/storage.objectCreator"
+  role   = "roles/storage.admin"
   member = "serviceAccount:${google_service_account.task_builder[0].email}"
 }
 resource "google_storage_bucket_iam_member" "runtime_build_logs" {
@@ -152,6 +154,14 @@ resource "google_project_iam_member" "runtime_cloud_build" {
   project = var.project_id
   role    = "roles/cloudbuild.builds.editor"
   member  = "serviceAccount:${google_service_account.runtime.email}"
+}
+# Cloud Build's own service agent mints the builder account's tokens for its builds.
+resource "google_service_account_iam_member" "cloud_build_agent_builder" {
+  count              = var.task_images ? 1 : 0
+  service_account_id = google_service_account.task_builder[0].name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:service-${data.google_project.this[0].number}@gcp-sa-cloudbuild.iam.gserviceaccount.com"
+  depends_on         = [google_project_service.api]
 }
 resource "google_service_account_iam_member" "runtime_acts_as_builder" {
   count              = var.task_images ? 1 : 0
