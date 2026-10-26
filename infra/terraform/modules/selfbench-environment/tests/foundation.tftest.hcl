@@ -326,7 +326,9 @@ run "task_images" {
       google_artifact_registry_repository_iam_member.builder_task_images[0].role == "roles/artifactregistry.writer" &&
       google_artifact_registry_repository_iam_member.builder_task_cache[0].role == "roles/artifactregistry.writer" &&
       google_artifact_registry_repository_iam_member.builder_dockerhub[0].role == "roles/artifactregistry.reader" &&
-      google_storage_bucket_iam_member.builder_logs[0].bucket == "selfbench-dev-testing-task-builds"
+      google_storage_bucket_iam_member.builder_logs[0].bucket == "selfbench-dev-testing-task-builds" &&
+      # Cloud Build streams a log by rewriting its object, which Object Creator cannot do.
+      google_storage_bucket_iam_member.builder_logs[0].role == "roles/storage.admin"
     )
     error_message = "Builds run untrusted setup code: their account may only push images, read the mirror and keep logs in their own bucket."
   }
