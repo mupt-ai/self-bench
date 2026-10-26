@@ -107,18 +107,15 @@ export async function selfBenchAuthorWorkflow(
         reason: cancelled ? "Generation cancelled." : "Generation ran out of time (14 days).",
       },
     };
-    // A cancelled candidate still records where it stopped, then reports its cancellation.
     await CancellationScope.nonCancellable(() =>
-      verdicts.settleTask({ ...row, result, ...(cancelled ? { cancelled } : {}) }),
+      settleStopped(input, result, cancelled, { ...verdicts, ...compaction }),
     );
-    // Images the candidate built are removed on cancel too; only a cancel leaves them to the sweep.
-    await CancellationScope.nonCancellable(() => compact(input, result));
     if (cancelled) throw error;
     return result;
   }
   // A finished verdict reaches the row even if a cancel lands meanwhile.
   const settled = await CancellationScope.nonCancellable(() => settle(row, result));
-  await compact(input, settled);
+  await compact(input, settled, compaction);
   return settled;
 }
 
@@ -147,11 +144,33 @@ async function settle(
   }
 }
 
+type StoppedSteps = Pick<TaskActivities, "settleTask"> & CompactionSteps;
+type CompactionSteps = Pick<WorkerActivities, "compactCandidateBundles" | "discardCandidateImages">;
+
+/**
+ * Settles a candidate a cancel or its deadline stopped: its row records where it stopped, and the
+ * images and bundles it built are removed, cancelled or not.
+ */
+export async function settleStopped(
+  input: CandidateWorkflowInput,
+  result: CandidateWorkflowResult,
+  cancelled: boolean,
+  steps: StoppedSteps,
+): Promise<void> {
+  const row = { runId: input.run.runId, candidateId: input.candidate.candidateId };
+  await steps.settleTask({ ...row, result, ...(cancelled ? { cancelled } : {}) });
+  await compact(input, result, steps);
+}
+
 /**
  * Drops what the candidate stored but its task does not use: superseded compile attempts, and every
  * image it built except the accepted pair. Only storage is at stake, so neither ever fails it.
  */
-async function compact(input: CandidateWorkflowInput, result: CandidateWorkflowResult) {
+async function compact(
+  input: CandidateWorkflowInput,
+  result: CandidateWorkflowResult,
+  compaction: CompactionSteps,
+) {
   const row = { runId: input.run.runId, candidateId: input.candidate.candidateId };
   const images = result.task?.images;
   const ignored = (error: unknown) => {
