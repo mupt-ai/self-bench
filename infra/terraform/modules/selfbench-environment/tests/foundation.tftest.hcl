@@ -331,6 +331,10 @@ run "task_images" {
     error_message = "Builds run untrusted setup code: their account may only push images, read the mirror and keep logs in their own bucket."
   }
   assert {
+    condition     = google_service_account_iam_member.cloud_build_agent_builder[0].role == "roles/iam.serviceAccountTokenCreator" && endswith(google_service_account_iam_member.cloud_build_agent_builder[0].member, "@gcp-sa-cloudbuild.iam.gserviceaccount.com")
+    error_message = "Cloud Build's service agent must mint the builder account's tokens, or builds as that account are denied."
+  }
+  assert {
     condition     = google_service_account_iam_member.runtime_acts_as_builder[0].role == "roles/iam.serviceAccountUser" && google_project_iam_member.runtime_cloud_build[0].role == "roles/cloudbuild.builds.editor"
     error_message = "The worker starts builds as the builder's account."
   }
