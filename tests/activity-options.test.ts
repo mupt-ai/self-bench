@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { compileRetryPolicy } from "@temporalio/common";
 import { harborQueue, record, task } from "../src/temporal/activity-options.js";
 
 test("a record retries briefly unless told to keep going; heartbeating work waits on cancel", () => {
@@ -11,7 +12,13 @@ test("a record retries briefly unless told to keep going; heartbeating work wait
       maximumAttempts: 5,
     },
   });
-  expect(record({ attempts: 0 }).retry?.maximumAttempts).toBe(0);
+  // Temporal's SDK refuses 0 and drops Infinity, which is its own default of unlimited.
+  expect(
+    compileRetryPolicy(record({ attempts: Number.POSITIVE_INFINITY }).retry ?? {}),
+  ).toMatchObject({
+    maximumAttempts: undefined,
+  });
+  expect(() => compileRetryPolicy({ maximumAttempts: 0 })).toThrow("positive integer");
   expect(record({ final: ["RepeatSpendError"] }).retry?.nonRetryableErrorTypes).toEqual([
     "RepeatSpendError",
   ]);

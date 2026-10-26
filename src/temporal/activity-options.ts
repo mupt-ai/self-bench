@@ -28,7 +28,7 @@ const backoff = {
 interface Preset {
   /** How long one attempt may run: a duration string, or milliseconds. */
   readonly timeout: NonNullable<ActivityOptions["startToCloseTimeout"]>;
-  /** Attempts in all; 0 retries until it succeeds. */
+  /** Attempts in all; Infinity retries until it succeeds (Temporal's SDK refuses 0). */
   readonly attempts?: number;
   /** Error types no retry can fix. */
   readonly final?: readonly string[];

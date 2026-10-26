@@ -37,7 +37,7 @@ const finish = proxyActivities<
   >
 >(task({ timeout: "15 minutes", attempts: 5 }));
 // A row write waits out a database outage rather than leave its task unsettled.
-const rows = proxyActivities<TaskActivities>(record({ attempts: 0 }));
+const rows = proxyActivities<TaskActivities>(record({ attempts: Number.POSITIVE_INFINITY }));
 // Compaction streams each green attempt's full bundle once to check it before deleting it.
 const compaction = proxyActivities<Pick<WorkerActivities, "compactCandidateBundles">>(
   task({ timeout: "2 hours", attempts: 3, heartbeat: "5 minutes" }),
