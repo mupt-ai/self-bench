@@ -1,4 +1,4 @@
-import { mkdir, rename } from "node:fs/promises";
+import { mkdir, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { runCommand } from "../lib/process.js";
 
@@ -34,4 +34,19 @@ export async function splitGateBundle(compiled: string, work: string): Promise<v
   await mkdir(snapshot);
   await runCommand("tar", ["-xzf", compiled, "-C", snapshot, ENVIRONMENT_SNAPSHOT]);
   await rename(join(snapshot, ENVIRONMENT_SNAPSHOT), join(work, SNAPSHOT_FILE));
+}
+
+/**
+ * Writes the compiled bundle and, when there is one, its pinned definition and gate split. Image
+ * builds read the split files, so a failed split fails the compile, which is retried.
+ */
+export async function writeCompiled(
+  work: string,
+  bundle: Uint8Array,
+  pinnedDefinition: string,
+): Promise<void> {
+  await writeFile(join(work, "compiled.tar.gz"), bundle);
+  if (bundle.byteLength === 0) return;
+  await writeFile(join(work, "definition.json"), pinnedDefinition);
+  await splitGateBundle(join(work, "compiled.tar.gz"), work);
 }
