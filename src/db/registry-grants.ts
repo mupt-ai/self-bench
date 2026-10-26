@@ -52,7 +52,13 @@ export function createRegistryGrantStore(db: Database, secret: string, repositor
       const ids = [...new Set(input.taskIds)];
       const rows = ids.length
         ? await db
-            .select({ id: tasks.id, status: tasks.pipelineStatus, images: tasks.images })
+            .select({
+              id: tasks.id,
+              status: tasks.pipelineStatus,
+              review: tasks.reviewDecision,
+              deletedAt: tasks.deletedAt,
+              images: tasks.images,
+            })
             .from(tasks)
             .where(inArray(tasks.id, ids))
         : [];
@@ -60,7 +66,11 @@ export function createRegistryGrantStore(db: Database, secret: string, repositor
       for (const id of ids) {
         const row = rows.find((candidate) => candidate.id === id);
         if (!row) throw new GrantRefusal(`Task ${id} does not exist`);
-        if (row.status !== "accepted") throw new GrantRefusal(`Task ${id} is not accepted`);
+        // Only what a person approved and still keeps; a deleted or rejected task's images may
+        // linger (pinned by a release, or awaiting removal) but are not for delivery.
+        if (row.deletedAt) throw new GrantRefusal(`Task ${id} was deleted`);
+        if (row.status !== "accepted" || row.review !== "approve")
+          throw new GrantRefusal(`Task ${id} is not an approved task`);
         const exported = row.images?.registry;
         if (!exported) throw new GrantRefusal(`Task ${id} has no exported images`);
         images.push(withinRepository(repository, exported.agent));

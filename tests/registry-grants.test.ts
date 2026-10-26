@@ -71,6 +71,7 @@ async function seeded() {
           difficulty: "medium",
           pipelineStatus: status,
           stage: "done",
+          ...(status === "accepted" ? { reviewDecision: "approve" as const } : {}),
           ...(registry ? { images: { provider: "modal", agent: "im-1", registry } } : {}),
         })
         .returning(),
@@ -247,4 +248,18 @@ test("the grant list shows each grant without its password", async () => {
   expect(listed.grants).toHaveLength(1);
   expect(listed.grants[0]).toMatchObject({ label: "Acme", images: 1, revokedAt: null });
   expect(JSON.stringify(listed)).not.toContain("rg_");
+});
+
+test("deleted and unapproved tasks can't be granted, even with images still exported", async () => {
+  const ids = await seeded();
+  if (!database) throw new Error("seeded");
+  const { eq } = await import("drizzle-orm");
+  const { origin } = await serve();
+  await database.db.update(tasks).set({ reviewDecision: null }).where(eq(tasks.id, ids.accepted));
+  expect((await issue(origin, { label: "Acme", taskIds: [ids.accepted] })).status).toBe(400);
+  await database.db
+    .update(tasks)
+    .set({ reviewDecision: "approve", deletedAt: new Date() })
+    .where(eq(tasks.id, ids.accepted));
+  expect((await issue(origin, { label: "Acme", taskIds: [ids.accepted] })).status).toBe(400);
 });
