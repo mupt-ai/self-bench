@@ -140,7 +140,8 @@ export async function selfBenchAuthorWorkflow(
     await compact(input, result);
     return result;
   }
-  await rows.settleTask({ ...row, result });
+  // A finished verdict reaches the row even if a cancel lands meanwhile.
+  await CancellationScope.nonCancellable(() => rows.settleTask({ ...row, result }));
   await compact(input, result);
   return result;
 }
