@@ -11,63 +11,8 @@ node dist/maintenance/reprice-dari-router.js <repoId> <evaluationId> [--apply]
 node dist/maintenance/reprice-openrouter.js <repoId> <evaluationId> [--apply]
 node dist/maintenance/backfill-timeouts.js <repoId | benchmark:<id>>... [--apply] [--auth=codex-login|api-key]
 node dist/maintenance/records-migration.js [--apply]
-node dist/maintenance/backfill-execution-bundles.js <repoId>... [--apply]
 node dist/maintenance/compact-task-bundles.js <runId>... | --all [--apply]
-node dist/maintenance/reverify-task-images.js <repoId>... [--row=<taskRowId>]... [--apply]
 ```
-
-## Historical Task Execution Bundles
-
-The worker exports a task's verified images once a person approves it, and deletes them once a
-person rejects or deletes it (`selfBenchTaskImagesWorkflow`, started by the review routes, on
-the `<task queue>-harbor-images` queue, two exports per worker).
-`backfill-execution-bundles` applies the same rule to existing tasks, one task at a time in its
-own process. For each task with
-recorded provider images it:
-
-- exports a human-approved task's original verified E2B templates, Modal images, Daytona
-  snapshots or Vercel images, then publishes a small `execution-task.tar.gz` with pinned `FROM`
-  lines instead of repository archives (already exported images are reused);
-- returns a rejected or deleted task to its compiled bundle and deletes its exported images,
-  unless a saved comparison or release names one of their digests.
-
-Tasks awaiting review, or with no recorded images, are left alone and not reported. It
-resolves the original verification account from saved generation settings, without needing
-historical model access. Inaccessible provider images fail without rebuilding a different
-environment or changing the task row. A removal deletes its images before switching the row, so a
-failed deletion leaves the row naming them and a rerun deletes them again.
-
-Run in the worker environment with artifact settings, `SELFBENCH_DATABASE_URL`,
-`SELFBENCH_EVAL_CREDENTIAL_KEY`, `SELFBENCH_TASK_IMAGE_REPOSITORY`, registry push permission,
-and managed provider keys where applicable. Dry runs only list planned changes; `--apply`
-starts provider sandboxes and uploads images, which can incur provider/storage costs.
-The task's bundle and image fields switch only after both images and the new bundle exist,
-with a concurrent-change guard (bundle, images, review and deletion must all be unchanged).
-Removal needs `roles/artifactregistry.repoAdmin` on the task image repository. Original bundles, frozen comparisons and published releases
-remain unchanged. New evaluations and releases use the updated task row. Rerunning skips
-completed tasks; failed exports leave the original task runnable.
-
-Exports read each Dockerfile's base image config from its registry anonymously. Each digest is
-read once per process, and a 429 or 503 is retried as its `Retry-After` asks (up to 30 seconds),
-so a bulk backfill stays inside Docker Hub's anonymous pull limit.
-
-### Tasks Without Recorded Images
-
-Tasks accepted before verification recorded its images (or on E2B before its export existed)
-have nothing to export. `reverify-task-images` gives them images: each accepted, nondeleted task
-without images, unless rejected in review, runs the build, smoke, nop and oracle gates again from
-its own compiled bundle, on the provider and account its run verified with. The images the
-oracle started from are recorded on the row only if every gate passes again; the task's files do
-not change. An approved task is then exported as above; one awaiting review is exported when a
-person approves it. A failed gate leaves the row as it was and names the gate and its outputs
-(`reverify-<time>/` beside the compiled bundle).
-
-The dry run checks each run's verification account is still available. `--apply` starts
-provider sandboxes and builds images. It needs the backfill's settings, enough memory to unpack a
-full bundle (they reach hundreds of MB), and an hour or more per task. Run it as a Cloud Run job
-with several tasks to work in parallel: each takes every `CLOUD_RUN_TASK_COUNT`-th row.
-`--row=<taskRowId>` limits it to named rows, for a pilot. Managed runs are refused, since their
-verification provider is stamped on the run, not saved with its settings.
 
 ## Task Bundle Compaction
 
@@ -79,8 +24,8 @@ repository dozens of times. When a candidate finishes, the worker now compacts i
 - each snapshot moves to one shared copy per content, `snapshots/<sha256>.tar.gz`, and the attempt
   keeps a `repo.json` pointer to it (`git archive` of a commit is the same bytes every time);
 - each full bundle except the accepted task's goes, once its `gate-task.tar.gz` and snapshot are
-  shown to hold exactly its files (paths, modes, contents). Attempts without a gate task (tasks
-  with services, older compiles) keep theirs.
+  shown to hold exactly its files (paths, modes, contents). Attempts without a gate task (older
+  compiles of tasks with services) keep theirs.
 
 Readers of the snapshot (Modal trials, the run viewer) follow the pointer; the viewer and public
 downloads already read the gate task. `compact-task-bundles` applies the same to finished

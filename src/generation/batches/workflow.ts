@@ -14,11 +14,8 @@ import type {
 import { record, task } from "../../temporal/activity-options.js";
 import { whenSandboxFree } from "../../temporal/sandbox-capacity.js";
 import type { DiscoveryShardInput } from "../pipeline/activities.js";
-import {
-  rootMessage,
-  selfBenchAuthorWorkflow,
-  selfBenchDiscoveryShardWorkflow,
-} from "../pipeline/workflows.js";
+import { rootMessage } from "../pipeline/candidate.js";
+import { selfBenchAuthorWorkflow, selfBenchDiscoveryShardWorkflow } from "../pipeline/workflows.js";
 import type { BatchActivities } from "./activities.js";
 import { CANCELLED, type Outcome } from "./record.js";
 

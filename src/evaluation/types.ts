@@ -13,7 +13,7 @@ interface EvaluationTask {
   runId: string;
   taskId: string;
   bundleKey: string;
-  /** The Modal images the task was verified on; Modal trials start from them. */
+  /** The images the task's checks ran on; every trial starts from them. */
   images?: TaskImages;
   /**
    * A task frozen from Harbor's registry (freezeRegistryTasks), as `org/name@sha256:…`; its

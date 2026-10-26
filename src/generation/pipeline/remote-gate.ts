@@ -3,42 +3,17 @@ import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import type { ArtifactStore } from "../../artifacts/index.js";
-import type { SelfBenchConfig } from "../../contracts/config/index.js";
 import type { ArtifactRef } from "../../contracts/index.js";
 import { extractRegularArchive } from "../../lib/archive.js";
-import { GATE_TASK_FILE, SNAPSHOT_FILE } from "../../sandbox/gate-bundle.js";
-import { jobFileKey, type SandboxJobOutcome } from "../../sandbox/jobs.js";
-import { snapshotLinkUrl } from "../../sandbox/snapshot-link.js";
-import type { SandboxCallback } from "./sandbox-job.js";
 
 /**
- * The Harbor task without its repository snapshots, and where the image build fetches the
- * environment snapshot instead.
+ * The Harbor task without its repository snapshots, and where an image build on Modal fetches the
+ * snapshot instead (a trial of a task without images, src/evaluation/task-bundle.ts).
  */
 export interface RemoteGate {
   readonly bundle: ArtifactRef;
   readonly snapshotUrl: string;
   readonly snapshotSha256: string;
-}
-
-/**
- * On Modal, a check whose compile split out the snapshot builds its image from the small task
- * and fetches the snapshot itself; anything else (Docker, older compiles) uses the full bundle.
- */
-export function remoteGate(
-  harborEnvironment: SelfBenchConfig["harborEnvironment"],
-  compiled: SandboxJobOutcome,
-  callback: SandboxCallback,
-): RemoteGate | undefined {
-  const bundle = compiled.files[GATE_TASK_FILE];
-  const snapshot = compiled.files[SNAPSHOT_FILE];
-  if (harborEnvironment !== "modal" || !bundle || !snapshot) return undefined;
-  const key = jobFileKey(compiled.prefix, SNAPSHOT_FILE);
-  return {
-    bundle,
-    snapshotUrl: snapshotLinkUrl(callback.url, { key, sha256: snapshot.sha256 }, callback.secret),
-    snapshotSha256: snapshot.sha256,
-  };
 }
 
 const SNAPSHOT_COPY = "COPY repo.tar.gz /tmp/repo.tar.gz";

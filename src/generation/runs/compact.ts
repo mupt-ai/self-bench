@@ -58,7 +58,7 @@ export interface CompactionOptions {
 /**
  * Compacts one compile attempt at `directory`: its snapshot moves to the one shared copy, and,
  * unless `kept` names it, its full bundle goes once the gate task and snapshot are shown to hold
- * exactly the same files. Attempts without a gate task (tasks with services, older compiles) keep
+ * exactly the same files. Attempts without a gate task (older compiles of tasks with services) keep
  * their full bundle. A dry run reports what would be freed without changing anything.
  */
 async function compactAttempt(

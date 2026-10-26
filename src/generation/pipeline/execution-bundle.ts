@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { pack } from "tar-stream";
 import type { ArtifactStore } from "../../artifacts/index.js";
-import type { AuthoredTask } from "../../contracts/index.js";
+import type { ArtifactRef, AuthoredTask, TaskImages } from "../../contracts/index.js";
 import { sha256 } from "../../lib/hash.js";
 import { unpackTask } from "./remote-gate.js";
 
@@ -19,25 +19,26 @@ const REQUIRED_FILES = [
 ];
 
 /**
- * The compiler's build inputs remain immutable provenance. Once both verified images are
- * exported, the delivered task needs only native Harbor files and digest-backed Dockerfiles.
- * Hidden tests stay in the separate verifier; neither tests nor solution enter the agent build.
+ * The compiler's build inputs remain immutable provenance. A task with images needs only native
+ * Harbor files and digest-backed Dockerfiles, read from its gate task (the compiled task without
+ * its repository snapshots) and published beside its compiled bundle. Hidden tests stay in the
+ * separate verifier; neither tests nor solution enter the agent build.
  */
-export async function publishExecutionBundle<T extends Pick<AuthoredTask, "bundle" | "images">>(
+export async function publishExecutionBundle(
   store: ArtifactStore,
-  task: T,
+  task: Pick<AuthoredTask, "bundle"> & { readonly images: TaskImages },
+  gate: ArtifactRef,
   signal: AbortSignal,
-): Promise<T> {
-  const images = task.images?.registry;
-  if (!images?.agent || !images.verifier) return task;
-  if (task.bundle.uri.endsWith(`/${EXECUTION_BUNDLE_NAME}`)) return task;
+): Promise<ArtifactRef> {
+  const { images } = task;
+  if (task.bundle.uri.endsWith(`/${EXECUTION_BUNDLE_NAME}`)) return task.bundle;
   const runIndex = task.bundle.uri.indexOf("/runs/");
   if (runIndex < 0) throw new Error("Execution bundle must belong to a generation run");
   const prefix = dirname(task.bundle.uri.slice(runIndex + 1));
   const root = await mkdtemp(join(tmpdir(), "selfbench-execution-bundle-"));
   try {
     await mkdir(join(root, "source"));
-    const source = await unpackTask(store, task.bundle, join(root, "source"), signal);
+    const source = await unpackTask(store, gate, join(root, "source"), signal);
     const output = join(root, "delivered", "harbor-task");
     for (const file of REQUIRED_FILES) {
       await mkdir(dirname(join(output, file)), { recursive: true });
@@ -79,10 +80,9 @@ export async function publishExecutionBundle<T extends Pick<AuthoredTask, "bundl
     ).slice(0, 24);
     const key = `${prefix}/execution-${revision}/${EXECUTION_BUNDLE_NAME}`;
     const existing = await store.stat(key);
-    const bundle = existing
+    return existing
       ? { ...existing, contentType: "application/gzip" }
       : await store.put(key, bytes, "application/gzip");
-    return { ...task, bundle };
   } finally {
     await rm(root, { recursive: true, force: true });
   }

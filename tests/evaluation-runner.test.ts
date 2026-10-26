@@ -37,7 +37,6 @@ test("Pi custom endpoints receive Harbor's explicit Chat Completions API style",
       "e2b",
       "default",
       ["routing.dari.dev"],
-      undefined,
       "custom",
     );
     expect(args.slice(-2)).toEqual(["--agent-kwarg", "model_api=openai-completions"]);
@@ -55,7 +54,6 @@ test("custom endpoint API style preserves thinking and leaves other harnesses un
     "modal",
     "high",
     [],
-    undefined,
     "custom",
   );
   expect(args.slice(-4)).toEqual([
@@ -72,7 +70,6 @@ test("custom endpoint API style preserves thinking and leaves other harnesses un
     "e2b",
     undefined,
     [],
-    undefined,
     "custom",
   );
   expect(codex).not.toContain("model_api=openai-completions");

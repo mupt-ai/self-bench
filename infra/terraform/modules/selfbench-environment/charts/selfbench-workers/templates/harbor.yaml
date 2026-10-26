@@ -1,6 +1,6 @@
-# Harbor work as jobs: KEDA starts a job pod per harborSlots Harbor tasks waiting on the queue (or
-# per 2 image exports on theirs), and each pod runs up to harborSlots Harbor checks or solver trials
-# plus 2 exports and exits once it has been idle for 5 minutes.
+# Harbor work as jobs: KEDA starts a job pod per harborSlots Harbor tasks waiting on the queue, and
+# each pod runs up to harborSlots Harbor checks or solver trials and exits once it has been idle for
+# 5 minutes.
 # Nothing removes a busy pod: Autopilot caps a pod's termination grace at 10 minutes, far short of
 # a solver evaluation (one unretried activity of up to 72 hours), so pods only ever end themselves.
 # GKE's own system pods (konnectivity-agent, which grows with the node count) preempt whatever
@@ -15,8 +15,6 @@ spec:
   # The backlog excludes tasks already running, so count only pending jobs against it.
   scalingStrategy:
     strategy: accurate
-    # Each queue has its own slots on a pod, so the pods two backlogs need add up.
-    multipleScalersCalculation: sum
   # A release (a new image) leaves running jobs alone; only new jobs use the new spec.
   rollout:
     strategy: gradual
@@ -30,17 +28,6 @@ spec:
         taskQueue: {{ .Values.temporal.queue | quote }}
         queueTypes: activity
         targetQueueSize: {{ .Values.harborSlots | quote }}
-      authenticationRef:
-        name: temporal
-    # Image exports wait on a queue of their own, two to a pod (TASK_IMAGE_CONCURRENCY), so a burst
-    # of approvals starts a pod per two exports instead of crowding ten onto one pod's two CPUs.
-    - type: temporal
-      metadata:
-        endpoint: {{ .Values.temporal.address | quote }}
-        namespace: {{ .Values.temporal.namespace | quote }}
-        taskQueue: {{ printf "%s-images" .Values.temporal.queue | quote }}
-        queueTypes: activity
-        targetQueueSize: "2"
       authenticationRef:
         name: temporal
   jobTargetRef:

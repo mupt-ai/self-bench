@@ -15,10 +15,10 @@ import { GATE_TASK_FILE, SNAPSHOT_FILE } from "../../sandbox/gate-bundle.js";
 import type { SandboxExecutor } from "../../sandbox/index.js";
 import type { SandboxJobOutcome } from "../../sandbox/jobs.js";
 import { githubToken } from "../../third_party/github/token.js";
+import type { TaskImageBuilder } from "../images/builder.js";
 import { verifierRuntimeFiles } from "../task/runtime-assets.js";
 import { notRunGates, runHarborGates } from "./harbor-gates.js";
 import { artifactFile, readAsset, withHeartbeats } from "./helpers.js";
-import { remoteGate } from "./remote-gate.js";
 import { runSandboxJob, type SandboxCallback } from "./sandbox-job.js";
 import { isGreen, renderVerifyReport } from "./verify-report.js";
 
@@ -137,14 +137,16 @@ export async function finishCompile(
 }
 
 /**
- * Harbor's half of the check: it builds the compiled task and runs smoke, nop, and oracle.
- * Every result lands in one report for the agent.
+ * The check after the compile: the deployment's builder builds the task's images (the build gate),
+ * and Harbor runs smoke, nop, and oracle on them on the run's provider. Every result lands in one
+ * report for the agent; a green check's task carries the images its oracle passed on.
  */
 export async function verifyCompiled(
   store: ArtifactStore,
   harborEnvironment: SelfBenchConfig["harborEnvironment"],
   input: VerifyCompiledInput,
   callback: SandboxCallback,
+  builder?: TaskImageBuilder,
 ): Promise<VerifyOutcome> {
   const { stage, round, compiled } = input;
   const prefix = verifyPrefix(input);
@@ -159,6 +161,10 @@ export async function verifyCompiled(
       result.compileErrors.length === 0 && bundle
         ? { ...input.task, definition, bundle }
         : undefined;
+    const gate = compiled.files[GATE_TASK_FILE];
+    const snapshot = compiled.files[SNAPSHOT_FILE];
+    if (builder && task && (!gate || !snapshot))
+      throw new Error("The compile wrote no gate task or snapshot to build images from");
     const { images, ...gates }: Awaited<ReturnType<typeof runHarborGates>> =
       task && result.auditBlockers.length === 0
         ? await runHarborGates(
@@ -167,7 +173,19 @@ export async function verifyCompiled(
             harborEnvironment,
             prefix,
             signal,
-            remoteGate(harborEnvironment, compiled, callback),
+            builder && gate && snapshot
+              ? {
+                  builder,
+                  build: {
+                    runId: input.run.runId,
+                    candidateId: input.candidate.candidateId,
+                    gate,
+                    snapshot,
+                    prefix: compiled.prefix,
+                  },
+                  serving: { env: process.env, callback },
+                }
+              : undefined,
           )
         : notRunGates();
     const partial = {

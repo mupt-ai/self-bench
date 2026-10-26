@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { Client } from "@temporalio/client";
 import { createArtifactStore } from "../artifacts/index.js";
 import type { SelfBenchConfig } from "../contracts/config/index.js";
+import { isArtifactRegistry } from "../contracts/config/task-images.js";
 import { apiKeyDenies } from "../db/api-keys.js";
 import { openDatabase } from "../db/client.js";
 import { createGenerationBatches, RunNotFoundError } from "../generation/batches/service.js";
@@ -58,9 +59,12 @@ export async function startApi(
     (localDatabase
       ? createGenerationBatches(localDatabase.db, client, artifacts, config.temporal.taskQueue)
       : undefined);
+  // Sandbox providers pull from Artifact Registry through here; a local registry serves Docker.
+  const repository = config.taskImages?.repository;
   const registry =
-    config.taskImages &&
-    taskImageRegistry({ repository: config.taskImages.repository, token: googleAccessToken });
+    repository &&
+    isArtifactRegistry(repository) &&
+    taskImageRegistry({ repository, token: googleAccessToken });
   const runStatus = async (runId: string) => {
     if (!batches) throw new RunNotFoundError(runId);
     return batches.status(runId);

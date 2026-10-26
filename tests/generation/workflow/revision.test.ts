@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import type { AuthoringTurnInput } from "../../../src/generation/pipeline/authoring.js";
 import { authoringPrompt } from "../../../src/generation/pipeline/authoring.js";
+import { executeCandidate } from "../../../src/generation/pipeline/candidate.js";
 import type { ReviewRoundInput } from "../../../src/generation/pipeline/review.js";
-import { executeCandidate } from "../../../src/generation/pipeline/workflows.js";
 import {
   acceptingActivities,
   candidate,

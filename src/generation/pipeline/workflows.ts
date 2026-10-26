@@ -1,21 +1,14 @@
 import { CancellationScope, isCancellation, proxyActivities } from "@temporalio/workflow";
-import {
-  type ArtifactRef,
-  AUTHOR_VERIFY_BUDGET,
-  type AuthoredTask,
-  type AuthoredTaskDraft,
-  type Candidate,
-  type CandidateWorkflowInput,
-  type CandidateWorkflowResult,
-  type DiscoveryResult,
-  MAX_AUTHORING_ROUNDS,
-  type TaskProgress,
+import type {
+  CandidateWorkflowInput,
+  CandidateWorkflowResult,
+  DiscoveryResult,
 } from "../../contracts/index.js";
 import { harbor, record, task } from "../../temporal/activity-options.js";
 import { whenSandboxFree } from "../../temporal/sandbox-capacity.js";
 import type { TaskActivities } from "../tasks/activities.js";
 import type { DiscoveryShardInput, SelfBenchActivities, WorkerActivities } from "./activities.js";
-import { verifyReportSummary } from "./verify-report.js";
+import { executeCandidate, initialProgress, rootMessage } from "./candidate.js";
 
 /** How long a candidate may take, waits for sandbox capacity included, before it gives up. */
 const CANDIDATE_DEADLINE_MS = 14 * 24 * 60 * 60_000;
@@ -36,12 +29,18 @@ const finish = proxyActivities<
     "finishDiscoveryShard" | "finishAuthoringTurn" | "finishReviewRound" | "finishCompile"
   >
 >(task({ timeout: "15 minutes", attempts: 5 }));
-// A row write waits out a database outage rather than leave its task unsettled.
-const rows = proxyActivities<TaskActivities>(record({ attempts: Number.POSITIVE_INFINITY }));
-// Compaction streams each green attempt's full bundle once to check it before deleting it.
-const compaction = proxyActivities<Pick<WorkerActivities, "compactCandidateBundles">>(
-  task({ timeout: "2 hours", attempts: 3, heartbeat: "5 minutes" }),
+// A progress write waits out a database outage. A verdict also publishes an accepted task's
+// execution bundle, and keeps trying for a quarter of an hour before its fallback (settle).
+const rows = proxyActivities<Pick<TaskActivities, "recordTaskProgress">>(
+  record({ attempts: Number.POSITIVE_INFINITY }),
 );
+const verdicts = proxyActivities<Pick<TaskActivities, "settleTask">>(
+  task({ timeout: "10 minutes", attempts: 10 }),
+);
+// Compaction streams each green attempt's full bundle once to check it before deleting it.
+const compaction = proxyActivities<
+  Pick<WorkerActivities, "compactCandidateBundles" | "discardCandidateImages">
+>(task({ timeout: "2 hours", attempts: 3, heartbeat: "5 minutes" }));
 const checks = () =>
   proxyActivities<Pick<WorkerActivities, "verifyCompiled">>(
     harbor({ timeout: "7 hours", attempts: 4, heartbeat: "10 minutes" }),
@@ -110,166 +109,64 @@ export async function selfBenchAuthorWorkflow(
     };
     // A cancelled candidate still records where it stopped, then reports its cancellation.
     await CancellationScope.nonCancellable(() =>
-      rows.settleTask({ ...row, result, ...(cancelled ? { cancelled } : {}) }),
+      verdicts.settleTask({ ...row, result, ...(cancelled ? { cancelled } : {}) }),
     );
     if (cancelled) throw error;
     await compact(input, result);
     return result;
   }
   // A finished verdict reaches the row even if a cancel lands meanwhile.
-  await CancellationScope.nonCancellable(() => rows.settleTask({ ...row, result }));
-  await compact(input, result);
-  return result;
+  const settled = await CancellationScope.nonCancellable(() => settle(row, result));
+  await compact(input, settled);
+  return settled;
 }
 
-/** Drops the candidate's superseded compile attempts. Only storage is at stake, so never fails. */
+/**
+ * Settles the candidate's row with its verdict. An accepted task whose execution bundle cannot be
+ * published settles as an infrastructure failure instead: its trials must run on its images.
+ */
+async function settle(
+  row: { readonly runId: string; readonly candidateId: string },
+  result: CandidateWorkflowResult,
+): Promise<CandidateWorkflowResult> {
+  try {
+    await verdicts.settleTask({ ...row, result });
+    return result;
+  } catch (error) {
+    if (isCancellation(error) || result.progress.status !== "accepted") throw error;
+    const failed: CandidateWorkflowResult = {
+      progress: {
+        ...result.progress,
+        status: "infrastructure_failed",
+        reason: `The accepted task could not be published: ${rootMessage(error)}`,
+      },
+    };
+    await verdicts.settleTask({ ...row, result: failed });
+    return failed;
+  }
+}
+
+/**
+ * Drops what the candidate stored but its task does not use: superseded compile attempts, and every
+ * image it built except the accepted pair. Only storage is at stake, so neither ever fails it.
+ */
 async function compact(input: CandidateWorkflowInput, result: CandidateWorkflowResult) {
+  const row = { runId: input.run.runId, candidateId: input.candidate.candidateId };
+  const images = result.task?.images;
+  const ignored = (error: unknown) => {
+    if (isCancellation(error)) throw error;
+  };
+  await compaction
+    .discardCandidateImages({ ...row, keep: images ? [images.agent, images.verifier] : [] })
+    .catch(ignored);
   const kept = result.task ? artifactKey(result.task.bundle.uri) : undefined;
   // A task bundle outside the run's artifacts is never expected; compaction then keeps everything.
   if (result.task && !kept) return;
-  await compaction
-    .compactCandidateBundles({
-      runId: input.run.runId,
-      candidateId: input.candidate.candidateId,
-      kept: kept ? [kept] : [],
-    })
-    .catch((error: unknown) => {
-      if (isCancellation(error)) throw error;
-    });
+  await compaction.compactCandidateBundles({ ...row, kept: kept ? [kept] : [] }).catch(ignored);
 }
 
 /** The store key in an artifact URI (`gs://bucket/<prefix>/runs/...` or `file://.../runs/...`). */
 function artifactKey(uri: string): string | undefined {
   const index = uri.indexOf("/runs/");
   return index < 0 ? undefined : uri.slice(index + 1);
-}
-
-function initialProgress(candidate: Candidate): TaskProgress {
-  return {
-    candidateId: candidate.candidateId,
-    taskId: candidate.candidateId,
-    difficulty: candidate.difficulty,
-    status: "authoring",
-    stage: "authoring",
-    round: 1,
-  };
-}
-
-/**
- * Up to MAX_AUTHORING_ROUNDS rounds. Within a round the author works in turns: each `verify` ends
- * a turn, the worker checks the draft, and the next turn resumes the session with the report. A
- * submission is verified again, and a green task goes to a fresh reviewer who accepts, rejects, or
- * sends suggestions back. Activities that exhaust their retries mark the candidate
- * infrastructure_failed.
- */
-export async function executeCandidate(
-  input: CandidateWorkflowInput,
-  activities: SelfBenchActivities,
-  report: (progress: TaskProgress) => Promise<void>,
-): Promise<CandidateWorkflowResult> {
-  const { run, candidate } = input;
-  const progress = initialProgress(candidate);
-  // Each change of where the candidate is reaches its row; the verdict is the caller's to settle.
-  let reported = "";
-  const update = async (patch: Partial<TaskProgress>): Promise<void> => {
-    Object.assign(progress, patch);
-    const key = JSON.stringify([progress.status, progress.round, progress.taskId]);
-    if (key === reported) return;
-    reported = key;
-    await report({ ...progress });
-  };
-  const finish = (status: "rejected" | "infrastructure_failed", reason: string) => ({
-    progress: { ...progress, status, reason },
-  });
-  // A revision restores the task it revises and hands the person's feedback to the first turn.
-  const maintainerFeedback = input.revision?.feedback;
-  let session: ArtifactRef | undefined;
-  let draft: AuthoredTaskDraft | undefined = input.revision?.draft;
-  let lastReport: ArtifactRef | undefined;
-  let feedback: string | undefined;
-  let lastSummary = "no verification report";
-  let reviews = 0;
-  try {
-    for (let round = 1; round <= MAX_AUTHORING_ROUNDS; round += 1) {
-      await update({ status: "authoring", stage: "authoring", round });
-      let turnReport = lastReport;
-      let submitted: AuthoredTaskDraft | undefined;
-      for (let turn = 1; ; turn += 1) {
-        const authored = await activities.runAuthoringTurn({
-          run,
-          candidate,
-          round,
-          turn,
-          verifiesLeft: AUTHOR_VERIFY_BUDGET - (turn - 1),
-          ...(session ? { session } : {}),
-          ...(draft ? { draft } : {}),
-          ...(turnReport ? { report: turnReport } : {}),
-          ...(feedback && turn === 1 ? { feedback } : {}),
-          ...(maintainerFeedback && round === 1 && turn === 1 ? { maintainerFeedback } : {}),
-        });
-        if (authored.kind === "rejected") return finish("rejected", authored.reason);
-        session = authored.session;
-        draft = authored.task;
-        if (authored.kind === "submitted") {
-          submitted = authored.task;
-          break;
-        }
-        // The verify tool refuses past the budget; never run checks the budget doesn't cover.
-        if (turn > AUTHOR_VERIFY_BUDGET) break;
-        await update({ status: "verifying", taskId: authored.task.taskId });
-        const checked = await activities.compileAndVerify({
-          run,
-          candidate,
-          task: authored.task,
-          stage: "authoring",
-          round,
-          turn,
-        });
-        turnReport = checked.reportRef;
-        await update({ status: "authoring" });
-      }
-      if (!submitted) {
-        return finish("rejected", `authoring round ${round}: the agent never submitted a task`);
-      }
-      await update({ status: "verifying", taskId: submitted.taskId });
-      const verified = await activities.compileAndVerify({
-        run,
-        candidate,
-        task: submitted,
-        stage: "authoring",
-        round,
-      });
-      lastReport = verified.reportRef;
-      lastSummary = verifyReportSummary(verified.report);
-      feedback = undefined;
-      if (!verified.report.green || !verified.task) continue;
-      const task: AuthoredTask = verified.task;
-      reviews += 1;
-      await update({ status: "reviewing", stage: "review", round: reviews });
-      const verdict = await activities.runReviewRound({
-        run,
-        candidate,
-        task,
-        report: verified.reportRef,
-        round: reviews,
-        ...(maintainerFeedback ? { maintainerFeedback } : {}),
-      });
-      if (verdict.kind === "accepted")
-        return { progress: { ...progress, status: "accepted" }, task, report: verified.reportRef };
-      if (verdict.kind === "rejected") return finish("rejected", verdict.reason);
-      feedback = `${verdict.summary}\n\n${verdict.suggestions}`;
-      lastSummary = `reviewer requested changes: ${feedback}`;
-    }
-    return finish("rejected", `authoring exhausted ${MAX_AUTHORING_ROUNDS} rounds; ${lastSummary}`);
-  } catch (error) {
-    if (isCancellation(error)) throw error;
-    return finish("infrastructure_failed", rootMessage(error));
-  }
-}
-
-/** The innermost cause's message: Temporal wraps activity failures several levels deep. */
-export function rootMessage(error: unknown): string {
-  let current = error;
-  while (current instanceof Error && current.cause instanceof Error) current = current.cause;
-  return current instanceof Error ? current.message : String(current);
 }

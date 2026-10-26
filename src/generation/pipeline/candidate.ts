@@ -1,0 +1,144 @@
+import { isCancellation } from "@temporalio/workflow";
+import {
+  type ArtifactRef,
+  AUTHOR_VERIFY_BUDGET,
+  type AuthoredTask,
+  type AuthoredTaskDraft,
+  type Candidate,
+  type CandidateWorkflowInput,
+  type CandidateWorkflowResult,
+  MAX_AUTHORING_ROUNDS,
+  type TaskProgress,
+} from "../../contracts/index.js";
+import type { SelfBenchActivities } from "./activities.js";
+import { verifyReportSummary } from "./verify-report.js";
+
+export function initialProgress(candidate: Candidate): TaskProgress {
+  return {
+    candidateId: candidate.candidateId,
+    taskId: candidate.candidateId,
+    difficulty: candidate.difficulty,
+    status: "authoring",
+    stage: "authoring",
+    round: 1,
+  };
+}
+
+/**
+ * Up to MAX_AUTHORING_ROUNDS rounds. Within a round the author works in turns: each `verify` ends
+ * a turn, the worker checks the draft, and the next turn resumes the session with the report. A
+ * submission is verified again, and a green task goes to a fresh reviewer who accepts, rejects, or
+ * sends suggestions back. Activities that exhaust their retries mark the candidate
+ * infrastructure_failed.
+ */
+export async function executeCandidate(
+  input: CandidateWorkflowInput,
+  activities: SelfBenchActivities,
+  report: (progress: TaskProgress) => Promise<void>,
+): Promise<CandidateWorkflowResult> {
+  const { run, candidate } = input;
+  const progress = initialProgress(candidate);
+  // Each change of where the candidate is reaches its row; the verdict is the caller's to settle.
+  let reported = "";
+  const update = async (patch: Partial<TaskProgress>): Promise<void> => {
+    Object.assign(progress, patch);
+    const key = JSON.stringify([progress.status, progress.round, progress.taskId]);
+    if (key === reported) return;
+    reported = key;
+    await report({ ...progress });
+  };
+  const finish = (status: "rejected" | "infrastructure_failed", reason: string) => ({
+    progress: { ...progress, status, reason },
+  });
+  // A revision restores the task it revises and hands the person's feedback to the first turn.
+  const maintainerFeedback = input.revision?.feedback;
+  let session: ArtifactRef | undefined;
+  let draft: AuthoredTaskDraft | undefined = input.revision?.draft;
+  let lastReport: ArtifactRef | undefined;
+  let feedback: string | undefined;
+  let lastSummary = "no verification report";
+  let reviews = 0;
+  try {
+    for (let round = 1; round <= MAX_AUTHORING_ROUNDS; round += 1) {
+      await update({ status: "authoring", stage: "authoring", round });
+      let turnReport = lastReport;
+      let submitted: AuthoredTaskDraft | undefined;
+      for (let turn = 1; ; turn += 1) {
+        const authored = await activities.runAuthoringTurn({
+          run,
+          candidate,
+          round,
+          turn,
+          verifiesLeft: AUTHOR_VERIFY_BUDGET - (turn - 1),
+          ...(session ? { session } : {}),
+          ...(draft ? { draft } : {}),
+          ...(turnReport ? { report: turnReport } : {}),
+          ...(feedback && turn === 1 ? { feedback } : {}),
+          ...(maintainerFeedback && round === 1 && turn === 1 ? { maintainerFeedback } : {}),
+        });
+        if (authored.kind === "rejected") return finish("rejected", authored.reason);
+        session = authored.session;
+        draft = authored.task;
+        if (authored.kind === "submitted") {
+          submitted = authored.task;
+          break;
+        }
+        // The verify tool refuses past the budget; never run checks the budget doesn't cover.
+        if (turn > AUTHOR_VERIFY_BUDGET) break;
+        await update({ status: "verifying", taskId: authored.task.taskId });
+        const checked = await activities.compileAndVerify({
+          run,
+          candidate,
+          task: authored.task,
+          stage: "authoring",
+          round,
+          turn,
+        });
+        turnReport = checked.reportRef;
+        await update({ status: "authoring" });
+      }
+      if (!submitted) {
+        return finish("rejected", `authoring round ${round}: the agent never submitted a task`);
+      }
+      await update({ status: "verifying", taskId: submitted.taskId });
+      const verified = await activities.compileAndVerify({
+        run,
+        candidate,
+        task: submitted,
+        stage: "authoring",
+        round,
+      });
+      lastReport = verified.reportRef;
+      lastSummary = verifyReportSummary(verified.report);
+      feedback = undefined;
+      if (!verified.report.green || !verified.task) continue;
+      const task: AuthoredTask = verified.task;
+      reviews += 1;
+      await update({ status: "reviewing", stage: "review", round: reviews });
+      const verdict = await activities.runReviewRound({
+        run,
+        candidate,
+        task,
+        report: verified.reportRef,
+        round: reviews,
+        ...(maintainerFeedback ? { maintainerFeedback } : {}),
+      });
+      if (verdict.kind === "accepted")
+        return { progress: { ...progress, status: "accepted" }, task, report: verified.reportRef };
+      if (verdict.kind === "rejected") return finish("rejected", verdict.reason);
+      feedback = `${verdict.summary}\n\n${verdict.suggestions}`;
+      lastSummary = `reviewer requested changes: ${feedback}`;
+    }
+    return finish("rejected", `authoring exhausted ${MAX_AUTHORING_ROUNDS} rounds; ${lastSummary}`);
+  } catch (error) {
+    if (isCancellation(error)) throw error;
+    return finish("infrastructure_failed", rootMessage(error));
+  }
+}
+
+/** The innermost cause's message: Temporal wraps activity failures several levels deep. */
+export function rootMessage(error: unknown): string {
+  let current = error;
+  while (current instanceof Error && current.cause instanceof Error) current = current.cause;
+  return current instanceof Error ? current.message : String(current);
+}

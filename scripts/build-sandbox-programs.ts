@@ -16,11 +16,9 @@ for (const asset of [
   "harbor_muse.py",
   "harbor_smoke.py",
   "registry_auth.py",
-  "selfbench_sandbox_export.py",
   "selfbench_daytona.py",
   "selfbench_vercel.py",
   "selfbench_e2b.py",
-  "selfbench_export.py",
   "selfbench_modal.py",
   "selfbench_prepare.py",
 ]) {

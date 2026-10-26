@@ -78,7 +78,7 @@ test("a cancelled build stops the task's trials, and backends without a shared i
   await docker(0);
 });
 
-test("the build runs on Harbor's own Python with the evaluation's sandbox and the task's pins", async () => {
+test("the build runs on Harbor's own Python with the evaluation's sandbox", async () => {
   const root = await temporary();
   const bin = join(root, "bin");
   await mkdir(bin);
@@ -96,19 +96,17 @@ test("the build runs on Harbor's own Python with the evaluation's sandbox and th
     "application/gzip",
   );
   const vault = memoryVault();
-  const images = { provider: "modal", agent: "im-Agent1", verifier: "im-Verifier1" } as const;
   const input = await credentialedInput(vault, (value) => {
     value.sandbox = "modal";
     value.credentials = {
       ...(value.credentials ?? { modelCredentialId: "", provider: "openai" }),
       sandboxCredentialId: "managed-sandbox",
     };
-    for (const task of value.tasks) task.images = images;
   });
   const calls: { name: string; args: readonly string[]; env?: NodeJS.ProcessEnv }[] = [];
   const command: typeof runCommand = async (name, args, options) => {
     calls.push({ name, args, ...(options?.env ? { env: options.env } : {}) });
-    const stdout = args[0] === "--version" ? HARBOR_VERSION : "agent pinned im-Agent1\n";
+    const stdout = args[0] === "--version" ? HARBOR_VERSION : "agent built im-Agent1\n";
     return { exitCode: 0, stdout, stderr: "" };
   };
 
@@ -123,15 +121,11 @@ test("the build runs on Harbor's own Python with the evaluation's sandbox and th
     },
   });
 
-  expect(outcome).toBe("agent pinned im-Agent1");
+  expect(outcome).toBe("agent built im-Agent1");
   const build = calls.at(-1);
   expect(build?.name).toBe("/opt/uv-tools/harbor/bin/python");
   expect(build?.args[0]).toBe(join(harborPythonPath(), "selfbench_prepare.py"));
-  expect(build?.args.slice(2)).toEqual([
-    "modal",
-    "agent_image=im-Agent1",
-    "verifier_image=im-Verifier1",
-  ]);
+  expect(build?.args.slice(2)).toEqual(["modal"]);
   expect(build?.env?.MODAL_TOKEN_SECRET).toBe("modal-secret");
   expect(build?.env?.PYTHONPATH).toBe(harborPythonPath());
 });

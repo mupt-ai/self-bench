@@ -17,10 +17,6 @@ import { createBatchActivities } from "../generation/batches/activities.js";
 import { createActivities } from "../generation/pipeline/activities.js";
 import { createTaskActivities } from "../generation/tasks/activities.js";
 import { createTaskImageActivities } from "../generation/tasks/task-images-activity.js";
-import {
-  TASK_IMAGE_CONCURRENCY,
-  taskImageQueue,
-} from "../generation/tasks/task-images-workflow.js";
 import { closeSentry, initSentry } from "../lib/telemetry/sentry.js";
 import { checkSandboxBackends } from "../sandbox/index.js";
 import { removeEmptyModalCredentialOverrides } from "../sandbox/providers/modal/auth.js";
@@ -88,16 +84,8 @@ const { runSolverTrial, prepareTaskImages, ...evaluation } = createEvaluationAct
   snapshotSecret && snapshotOrigin ? { secret: snapshotSecret, url: snapshotOrigin } : undefined,
   stopping.signal,
 );
-// Exports and removals follow human reviews; they need the task rows and the verifying account.
-const taskImages =
-  database && vault && config.taskImages
-    ? createTaskImageActivities({
-        db: database.db,
-        vault,
-        store: artifacts,
-        repository: config.taskImages.repository,
-      })
-    : {};
+// A rejected or deleted task's images go; the reconcile needs the task rows.
+const taskImages = database ? createTaskImageActivities({ db: database.db, store: artifacts }) : {};
 const harborConcurrency = resolveHarborConcurrency(config.harborConcurrency);
 const idle = idleTracker();
 const workers = await Promise.all([
@@ -109,7 +97,7 @@ const workers = await Promise.all([
           namespace: config.temporal.namespace,
           taskQueue: config.temporal.taskQueue,
           workflowsPath: fileURLToPath(new URL("./workflows.js", import.meta.url)),
-          activities: { ...generation, ...evaluation, ...batches },
+          activities: { ...generation, ...evaluation, ...batches, ...taskImages },
           maxConcurrentActivityTaskExecutions: config.activityConcurrency,
           interceptors: {
             activity: [activityEventInterceptor(), activityErrorInterceptor(), idle.interceptor],
@@ -128,23 +116,8 @@ const workers = await Promise.all([
             verifyCompiled,
             runSolverTrial,
             prepareTaskImages,
-            // Still served here for exports scheduled on this queue before taskImageQueue existed.
-            ...taskImages,
           },
           maxConcurrentActivityTaskExecutions: harborConcurrency,
-          interceptors: { activity: [activityErrorInterceptor(), idle.interceptor] },
-          shutdownGraceTime: shutdownGraceMs,
-        }),
-      ]),
-  ...(role === "workflows" || !("reconcileTaskImages" in taskImages)
-    ? []
-    : [
-        Worker.create({
-          connection,
-          namespace: config.temporal.namespace,
-          taskQueue: taskImageQueue(config.temporal.taskQueue),
-          activities: taskImages,
-          maxConcurrentActivityTaskExecutions: TASK_IMAGE_CONCURRENCY,
           interceptors: { activity: [activityErrorInterceptor(), idle.interceptor] },
           shutdownGraceTime: shutdownGraceMs,
         }),
@@ -153,9 +126,6 @@ const workers = await Promise.all([
 const slots = [
   ...(role === "harbor" ? [] : [`activity concurrency ${config.activityConcurrency}`]),
   ...(role === "workflows" ? [] : [`Harbor concurrency ${harborConcurrency}`]),
-  ...(role === "workflows" || !("reconcileTaskImages" in taskImages)
-    ? []
-    : [`image export concurrency ${TASK_IMAGE_CONCURRENCY}`]),
 ];
 console.log(
   `SelfBench ${role} worker polling ${config.temporal.namespace}/${config.temporal.taskQueue} with ${slots.join(" and ")}`,

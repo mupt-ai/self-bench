@@ -7,14 +7,10 @@ from uuid import uuid4
 from daytona_api_client_async.api.docker_registry_api import DockerRegistryApi
 from daytona_api_client_async.models.create_docker_registry import CreateDockerRegistry
 from harbor.environments.daytona import DaytonaEnvironment
-from registry_auth import record_image, registry_login, stage_compose_login
+from registry_auth import registry_login, stage_compose_login
 
 
 class SelfBenchDaytonaEnvironment(DaytonaEnvironment):
-    def __init__(self, *args, image_record_dir: str | None = None, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._selfbench_record = image_record_dir
-
     async def _sdk_upload_dir(self, source_dir, target_dir):
         if self._compose_mode and registry_login():
             result = await self._sandbox_exec("mkdir -p /root/.docker", user="root")
@@ -24,13 +20,6 @@ class SelfBenchDaytonaEnvironment(DaytonaEnvironment):
         return await super()._sdk_upload_dir(source_dir, target_dir)
 
     async def _create_sandbox(self, params, daytona=None):
-        sandbox = await self._create_registered_sandbox(params, daytona)
-        # With auto_snapshot, the snapshot verification ran on; the worker exports it on accept.
-        if self._selfbench_record and not self._compose_mode:
-            record_image(self._selfbench_record, self.environment_dir, getattr(params, "snapshot", None))
-        return sandbox
-
-    async def _create_registered_sandbox(self, params, daytona=None):
         login = registry_login()
         image = self.task_env_config.docker_image
         if self._compose_mode or not login or not image or not image.startswith(f"{login[0]}/"):
