@@ -12,7 +12,7 @@ import { createRunStore } from "../db/runs.js";
 import { createTaskStore } from "../db/tasks.js";
 import { createUsageStore } from "../db/usage.js";
 import { createUserStore } from "../db/users.js";
-import { createVault } from "../db/vault.js";
+import { createVault, type Vault } from "../db/vault.js";
 import {
   evaluationStarter,
   evaluationStopper,
@@ -69,6 +69,8 @@ interface Site {
   /** selfbench.dev itself, answered on its own host by this same server, when configured. */
   readonly resultsSite?: ResultsSite;
   readonly database: OpenDatabase;
+  /** The evaluation credential vault, when SELFBENCH_EVAL_CREDENTIAL_KEY is set. */
+  readonly vault?: Vault;
   generationBatches: ReturnType<typeof createGenerationBatches>;
   close(): Promise<void>;
 }
@@ -256,5 +258,6 @@ export async function openSite(
         )(workflowId, input),
     }),
     database,
+    ...(vault ? { vault } : {}),
   };
 }
