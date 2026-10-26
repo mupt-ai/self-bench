@@ -17,10 +17,7 @@ import { createBatchActivities } from "../generation/batches/activities.js";
 import { taskImageBuilder } from "../generation/images/builder.js";
 import { createActivities } from "../generation/pipeline/activities.js";
 import { createTaskActivities } from "../generation/tasks/activities.js";
-import {
-  createTaskImageActivities,
-  createTaskImageRebuildActivities,
-} from "../generation/tasks/task-images-activity.js";
+import { taskImageWorkerActivities } from "../generation/tasks/task-images-activity.js";
 import { closeSentry, initSentry } from "../lib/telemetry/sentry.js";
 import { checkSandboxBackends } from "../sandbox/index.js";
 import { removeEmptyModalCredentialOverrides } from "../sandbox/providers/modal/auth.js";
@@ -91,26 +88,18 @@ const { runSolverTrial, prepareTaskImages, ...evaluation } = createEvaluationAct
 // A rejected or deleted task's images go; the reconcile needs the task rows.
 const builder = taskImageBuilder(config.taskImages);
 // Rebuilding a task's images runs its gates again, with the credentials that checked it.
-const rebuilds =
-  database && vault && builder && config.taskImages && snapshotSecret && snapshotOrigin
-    ? createTaskImageRebuildActivities({
-        db: database.db,
-        store: artifacts,
+const { taskImages, rebuilds } = taskImageWorkerActivities(
+  database?.db,
+  artifacts,
+  vault && builder && config.taskImages && snapshotSecret && snapshotOrigin
+    ? {
         vault,
         builder,
         repository: config.taskImages.repository,
         serving: { env: process.env, callback: { url: snapshotOrigin, secret: snapshotSecret } },
-      })
-    : {};
-// Only a deployment that can rebuild says a task without images needs one; every worker of it
-// reads the same settings, so the Harbor workers register what the workflow worker asks for.
-const taskImages = database
-  ? createTaskImageActivities({
-      db: database.db,
-      store: artifacts,
-      builds: "rebuildTaskImages" in rebuilds,
-    })
-  : {};
+      }
+    : undefined,
+);
 const harborConcurrency = resolveHarborConcurrency(config.harborConcurrency);
 const idle = idleTracker();
 const workers = await Promise.all([

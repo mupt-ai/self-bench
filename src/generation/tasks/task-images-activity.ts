@@ -29,8 +29,26 @@ export interface TaskImageRebuildActivities {
 const log = (event: Record<string, unknown>) =>
   console.log(JSON.stringify({ event: "task-images", ...event }));
 
+type RebuildOptions = Parameters<typeof createTaskImageRebuildActivities>[0];
+
+/**
+ * A worker's task-image activities. The reconcile asks for a rebuild only where the Harbor workers
+ * register one; every worker of a deployment reads the same settings, so they agree.
+ */
+export function taskImageWorkerActivities(
+  db: Database | undefined,
+  store: ArtifactStore,
+  rebuild: Omit<RebuildOptions, "db" | "store"> | undefined,
+): { taskImages: Partial<TaskImageActivities>; rebuilds: Partial<TaskImageRebuildActivities> } {
+  if (!db) return { taskImages: {}, rebuilds: {} };
+  return {
+    taskImages: createTaskImageActivities({ db, store, builds: !!rebuild }),
+    rebuilds: rebuild ? createTaskImageRebuildActivities({ ...rebuild, db, store }) : {},
+  };
+}
+
 /** Behind selfBenchTaskImagesWorkflow on the workflow queue: rows and a few registry calls. */
-export function createTaskImageActivities(options: {
+function createTaskImageActivities(options: {
   readonly db: Database;
   readonly store: ArtifactStore;
   /** Whether this deployment builds images, so a kept task without them can be given them. */
@@ -55,7 +73,7 @@ export function createTaskImageActivities(options: {
  * The rebuild on the Harbor queue: it runs the task's gates, holding a slot of the verifying
  * credential throughout, as a check does.
  */
-export function createTaskImageRebuildActivities(options: {
+function createTaskImageRebuildActivities(options: {
   readonly db: Database;
   readonly store: ArtifactStore;
   readonly vault: Pick<Vault, "records" | "credentials">;
