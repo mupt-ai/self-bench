@@ -104,9 +104,7 @@ if (compileErrors.length === 0) {
 await writeFile(join(work, "compiled.tar.gz"), bundle);
 if (bundle.byteLength > 0) {
   await writeFile(join(work, "definition.json"), pinnedDefinition);
-  // Optional: without the split files the check falls back to the full bundle.
-  await splitGateBundle(join(work, "compiled.tar.gz"), work).catch((error) =>
-    process.stderr.write(`gate bundle split failed: ${errorMessage(error)}\n`),
-  );
+  // Image builds read the split files, so a failed split fails the compile, which is retried.
+  await splitGateBundle(join(work, "compiled.tar.gz"), work);
 }
 await writeFile(join(work, "result.json"), JSON.stringify({ compileErrors, auditBlockers }));

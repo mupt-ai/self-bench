@@ -36,7 +36,7 @@ const directory = path.join(args[args.indexOf('--jobs-dir')+1], args[args.indexO
 const trial = path.join(directory, 'trial-1');
 fs.mkdirSync(trial, {recursive:true});
 const rewards = agent === 'oracle' ? {patch_applied:1,setup_completed:1,fail_to_pass:1,pass_to_pass:1,deterministic:1} : {patch_applied:1,setup_completed:1,fail_to_pass:0,pass_to_pass:1};
-fs.writeFileSync(path.join(trial, 'result.json'), JSON.stringify({verifier_result:{rewards}}));
+fs.writeFileSync(path.join(trial, 'result.json'), JSON.stringify(fs.existsSync(${JSON.stringify(join(root, "fail-start"))}) ? {exception_info:{exception_type:'RuntimeError',exception_message:'manifest unknown'}} : {verifier_result:{rewards}}));
 fs.writeFileSync(path.join(directory, 'result.json'), JSON.stringify({trial_results:[{verifier_result:{rewards}}]}));
 `,
   );
@@ -108,4 +108,19 @@ test("a failed build is the author's build gate, and no Harbor run starts", asyn
   expect(gates.smoke.ran).toBe(false);
   expect(gates).not.toHaveProperty("images");
   expect(await Bun.file(join(root, "runs.log")).exists()).toBe(false);
+});
+
+test("a trial that cannot start from built images is retried, not charged to the author", async () => {
+  const { root, store, build, task } = await attempt();
+  const builder: TaskImageBuilder = { build: async () => ({ images }) };
+  await writeFile(join(root, "fail-start"), "");
+  await expect(
+    withExecutionEnvironment({ PATH: `${root}:/usr/bin:/bin` }, () =>
+      runHarborGates(store, task, "docker", "verify/task", new AbortController().signal, {
+        builder,
+        build,
+        serving: { env: {} },
+      }),
+    ),
+  ).rejects.toThrow("could not start task from its images: RuntimeError: manifest unknown");
 });

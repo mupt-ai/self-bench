@@ -62,12 +62,14 @@ export function googleCloudBuild(
       const id = (operation.metadata as { build?: { id?: string } } | undefined)?.build?.id;
       if (!id) throw new Error("Cloud Build started no build");
       const cancel = () => void call(`${base}/${id}:cancel`, { method: "POST" }).catch(() => {});
-      signal.addEventListener("abort", cancel, { once: true });
+      if (signal.aborted) cancel();
+      else signal.addEventListener("abort", cancel, { once: true });
       try {
         for (;;) {
           const current = (await call(`${base}/${id}`)) as unknown as FinishedBuild;
-          if (DONE.has(current.status)) return { ...current, id };
+          // A build this activity cancelled ends as the cancellation, never as a failed build.
           signal.throwIfAborted();
+          if (DONE.has(current.status)) return { ...current, id };
           await new Promise((resolve) => setTimeout(resolve, pollMs));
         }
       } finally {

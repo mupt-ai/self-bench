@@ -125,6 +125,10 @@ export async function runHarborGates(
     await storeResult(store, `${gateOutputs}/smoke-nop`, first);
     const smoke = smokeResult(first.trial);
     const buildError = trialError(first.trial);
+    // The images built already, so a trial that failed before smoke could not start from them:
+    // Harbor's or the provider's trouble, which Temporal retries, never the author's.
+    if (buildError && !smoke.failed && built)
+      throw new Error(`Harbor nop could not start ${task.taskId} from its images: ${buildError}`);
     if (buildError && !smoke.failed) {
       gates.build = {
         ran: true,
