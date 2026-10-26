@@ -50,6 +50,11 @@ export function listedModels(gateway: GatewayId): readonly ListedModel[] {
   return listing(gateway).models;
 }
 
+/** The gateway's listed model by the gateway's own id for it. */
+export function listedModel(gateway: GatewayId, id: string): ListedModel | undefined {
+  return listing(gateway).models.find((entry) => entry.id === id);
+}
+
 /** A listed model by its catalog id, from the first gateway that lists it. */
 export function findListedModel(id: string): ListedModel | undefined {
   for (const gateway of gatewayIds) {
@@ -87,7 +92,7 @@ export function piModelOverrides(gateway: GatewayId, id: string): object | undef
 }
 
 function listedPiModel(gateway: GatewayId, id: string): PiModel | undefined {
-  return listing(gateway).models.find((entry) => entry.id === id)?.pi;
+  return listedModel(gateway, id)?.pi;
 }
 
 function piThinking({ thinkingLevelMap, compat }: PiModel): object | undefined {
@@ -142,8 +147,8 @@ export function gatewayPricing(
 }
 
 /**
- * The variable a model provider's API key travels under, for Pi and every Harbor harness.
- * OpenAI-compatible providers (OpenAI, Codex, custom endpoints) share OPENAI_API_KEY.
+ * The variable a model provider's API key travels under, for Pi and a harness that calls its
+ * provider directly. OpenAI-compatible providers (OpenAI, custom endpoints) share OPENAI_API_KEY.
  */
 export function modelApiKeyVariable(provider: string): string {
   if (isGateway(provider)) return gateways[provider].keyVariable;

@@ -6,9 +6,13 @@ import { isArtifactRegistry } from "../contracts/config/task-images.js";
 import { apiKeyDenies } from "../db/api-keys.js";
 import { openDatabase } from "../db/client.js";
 import { createRegistryGrantStore } from "../db/registry-grants.js";
+import { validateEndpoint } from "../db/credentials.js";
+import { gatewayModelPrice, listedModelConfig } from "../gateway/models.js";
 import { gatewayRoute } from "../gateway/mount.js";
+import { withManagedModel } from "../gateway/platform.js";
 import { createGatewayUsageStore } from "../gateway/usage-store.js";
 import { createGenerationBatches, RunNotFoundError } from "../generation/batches/service.js";
+import { platformModelKey } from "../generation/billing/managed.js";
 import { googleAccessToken } from "../lib/google-access-token.js";
 import { reportError } from "../lib/telemetry/sentry.js";
 import { connectTemporalClient } from "../temporal/connection.js";
@@ -83,13 +87,17 @@ export async function startApi(
     if (!batches) throw new RunNotFoundError(runId);
     return batches.status(runId);
   };
-  // The model gateway trials call with a trial key; it needs the vault for the org's own keys.
+  // The model gateway trials call with a trial key; it needs the vault for the org's own keys,
+  // and the platform's OpenRouter key for managed model access.
   const gateway = site?.vault
     ? (() => {
         const usage = createGatewayUsageStore(site.database.db);
         return gatewayRoute({
           secret,
-          credentials: site.vault.credentials,
+          credentials: withManagedModel(site.vault.credentials, platformModelKey(process.env)),
+          modelConfig: listedModelConfig,
+          modelPrice: gatewayModelPrice,
+          endpoint: (endpoint) => validateEndpoint(endpoint, process.env),
           recordUsage: (entry) => {
             usage
               .record(entry)

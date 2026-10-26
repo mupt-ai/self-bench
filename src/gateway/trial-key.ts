@@ -1,5 +1,21 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
+import type { ThinkingLevel } from "../contracts/models.js";
+
+/** The credential id of SelfBench's own OpenRouter account (managed model access). */
+export const MANAGED_MODEL_CREDENTIAL = "managed-model";
+
+/** A thinking level the gateway pins a trial's model to: any but the provider default. */
+const pinnedLevels = [
+  "off",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+] as const satisfies readonly ThinkingLevel[];
+export type PinnedThinking = (typeof pinnedLevels)[number];
 
 /**
  * What one trial's agent may call through the gateway, signed by the worker and checked by the
@@ -11,6 +27,11 @@ export interface TrialKey {
   readonly credentialId: string;
   /** The gateway's model id, `provider/model`, such as `openrouter/anthropic/claude-sonnet-5-5`. */
   readonly model: string;
+  /**
+   * The thinking level every call is served at, when the trial's harness does not say it on each
+   * request itself (Codex's is dropped by the gateway). Absent, each call's own level is served.
+   */
+  readonly thinking?: PinnedThinking;
   /** Attribution for the requests it makes, recorded with their usage and cost. */
   readonly tags: Readonly<Record<string, string>>;
   readonly expiresAt: number;
@@ -18,8 +39,9 @@ export interface TrialKey {
 
 const keySchema = z.object({
   orgId: z.number().int(),
-  credentialId: z.uuid(),
+  credentialId: z.union([z.uuid(), z.literal(MANAGED_MODEL_CREDENTIAL)]),
   model: z.string().regex(/^[^/\s]+\/\S+$/),
+  thinking: z.enum(pinnedLevels).optional(),
   tags: z.record(z.string(), z.string()),
   expiresAt: z.number(),
 });
@@ -44,8 +66,10 @@ export function readTrialKey(
   const actual = Buffer.from(mac);
   if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return undefined;
   try {
-    const key = keySchema.parse(JSON.parse(Buffer.from(payload, "base64url").toString()));
-    return key.expiresAt > now ? key : undefined;
+    const { thinking, ...key } = keySchema.parse(
+      JSON.parse(Buffer.from(payload, "base64url").toString()),
+    );
+    return key.expiresAt > now ? { ...key, ...(thinking ? { thinking } : {}) } : undefined;
   } catch {
     return undefined;
   }

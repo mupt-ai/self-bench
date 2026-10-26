@@ -1,4 +1,4 @@
-import { signTrialKey } from "./trial-key.js";
+import { type PinnedThinking, signTrialKey } from "./trial-key.js";
 
 /** Where the API serves the gateway: `/gateway/v1/messages`, `/gateway/v1/responses`, … */
 export const GATEWAY_PATH = "/gateway";
@@ -30,6 +30,8 @@ export function gatewayConnection(args: {
   orgId: number;
   credentialId: string;
   model: string;
+  /** The thinking level every call is served at (TrialKey.thinking). */
+  thinking?: PinnedThinking;
   tags: Readonly<Record<string, string>>;
   now?: number;
 }): GatewayConnection {
@@ -42,6 +44,7 @@ export function gatewayConnection(args: {
         orgId: args.orgId,
         credentialId: args.credentialId,
         model: args.model,
+        ...(args.thinking ? { thinking: args.thinking } : {}),
         tags: args.tags,
         expiresAt: (args.now ?? Date.now()) + TRIAL_KEY_TTL_MS,
       },
