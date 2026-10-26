@@ -9,6 +9,7 @@ import { OutcomeFilter } from "./ResultsFilters";
 import { NoValue, ResultsStatus } from "./ResultsMarks";
 import { DoneCell, sortedEntries, TaskHeadings, TaskRow, taskEntries } from "./ResultsTaskRows";
 import { BATCH_CHEVRON, BATCH_INDENT, Elbow, TASK_INDENT, Toggle } from "./ResultsTree";
+import { RetryErroredTasks } from "./RetryErroredTasks";
 import { type Batch, type Outcome, type TaskResult, tally } from "./results-model";
 import { momentLabel, outcomeSummary } from "./results-presentation";
 import type { Sort } from "./results-view";
@@ -52,6 +53,7 @@ export function ResultGroupRows({
   onOpenTask,
   run,
   baseUrl,
+  pages,
   onChanged,
 }: {
   /** What the group is, for its toggle's label: "the Sep 29, 16:19 Run". */
@@ -70,11 +72,15 @@ export function ResultGroupRows({
   onOpenTask(result: TaskResult): void;
   run?: EvaluationRun | undefined;
   baseUrl?: string;
+  /** Where the scope's pages live, for the comparison a retry starts. */
+  pages?: string;
   onChanged?(run: EvaluationRun): void;
 }) {
   const totals = tally(results);
   const live = run?.status === "running" || run?.status === "queued";
   const entries = taskEntries(results);
+  // A row is one setting's share of its run: one harness.
+  const harness = results[0]?.trial.harness;
   const tasks = sortedEntries(
     entries.filter((entry) => shown.has(entry.outcome)),
     sort,
@@ -125,6 +131,14 @@ export function ResultGroupRows({
                   </span>
                   {baseUrl && onChanged && (
                     <span className="flex flex-wrap gap-2">
+                      {pages && harness && (
+                        <RetryErroredTasks
+                          run={run}
+                          harness={harness}
+                          url={baseUrl}
+                          pages={pages}
+                        />
+                      )}
                       {live && (
                         <CancelEvaluation<EvaluationRun>
                           endpoint={`${baseUrl}/${encodeURIComponent(run.id)}/cancel`}

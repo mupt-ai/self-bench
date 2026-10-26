@@ -29,6 +29,7 @@ export function ConfigurationRows({
   setView,
   onOpenTask,
   baseUrl,
+  pages,
   onChanged,
 }: {
   configuration: Configuration;
@@ -38,6 +39,8 @@ export function ConfigurationRows({
   setView: Dispatch<SetStateAction<ResultsView>>;
   onOpenTask(result: TaskResult): void;
   baseUrl?: string;
+  /** Where the scope's pages live, for the comparison a retry starts. */
+  pages?: string;
   onChanged?(run: EvaluationRun): void;
 }) {
   const open = view.configurations.includes(configuration.key);
@@ -123,6 +126,7 @@ export function ConfigurationRows({
               results={batch.results}
               run={batch.results[0]?.run}
               {...(baseUrl ? { baseUrl } : {})}
+              {...(pages ? { pages } : {})}
               {...(onChanged ? { onChanged } : {})}
               {...group(`${configuration.key}\n${batch.id}`)}
             />

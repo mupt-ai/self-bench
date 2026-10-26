@@ -232,6 +232,7 @@ export function ResultsTable({
                   view={view}
                   setView={setView}
                   baseUrl={baseUrl}
+                  pages={pages}
                   {...(onChanged ? { onChanged } : {})}
                   onOpenTask={(result) => showTrial(trialParam(result.run, result.trial))}
                 />
