@@ -155,6 +155,13 @@
       "when": 1792435780161,
       "tag": "0021_task_revisions",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1793056425088,
+      "tag": "0022_registry_grants",
+      "breakpoints": true
     }
   ]
 }

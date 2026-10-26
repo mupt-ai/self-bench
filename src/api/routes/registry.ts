@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { isCustomerGrantPassword } from "../../db/registry-grants.js";
 import { type RegistryGrant, readRegistryGrant } from "../../sandbox/registry-grant.js";
 
 // The OCI distribution grammar for repository names; never `..` or an empty segment.
@@ -23,6 +24,8 @@ export interface TaskImageUpstream {
   readonly repository: string;
   readonly token: () => Promise<string>;
   readonly fetch?: typeof fetch;
+  /** A customer's grant (db/registry-grants.ts), looked up on every request so revoking is immediate. */
+  readonly customerGrant?: (password: string) => Promise<RegistryGrant | undefined>;
 }
 
 /**
@@ -107,7 +110,7 @@ export function taskImageRegistry(upstream: TaskImageUpstream) {
       registryError(response, 405, "UNSUPPORTED", "read-only registry", headers);
       return true;
     }
-    const grant = presentedGrant(request, secret);
+    const grant = await presentedGrant(request, secret, upstream.customerGrant);
     if (!grant) {
       registryError(response, 401, "UNAUTHORIZED", "authentication required", {
         ...headers,
@@ -170,11 +173,16 @@ export function taskImageRegistry(upstream: TaskImageUpstream) {
   };
 }
 
-function presentedGrant(request: IncomingMessage, secret: string): RegistryGrant | undefined {
+async function presentedGrant(
+  request: IncomingMessage,
+  secret: string,
+  customerGrant: TaskImageUpstream["customerGrant"],
+): Promise<RegistryGrant | undefined> {
   const header = request.headers.authorization;
   if (!header?.startsWith("Basic ")) return undefined;
   const decoded = Buffer.from(header.slice("Basic ".length), "base64").toString();
   const password = decoded.slice(decoded.indexOf(":") + 1);
+  if (isCustomerGrantPassword(password)) return await customerGrant?.(password);
   return readRegistryGrant(password, secret);
 }
 
