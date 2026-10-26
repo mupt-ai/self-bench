@@ -10,7 +10,6 @@ const result = await Bun.build({
     "repair-cost-coverage",
     "reprice-vendor-rates",
     "reprice-dari-router",
-    "reprice-openrouter",
     "backfill-timeouts",
     "compact-task-bundles",
     "records-migration",

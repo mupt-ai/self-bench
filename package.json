@@ -65,6 +65,7 @@
     "check:unused": "knip"
   },
   "dependencies": {
+    "@earendil-works/pi-ai": "0.84.0",
     "@earendil-works/pi-coding-agent": "0.84.0",
     "@google-cloud/storage": "^7.22.0",
     "@mupt-ai/dari-gateway": "0.2.0",

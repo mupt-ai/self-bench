@@ -8,7 +8,6 @@ All commands default to a dry run. Inspect the report before passing `--apply`:
 node dist/maintenance/recompute-cost.js <repoId> <evaluationId> [--apply] [--auth=codex-login|api-key]
 node dist/maintenance/reprice-vendor-rates.js <repoId> <evaluationId> [--apply]
 node dist/maintenance/reprice-dari-router.js <repoId> <evaluationId> [--apply]
-node dist/maintenance/reprice-openrouter.js <repoId> <evaluationId> [--apply]
 node dist/maintenance/backfill-timeouts.js <repoId | benchmark:<id>>... [--apply] [--auth=codex-login|api-key]
 node dist/maintenance/records-migration.js [--apply]
 node dist/maintenance/compact-task-bundles.js <runId>... | --all [--apply]
@@ -59,31 +58,6 @@ without a row or still in progress are skipped. The dry run reports what applyin
 deletes once. The bucket is versioned: deleted objects stay noncurrent and recoverable for 30
 days, when its lifecycle rule removes them, so the storage bill drops a month after a run. A Modal
 evaluation running during the backfill may lose its snapshot link and build again on retry.
-
-## OpenRouter Pricing
-
-New Pi trials preserve `solver/openrouter-generation-ids.json` before transcript truncation.
-An optional, owner-supplied OpenRouter management key can be added to the workspace's
-OpenRouter credential (UI or credential API). It is sealed with the inference key and stays
-server-side, never in Harbor or a solver. No worker-wide management key is used.
-
-Pricing discovers generations in exact proven sessions, joins children to direct request IDs,
-and requires nontruncated analytics with two identical valid snapshots after an indexing delay.
-No model identity or child-count assumptions are used. Direct requests need only the inference
-key; routed requests require management access. Positive parent/child charges are rejected as
-ambiguous rather than double-counted. Stable snapshots reduce indexing races but are not a
-provider guarantee that the ledger is final.
-Full-precision generation records supply the price, not rounded analytics usage. An outer
-zero wrapper is not a free request. BYOK provider costs are included separately from OpenRouter
-credits. `solver/openrouter-billing.json` preserves the generation-level evidence.
-
-`reprice-openrouter` uses the finished run's owner-scoped inference credential and optional
-management key,
-loaded with `SELFBENCH_DATABASE_URL` and `SELFBENCH_EVAL_CREDENTIAL_KEY`, plus artifact settings.
-It defaults to a dry run; `--apply` saves evidence and appends a snapshot only for fully
-reconciled trials. Missing access or incomplete historical logs leave existing trials unchanged.
-Replacing a credential affects new comparisons, not the credentials of historical runs.
-No invoice or billing ledger is modified.
 
 ## Dari Router Pricing
 

@@ -6,7 +6,6 @@ import { getEvaluation } from "../src/evaluation/store.js";
 import type { EvaluationInput, EvaluationTrial } from "../src/evaluation/types.js";
 import { HARBOR_VERSION } from "../src/harnesses/harbor/command.js";
 import type { CommandOptions, CommandResult } from "../src/lib/process.js";
-import { testModelSecret } from "./support/evaluation-fixture.js";
 import { runEvaluation } from "./support/evaluation-run.js";
 import { runnerFixture } from "./support/evaluation-runner-fixture.js";
 import { memoryVault } from "./support/evaluation-vault.js";
@@ -23,6 +22,9 @@ const TASK_FILES = {
   "tests/test.patch": "+test('chunks are ordered by path', ...)\n",
   "solution/gold.patch": "+chunks.sort(byPath)\n",
 };
+
+/** The gateway key the last trial's Harbor was given. */
+let trialKey = "";
 
 interface PiCall {
   args: readonly string[];
@@ -62,12 +64,14 @@ async function evaluate(
       return pi;
     }
     if (args[0] === "--version") return { stdout: HARBOR_VERSION, stderr: "", exitCode: 0 };
+    // The only model credential a trial holds is its gateway key, which a test might print.
+    trialKey = options?.env?.OPENAI_API_KEY ?? "";
     const trial = join(args[args.indexOf("--jobs-dir") + 1] ?? "", "solver", "task__123");
     await mkdir(join(trial, "verifier"), { recursive: true });
     await mkdir(join(trial, "artifacts", "opt", "selfbench"), { recursive: true });
     await writeFile(
       join(trial, "verifier", "test-stdout.txt"),
-      `FAIL chunks are ordered by path: expected [a, b], got [b, a]\n${testModelSecret}\n`,
+      `FAIL chunks are ordered by path: expected [a, b], got [b, a]\n${trialKey}\n`,
     );
     await writeFile(
       join(trial, "artifacts", "opt", "selfbench", "agent.patch"),
@@ -145,7 +149,9 @@ test("a trial that fails its tests is explained by Pi running GPT-6 Luna on the 
     "+chunks.sort(byPath)",
   ])
     expect(call.material).toContain(evidence);
-  expect(call.material).not.toContain(testModelSecret);
+  expect(trialKey).toStartWith("sbk_");
+  expect(call.material).not.toContain(trialKey);
+  expect(call.material).toContain("[redacted]");
 });
 
 test("a benchmark's failed trial is explained and kept under the benchmark's evaluations", async () => {

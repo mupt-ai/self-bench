@@ -1,5 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
-import { solverAgentArguments } from "../src/evaluation/execution.js";
+import { piGatewayModels } from "../src/evaluation/execution.js";
+import type { EvaluationInput } from "../src/evaluation/types.js";
+import { gatewayModelPrice, listedModelConfig } from "../src/gateway/models.js";
 import { gatewayIds, piModels, setGatewayListing } from "../src/gateways/index.js";
 import { refreshGateway } from "../src/gateways/refresh.js";
 import { piModelsFiles } from "../src/generation/settings/models.js";
@@ -83,18 +85,45 @@ test("Pi is told how Vercel AI Gateway takes each model, from the gateway's own 
     },
   });
   expect(piModels("vercel-ai-gateway", "vendor/unlisted")).toBeUndefined();
-  // Only Pi over that gateway takes them: Harbor's own Pi adapter refuses options it lacks.
+  // An evaluation's Pi reaches the model through SelfBench's gateway, with the listing's limits.
   const name = "vercel-ai-gateway/mistral/mistral-large-4";
-  expect(solverAgentArguments("pi", "vercel-ai-gateway", name, "high")).toEqual([
-    "--agent-kwarg",
-    "thinking=high",
-    "--agent-kwarg",
-    `models_json=${JSON.stringify(piModels("vercel-ai-gateway", "mistral/mistral-large-4"))}`,
-  ]);
-  expect(solverAgentArguments("codex", "vercel-ai-gateway", name)).toEqual([]);
-  expect(
-    solverAgentArguments("pi", "openrouter", "openrouter/mistralai/mistral-large-4-0"),
-  ).toEqual([]);
+  const trial = {
+    modelName: name,
+    credentials: { provider: "vercel-ai-gateway" },
+  } as EvaluationInput;
+  const connection = { openAiBase: "https://gateway/v1", requestModel: `dari/model/${name}` };
+  expect(piGatewayModels(trial, connection)).toMatchObject({
+    providers: {
+      selfbench: {
+        models: [
+          {
+            id: `dari/model/${name}`,
+            name: "Mistral Large 4",
+            input: ["text", "image"],
+            contextWindow: 524288,
+            maxTokens: 262144,
+          },
+        ],
+      },
+    },
+  });
+  // The gateway itself serves a model Pi's catalog lacks as the listing describes it, and leaves
+  // one Pi lists (as Mistral Large 4), and every model of a provider that is no gateway, to Pi.
+  expect(listedModelConfig("vercel-ai-gateway/vendor/plain")).toEqual({
+    provider: "vercel-ai-gateway",
+    native_model_id: "vendor/plain",
+    api: "openai-completions",
+    cost: { input: 1, output: 2, cached_input: 1, cache_write: 1 },
+  });
+  expect(listedModelConfig(name)).toBeUndefined();
+  expect(gatewayModelPrice(name)).toEqual({
+    input: 0.68,
+    output: 2.09,
+    cached_input: 0.07,
+    cache_write: 0.68,
+  });
+  expect(listedModelConfig("vercel-ai-gateway/vendor/unlisted")).toBeUndefined();
+  expect(listedModelConfig("openai/gpt-6.1-sol")).toBeUndefined();
   // Generation's Pi gets the same file, and only the overrides where its catalog lists the model.
   expect(piModelsFiles("vercel-ai-gateway", "mistral/mistral-large-4")).toEqual({
     models: JSON.stringify(piModels("vercel-ai-gateway", "mistral/mistral-large-4")),
@@ -115,4 +144,12 @@ test("Pi is told how Vercel AI Gateway takes each model, from the gateway's own 
     models: JSON.stringify(piModels("vercel-ai-gateway", "vendor/plain")),
   });
   expect(piModelsFiles("openai", "gpt-6.1-sol")).toBeUndefined();
+});
+
+test("a vendor's own key is priced at the catalog's reference rates, with long prompts tiered", () => {
+  const price = gatewayModelPrice("openai/gpt-6.1-sol");
+  expect(price).toMatchObject({ input: expect.any(Number), output: expect.any(Number) });
+  expect(gatewayModelPrice("anthropic/gpt-6.1-sol")).toBeUndefined();
+  expect(gatewayModelPrice("custom/acme-coder")).toBeUndefined();
+  for (const tier of price?.tiers ?? []) expect(tier.input_tokens_above).toBeGreaterThan(0);
 });

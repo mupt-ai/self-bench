@@ -15,8 +15,8 @@ export interface ListedModel {
   readonly thinking?: readonly ThinkingLevel[];
   /**
    * Pi's models.json entry for it, from the gateway's listing. Pi guesses at a model its catalog
-   * lacks, and its own entry can still take thinking as the gateway does not, so the harborPi
-   * adapter gives Pi the whole entry or only its thinking (piModels, harbor_gateway.py).
+   * lacks, and its own entry can still take thinking as the gateway does not, so generation gives
+   * Pi the whole entry or only its thinking (piModels). Evaluation trials read its limits.
    */
   readonly pi?: PiModel;
 }
@@ -55,16 +55,12 @@ export interface GatewayListing {
  */
 export interface Gateway {
   readonly label: string;
-  /** The variable its key travels under, for Pi and every Harbor harness. */
+  /** The variable its key travels under, for Pi in generation. */
   readonly keyVariable: string;
-  /** OpenAI-compatible base: Codex (Responses), Mini-SWE-Agent and Terminus 2 (Chat Completions). */
+  /** OpenAI-compatible base, where a benchmark's LLM judge calls it (judge.ts). */
   readonly openAiBase: string;
-  /** Anthropic Messages base, for Claude Code. */
+  /** Anthropic Messages base, for a judge that calls Anthropic's API. */
   readonly anthropicBase: string;
-  /** Hosts a trial's agent must reach. */
-  readonly hosts: readonly string[];
-  /** The Harbor agent that runs Pi over it: Harbor's own when Harbor knows its key variable. */
-  readonly harborPi: string;
   /**
    * Vendors it spells differently from the catalog, which spells them as OpenRouter does: its
    * spelling to the catalog's ("zai" to "z-ai").

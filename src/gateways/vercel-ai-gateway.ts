@@ -24,17 +24,12 @@ interface VercelEntry {
   released?: unknown;
 }
 
-/**
- * Vercel AI Gateway. Harbor's Pi adapter reads its key from a variable Pi does not, so Pi runs
- * through SelfBench's adapter (harnesses/harbor/runtime/harbor_gateway.py).
- */
+/** Vercel AI Gateway. */
 export const vercelAiGateway: Gateway = {
   label: "Vercel AI Gateway",
   keyVariable: "AI_GATEWAY_API_KEY",
   openAiBase: "https://ai-gateway.vercel.sh/v1",
   anthropicBase: "https://ai-gateway.vercel.sh",
-  hosts: ["ai-gateway.vercel.sh"],
-  harborPi: "harbor_gateway:GatewayPi",
   vendorAliases: {
     alibaba: "qwen",
     bytedance: "bytedance-seed",

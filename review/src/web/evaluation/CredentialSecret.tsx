@@ -99,26 +99,6 @@ export function CredentialSecret({
           )}
         </div>
       )}
-      {draft.kind === "openrouter" && (
-        <label className={fieldStyles} htmlFor="credential-management-key">
-          Management Key (Optional)
-          <Input
-            id="credential-management-key"
-            type="password"
-            autoComplete="new-password"
-            maxLength={4096}
-            value={draft.managementKey ?? ""}
-            onChange={(event) =>
-              setDraft({ ...draft, managementKey: event.target.value || undefined })
-            }
-          />
-          <span className="text-xs font-normal leading-5 text-muted-foreground">
-            From the same OpenRouter account. Enables routed-request billing through read-only
-            analytics. Kept encrypted on the server, never sent to a solver. Routed costs stay
-            unknown without this access.
-          </span>
-        </label>
-      )}
     </>
   );
 }

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { credentialExecution } from "../src/evaluation/execution.js";
+import { credentialExecution, gatewayTrial } from "../src/evaluation/execution.js";
 import { collectOutput, completeLines, redactOutput } from "../src/evaluation/output.js";
 import { solverArguments } from "../src/evaluation/solver-arguments.js";
 import { evaluationPrefix, getEvaluation, listEvaluations } from "../src/evaluation/store.js";
@@ -10,9 +10,12 @@ import {
   MAX_EVALUATION_BUNDLE_BYTES,
 } from "../src/evaluation/task-bundle.js";
 import { piSteps, trajectorySteps } from "../src/evaluation/transcript.js";
+import type { EvaluationInput } from "../src/evaluation/types.js";
+import { readTrialKey } from "../src/gateway/trial-key.js";
 import { HARBOR_VERSION } from "../src/harnesses/harbor/command.js";
 import type { runCommand } from "../src/lib/process.js";
 import { testModelSecret } from "./support/evaluation-fixture.js";
+import { TEST_GATEWAY_API, testGateway } from "./support/evaluation-gateway.js";
 import { runEvaluation } from "./support/evaluation-run.js";
 import { runnerFixture } from "./support/evaluation-runner-fixture.js";
 
@@ -22,57 +25,39 @@ test("PostHog-sized bundles pass the compressed size guard, but oversized bundle
     "Task bundle exceeds 512 MiB",
   );
 });
-test("solver invocation carries the selected thinking level", () => {
-  const args = solverArguments("/task", "/jobs", "codex", "openai/gpt-6-astra", "e2b", "max");
-  expect(args.slice(-2)).toEqual(["--agent-kwarg", "reasoning_effort=max"]);
-  expect(args[args.indexOf("--model") + 1]).toBe("openai/gpt-6-astra");
-});
-test("Pi custom endpoints receive Harbor's explicit Chat Completions API style", () => {
-  for (const model of ["openai/dari/routing", "openai/jev-test"]) {
-    const args = solverArguments(
-      "/task",
-      "/jobs",
-      "pi",
-      model,
-      "e2b",
-      "default",
-      ["routing.dari.dev"],
-      "custom",
-    );
-    expect(args.slice(-2)).toEqual(["--agent-kwarg", "model_api=openai-completions"]);
-    expect(args[args.indexOf("--model") + 1]).toBe(model);
-  }
-  const native = solverArguments("/task", "/jobs", "pi", "openai/gpt-6-astra", "e2b");
-  expect(native).not.toContain("model_api=openai-completions");
-});
-test("custom endpoint API style preserves thinking and leaves other harnesses unchanged", () => {
+test("solver invocation carries the trial's agent, model and arguments", () => {
   const args = solverArguments(
     "/task",
     "/jobs",
-    "pi",
-    "openai/dari/routing",
-    "modal",
-    "high",
-    [],
-    "custom",
+    {
+      agent: "harbor_gateway:SelfBenchCodex",
+      model: "openai/gpt-6-astra",
+      agentArguments: ["--agent-kwarg", "reasoning_effort=max"],
+    },
+    "e2b",
   );
-  expect(args.slice(-4)).toEqual([
+  expect(args.slice(-2)).toEqual(["--agent-kwarg", "reasoning_effort=max"]);
+  expect(args[args.indexOf("--model") + 1]).toBe("openai/gpt-6-astra");
+  expect(args[args.indexOf("--agent") + 1]).toBe("harbor_gateway:SelfBenchCodex");
+});
+test("Dari's router on a custom endpoint keeps Harbor's explicit Chat Completions API style", () => {
+  const input = {
+    modelName: "openai/dari/routing",
+    thinking: "high",
+    credentials: { provider: "custom", auth: "api-key" },
+  } as EvaluationInput;
+  const env = { OPENAI_API_KEY: "key", OPENAI_BASE_URL: "https://routing.dari.dev/v1" };
+  const pi = gatewayTrial(input, "pi", input.modelName, env);
+  expect(pi.agentArguments).toEqual([
     "--agent-kwarg",
     "thinking=high",
     "--agent-kwarg",
     "model_api=openai-completions",
   ]);
-  const codex = solverArguments(
-    "/task",
-    "/jobs",
-    "codex",
-    "openai/dari/routing",
-    "e2b",
-    undefined,
-    [],
-    "custom",
+  expect(pi.extraAllowedHosts).toEqual(["routing.dari.dev"]);
+  expect(gatewayTrial(input, "codex", input.modelName, env).agentArguments).not.toContain(
+    "model_api=openai-completions",
   );
-  expect(codex).not.toContain("model_api=openai-completions");
 });
 const trajectory = {
   steps: [
@@ -87,9 +72,10 @@ const trajectory = {
     },
   ],
 };
-test("saved credentials reach the solver; host auth never does", async () => {
+test("saved credentials reach the solver; host auth and the vault's API key never do", async () => {
   const { input, vault } = await runnerFixture();
-  const { child } = await credentialExecution(
+  // An API key's trial calls the gateway, which reads the key itself.
+  const { child, route } = await credentialExecution(
     input,
     "/temporary-home",
     {
@@ -103,16 +89,18 @@ test("saved credentials reach the solver; host auth never does", async () => {
       MODAL_TOKEN_SECRET: "modal",
     },
     vault,
+    "codex",
   );
+  expect(route).toBe("gateway");
   expect(child).toEqual({
     PATH: "/bin",
     HOME: "/temporary-home",
     TMPDIR: "/temporary-home",
     LANG: "C.UTF-8",
     PYTHONUNBUFFERED: "1",
-    OPENAI_API_KEY: testModelSecret,
     E2B_API_KEY: "sandbox-secret",
   });
+  expect(JSON.stringify(child)).not.toContain(testModelSecret);
   await expect(
     credentialExecution({ ...input, sandbox: "modal" }, "/tmp", {}, vault),
   ).rejects.toThrow("reserved comparison");
@@ -122,7 +110,12 @@ test("saved credentials reach the solver; host auth never does", async () => {
   ).rejects.toThrow("reserved comparison");
 });
 test("solver argv cannot trigger author/oracle gates or implicit retries", () => {
-  const args = solverArguments("/task space", "/jobs", "codex", "openai/test-model", "docker");
+  const args = solverArguments(
+    "/task space",
+    "/jobs",
+    { agent: "codex", model: "openai/test-model", agentArguments: [] },
+    "docker",
+  );
   expect(args).toContain("/task space");
   expect(args.slice(args.indexOf("--max-retries"), args.indexOf("--max-retries") + 2)).toEqual([
     "--max-retries",
@@ -135,22 +128,27 @@ test("mocked Harbor persists live output, structured tool results and final scor
   const { store, input, vault } = await runnerFixture();
   let calls = 0;
   let sawLive = false;
+  // The agent holds only its trial key for the gateway; it is redacted wherever it is printed.
+  let leaked = "";
   const command: typeof runCommand = async (name, args, options) => {
     expect(name).toBe("harbor");
     if (args[0] === "--version") return { stdout: HARBOR_VERSION, stderr: "", exitCode: 0 };
     calls += 1;
+    leaked = options?.env?.OPENAI_API_KEY ?? "";
+    expect(leaked).toStartWith("sbk_");
+    expect(JSON.stringify(options?.env)).not.toContain(testModelSecret);
     const jobs = args[args.indexOf("--jobs-dir") + 1];
     if (!jobs) throw new Error("Missing jobs path");
     const trial = join(jobs, "solver", "task__123");
     await mkdir(join(trial, "agent"), { recursive: true });
     await writeFile(join(trial, "agent", "codex.txt"), '{"type":"item.completed"}\n');
-    await writeFile(join(trial, "trial.log"), `Running tests\n${testModelSecret}\n`);
-    options?.onOutput?.("stdout", Buffer.from(`Starting ${testModelSecret}\n`));
+    await writeFile(join(trial, "trial.log"), `Running tests\n${leaked}\n`);
+    options?.onOutput?.("stdout", Buffer.from(`Starting ${leaked}\n`));
     for (let attempt = 0; attempt < 100; attempt += 1) {
       const snapshot = await getEvaluation(store, input, input.id);
       if (snapshot?.trials[0]?.log.includes("Running tests")) {
         sawLive = true;
-        expect(JSON.stringify(snapshot)).not.toContain(testModelSecret);
+        expect(JSON.stringify(snapshot)).not.toContain(leaked);
         break;
       }
       await new Promise((resolve) => setTimeout(resolve, 5));
@@ -175,7 +173,7 @@ test("mocked Harbor persists live output, structured tool results and final scor
   expect(run?.trials[0]?.artifacts.some((name) => name.endsWith("config.json"))).toBe(false);
   for (const artifact of await store.list(evaluationPrefix(input, input.id).slice(0, -1)))
     expect(Buffer.from((await store.getByKey(artifact.key)) ?? []).toString()).not.toContain(
-      testModelSecret,
+      leaked,
     );
   expect((await listEvaluations(store, input))[0]?.status).toBe("completed");
   await expect(runEvaluation(store, input, { env: {}, vault, command })).rejects.toThrow(
@@ -291,4 +289,30 @@ test("ATIF and Pi tool calls retain the matching tool output", () => {
   expect(redactOutput("Bearer abcd xyz-secret", ["xyz-secret"])).toBe(
     "Bearer [redacted] [redacted]",
   );
+});
+test("a gateway trial's cost is what the gateway recorded for its calls", async () => {
+  const { store, input, vault } = await runnerFixture();
+  let tags: unknown;
+  const command: typeof runCommand = async (_name, args, options) => {
+    if (args[0] === "--version") return { stdout: HARBOR_VERSION, stderr: "", exitCode: 0 };
+    tags = readTrialKey(options?.env?.OPENAI_API_KEY ?? "", TEST_GATEWAY_API.secret)?.tags;
+    const trial = join(args[args.indexOf("--jobs-dir") + 1] ?? "", "solver", "task__123");
+    await mkdir(trial, { recursive: true });
+    await writeFile(
+      join(trial, "result.json"),
+      JSON.stringify({ verifier_result: { rewards: { reward: 1 } }, exception_info: null }),
+    );
+    return { stdout: "", stderr: "", exitCode: 0 };
+  };
+  // One of its calls went unpriced, so the total is known spend but not complete.
+  const gateway = testGateway({ [`${input.id}/0`]: { costUsd: 0.42, complete: false } });
+  await runEvaluation(store, input, { env: {}, vault, command, gateway });
+  expect(tags).toEqual({ run: input.id, trial: `${input.id}/0`, harness: "codex" });
+  expect((await getEvaluation(store, input, input.id))?.trials[0]).toMatchObject({
+    status: "completed",
+    apiCostUsd: 0.42,
+    billedCostUsd: 0.42,
+    costSource: "gateway",
+    costIncomplete: true,
+  });
 });

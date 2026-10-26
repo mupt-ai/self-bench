@@ -110,8 +110,8 @@ export function signInRefusal(
 
 /**
  * Harnesses a direct provider key can drive: those that speak its API. OpenAI serves no
- * Anthropic Messages for Claude Code, and Anthropic no Responses for Codex; Meta serves both
- * (compatibleEndpoints). Muse Code speaks only Meta's API.
+ * Anthropic Messages for Claude Code, and Anthropic no Responses for Codex; Meta serves both, so a
+ * Meta key drives every harness through the gateway. Muse Code speaks only Meta's API.
  */
 const providerHarnesses: Partial<Record<CatalogModel["provider"], Harness[]>> = {
   dari: ["pi"],

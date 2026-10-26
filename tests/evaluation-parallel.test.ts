@@ -13,6 +13,10 @@ import { runEvaluationTrials, runTrial } from "../src/evaluation/workflow.js";
 import { HARBOR_VERSION } from "../src/harnesses/harbor/command.js";
 import { CommandTimeoutError, runCommand } from "../src/lib/process.js";
 import { credentialedInput, evaluationInput } from "./support/evaluation-fixture.js";
+import { testGateway } from "./support/evaluation-gateway.js";
+
+const gateway = testGateway();
+
 import { memoryVault } from "./support/evaluation-vault.js";
 
 const directories: string[] = [];
@@ -76,7 +80,7 @@ test("trials running at once each keep their own progress and result", async () 
     if (calls.length === 4) release();
     await barrier;
   });
-  const options = { env: {}, vault, command, pollMs: 1, progressMs: 0 };
+  const options = { env: {}, vault, command, gateway, pollMs: 1, progressMs: 0 };
   // Each trial workflow carries only its own task.
   await Promise.all(
     [0, 1, 2, 3].map((index) => executeTrial(store, trialInput(input, index), index, options)),
@@ -97,8 +101,8 @@ test("a trial never runs Harbor twice, and a trial failed elsewhere stays failed
     failedElsewhere = failTrial(store, input, 0);
     await failedElsewhere;
   });
-  await executeTrial(store, input, 0, { env: {}, vault, command });
-  await expect(executeTrial(store, input, 0, { env: {}, vault, command })).rejects.toThrow(
+  await executeTrial(store, input, 0, { env: {}, vault, command, gateway });
+  await expect(executeTrial(store, input, 0, { env: {}, vault, command, gateway })).rejects.toThrow(
     "refusing to repeat model spend",
   );
   expect(calls).toHaveLength(1);
@@ -116,6 +120,7 @@ test("a trial whose setup failed before Harbor ran is retried, and its last atte
   const options = {
     env: {},
     vault,
+    gateway,
     retry: true,
     command: (async (name, args, commandOptions) => {
       if (args[0] === "--version" && timeouts-- > 0)
@@ -145,6 +150,7 @@ test("a trial whose worker was lost before its solver started runs on the next a
   const lost = executeTrial(store, input, 0, {
     env: {},
     vault,
+    gateway,
     command: (async (name, args, commandOptions) => {
       setUp.resolve();
       await stalled.promise;
@@ -152,7 +158,7 @@ test("a trial whose worker was lost before its solver started runs on the next a
     }) satisfies typeof runCommand,
   });
   await setUp.promise;
-  await executeTrial(store, input, 0, { env: {}, vault, command });
+  await executeTrial(store, input, 0, { env: {}, vault, command, gateway });
   // A stalled attempt that comes back never starts Harbor or overwrites the outcome.
   stalled.resolve();
   await expect(lost).rejects.toThrow("refusing to repeat model spend");
@@ -170,9 +176,9 @@ test("a trial whose worker was lost after its solver started is not run again", 
     solving.resolve();
     await finished.promise;
   });
-  const first = executeTrial(store, input, 0, { env: {}, vault, command });
+  const first = executeTrial(store, input, 0, { env: {}, vault, command, gateway });
   await solving.promise;
-  await expect(executeTrial(store, input, 0, { env: {}, vault, command })).rejects.toThrow(
+  await expect(executeTrial(store, input, 0, { env: {}, vault, command, gateway })).rejects.toThrow(
     "refusing to repeat model spend",
   );
   finished.resolve();
@@ -188,6 +194,7 @@ test("a stopping worker hands a trial in setup to the next attempt, but runs its
   const options = {
     env: {},
     vault,
+    gateway,
     retry: true,
     stopping: stopping.signal,
     command: (async (name, args, commandOptions) => {
@@ -214,6 +221,7 @@ test("a worker that stops once a solver has started leaves that solver running",
   await executeTrial(store, input, 0, {
     env: {},
     vault,
+    gateway,
     retry: true,
     stopping: stopping.signal,
     command: (async (name, args, commandOptions) => {

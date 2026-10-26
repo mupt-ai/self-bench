@@ -12,40 +12,45 @@ import { runEvaluation } from "./support/evaluation-run.js";
 import { runnerFixture } from "./support/evaluation-runner-fixture.js";
 
 test.each([
-  ["openai", {}, ["api.openai.com"]],
   [
     "openai",
+    "codex-login",
+    "codex",
     { CODEX_AUTH_JSON_PATH: "/private/auth.json" },
     ["chatgpt.com", "*.chatgpt.com", "auth.openai.com"],
   ],
-  ["anthropic", {}, ["api.anthropic.com"]],
-  ["anthropic", { CLAUDE_CODE_OAUTH_TOKEN: "test-token" }, ["api.anthropic.com"]],
-  // Codex reaches Meta through its OpenAI-compatible API, on Meta's own host.
-  ["meta", { META_API_KEY: "test-key" }, ["api.meta.ai"]],
-  ["custom", { OPENAI_BASE_URL: "https://models.example/v1" }, ["models.example"]],
   [
-    "openai",
-    { OPENAI_BASE_URL: "https://models.example/v1", OPENAI_API_BASE: "https://models.example/v1" },
-    ["models.example"],
+    "anthropic",
+    "claude-login",
+    "claude-code",
+    { CLAUDE_CODE_OAUTH_TOKEN: "test-token" },
+    ["api.anthropic.com"],
   ],
-] as const)("%s grants only its connection's hosts: %j", (provider, env, hosts) => {
-  const input = { credentials: { provider } } as EvaluationInput;
-  const trial = gatewayTrial(input, "codex", "openai/model", env);
-  expect(trial.extraAllowedHosts).toEqual([...hosts]);
-  const args = solverArguments(
-    "task",
-    "jobs",
-    "codex",
-    trial.model,
-    "modal",
-    undefined,
-    trial.extraAllowedHosts,
-    provider,
-  );
-  expect(
-    args.flatMap((arg, index) => (arg === "--allow-agent-host" ? [args[index + 1]] : [])),
-  ).toEqual([...hosts]);
-});
+  ["meta", "muse-login", "muse-code", {}, ["api.meta.ai"]],
+  // Muse Code keeps a Meta key on Meta's own host.
+  ["meta", "api-key", "muse-code", { META_API_KEY: "test-key" }, ["api.meta.ai"]],
+  [
+    "dari",
+    "api-key",
+    "pi",
+    { OPENAI_BASE_URL: "https://router.dari.test/v1" },
+    ["router.dari.test"],
+  ],
+] as const)(
+  "a direct %s %s trial grants only its vendor's hosts",
+  (provider, auth, harness, env, hosts) => {
+    const input = {
+      modelName: provider === "dari" ? "dari/routing" : `${provider}/model`,
+      credentials: { provider, auth },
+    } as EvaluationInput;
+    const trial = gatewayTrial(input, harness, input.modelName, env);
+    expect(trial.extraAllowedHosts).toEqual([...hosts]);
+    const args = solverArguments("task", "jobs", trial, "modal", trial.extraAllowedHosts);
+    expect(
+      args.flatMap((arg, index) => (arg === "--allow-agent-host" ? [args[index + 1]] : [])),
+    ).toEqual([...hosts]);
+  },
+);
 
 test("a historical bundle is backfilled for execution without changing the stored artifact", async () => {
   const { store, input, vault } = await runnerFixture(
@@ -54,6 +59,7 @@ test("a historical bundle is backfilled for execution without changing the store
   const key = input.tasks[0]?.bundleKey ?? "";
   const before = await store.getByKey(key);
   let solved = false;
+  // An OpenAI key's agent reaches only the gateway, whatever hosts the old bundle granted.
   const command: typeof runCommand = async (_name, args) => {
     if (args[0] === "--version") return { stdout: HARBOR_VERSION, stderr: "", exitCode: 0 };
     const taskPath = args[args.indexOf("--path") + 1];
@@ -63,7 +69,7 @@ test("a historical bundle is backfilled for execution without changing the store
     expect(prepared.verifier).toEqual({ network_mode: "public" });
     expect(
       args.flatMap((arg, index) => (arg === "--allow-agent-host" ? [args[index + 1]] : [])),
-    ).toEqual(["api.openai.com"]);
+    ).toEqual(["api.selfbench.test"]);
     const jobs = args[args.indexOf("--jobs-dir") + 1];
     const trial = join(jobs ?? "", "solver", "task__123");
     await mkdir(trial, { recursive: true });

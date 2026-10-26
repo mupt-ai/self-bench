@@ -12,6 +12,7 @@ import { createUsageStore } from "../db/usage.js";
 import { createVault } from "../db/vault.js";
 import { createEvaluationActivities } from "../evaluation/activities.js";
 import { keepRunSummaries } from "../evaluation/store.js";
+import { createGatewayUsageStore } from "../gateway/usage-store.js";
 import { keepGatewaysFresh } from "../gateways/refresh.js";
 import { createBatchActivities } from "../generation/batches/activities.js";
 import { taskImageBuilder } from "../generation/images/builder.js";
@@ -73,17 +74,24 @@ const batches =
       }
     : {};
 const { secret: snapshotSecret, url: snapshotOrigin } = config.sandboxCallback ?? {};
+const sandboxApi =
+  snapshotSecret && snapshotOrigin ? { secret: snapshotSecret, url: snapshotOrigin } : undefined;
 // A stopping worker (SIGTERM on a preemption, scale-in or rollout) stops polling at once through
 // Temporal's handler, installed with the connection, and lets in-flight activities finish for
 // shutdownGraceMs. Trials not yet solving leave for another worker instead: the pod is usually
 // killed long before one could finish.
 const stopping = new AbortController();
 process.once("SIGTERM", () => stopping.abort());
+// API keys' trials call the API's model gateway, at the address sandboxes reach the API by (the
+// one their callbacks use), and read back what it recorded their calls cost.
 const { runSolverTrial, prepareTaskImages, ...evaluation } = createEvaluationActivities(
   artifacts,
   vault,
-  snapshotSecret && snapshotOrigin ? { secret: snapshotSecret, url: snapshotOrigin } : undefined,
+  sandboxApi,
   stopping.signal,
+  sandboxApi && database
+    ? { api: sandboxApi, usage: createGatewayUsageStore(database.db) }
+    : undefined,
 );
 // A rejected or deleted task's images go; the reconcile needs the task rows.
 const builder = taskImageBuilder(config.taskImages);

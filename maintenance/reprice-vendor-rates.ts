@@ -54,7 +54,7 @@ export async function repriceEvaluation(
   if (run.status === "queued" || run.status === "running")
     throw new Error("Evaluation is still in progress");
   if (run.credentials?.provider === "openrouter")
-    throw new Error("OpenRouter evaluations use actual charges; use reprice-openrouter instead");
+    throw new Error("OpenRouter evaluations use actual charges, not list rates");
   if (!isGateway(run.credentials?.provider) || !run.pricing)
     throw new Error("Only priced gateway evaluations take vendor list rates");
   const model = evaluationCatalog().find((entry) => entry.id === run.model) ?? { id: run.model };

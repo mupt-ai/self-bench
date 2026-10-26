@@ -150,6 +150,7 @@ test("an HTTP Claude sign-in becomes a credential that runs only Claude Code, by
       home,
       { ANTHROPIC_API_KEY: "unused" },
       vault,
+      "claude-code",
     );
     expect(execution.child.ANTHROPIC_API_KEY).toBeUndefined();
     expect(execution.child.CLAUDE_CODE_OAUTH_TOKEN).toBe(token);

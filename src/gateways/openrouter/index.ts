@@ -20,14 +20,12 @@ interface OpenRouterEntry {
   benchmarks?: { artificial_analysis?: { intelligence_index?: unknown } | null } | null;
 }
 
-/** OpenRouter: the catalog names models as OpenRouter does. Harbor knows its key variable. */
+/** OpenRouter: the catalog names models as OpenRouter does. */
 export const openRouter: Gateway = {
   label: "OpenRouter",
   keyVariable: "OPENROUTER_API_KEY",
   openAiBase: "https://openrouter.ai/api/v1",
   anthropicBase: "https://openrouter.ai/api",
-  hosts: ["openrouter.ai", "*.openrouter.ai"],
-  harborPi: "pi",
   modelsUrl: "https://openrouter.ai/api/v1/models?sort=most-popular",
   modelPage: (id) => `https://openrouter.ai/${id}`,
   parse,

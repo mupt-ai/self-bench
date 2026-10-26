@@ -79,13 +79,15 @@ test("managed evaluations use the platform model and sandbox credentials", async
     expect(fixture.starts).toHaveLength(1);
     expect(input.sandbox).toBe("modal");
     expect(input.explainFailures).toBe(true);
-    const execution = await credentialExecution(input, home, env, records);
-    expect(execution.child.OPENROUTER_API_KEY).toBe("managed-model-secret");
+    const execution = await credentialExecution(input, home, env, records, "pi");
+    // Managed model calls go through the gateway, which holds the platform's key itself.
+    expect(execution.route).toBe("gateway");
+    expect(execution.credential.id).toBe("managed-model");
+    expect(JSON.stringify(execution.child)).not.toContain("managed-model-secret");
     expect(execution.child.MODAL_TOKEN_ID).toBe("managed-modal-id");
     expect(execution.child.MODAL_TOKEN_SECRET).toBe("managed-modal-secret");
     expect(execution.child.MODAL_ENVIRONMENT).toBe("selfbench-test");
     expect(execution.child.E2B_API_KEY).toBeUndefined();
-    expect(execution.secrets).toContain("managed-model-secret");
     expect(execution.secrets).toContain("managed-modal-secret");
   } finally {
     await fixture.close();
@@ -195,8 +197,12 @@ test("durable comparison, scoped credentials, frozen tasks, partial dispatch and
         home,
         { PATH: "/bin", GITHUB_TOKEN: "host-secret", OPENAI_API_KEY: "unrelated-key" },
         records,
+        "codex",
       );
-      expect(execution.child.OPENAI_API_KEY).toBe("model-secret");
+      // The model key stays in the vault: the trial reaches it through the gateway.
+      expect(execution.route).toBe("gateway");
+      expect(execution.child.OPENAI_API_KEY).toBeUndefined();
+      expect(JSON.stringify(execution)).not.toContain("model-secret");
       expect(execution.child.E2B_API_KEY).toBe("sandbox-secret");
       expect(execution.child.GITHUB_TOKEN).toBeUndefined();
       expect(execution.child.SELFBENCH_BAO_TOKEN).toBeUndefined();
@@ -287,6 +293,7 @@ test("Codex sign-in is explicit, scoped and never falls back to an API key", asy
       home,
       { OPENAI_API_KEY: "do-not-use" },
       records,
+      "codex",
     );
     expect(execution.child.OPENAI_API_KEY).toBeUndefined();
     expect(await readFile(execution.child.CODEX_AUTH_JSON_PATH ?? "", "utf8")).toBe(auth);

@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { credentialSchema, dariEndpoint } from "../src/db/credentials.js";
 import { dariRouter, evaluationCatalog } from "../src/evaluation/catalog.js";
 import { isDariRun } from "../src/evaluation/dari/cost.js";
-import { gatewayTrial, solverAgent, solverAgentArguments } from "../src/evaluation/execution.js";
+import { gatewayTrial } from "../src/evaluation/execution.js";
 import { routeFor } from "../src/evaluation/models.js";
 import { initialEvaluation } from "../src/evaluation/store.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";
@@ -88,10 +88,7 @@ test("the built-in Dari route uses the existing response-price adapter", () => {
   expect(run.modelLabel).toBe("Dari Router");
   expect(trial.model).toBe("openai/dari/routing");
   expect(trial.extraAllowedHosts).toEqual(["routing.dari.dev"]);
-  expect(solverAgent("pi", "dari", trial.model)).toBe("harbor_dari:DariPi");
-  expect(solverAgentArguments("pi", "dari", trial.model)).toEqual([
-    "--agent-kwarg",
-    "model_api=openai-completions",
-  ]);
+  expect(trial.agent).toBe("harbor_dari:DariPi");
+  expect(trial.agentArguments).toEqual(["--agent-kwarg", "model_api=openai-completions"]);
   expect(isDariRun(run)).toBe(true);
 });

@@ -8,7 +8,7 @@ import { explainTrialFailure } from "./failure-summary.js";
 import { failEvaluation, failTrial, finishEvaluation, startEvaluation } from "./lifecycle.js";
 import { environmentSecrets, redactOutput } from "./output.js";
 import { prepareTaskImages } from "./prepare.js";
-import { executeTrial, type RunnerOptions } from "./runner.js";
+import { executeTrial, type RunnerOptions, type TrialGateway } from "./runner.js";
 import { auditTask, type TaskAuditRequest } from "./task-audit.js";
 import type { EvaluationInput, FailedTrial } from "./types.js";
 
@@ -34,6 +34,8 @@ export function createEvaluationActivities(
   vault?: Vault,
   snapshotLink?: SandboxCallback,
   stopping?: AbortSignal,
+  /** The model gateway API keys' trials call; without it, those trials are refused. */
+  gateway?: TrialGateway,
 ): EvaluationActivities {
   const heartbeating = async <T>(run: (options: RunnerOptions) => Promise<T>): Promise<T> => {
     const context = Context.current();
@@ -43,6 +45,7 @@ export function createEvaluationActivities(
         ...(vault ? { vault } : {}),
         ...(snapshotLink ? { snapshotLink } : {}),
         ...(stopping ? { stopping } : {}),
+        ...(gateway ? { gateway } : {}),
         signal: context.cancellationSignal,
         heartbeat: () => context.heartbeat(),
       });

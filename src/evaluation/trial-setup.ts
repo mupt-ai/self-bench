@@ -2,6 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { ArtifactStore } from "../artifacts/index.js";
 import { trialTimeouts } from "../contracts/agent-limit.js";
+import { type GatewayConnection, gatewayConnection } from "../gateway/connection.js";
 import {
   assertHarborVersion,
   HARBOR_PROCESS_TIMEOUT_MS,
@@ -15,23 +16,36 @@ import {
   refuseWithoutRetry,
 } from "../harnesses/harbor/task-safety.js";
 import type { runCommand } from "../lib/process.js";
-import { credentialExecution, gatewayTrial, refuseTrial } from "./execution.js";
+import {
+  credentialExecution,
+  gatewayModelId,
+  gatewayTrial,
+  pinnedThinking,
+  refuseTrial,
+} from "./execution.js";
 import { judgeTrial } from "./judge.js";
 import type { RunnerOptions } from "./runner.js";
 import { unpackTrialTask } from "./task-bundle.js";
 import type { EvaluationInput, EvaluationRun, EvaluationTrial } from "./types.js";
 
+/** The tag the gateway records a trial's calls under, unique within its organization. */
+export function gatewayTrialTag(run: Pick<EvaluationRun, "id">, index: number): string {
+  return `${run.id}/${index}`;
+}
+
 /**
  * Readies a claimed trial for its solver under `root`: its credentials, a supported Harbor, its
- * checked task, and the gateway its harness reaches the model through. Nothing here spends model
- * money. Secrets are added to `secrets` as they are resolved, so any later error can be redacted.
- * `setupSignal` stops the setup; the returned guard, which Harbor runs under, follows only `signal`.
+ * checked task, and the connection its harness reaches the model through (the gateway, for an API
+ * key). Nothing here spends model money. Secrets are added to `secrets` as they are resolved, so
+ * any later error can be redacted. `setupSignal` stops the setup; the returned guard, which Harbor
+ * runs under, follows only `signal`.
  */
 export async function setUpTrial(
   store: ArtifactStore,
   input: EvaluationInput,
   run: EvaluationRun,
   trial: EvaluationTrial,
+  index: number,
   root: string,
   secrets: string[],
   options: RunnerOptions & {
@@ -43,7 +57,13 @@ export async function setUpTrial(
   const home = join(root, "home");
   await mkdir(home, { mode: 0o700 });
   if (!options.vault) throw refuseTrial("Credential storage unavailable on the worker");
-  const execution = await credentialExecution(input, home, options.env, options.vault);
+  const execution = await credentialExecution(
+    input,
+    home,
+    options.env,
+    options.vault,
+    trial.harness,
+  );
   secrets.push(...execution.secrets);
   const child = harborProcessEnvironment(execution.child);
   const version = await options.command("harbor", ["--version"], {
@@ -67,7 +87,23 @@ export async function setUpTrial(
     ...(options.snapshotLink ? { snapshotLink: options.snapshotLink } : {}),
     ...(options.setupSignal ? { signal: options.setupSignal } : {}),
   });
-  const gateway = gatewayTrial(input, trial.harness, execution.profile.model, child);
+  // An API key's trial reaches its model through the gateway, under a key that pins the model.
+  let connection: GatewayConnection | undefined;
+  if (execution.route === "gateway") {
+    if (!options.gateway) throw refuseTrial("The model gateway is not configured on this worker");
+    const thinking = pinnedThinking(trial.harness, input.thinking);
+    connection = gatewayConnection({
+      apiUrl: options.gateway.api.url,
+      secret: options.gateway.api.secret,
+      orgId: execution.credential.orgId,
+      credentialId: execution.credential.id,
+      model: gatewayModelId(input),
+      ...(thinking ? { thinking } : {}),
+      tags: { run: run.id, trial: gatewayTrialTag(run, index), harness: trial.harness },
+    });
+    secrets.push(connection.key);
+  }
+  const gateway = gatewayTrial(input, trial.harness, execution.profile.model, child, connection);
   const prepared = await prepareHarborRun(
     taskPath,
     trialRoot,
@@ -93,7 +129,8 @@ export async function setUpTrial(
     jobs: join(trialRoot, "jobs"),
     ...gateway,
     modelAuth: execution.auth,
-    ...(execution.billingKey ? { billingKey: execution.billingKey } : {}),
+    // A gateway trial's cost is what the gateway recorded for its calls (runner.ts).
+    ...(connection ? { gatewayOrgId: execution.credential.orgId } : {}),
     child: { ...judged.child, ...pull },
     verifierEnv: judged.verifierEnv,
     guard: prepared.guard,
