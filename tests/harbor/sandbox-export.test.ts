@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import type { Server } from "node:http";
 import { tmpdir } from "node:os";
@@ -96,6 +97,31 @@ print([status(0, 0), status(1, 0), status(2, 0), status(0, 1)])
 `;
   const result = await runCommand("python3", ["-I", "-c", script, runtime, root]);
   expect(result.stdout.trim()).toBe("[0, 0, 1, 1]");
+});
+
+test("the pack script archives the CA certificates even when they are a mount point", async () => {
+  const root = await temporary();
+  const runtime = fileURLToPath(new URL("../../src/harnesses/harbor/runtime/", import.meta.url));
+  // E2B mounts its certificates over /etc/ssl/certs, which --one-file-system alone leaves out;
+  // tar archives a mount point's contents when it is named as an operand.
+  const script = `
+import os, subprocess, sys, types
+sys.modules["modal"] = types.SimpleNamespace(App=None, Image=None, Sandbox=None)
+sys.path.insert(0, sys.argv[1])
+from selfbench_sandbox_export import PACK
+bin_dir, args = sys.argv[2], os.path.join(sys.argv[2], "args")
+for name, body in [("tar", f'printf "%s\\\\n" "$@" > {args}'), ("gzip", "cat >/dev/null")]:
+    path = os.path.join(bin_dir, name)
+    open(path, "w").write(f"#!/bin/sh\\n{body}\\n")
+    os.chmod(path, 0o755)
+env = {**os.environ, "PATH": bin_dir + ":/bin:/usr/bin"}
+code = subprocess.run(["bash", "-c", PACK.replace("/tmp/selfbench-rootfs.tar.gz", os.path.join(bin_dir, "out"))], env=env).returncode
+operands = open(args).read().split()
+print(code, operands[-2:] if os.path.isdir("/etc/ssl/certs") else operands[-1:])
+`;
+  const result = await runCommand("python3", ["-I", "-c", script, runtime, root]);
+  const expected = existsSync("/etc/ssl/certs") ? "0 ['.', './etc/ssl/certs']" : "0 ['.']";
+  expect(result.stdout.trim()).toBe(expected);
 });
 
 test("a failed pack still removes the sandbox and ends the export instead of hanging", async () => {

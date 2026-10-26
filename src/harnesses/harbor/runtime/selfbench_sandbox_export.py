@@ -20,9 +20,14 @@ SANDBOX_LIFETIME_SECS = 2 * 60 * 60
 E2B_LIFETIME_SECS = 60 * 60
 CHUNK = 1024 * 1024
 # Tar's 1 means a file changed while it was read, which an idle sandbox does not care about.
+# E2B mounts its own CA certificates over /etc/ssl/certs, which --one-file-system skips, so the
+# folder is named on its own: tar archives a named mount point's contents. Without it every
+# exported image had an empty /etc/ssl/certs and HTTPS failed outside E2B.
+CERTS = "/etc/ssl/certs"
 PACK = (
     "tar --one-file-system --numeric-owner -C / -cf - --exclude=./proc --exclude=./sys "
-    f"--exclude=./dev --exclude=.{ARCHIVE} . | gzip -1 > {ARCHIVE}; "
+    f"--exclude=./dev --exclude=.{ARCHIVE} . $([ -d {CERTS} ] && echo .{CERTS}) "
+    f"| gzip -1 > {ARCHIVE}; "
     # One assignment: any command, even `t=…`, resets PIPESTATUS for the next.
     's=("${PIPESTATUS[@]}"); '
     '[ "${s[1]}" = 0 ] && { [ "${s[0]}" = 0 ] || [ "${s[0]}" = 1 ]; } '

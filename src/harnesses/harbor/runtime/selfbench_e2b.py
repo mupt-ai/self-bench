@@ -77,6 +77,8 @@ from registry_auth import record_image
 
 TAG = "default"
 CAPACITY_WAIT_SECS = (15, 120)
+# Polls a template build that is already running, every 10 seconds at first, then every minute.
+BUILD_POLL_SECS = (10, 60)
 # Reconnects to a command whose stream dropped, waiting 2, 4, 8, ... seconds before each.
 RECONNECTS = 6
 RECONNECT_WAIT_SECS = 2
@@ -263,21 +265,27 @@ class SelfBenchE2BEnvironment(E2BEnvironment):
         build = next((tag.build_id for tag in tags if tag.tag == TAG), None)
         if build is None:
             return False
-        try:
-            status = (
-                await AsyncTemplate.get_build_status(
-                    BuildInfo(template_id=name, build_id=build, name=name, alias=name, tags=[TAG])
-                )
-            ).status
-        except BuildException as error:
-            if str(error) != f"400: Build '{build}' not found":
-                raise
-            self.logger.warning(f"Template {name} build {build} is missing; building it again")
-            return False
-        if status == TemplateBuildStatus.READY:
-            return True
-        self.logger.warning(f"Template {name} build {build} is {status.value}; building it again")
-        return False
+        info = BuildInfo(template_id=name, build_id=build, name=name, alias=name, tags=[TAG])
+        first, most = BUILD_POLL_SECS
+        wait = first
+        while True:
+            try:
+                status = (await AsyncTemplate.get_build_status(info)).status
+            except BuildException as error:
+                if str(error) != f"400: Build '{build}' not found":
+                    raise
+                self.logger.warning(f"Template {name} build {build} is missing; building it again")
+                return False
+            if status == TemplateBuildStatus.READY:
+                return True
+            if status == TemplateBuildStatus.ERROR:
+                self.logger.warning(f"Template {name} build {build} failed; building it again")
+                return False
+            # Another trial or evaluation is building it: a second build under the same name would
+            # cancel the first, and its waiting trials fail with "build was cancelled".
+            self.logger.warning(f"Template {name} build {build} is {status.value}; waiting for it")
+            await asyncio.sleep(wait)
+            wait = min(wait * 2, most)
 
     async def _build_template(self):
         image = self.task_env_config.docker_image
