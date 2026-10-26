@@ -72,50 +72,64 @@ export async function rebuildTaskImages(
 ): Promise<RebuildOutcome> {
   if (!needsImages(task)) return { status: "skipped", reason: "Has images, or is not a kept task" };
   const compiled = compiledBundleKey(task.bundleKey as string);
-  const bundle = await store.stat(compiled);
-  if (!bundle) throw new Error("Original compiled bundle is missing");
+  const stat = await store.stat(compiled);
+  if (!stat) throw new Error("Original compiled bundle is missing");
+  const bundle: ArtifactRef = { ...stat, contentType: "application/gzip" };
   const { provider, env } = deps.verification;
   const directory = dirname(compiled);
   const { gate, snapshot } = await gateSource(store, compiled, deps.signal);
   const stamp = (deps.now?.() ?? new Date()).toISOString().replace(/[:.]/g, "-");
   const outputs = `${directory}/rebuild-${stamp}`;
-  const gates = await withExecutionEnvironment(env, () =>
-    (deps.gates ?? runHarborGates)(
-      store,
-      { taskId: task.taskId, bundle: { ...bundle, contentType: "application/gzip" } },
-      provider,
-      outputs,
-      deps.signal,
-      {
-        builder: deps.builder,
-        build: {
-          runId: task.runId,
-          candidateId: task.candidateId,
-          gate,
-          snapshot,
-          prefix: outputs,
+  // Whatever the builder pushed is deleted unless the row ends up naming it.
+  let built: TaskImages | undefined;
+  const builder: TaskImageBuilder = {
+    build: async (...args) => {
+      const result = await deps.builder.build(...args);
+      if ("images" in result) built = result.images;
+      return result;
+    },
+  };
+  try {
+    const gates = await withExecutionEnvironment(env, () =>
+      (deps.gates ?? runHarborGates)(
+        store,
+        { taskId: task.taskId, bundle },
+        provider,
+        outputs,
+        deps.signal,
+        {
+          builder,
+          build: {
+            runId: task.runId,
+            candidateId: task.candidateId,
+            gate,
+            snapshot,
+            prefix: outputs,
+          },
+          serving: deps.serving,
         },
-        serving: deps.serving,
-      },
-    ),
-  );
-  const failed = (["build", "smoke", "nop", "oracle"] as const).find((name) => !gates[name].ok);
-  if (failed || !gates.images) {
-    if (gates.images) await deps.removeImages(gates.images);
-    return { status: "failed", gate: failed ?? "images", outputs };
+      ),
+    );
+    const failed = (["build", "smoke", "nop", "oracle"] as const).find((name) => !gates[name].ok);
+    if (failed || !gates.images) {
+      if (built) await deps.removeImages(built);
+      return { status: "failed", gate: failed ?? "images", outputs };
+    }
+    const delivered = await publishExecutionBundle(
+      store,
+      { bundle, images: gates.images },
+      gate,
+      deps.signal,
+    );
+    const bundleKey = delivered.uri.slice(delivered.uri.indexOf("/runs/") + 1);
+    if (!(await deps.save(bundleKey, gates.images)))
+      throw new Error("Task changed during the rebuild; its row is unchanged");
+    return { status: "rebuilt", bundleKey, images: gates.images };
+  } catch (error) {
+    // A publish, a save the row refused, or a lost worker: nothing names these images.
+    if (built) await deps.removeImages(built);
+    throw error;
   }
-  const delivered = await publishExecutionBundle(
-    store,
-    { bundle: { ...bundle, contentType: "application/gzip" }, images: gates.images },
-    gate,
-    deps.signal,
-  );
-  const bundleKey = delivered.uri.slice(delivered.uri.indexOf("/runs/") + 1);
-  if (!(await deps.save(bundleKey, gates.images))) {
-    await deps.removeImages(gates.images);
-    throw new Error("Task changed during the rebuild; its row is unchanged");
-  }
-  return { status: "rebuilt", bundleKey, images: gates.images };
 }
 
 /**

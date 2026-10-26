@@ -90,9 +90,6 @@ const { runSolverTrial, prepareTaskImages, ...evaluation } = createEvaluationAct
 );
 // A rejected or deleted task's images go; the reconcile needs the task rows.
 const builder = taskImageBuilder(config.taskImages);
-const taskImages = database
-  ? createTaskImageActivities({ db: database.db, store: artifacts, builds: !!builder })
-  : {};
 // Rebuilding a task's images runs its gates again, with the credentials that checked it.
 const rebuilds =
   database && vault && builder && config.taskImages && snapshotSecret && snapshotOrigin
@@ -105,6 +102,15 @@ const rebuilds =
         serving: { env: process.env, callback: { url: snapshotOrigin, secret: snapshotSecret } },
       })
     : {};
+// Only a deployment that can rebuild says a task without images needs one; every worker of it
+// reads the same settings, so the Harbor workers register what the workflow worker asks for.
+const taskImages = database
+  ? createTaskImageActivities({
+      db: database.db,
+      store: artifacts,
+      builds: "rebuildTaskImages" in rebuilds,
+    })
+  : {};
 const harborConcurrency = resolveHarborConcurrency(config.harborConcurrency);
 const idle = idleTracker();
 const workers = await Promise.all([

@@ -75,8 +75,9 @@ function deps(gates: (images: TaskImages) => Awaited<ReturnType<typeof runHarbor
     },
     signal: new AbortController().signal,
     now: () => new Date("2026-10-25T00:00:00Z"),
-    gates: async (_store, _task, provider, _prefix, _signal, built) => {
+    gates: async (store, _task, provider, _prefix, signal, built) => {
       builds.push({ provider, build: built?.build });
+      if (built) await built.builder.build(store, built.build, signal);
       return gates(images);
     },
   };
@@ -161,4 +162,17 @@ test("verification runs with the run's own saved credential, never a managed gue
   await expect(verificationEnvironment(vault({ sandbox: "managed" }), "run-1", {})).rejects.toThrow(
     "Managed runs",
   );
+});
+
+test("images the row never takes are deleted, whatever stopped the rebuild", async () => {
+  const store = await legacy();
+  const refused = deps(passing);
+  const value = { ...refused.value, save: async () => false };
+  await expect(rebuildTaskImages(store, task, value)).rejects.toThrow("Task changed");
+  expect(refused.removed).toEqual([images]);
+  const lost = deps(() => {
+    throw new Error("worker lost");
+  });
+  await expect(rebuildTaskImages(store, task, lost.value)).rejects.toThrow("worker lost");
+  expect(lost.removed).toEqual([images]);
 });
