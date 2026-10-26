@@ -50,19 +50,21 @@ test("a finished run retries only its errored tasks, as it ran them", () => {
   expect(() => comparisonSchema.parse(retry?.selection)).not.toThrow();
 });
 
-test("a custom model retries under its typed name", () => {
-  const retry = retrySelection(
-    finishedRun((run) => {
-      run.model = "custom";
-      run.modelName = "openai/my-model";
-    }),
-    "pi",
-    ID,
-  );
-  expect(retry?.selection.models[0]).toMatchObject({
-    catalogId: "custom",
-    customModel: "my-model",
-  });
+test("a custom model retries under its typed name, whatever route reached it", () => {
+  for (const modelName of ["openai/my-model", "openrouter/my-model", "vercel/vendor/my-model"]) {
+    const retry = retrySelection(
+      finishedRun((run) => {
+        run.model = "custom";
+        run.modelName = modelName;
+      }),
+      "pi",
+      ID,
+    );
+    expect(retry?.selection.models[0]).toMatchObject({
+      catalogId: "custom",
+      customModel: modelName.replace(/^[^/]+\//, ""),
+    });
+  }
 });
 
 test("live, deleted, benchmark, uncredentialed and error-free runs offer no retry", () => {

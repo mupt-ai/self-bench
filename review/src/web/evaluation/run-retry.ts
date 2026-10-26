@@ -52,8 +52,8 @@ export function retrySelection(
       models: [
         {
           catalogId: run.model,
-          // Custom models are recorded as `openai/<typed name>`.
-          ...(custom ? { customModel: run.modelName.replace(/^openai\//, "") } : {}),
+          // Custom models are recorded as `<provider>/<typed name>` (completedConfigurationTasks).
+          ...(custom ? { customModel: run.modelName.replace(/^[^/]+\//, "") } : {}),
           credentialId: credentials.modelCredentialId,
           ...(run.thinking ? { thinking: run.thinking } : {}),
           harnesses: [harness],
