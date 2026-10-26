@@ -1,5 +1,5 @@
 import { createWriteStream } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { pipeline } from "node:stream/promises";
@@ -157,8 +157,9 @@ async function gateSource(
     if (!bundle) throw new Error("Original compiled bundle is missing");
     await pipeline(bundle, createWriteStream(archive), { signal });
     await splitGateBundle(archive, work);
-    const put = async (name: string) =>
-      await store.put(`${directory}/${name}`, await readFile(join(work, name)), "application/gzip");
+    // Streamed from disk: a repository snapshot can be larger than a Harbor slot's memory.
+    const put = (name: string) =>
+      store.putFile(`${directory}/${name}`, join(work, name), "application/gzip");
     return { gate: await put(GATE_TASK_FILE), snapshot: await put(SNAPSHOT_FILE) };
   } finally {
     await rm(work, { recursive: true, force: true });

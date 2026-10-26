@@ -176,3 +176,16 @@ test("images the row never takes are deleted, whatever stopped the rebuild", asy
   await expect(rebuildTaskImages(store, task, lost.value)).rejects.toThrow("worker lost");
   expect(lost.removed).toEqual([images]);
 });
+
+test("a legacy split streams its gate task and snapshot from disk, never through memory", async () => {
+  const store = await legacy();
+  const put = store.put.bind(store);
+  store.put = async (key, value, contentType) => {
+    if (key === `${attempt}/gate-task.tar.gz` || key === `${attempt}/repo.tar.gz`)
+      throw new Error(`buffered ${key}`);
+    return await put(key, value, contentType);
+  };
+  const { value } = deps(passing);
+  expect(await rebuildTaskImages(store, task, value)).toMatchObject({ status: "rebuilt" });
+  expect(await store.stat(`${attempt}/repo.tar.gz`)).toBeTruthy();
+});
