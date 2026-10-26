@@ -111,8 +111,9 @@ export async function selfBenchAuthorWorkflow(
     await CancellationScope.nonCancellable(() =>
       verdicts.settleTask({ ...row, result, ...(cancelled ? { cancelled } : {}) }),
     );
+    // Images the candidate built are removed on cancel too; only a cancel leaves them to the sweep.
+    await CancellationScope.nonCancellable(() => compact(input, result));
     if (cancelled) throw error;
-    await compact(input, result);
     return result;
   }
   // A finished verdict reaches the row even if a cancel lands meanwhile.
