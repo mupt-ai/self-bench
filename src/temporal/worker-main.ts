@@ -14,9 +14,13 @@ import { createEvaluationActivities } from "../evaluation/activities.js";
 import { keepRunSummaries } from "../evaluation/store.js";
 import { keepGatewaysFresh } from "../gateways/refresh.js";
 import { createBatchActivities } from "../generation/batches/activities.js";
+import { taskImageBuilder } from "../generation/images/builder.js";
 import { createActivities } from "../generation/pipeline/activities.js";
 import { createTaskActivities } from "../generation/tasks/activities.js";
-import { createTaskImageActivities } from "../generation/tasks/task-images-activity.js";
+import {
+  createTaskImageActivities,
+  createTaskImageRebuildActivities,
+} from "../generation/tasks/task-images-activity.js";
 import { closeSentry, initSentry } from "../lib/telemetry/sentry.js";
 import { checkSandboxBackends } from "../sandbox/index.js";
 import { removeEmptyModalCredentialOverrides } from "../sandbox/providers/modal/auth.js";
@@ -85,7 +89,22 @@ const { runSolverTrial, prepareTaskImages, ...evaluation } = createEvaluationAct
   stopping.signal,
 );
 // A rejected or deleted task's images go; the reconcile needs the task rows.
-const taskImages = database ? createTaskImageActivities({ db: database.db, store: artifacts }) : {};
+const builder = taskImageBuilder(config.taskImages);
+const taskImages = database
+  ? createTaskImageActivities({ db: database.db, store: artifacts, builds: !!builder })
+  : {};
+// Rebuilding a task's images runs its gates again, with the credentials that checked it.
+const rebuilds =
+  database && vault && builder && config.taskImages && snapshotSecret && snapshotOrigin
+    ? createTaskImageRebuildActivities({
+        db: database.db,
+        store: artifacts,
+        vault,
+        builder,
+        repository: config.taskImages.repository,
+        serving: { env: process.env, callback: { url: snapshotOrigin, secret: snapshotSecret } },
+      })
+    : {};
 const harborConcurrency = resolveHarborConcurrency(config.harborConcurrency);
 const idle = idleTracker();
 const workers = await Promise.all([
@@ -116,6 +135,7 @@ const workers = await Promise.all([
             verifyCompiled,
             runSolverTrial,
             prepareTaskImages,
+            ...rebuilds,
           },
           maxConcurrentActivityTaskExecutions: harborConcurrency,
           interceptors: { activity: [activityErrorInterceptor(), idle.interceptor] },

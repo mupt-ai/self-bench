@@ -19,7 +19,9 @@ const images = {
 const task: ReviewedTask = {
   id: 1,
   runId: "run-1",
+  candidateId: "task-1",
   taskId: "task-1",
+  pipelineStatus: "accepted",
   bundleKey: delivered,
   images,
   reviewDecision: "reject",

@@ -14,6 +14,29 @@ node dist/maintenance/records-migration.js [--apply]
 node dist/maintenance/compact-task-bundles.js <runId>... | --all [--apply]
 ```
 
+## Task Images for Older Tasks
+
+Tasks accepted before images were built (and any whose images a rejection removed before they
+were approved again) run on their Dockerfiles. `selfBenchTaskImagesBackfillWorkflow` gives them
+images on the normal workers, not as a job of its own: each row runs its
+`selfBenchTaskImagesWorkflow` (`task-images/<row id>`), which builds the task's compiled images,
+runs the smoke, nop and oracle gates on them on the provider and account its run checked it with,
+and records them with an execution bundle only if every gate passes. Images that fail are
+deleted and the row is left as it was; the gates' outputs land in `rebuild-<time>/` beside the
+compiled bundle. Managed runs are refused, since their provider is stamped on the run rather than
+saved. Start it with the Temporal CLI, a dry run first:
+
+```sh
+temporal workflow start --type selfBenchTaskImagesBackfillWorkflow \
+  --task-queue <SELFBENCH_TASK_QUEUE> --workflow-id task-images-backfill/<date> \
+  --input '{"repoIds":[25],"dryRun":true}'
+```
+
+`dryRun` returns the row IDs it would rebuild; `rowIds` names rows instead, for a pilot;
+`concurrency` (default 4) is how many rebuild at once, each holding a slot of its verifying
+credential. The result maps each row to its outcome (`rebuilt`, `failed at <gate>`, `skipped`,
+`already running`, or the error).
+
 ## Task Bundle Compaction
 
 Every compile attempt used to keep its own repository snapshot (`repo.tar.gz`) and a full bundle

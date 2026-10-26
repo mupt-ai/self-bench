@@ -151,3 +151,31 @@ test("only a rejected or deleted row no longer pins a shared digest", async () =
   await insert({ reviewDecision: null });
   expect(await rows.referenced([digest], task.id)).toBe(true);
 });
+
+test("kept accepted rows without images are the ones a backfill rebuilds", async () => {
+  const { db, rows, task } = await seeded();
+  const add = (candidateId: string, fields: Partial<typeof tasks.$inferInsert>) =>
+    db.insert(tasks).values({
+      repoId: task.repoId,
+      runId: "run-3",
+      candidateId,
+      taskId: candidateId,
+      difficulty: "medium",
+      pipelineStatus: "accepted",
+      stage: "accepted",
+      bundleKey: `runs/run-3/${candidateId}/harbor-task.tar.gz`,
+      ...fields,
+    });
+  await add("unreviewed", {});
+  await add("approved", { reviewDecision: "approve" });
+  await add("rejected", { reviewDecision: "reject" });
+  await add("deleted", { deletedAt: new Date() });
+  await add("failed", { pipelineStatus: "infrastructure_failed" });
+  await add("built", { images });
+  const found = await rows.withoutImages();
+  const names = (
+    await Promise.all(found.map(async (id) => (await rows.find(id))?.candidateId))
+  ).sort();
+  expect(names).toEqual(["approved", "unreviewed"]);
+  expect(await rows.withoutImages([task.repoId + 1])).toEqual([]);
+});

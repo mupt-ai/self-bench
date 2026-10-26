@@ -1,5 +1,5 @@
 import { dirname } from "node:path";
-import { and, eq, isNull, ne, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { TaskImages } from "../../contracts/index.js";
@@ -12,11 +12,21 @@ const COMPILED_BUNDLE = "/harbor-task.tar.gz";
 
 export type ReviewedTask = Pick<
   typeof tasks.$inferSelect,
-  "id" | "runId" | "taskId" | "bundleKey" | "images" | "reviewDecision" | "deletedAt"
+  | "id"
+  | "runId"
+  | "candidateId"
+  | "taskId"
+  | "pipelineStatus"
+  | "bundleKey"
+  | "images"
+  | "reviewDecision"
+  | "deletedAt"
 >;
 
 export type TaskImageOutcome =
   | { readonly status: "removed"; readonly bundleKey: string }
+  /** A kept task without images, which a rebuild gives them (task-image-rebuild.ts). */
+  | { readonly status: "unbuilt" }
   | { readonly status: "kept"; readonly reason: string }
   | { readonly status: "skipped"; readonly reason: string };
 
@@ -77,10 +87,11 @@ export function taskImageRows(db: Database) {
       const [row] = await db.select().from(tasks).where(eq(tasks.id, taskRowId));
       return row;
     },
-    async save(task: ReviewedTask, bundleKey: string): Promise<boolean> {
+    /** Switches the row's bundle and images unless the task changed since it was read. */
+    async save(task: ReviewedTask, bundleKey: string, images?: TaskImages): Promise<boolean> {
       const changed = await db
         .update(tasks)
-        .set({ bundleKey, images: null })
+        .set({ bundleKey, images: images ?? null })
         .where(
           and(
             eq(tasks.id, task.id),
@@ -96,6 +107,23 @@ export function taskImageRows(db: Database) {
         )
         .returning({ id: tasks.id });
       return changed.length === 1;
+    },
+    /** Accepted, kept rows that run on their Dockerfiles, optionally within some repositories. */
+    async withoutImages(repoIds?: readonly number[]): Promise<number[]> {
+      const rows = await db
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(
+          and(
+            eq(tasks.pipelineStatus, "accepted"),
+            isNull(tasks.images),
+            isNull(tasks.deletedAt),
+            or(isNull(tasks.reviewDecision), ne(tasks.reviewDecision, "reject")),
+            repoIds?.length ? inArray(tasks.repoId, [...repoIds]) : undefined,
+          ),
+        )
+        .orderBy(tasks.id);
+      return rows.map((row) => row.id);
     },
     async referenced(digests: readonly string[], exceptTaskId: number): Promise<boolean> {
       const patterns = digests.map((digest) => `%${digest}%`);
