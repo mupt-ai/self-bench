@@ -25,13 +25,14 @@ import {
 } from "../../harnesses/harbor/results.js";
 import { prepareHarborRun, refuseWithoutRetry } from "../../harnesses/harbor/task-safety.js";
 import { runCommand } from "../../lib/process.js";
-import { isRecord, tail } from "../../lib/util.js";
+import { tail } from "../../lib/util.js";
 import { providerEnvironment } from "../../sandbox/provider-environment.js";
 import type { ImageBuild, TaskImageBuilder } from "../images/builder.js";
 import { type HarborLiveRun, harborLiveFeed, providerSecrets } from "./harbor-live.js";
 import { activityAttempt } from "./helpers.js";
 import { unpackTask } from "./remote-gate.js";
 import { smokeLog, smokeResult } from "./smoke-result.js";
+import { agentStarted, rewards, trialError } from "./trial-result.js";
 import { nopGatePassed, oracleGatePassed } from "./verify-report.js";
 
 export type HarborGates = Pick<VerifyReport, "build" | "smoke" | "nop" | "oracle">;
@@ -166,6 +167,12 @@ export async function runHarborGates(
     );
     await storeResult(store, `${gateOutputs}/oracle`, oracle);
     const oracleError = trialError(oracle.trial);
+    // Nop already started from these images, so an oracle trial that never reached its agent hit
+    // Harbor's or the provider's trouble, which Temporal retries, never the author's.
+    if (oracleError && built && !agentStarted(oracle.trial))
+      throw new Error(
+        `Harbor oracle could not start ${task.taskId} from its images: ${oracleError}`,
+      );
     const oracleRewards = oracleError ? {} : numericRewards(rewards(oracle.trial));
     gates.oracle = {
       ran: true,
@@ -274,19 +281,6 @@ function failureText(error: string, result: HarborJobResult): string {
   return [error, result.trialLog ?? "", verifierOutput(result)]
     .filter((part) => part.trim())
     .join("\n\n");
-}
-
-function trialError(trial: unknown): string | undefined {
-  const info = isRecord(trial) ? trial.exception_info : undefined;
-  if (info === undefined || info === null) return undefined;
-  if (!isRecord(info)) return JSON.stringify(info);
-  const type = typeof info.exception_type === "string" ? `${info.exception_type}: ` : "";
-  return `${type}${String(info.exception_message ?? "")}`;
-}
-
-function rewards(trial: unknown): Record<string, unknown> {
-  const result = isRecord(trial) ? trial.verifier_result : undefined;
-  return isRecord(result) && isRecord(result.rewards) ? result.rewards : {};
 }
 
 function numericRewards(raw: Record<string, unknown>): HarborRewards {

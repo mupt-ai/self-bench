@@ -36,7 +36,9 @@ const directory = path.join(args[args.indexOf('--jobs-dir')+1], args[args.indexO
 const trial = path.join(directory, 'trial-1');
 fs.mkdirSync(trial, {recursive:true});
 const rewards = agent === 'oracle' ? {patch_applied:1,setup_completed:1,fail_to_pass:1,pass_to_pass:1,deterministic:1} : {patch_applied:1,setup_completed:1,fail_to_pass:0,pass_to_pass:1};
-fs.writeFileSync(path.join(trial, 'result.json'), JSON.stringify(fs.existsSync(${JSON.stringify(join(root, "fail-start"))}) ? {exception_info:{exception_type:'RuntimeError',exception_message:'manifest unknown'}} : {verifier_result:{rewards}}));
+const failStart = fs.existsSync(${JSON.stringify(join(root, "fail-start"))}) || (agent === 'oracle' && fs.existsSync(${JSON.stringify(join(root, "fail-oracle-start"))}));
+const failOracle = agent === 'oracle' && fs.existsSync(${JSON.stringify(join(root, "fail-oracle"))});
+fs.writeFileSync(path.join(trial, 'result.json'), JSON.stringify(failOracle ? {agent_execution:{started_at:'2026-10-26T00:00:00Z'},exception_info:{exception_type:'AgentTimeoutError',exception_message:'oracle timed out'}} : failStart ? {exception_info:{exception_type:'RuntimeError',exception_message:'manifest unknown'}} : {verifier_result:{rewards}}));
 fs.writeFileSync(path.join(directory, 'result.json'), JSON.stringify({trial_results:[{verifier_result:{rewards}}]}));
 `,
   );
@@ -123,4 +125,34 @@ test("a trial that cannot start from built images is retried, not charged to the
       }),
     ),
   ).rejects.toThrow("could not start task from its images: RuntimeError: manifest unknown");
+});
+
+test("an oracle trial that cannot start from built images is retried, not charged to the author", async () => {
+  const { root, store, build, task } = await attempt();
+  const builder: TaskImageBuilder = { build: async () => ({ images }) };
+  await writeFile(join(root, "fail-oracle-start"), "");
+  await expect(
+    run(root, () =>
+      runHarborGates(store, task, "docker", "verify/task", new AbortController().signal, {
+        builder,
+        build,
+        serving: { env: {} },
+      }),
+    ),
+  ).rejects.toThrow("oracle could not start task from its images: RuntimeError: manifest unknown");
+});
+
+test("an oracle that started and failed is still the author's oracle gate", async () => {
+  const { root, store, build, task } = await attempt();
+  const builder: TaskImageBuilder = { build: async () => ({ images }) };
+  await writeFile(join(root, "fail-oracle"), "");
+  const gates = await run(root, () =>
+    runHarborGates(store, task, "docker", "verify/task", new AbortController().signal, {
+      builder,
+      build,
+      serving: { env: {} },
+    }),
+  );
+  expect(gates.oracle).toMatchObject({ ran: true, ok: false });
+  expect(gates).not.toHaveProperty("images");
 });
