@@ -3,10 +3,8 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import { createPrioritySelectorBackend, createRequestHandler } from "@mupt-ai/dari-gateway";
+import { GATEWAY_PATH } from "./connection.js";
 import { type SelfBenchGatewayDeps, selfBenchPlatform } from "./platform.js";
-
-/** Where the API serves the gateway: `/gateway/v1/messages`, `/gateway/v1/responses`, … */
-const GATEWAY_PATH = "/gateway";
 
 /**
  * The model gateway every trial's agent calls, served by the API under GATEWAY_PATH. Returns a

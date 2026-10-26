@@ -235,3 +235,30 @@ test("usage rows sum to a trial's cost, flagging unpriced calls", async () => {
     await database.close();
   }
 });
+
+test("a connection's key is served by the gateway it points at", async () => {
+  const { gatewayConnection } = await import("../../src/gateway/connection.js");
+  const connection = gatewayConnection({
+    apiUrl: `${apiUrl}/`,
+    secret: SECRET,
+    orgId: 7,
+    credentialId: CREDENTIAL,
+    model: MODEL,
+    tags: { run: "r2", trial: "t9" },
+  });
+  expect(connection.openAiBase).toBe(`${apiUrl}/gateway/v1`);
+  expect(connection.host).toBe("127.0.0.1");
+  const response = await fetch(`${connection.openAiBase}/chat/completions`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${connection.key}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      model: connection.requestModel,
+      stream: true,
+      messages: [{ role: "user", content: "hello" }],
+    }),
+  });
+  expect(response.status).toBe(200);
+  await response.text();
+  await waitFor(() => usage.length === 1);
+  expect(usage[0]?.tags).toEqual({ run: "r2", trial: "t9" });
+});
