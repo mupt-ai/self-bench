@@ -105,7 +105,8 @@ export function cloudBuild(
     const role =
       failed === AGENT_STEP ? "agent" : failed === VERIFIER_STEP ? "verifier" : undefined;
     const step = failed === undefined || failed < 0 ? undefined : finished.steps?.[failed];
-    if (finished.status === "FAILURE" && role && step) {
+    // A step over its own limit may end the build as TIMEOUT rather than FAILURE.
+    if (["FAILURE", "TIMEOUT"].includes(finished.status) && role && step) {
       const log = stepLog(await cloud.log(finished.id), step.id ?? role);
       if (step.status === "TIMEOUT")
         return {
