@@ -8,16 +8,14 @@ import type { SelfBenchConfig } from "../../contracts/config/index.js";
 import type { BillingStore } from "../../db/billing.js";
 import type { RepoStore } from "../../db/repos.js";
 import type { RunStore } from "../../db/runs.js";
-import type { TaskStore } from "../../db/tasks.js";
 import type { User, UserStore } from "../../db/users.js";
 import type { Vault } from "../../db/vault.js";
-import { type BatchStatus, syncBatchProgress } from "../../generation/batches/progress.js";
+import type { BatchStatus } from "../../generation/batches/progress.js";
 import {
   type BatchStarter,
   batchSubmissionSchema,
   prepareBatch,
 } from "../../generation/batches/start.js";
-import type { GenerationBatch } from "../../generation/batches/types.js";
 import { managedBillingRefusal } from "../../generation/billing/eligibility.js";
 import { managedOffer } from "../../generation/billing/managed.js";
 import {
@@ -42,11 +40,9 @@ export interface BatchRoutesOptions {
   users: UserStore;
   repos: RepoStore;
   runs: RunStore;
-  tasks: TaskStore;
   artifacts: ArtifactStore;
   start: BatchStarter;
   status: (runId: string) => Promise<BatchStatus>;
-  batch: (runId: string) => Promise<GenerationBatch | undefined>;
   cancel: (runId: string) => Promise<void>;
   fetchImpl?: typeof fetch;
   vault?: Vault;
@@ -62,7 +58,7 @@ export interface BatchRoutes {
 }
 
 export function createBatchRoutes(options: BatchRoutesOptions): BatchRoutes {
-  const { users, repos, runs, tasks, artifacts } = options;
+  const { users, repos, runs } = options;
   return {
     async handle(request, url, response, user) {
       const match = route.exec(url.pathname);
@@ -198,9 +194,7 @@ export function createBatchRoutes(options: BatchRoutesOptions): BatchRoutes {
         return true;
       }
       if (!match[5] && request.method === "GET") {
-        const [status, batch] = await Promise.all([options.status(runId), options.batch(runId)]);
-        if (batch) await syncBatchProgress({ repo, tasks, artifacts, batch, status });
-        sendJson(response, 200, status);
+        sendJson(response, 200, await options.status(runId));
         return true;
       }
       return false;

@@ -5,6 +5,8 @@ import type {
   DiscoveryResult,
 } from "../../contracts/index.js";
 import type { BatchStore } from "../../db/batches.js";
+import type { RunStore } from "../../db/runs.js";
+import type { TaskStore } from "../../db/tasks.js";
 import type { UsageLedger } from "../../db/usage.js";
 import type { Vault } from "../../db/vault.js";
 import { githubToken } from "../../third_party/github/token.js";
@@ -13,6 +15,7 @@ import { exportBatch as buildBatchExport } from "./export.js";
 import { prepareGenerationBatch } from "./prepare.js";
 import {
   beginExport,
+  CANCELLED,
   completeExport,
   fail,
   finishCancel,
@@ -23,7 +26,7 @@ import {
   recordShard,
   recordShards,
 } from "./record.js";
-import type { GenerationBatch } from "./types.js";
+import { type GenerationBatch, isFinished } from "./types.js";
 
 type Shard = Pick<GenerationBatch["shards"][number], "workflowId" | "input">;
 
@@ -32,7 +35,10 @@ export interface BatchActivities {
   /** Fetches merged PRs and stages the discovery shards; none when the batch already ended. */
   prepareBatch(runId: string): Promise<Shard[]>;
   recordBatchShard(runId: string, index: number, outcome: Outcome<DiscoveryResult>): Promise<void>;
-  /** Plans one author workflow per discovered candidate; none when the batch ended instead. */
+  /**
+   * Plans one author workflow per discovered candidate, each with its task row in the batch's
+   * repository; none when the batch ended instead.
+   */
   planBatch(runId: string): Promise<{ workflowId: string; input: CandidateWorkflowInput }[]>;
   recordBatchCandidate(
     runId: string,
@@ -40,17 +46,20 @@ export interface BatchActivities {
     outcome: Outcome<CandidateWorkflowResult>,
   ): Promise<void>;
   exportBatch(runId: string): Promise<void>;
+  /** Ends the batch; candidates whose rows are still running stop with it. */
   recordBatchCancelled(runId: string): Promise<void>;
   failBatch(runId: string, error: string): Promise<void>;
 }
 
 export function createBatchActivities(options: {
   store: BatchStore;
+  tasks: TaskStore;
+  runs: Pick<RunStore, "repoOf">;
   artifacts: ArtifactStore;
   vault?: Vault;
   usage?: UsageLedger;
 }): BatchActivities {
-  const { store, artifacts, vault, usage } = options;
+  const { store, tasks, runs, artifacts, vault, usage } = options;
   const read = async (runId: string) => {
     const batch = await store.read(runId);
     if (!batch) throw new Error(`batch ${runId} not found`);
@@ -81,7 +90,23 @@ export function createBatchActivities(options: {
       await store.update(runId, (state) => recordShard(state, index, outcome));
     },
     async planBatch(runId) {
-      return plannedCandidates(await store.update(runId, planCandidates));
+      const planned = plannedCandidates(await store.update(runId, planCandidates));
+      const repoId = await runs.repoOf(runId);
+      if (repoId !== undefined)
+        await tasks.plan(
+          planned.map(({ workflowId, input: { candidate } }) => ({
+            repoId,
+            workflowId,
+            runId,
+            candidateId: candidate.candidateId,
+            taskId: candidate.candidateId,
+            sourcePr: candidate.sourcePr,
+            sourceUrl: candidate.sourceUrl,
+            difficulty: candidate.difficulty,
+            stage: "queued",
+          })),
+        );
+      return planned;
     },
     async recordBatchCandidate(runId, index, outcome) {
       await store.update(runId, (state) => recordCandidate(state, index, outcome));
@@ -93,10 +118,21 @@ export function createBatchActivities(options: {
       await store.update(runId, (state) => completeExport(state, reference));
     },
     async recordBatchCancelled(runId) {
-      await store.update(runId, finishCancel);
+      const batch = await store.update(runId, finishCancel);
+      if (isFinished(batch.phase))
+        await tasks.settleRun(runId, {
+          pipelineStatus: "infrastructure_failed",
+          stage: "cancelled",
+          reason: CANCELLED,
+        });
     },
     async failBatch(runId, error) {
-      await store.update(runId, (state) => fail(state, error));
+      const batch = await store.update(runId, (state) => fail(state, error));
+      await tasks.settleRun(runId, {
+        pipelineStatus: "infrastructure_failed",
+        stage: batch.phase === "cancelled" ? "cancelled" : "authoring",
+        reason: batch.phase === "cancelled" ? CANCELLED : (batch.error ?? error),
+      });
     },
   };
 }

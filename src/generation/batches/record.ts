@@ -1,8 +1,9 @@
-import type {
-  ArtifactRef,
-  CandidateWorkflowInput,
-  CandidateWorkflowResult,
-  DiscoveryResult,
+import {
+  type ArtifactRef,
+  type CandidateWorkflowInput,
+  type CandidateWorkflowResult,
+  candidateWorkflowId,
+  type DiscoveryResult,
 } from "../../contracts/index.js";
 import { type GenerationBatch, isFinished, settled } from "./types.js";
 
@@ -85,7 +86,7 @@ export function planCandidates(batch: GenerationBatch): boolean {
       ).length;
       if (tier >= batch.run.candidateCounts[candidate.difficulty]) continue;
       candidates.push({
-        workflowId: `${batch.run.runId}/candidate/${candidate.candidateId}`,
+        workflowId: candidateWorkflowId(batch.run.runId, candidate.candidateId),
         candidate,
       });
     }

@@ -14,6 +14,8 @@ export interface RunStore {
   attachRun(repoId: number, runId: string, userId: number): Promise<AttachedRun>;
   /** True when a row was removed. */
   detachRun(repoId: number, runId: string): Promise<boolean>;
+  /** The repository a run is attached to; undefined for a run outside any (the CLI's). */
+  repoOf(runId: string): Promise<number | undefined>;
 }
 
 export function createRunStore(db: Database, options: { now?: () => Date } = {}): RunStore {
@@ -47,6 +49,15 @@ export function createRunStore(db: Database, options: { now?: () => Date } = {})
         .where(and(eq(repoRuns.repoId, repoId), eq(repoRuns.runId, runId)))
         .returning({ runId: repoRuns.runId });
       return rows.length > 0;
+    },
+    async repoOf(runId) {
+      const [row] = await db
+        .select({ repoId: repoRuns.repoId })
+        .from(repoRuns)
+        .where(eq(repoRuns.runId, runId))
+        .orderBy(repoRuns.attachedAt)
+        .limit(1);
+      return row?.repoId;
     },
   };
 }

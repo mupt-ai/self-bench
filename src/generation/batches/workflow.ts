@@ -36,10 +36,10 @@ const exporting = proxyActivities<Pick<BatchActivities, "exportBatch">>({
   startToCloseTimeout: "1 hour",
   retry: { maximumAttempts: 3 },
 });
+// Candidates keep their own deadline (selfBenchAuthorWorkflow), so they settle their rows.
 const child = {
   cancellationType: ChildWorkflowCancellationType.WAIT_CANCELLATION_COMPLETED,
   parentClosePolicy: ParentClosePolicy.TERMINATE,
-  workflowExecutionTimeout: "14 days",
 };
 
 export interface BatchChildren {

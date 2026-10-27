@@ -8,6 +8,7 @@ import type { ArtifactStore } from "../../artifacts/index.js";
 import type { RunRequest } from "../../contracts/index.js";
 import { createBatchStore } from "../../db/batches.js";
 import type { Database } from "../../db/client.js";
+import { createTaskStore } from "../../db/tasks.js";
 import { createUsageStore } from "../../db/usage.js";
 import { generationCost } from "../billing/cost-status.js";
 import { loadDiscoveryShards, mergeDiscoveryShards } from "../runs/discovery-shards.js";
@@ -38,14 +39,17 @@ export function createGenerationBatches(
   const store = createBatchStore(db);
   const usage = createUsageStore(db);
   const observe = batchObserver(client);
-  // A workflow that closed, or never started, without recording an outcome leaves its batch
-  // unfinished; the next read settles it.
-  const settleAbandoned = async (batch: GenerationBatch) => {
+  const tasks = createTaskStore(db);
+  // A workflow terminated, or never started, records no outcome; a read shows its batch as
+  // failed without writing anything.
+  const shown = async (batch: GenerationBatch) => {
     if (isFinished(batch.phase)) return batch;
     const status = await batchWorkflowStatus(client, batch.run.runId).catch(() => "RUNNING");
     if (status === "RUNNING") return batch;
     if (!status && Date.now() - (batch.acceptedAt ?? 0) < START_GRACE_MS) return batch;
-    return store.update(batch.run.runId, (state) => abandon(state, status));
+    const abandoned = structuredClone(batch);
+    abandon(abandoned, status);
+    return abandoned;
   };
   return {
     async start(run: RunRequest) {
@@ -78,8 +82,11 @@ export function createGenerationBatches(
     async status(runId: string): Promise<BatchStatus> {
       const stored = await store.read(runId);
       if (!stored) throw new RunNotFoundError(runId);
-      const { batch, activity } = await observe(await settleAbandoned(stored));
-      let base: BatchStatus = { ...batchStatus(batch), ...(activity ? { activity } : {}) };
+      const [{ batch, activity }, rows] = await Promise.all([
+        shown(stored).then(observe),
+        tasks.listForRun(runId),
+      ]);
+      let base: BatchStatus = { ...batchStatus(batch, rows), activity };
       if (batch.run.generation) {
         const { settings } = batch.run.generation;
         const orgId = batch.run.generation.orgId ?? batch.run.generation.ownerId;

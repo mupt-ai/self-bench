@@ -8,6 +8,13 @@ export class TaskNotFoundError extends Error {
   }
 }
 
+/** A review of a task whose workflow has not settled it yet. */
+export class TaskNotSettledError extends Error {
+  constructor() {
+    super("Task generation is still in progress");
+  }
+}
+
 /** Keep status validation and tombstoning under the same row lock as ingestion/progress. */
 export function tombstoneTask(
   db: Database,

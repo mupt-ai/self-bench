@@ -4,7 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { createBatchStore } from "../../src/db/batches.js";
-import { generationBatches } from "../../src/db/schema.js";
+import { createRepoStore } from "../../src/db/repos.js";
+import { createRunStore } from "../../src/db/runs.js";
+import { generationBatches, tasks as taskRows } from "../../src/db/schema.js";
+import { createTaskStore } from "../../src/db/tasks.js";
+import { createUserStore } from "../../src/db/users.js";
 import { createBatchActivities } from "../../src/generation/batches/activities.js";
 import * as exporter from "../../src/generation/batches/export.js";
 import * as preparer from "../../src/generation/batches/prepare.js";
@@ -47,20 +51,40 @@ const result = (id: string, status: "accepted" | "rejected", taskId = id) => ({
     : {}),
 });
 
-let shared: Awaited<ReturnType<typeof testDatabase>> | undefined;
+let shared: { database: Awaited<ReturnType<typeof testDatabase>>; repoId: number } | undefined;
+
+/** The test run, attached to a connected repository so its candidates get task rows. */
+async function connectedDatabase() {
+  const database = await testDatabase();
+  const users = createUserStore(database.db, { secret: "batch-activities-secret" });
+  const user = await users.upsert({ githubId: 1, login: "o", token: "t", scopes: "", orgs: [] });
+  const [org] = await users.orgsFor(user.id);
+  if (!org) throw new Error("org missing");
+  const repo = await createRepoStore(database.db).connect({
+    orgId: org.id,
+    githubId: 1,
+    fullName: "o/r",
+    defaultBranch: "main",
+    private: false,
+    connectedBy: user.id,
+  });
+  await createRunStore(database.db).attachRun(repo.id, run.runId, user.id);
+  return { database, repoId: repo.id };
+}
 
 /** A fresh batch record; cases within a test share one database, one batch at a time. */
 async function activitiesFor(state: Partial<GenerationBatch>) {
   if (!shared) {
-    const database = await testDatabase();
-    shared = database;
+    const connected = await connectedDatabase();
+    shared = connected;
     cleanups.push(async () => {
       shared = undefined;
-      await database.close();
+      await connected.database.close();
     });
   }
-  const database = shared;
+  const { database, repoId } = shared;
   await database.db.delete(generationBatches);
+  await database.db.delete(taskRows);
   const directory = await mkdtemp(join(tmpdir(), "batch-activities-"));
   cleanups.push(() => rm(directory, { recursive: true, force: true }));
   const vault = memoryVault();
@@ -73,8 +97,11 @@ async function activitiesFor(state: Partial<GenerationBatch>) {
     candidates: [],
     ...state,
   });
+  const tasks = createTaskStore(database.db);
   const activities = createBatchActivities({
     store,
+    tasks,
+    runs: createRunStore(database.db),
     artifacts: new LocalArtifactStore(directory),
     vault,
   });
@@ -83,7 +110,7 @@ async function activitiesFor(state: Partial<GenerationBatch>) {
     if (!batch) throw new Error("batch missing");
     return batch;
   };
-  return { activities, store, vault, read };
+  return { activities, store, tasks, repoId, vault, read };
 }
 
 test("preparation reads the submitter's saved token once and records the shards", async () => {
@@ -230,4 +257,28 @@ test("a cancel keeps finished work, and one that lands during export wins over t
   await exporting.activities.exportBatch(run.runId);
   expect(await exporting.read()).toMatchObject({ phase: "cancelled" });
   expect((await exporting.read()).export).toBeUndefined();
+});
+
+test("planning gives each candidate its task row; a stopped batch settles the rows still running", async () => {
+  const two = { ...run, candidateCounts: { easy: 0, medium: 0, hard: 2 } };
+  const f = await activitiesFor({ run: two, phase: "discovering", shards: [shard(0)] });
+  await f.activities.recordBatchShard(run.runId, 0, {
+    result: { report: artifact, candidates: [candidate("one", 1), candidate("two", 2)] },
+  });
+  await f.activities.planBatch(run.runId);
+  // A retried plan inserts nothing twice.
+  await f.activities.planBatch(run.runId);
+  const planned = await f.tasks.listForRun(run.runId);
+  expect(planned).toMatchObject([
+    { candidateId: "one", pipelineStatus: "in_progress", stage: "queued", sourcePr: 1 },
+    { candidateId: "two", pipelineStatus: "in_progress", stage: "queued", sourcePr: 2 },
+  ]);
+  expect(planned[0]?.workflowId).toBe(`${run.runId}/candidate/one`);
+  await f.tasks.settle(run.runId, "one", { pipelineStatus: "rejected", stage: "authoring" });
+
+  await f.activities.failBatch(run.runId, "worker lost");
+  expect(await f.tasks.listForRun(run.runId)).toMatchObject([
+    { candidateId: "one", pipelineStatus: "rejected" },
+    { candidateId: "two", pipelineStatus: "infrastructure_failed", reason: "worker lost" },
+  ]);
 });

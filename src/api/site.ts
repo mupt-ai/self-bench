@@ -32,7 +32,7 @@ import {
   taskImagesWorkflowId,
   taskReviewChanged,
 } from "../generation/tasks/task-images-workflow.js";
-import { temporalStarter, temporalStatus } from "../generation/tasks/workflow-client.js";
+import { temporalStarter, temporalTaskWorkflows } from "../generation/tasks/workflow-client.js";
 import { projectRoot } from "../lib/project-paths.js";
 import { releasedTrials } from "../public/release-sources.js";
 import type { AuthConfig } from "./auth/config.js";
@@ -194,11 +194,9 @@ export async function openSite(
       users,
       repos,
       runs,
-      tasks,
       artifacts,
       start: (input) => batches.start(input),
       status: (runId) => batches.status(runId),
-      batch: (runId) => batches.read(runId),
       cancel: (runId) => batches.cancel(runId),
       billing: billingStore,
     }),
@@ -207,7 +205,7 @@ export async function openSite(
       repos,
       tasks,
       artifacts,
-      status: temporalStatus(client),
+      workflows: temporalTaskWorkflows(client),
       ...(config.taskImages
         ? {
             reviewChanged: async (taskRowId: number) => {

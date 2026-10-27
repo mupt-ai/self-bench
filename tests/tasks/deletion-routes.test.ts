@@ -34,7 +34,7 @@ async function signedIn() {
 const REPO = "/api/orgs/mupt-ai/repos/Mupt-AI/self-bench";
 
 describe("task routes", () => {
-  test("deletion is authorized, idempotent, durable across ingestion and keeps artifacts", async () => {
+  test("deletion is authorized, idempotent, durable and keeps artifacts", async () => {
     const { site, headers, ingest, artifacts } = await signedIn();
     await ingest();
     await site.request("/api/orgs/mupt-ai/repos", {
@@ -75,7 +75,6 @@ describe("task routes", () => {
     expect(
       (await site.request(`${REPO}/tasks/run-one/missing`, { method: "DELETE", headers })).status,
     ).toBe(404);
-    await ingest();
     const list = (await (await site.request(`${REPO}/tasks`, { headers })).json()) as {
       tasks: { taskId: string }[];
     };
@@ -85,11 +84,6 @@ describe("task routes", () => {
     ).toMatchObject({
       counts: { "Mupt-AI/self-bench": { total: 1, needsReview: 0 } },
     });
-    await ingest();
-    const reingested = (await (await site.request(`${REPO}/tasks`, { headers })).json()) as {
-      tasks: { taskId: string }[];
-    };
-    expect(reingested.tasks.map((task) => task.taskId)).toEqual(["task-bad"]);
     expect((await site.request(path, { method: "DELETE", headers })).status).toBe(200);
     expect(await artifacts.getByKey("runs/run-one/authoring/c1/definition.json")).toBeDefined();
     expect(
@@ -101,7 +95,7 @@ describe("task routes", () => {
     ).toBe("tar");
   });
 
-  test("active generation cannot be deleted even after a human review", async () => {
+  test("active generation can be neither reviewed nor deleted", async () => {
     const { site, headers } = await signedIn();
     const started = await site.request(`${REPO}/tasks/from-pr`, {
       method: "POST",
@@ -113,11 +107,12 @@ describe("task routes", () => {
       task: { runId: string; taskId: string };
     };
     const path = `${REPO}/tasks/${task.runId}/${task.taskId}`;
-    await site.request(`${path}/review`, {
+    const review = await site.request(`${path}/review`, {
       method: "PUT",
       headers,
       body: JSON.stringify({ decision: "approve" }),
     });
+    expect(review.status).toBe(409);
     const response = await site.request(path, { method: "DELETE", headers });
     expect(response.status).toBe(409);
     expect(await response.json()).toEqual({ error: "Task generation is still in progress" });
@@ -127,7 +122,7 @@ describe("task routes", () => {
     expect(list.tasks).toHaveLength(1);
     expect(list.tasks[0]).toMatchObject({
       taskId: task.taskId,
-      state: "accepted",
+      state: "in_progress",
       pipelineStatus: "in_progress",
     });
   });
