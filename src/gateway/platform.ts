@@ -158,6 +158,11 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
       const key = summary.api_key_id ? resolved.get(summary.api_key_id) : undefined;
       if (!key) return;
       try {
+        // A price the gateway applied from a placeholder (a custom endpoint, or a listed model with
+        // no list price) says nothing about what the call cost: that call is unpriced, not free.
+        const priced =
+          summary.cost_source === "provider" ||
+          (summary.cost_source === "pricing" && deps.modelPrice?.(key.model) !== undefined);
         deps.recordUsage({
           requestId: summary.request_id,
           orgId: key.orgId,
@@ -170,8 +175,8 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
           outputTokens: summary.output_tokens,
           cacheReadTokens: summary.cache_read_tokens,
           cacheWriteTokens: summary.cache_write_tokens,
-          costUsd: summary.total_cost_usd,
-          costSource: summary.cost_source,
+          costUsd: priced ? summary.total_cost_usd : null,
+          costSource: priced ? summary.cost_source : null,
         });
       } catch (error) {
         deps.captureError(error);

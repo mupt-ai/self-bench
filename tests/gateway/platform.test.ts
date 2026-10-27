@@ -114,6 +114,47 @@ describe("the platform a trial key resolves to", () => {
     await expect(refused.resolveRouter({ apiKey })).rejects.toMatchObject({ status: 403 });
   });
 
+  test("a call with no list price is recorded unpriced, not as a free call", async () => {
+    const recorded: { costUsd: number | null; costSource: string | null }[] = [];
+    const record = (
+      modelPrice?: (model: string) => undefined | { input: number; output: number },
+    ) => {
+      const gateway = platform(credential("custom", "https://approved.example/v1"), {
+        recordUsage: (usage) => recorded.push(usage),
+        ...(modelPrice ? { modelPrice } : {}),
+      });
+      return gateway;
+    };
+    const summarise = (gateway: ReturnType<typeof record>, model: string) =>
+      gateway.resolveRouter({ apiKey: trialKey({ model }) }).then((router) =>
+        gateway.recordRequest?.({
+          summary: {
+            request_id: `r-${model}`,
+            status: "completed",
+            api_key_id: router.api_key_id,
+            input_tokens: 8,
+            output_tokens: 3,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
+            total_cost_usd: 0,
+            cost_source: "pricing",
+          } as never,
+          tags: {},
+        } as never),
+      );
+    // No list price for the model: the gateway's zero placeholder is not a cost.
+    await summarise(record(), "custom/acme-coder");
+    // With a list price, the same call is priced.
+    await summarise(
+      record(() => ({ input: 2, output: 8 })),
+      "custom/acme-coder",
+    );
+    expect(recorded).toEqual([
+      expect.objectContaining({ costUsd: null, costSource: null }),
+      expect.objectContaining({ costUsd: 0, costSource: "pricing" }),
+    ]);
+  });
+
   test("the managed model credential is SelfBench's own OpenRouter key, when it is set", async () => {
     const vault = {
       find: async () => undefined,
