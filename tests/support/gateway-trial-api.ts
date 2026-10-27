@@ -125,7 +125,16 @@ export async function startTrialApi() {
   const apiUrl = `http://127.0.0.1:${(api.address() as AddressInfo).port}`;
 
   /** A trial's environment and connection, as the worker builds them. */
-  function trialFor(harness: Harness, credential: Credential, trial: string, judge?: TrialJudge) {
+  /** A judge's own connection, as the worker builds one for a judged trial. */
+  function judgeFor(judge: TrialJudge, trial: string) {
+    return gatewayConnection(apiUrl, SECRET, {
+      orgId: ORG,
+      judge,
+      tags: { run: "run-e2e", trial },
+    });
+  }
+
+  function trialFor(harness: Harness, credential: Credential, trial: string) {
     const { kind, auth, model } = CREDENTIALS[credential];
     const input = {
       modelName: model,
@@ -137,7 +146,6 @@ export async function startTrialApi() {
       credentialId: ids[credential],
       model: gatewayModelId(input),
       ...(thinking ? { thinking } : {}),
-      ...(judge ? { judge } : {}),
       tags: { run: "run-e2e", trial, harness },
     });
     // The worker's host environment holds every raw provider key; none may reach the trial.
@@ -172,6 +180,7 @@ export async function startTrialApi() {
     ids,
     failures,
     trialFor,
+    judgeFor,
     usageRows,
     async close() {
       await new Promise((resolve) => api.close(resolve));

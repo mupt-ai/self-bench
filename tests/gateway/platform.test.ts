@@ -19,6 +19,19 @@ const CREDENTIAL = "8d6b2c4e-1f3a-4b5c-9d7e-0a1b2c3d4e5f";
 const MODEL = "openrouter/acme/model-a";
 const JUDGE = "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9";
 
+/** A key only a task's judge calls with, for its Anthropic credential. */
+function judgeKey(): string {
+  return signTrialKey(
+    {
+      orgId: 7,
+      judge: { credentialId: JUDGE, provider: "anthropic" },
+      tags: { run: "r1", trial: "t1" },
+      expiresAt: Date.now() + 60_000,
+    },
+    SECRET,
+  );
+}
+
 function trialKey(overrides: Partial<Parameters<typeof signTrialKey>[0]> = {}): string {
   return signTrialKey(
     {
@@ -116,17 +129,13 @@ describe("the platform a trial key resolves to", () => {
     await expect(refused.resolveRouter({ apiKey })).rejects.toMatchObject({ status: 403 });
   });
 
-  test("records each call as the gateway priced it, a judge's apart from the solver's", async () => {
+  test("records each call as the gateway priced it, a judge's under its own key", async () => {
     const recorded: { credentialId: string; model: string; tags: object; costUsd: unknown }[] = [];
     const gateway = platform(credential("openai"), {
       recordUsage: (usage) => recorded.push(usage),
     });
-    const apiKey = trialKey({
-      model: "openai/gpt-x",
-      judge: { credentialId: JUDGE, provider: "anthropic" },
-    });
-    const router = await gateway.resolveRouter({ apiKey });
-    const summary = (model: string, cost: number | null) =>
+    const record = async (apiKey: string, model: string, cost: number | null) => {
+      const router = await gateway.resolveRouter({ apiKey });
       gateway.recordRequest?.({
         summary: {
           request_id: `r-${model}`,
@@ -138,9 +147,10 @@ describe("the platform a trial key resolves to", () => {
         } as never,
         tags: {},
       } as never);
-    summary("openai/gpt-x", 0.5);
+    };
+    await record(trialKey({ model: "openai/gpt-x" }), "openai/gpt-x", 0.5);
     // Neither the provider nor a list price priced it: unpriced, not free.
-    summary("anthropic/claude-x", null);
+    await record(judgeKey(), "anthropic/claude-x", null);
     expect(recorded).toEqual([
       expect.objectContaining({ credentialId: CREDENTIAL, model: "openai/gpt-x", costUsd: 0.5 }),
       expect.objectContaining({
@@ -152,7 +162,7 @@ describe("the platform a trial key resolves to", () => {
     ]);
   });
 
-  test("a judge may call any model of its credential's provider, on the judge's key", async () => {
+  test("a judge's key calls any model of its provider on the judge's credential, and only that", async () => {
     const keys: Record<string, string> = { [CREDENTIAL]: "solver-key", [JUDGE]: "judge-key" };
     const gateway = platform(credential("openai"), {
       credentials: {
@@ -161,41 +171,30 @@ describe("the platform a trial key resolves to", () => {
         renew: async () => {},
       },
     });
-    const apiKey = trialKey({
-      model: "openai/gpt-x",
-      judge: { credentialId: JUDGE, provider: "anthropic" },
-    });
+    const apiKey = judgeKey();
     expect(await gateway.resolveRouter({ apiKey })).toMatchObject({
-      enabled_models: ["openai/gpt-x"],
+      enabled_models: [],
       strict: true,
       strict_providers: ["anthropic"],
       model_fallback_enabled: false,
     });
-    expect(await gateway.resolveProviderCredential({ apiKey, model: "openai/gpt-x" })).toEqual({
-      apiKey: "solver-key",
-    });
     expect(
       await gateway.resolveProviderCredential({ apiKey, model: "anthropic/claude-x" }),
     ).toEqual({ apiKey: "judge-key" });
-    await expect(
-      gateway.resolveProviderCredential({ apiKey, model: "openai/gpt-y" }),
-    ).rejects.toMatchObject({ status: 401 });
-    // A direct trial's key carries the judge alone: no solver model is enabled.
-    const judgeOnly = signTrialKey(
-      {
-        orgId: 7,
-        judge: { credentialId: JUDGE, provider: "anthropic" },
-        tags: {},
-        expiresAt: Date.now() + 60_000,
-      },
-      SECRET,
-    );
-    expect(await gateway.resolveRouter({ apiKey: judgeOnly })).toMatchObject({
-      enabled_models: [],
-      strict_providers: ["anthropic"],
-    });
-    // A key must name a solver or a judge, and a solver's model with its credential.
-    for (const key of [{}, { model: "openai/gpt-x" }, { credentialId: CREDENTIAL }])
+    // Not another provider's models, and not the model under test: that is the solver key's alone.
+    for (const model of ["openai/gpt-x", "openai/gpt-y"])
+      await expect(gateway.resolveProviderCredential({ apiKey, model })).rejects.toMatchObject({
+        status: 401,
+      });
+    // A key serves the model under test or a judge, never both, and a solver names both parts.
+    const judge = { credentialId: JUDGE, provider: "anthropic" };
+    for (const key of [
+      {},
+      { model: "openai/gpt-x" },
+      { credentialId: CREDENTIAL },
+      { credentialId: CREDENTIAL, model: "openai/gpt-x", judge },
+      { model: "openai/gpt-x", judge },
+    ])
       expect(
         readTrialKey(
           signTrialKey({ orgId: 7, tags: {}, expiresAt: Date.now() + 60_000, ...key }, SECRET),

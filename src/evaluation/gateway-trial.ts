@@ -108,12 +108,19 @@ export function gatewayTrial(
       ...(muse ? [] : ["--agent-kwarg", "model_api=openai-completions"]),
     ],
     child: { ...env },
-    // A judge on a direct trial still calls the gateway, from the sandbox.
-    extraAllowedHosts: [
-      ...(muse ? ["api.meta.ai"] : host(env.OPENAI_BASE_URL)),
-      ...(connection ? [connection.host] : []),
-    ],
+    extraAllowedHosts: muse ? ["api.meta.ai"] : host(env.OPENAI_BASE_URL),
   };
+}
+
+/**
+ * The hosts a trial's sandbox may reach: its model's, and the gateway's when a judge calls it, which
+ * runs in the sandbox or its verifier on any route.
+ */
+export function allowedHosts(
+  solver: Pick<SolverTrial, "extraAllowedHosts">,
+  judge?: Pick<GatewayConnection, "host">,
+): string[] {
+  return [...new Set([...solver.extraAllowedHosts, ...(judge ? [judge.host] : [])])];
 }
 
 function gatewayRouted(

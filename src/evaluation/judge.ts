@@ -75,7 +75,7 @@ export function judgeTrial(
       verifierEnv.add(`${name}=\${SELFBENCH_JUDGE_${name}}`);
     } else if (child[name] !== undefined && child[name] !== value)
       return {
-        refusal: `The task's sandbox reads ${name}, which Dari's router also uses: judge this task with another model`,
+        refusal: `The task's sandbox reads ${name}, which the model being tested also uses: a judge in the sandbox cannot share it`,
       };
     else next[name] = value;
   }

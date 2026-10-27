@@ -4,6 +4,7 @@ import { credentialSchema } from "../src/db/credentials.js";
 import { catalog } from "../src/evaluation/catalog.js";
 import { credentialExecution } from "../src/evaluation/execution.js";
 import {
+  allowedHosts,
   gatewayModelId,
   gatewayTrial,
   piGatewayModels,
@@ -167,17 +168,15 @@ test("a Meta key stays in the vault for the gateway, and reaches only Muse Code 
   expect(JSON.stringify(prepare)).not.toContain("meta-secret");
 });
 
-test("a judge on a direct trial lets the sandbox reach the gateway it calls", () => {
+test("a judge on any route lets the sandbox reach the gateway it calls", () => {
   const dari = input("custom", "openai/dari/routing");
-  const connection = {
-    key: "trial-key",
-    openAiBase: "https://api.selfbench.test/gateway/v1",
-    anthropicBase: "https://api.selfbench.test/gateway",
-    host: "api.selfbench.test",
-  };
+  const judge = { host: "api.selfbench.test" };
   const endpoint = { OPENAI_API_KEY: "key", OPENAI_BASE_URL: "https://models.example/v1" };
-  expect(gatewayTrial(dari, "pi", dari.modelName, endpoint, connection).extraAllowedHosts).toEqual([
-    "models.example",
+  const direct = gatewayTrial(dari, "pi", dari.modelName, endpoint);
+  expect(allowedHosts(direct, judge)).toEqual(["models.example", "api.selfbench.test"]);
+  expect(allowedHosts(direct)).toEqual(["models.example"]);
+  // A gateway trial already allows the gateway's host: the judge's adds no second entry.
+  expect(allowedHosts({ extraAllowedHosts: ["api.selfbench.test"] }, judge)).toEqual([
     "api.selfbench.test",
   ]);
 });

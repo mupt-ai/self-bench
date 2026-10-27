@@ -17,7 +17,13 @@ import {
 } from "../harnesses/harbor/task-safety.js";
 import type { runCommand } from "../lib/process.js";
 import { credentialExecution } from "./execution.js";
-import { gatewayModelId, gatewayTrial, gatewayTrialTag, pinnedThinking } from "./gateway-trial.js";
+import {
+  allowedHosts,
+  gatewayModelId,
+  gatewayTrial,
+  gatewayTrialTag,
+  pinnedThinking,
+} from "./gateway-trial.js";
 import { judgeEnvironment, judgeTrial } from "./judge.js";
 import { refuseTrial } from "./refusal.js";
 import type { RunnerOptions } from "./runner.js";
@@ -79,24 +85,39 @@ export async function setUpTrial(
     ...(options.setupSignal ? { signal: options.setupSignal } : {}),
   });
   // The trial reaches its model through the gateway, under a key that pins the model, unless its
-  // route is direct; its judge always does, under the same key, as any model of its provider.
+  // route is direct. A judge calls the gateway under its own key, which names only its credential:
+  // a key never serves both the model under test and the judge, so the two are never confused.
   const gatewayed = execution.route === "gateway";
-  let connection: GatewayConnection | undefined;
-  if (gatewayed || execution.judge) {
+  const gatewayAt = () => {
     if (!options.gateway) throw refuseTrial("The model gateway is not configured on this worker");
-    const thinking = gatewayed ? pinnedThinking(trial.harness, input.thinking) : undefined;
-    connection = gatewayConnection(options.gateway.api.url, options.gateway.api.secret, {
+    return options.gateway;
+  };
+  const tags = { run: run.id, trial: gatewayTrialTag(run, index), harness: trial.harness };
+  let connection: GatewayConnection | undefined;
+  if (gatewayed) {
+    const at = gatewayAt();
+    const thinking = pinnedThinking(trial.harness, input.thinking);
+    connection = gatewayConnection(at.api.url, at.api.secret, {
       orgId: execution.credential.orgId,
-      ...(gatewayed ? { credentialId: execution.credential.id, model: gatewayModelId(input) } : {}),
+      credentialId: execution.credential.id,
+      model: gatewayModelId(input),
       ...(thinking ? { thinking } : {}),
       // Codex speaks Responses; a custom endpoint must serve it that way, as its direct route did.
-      ...(gatewayed && trial.harness === "codex" ? { api: "openai-responses" as const } : {}),
-      ...(execution.judge ? { judge: execution.judge } : {}),
-      tags: { run: run.id, trial: gatewayTrialTag(run, index), harness: trial.harness },
+      ...(trial.harness === "codex" ? { api: "openai-responses" as const } : {}),
+      tags,
     });
     secrets.push(connection.key);
   }
+  const judgeConnection = execution.judge
+    ? gatewayConnection(gatewayAt().api.url, gatewayAt().api.secret, {
+        orgId: execution.credential.orgId,
+        judge: execution.judge,
+        tags,
+      })
+    : undefined;
+  if (judgeConnection) secrets.push(judgeConnection.key);
   const gateway = gatewayTrial(input, trial.harness, execution.profile.model, child, connection);
+  const extraAllowedHosts = allowedHosts(gateway, judgeConnection);
   const prepared = await prepareHarborRun(
     taskPath,
     trialRoot,
@@ -111,7 +132,7 @@ export async function setUpTrial(
     ? judgeTrial(
         hostVariables(await readTaskConfig(taskPath)),
         prepared.env,
-        execution.judge && connection ? judgeEnvironment(connection) : {},
+        judgeConnection ? judgeEnvironment(judgeConnection) : {},
       )
     : { child: prepared.env, verifierEnv: [] };
   if ("refusal" in judged) throw refuseTrial(judged.refusal);
@@ -125,6 +146,7 @@ export async function setUpTrial(
     taskPath,
     jobs: join(trialRoot, "jobs"),
     ...gateway,
+    extraAllowedHosts,
     modelAuth: execution.auth,
     // A gateway trial's cost is what the gateway recorded for its calls (runner.ts).
     ...(gatewayed ? { gatewayOrgId: execution.credential.orgId } : {}),

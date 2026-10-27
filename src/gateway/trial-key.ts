@@ -63,7 +63,12 @@ const keySchema = z
     tags: z.record(z.string(), z.string()),
     expiresAt: z.number(),
   })
-  .refine((key) => !key.credentialId === !key.model && (key.model || key.judge));
+  // A key serves either the model under test or a judge, never both.
+  .refine(
+    (key) =>
+      (key.model && key.credentialId && !key.judge) ||
+      (key.judge && !key.credentialId && !key.model),
+  );
 
 const PREFIX = "sbk_";
 

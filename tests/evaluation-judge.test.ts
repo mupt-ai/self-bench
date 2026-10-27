@@ -106,18 +106,17 @@ test("a trial gives the judge its key without touching the solver's own", () => 
     }).join(" "),
   ).toContain(`--ve ANTHROPIC_API_KEY=\${SELFBENCH_JUDGE_ANTHROPIC_API_KEY}`);
 
-  // A sandbox variable is Harbor's own environment. A gateway solver holds the same key and
-  // address there; only Dari's router, called directly, holds its own.
-  const shared = judgeTrial(
-    hostVariables(tau3),
-    { OPENAI_API_KEY: "trial-key", OPENAI_BASE_URL: connection.openAiBase },
-    judge,
-  );
-  if ("refusal" in shared) throw new Error(shared.refusal);
-  expect(shared.child.OPENAI_BASE_URL).toBe(connection.openAiBase);
+  // A sandbox variable is Harbor's own environment. The judge's key is its own, so where the model
+  // under test holds the same variable the judge cannot share it; where it does not, the judge may.
   expect(judgeTrial(hostVariables(tau3), solver, judge)).toEqual({
     refusal:
-      "The task's sandbox reads OPENAI_API_KEY, which Dari's router also uses: judge this task with another model",
+      "The task's sandbox reads OPENAI_API_KEY, which the model being tested also uses: a judge in the sandbox cannot share it",
+  });
+  const apart = judgeTrial(hostVariables(tau3), { PATH: "/usr/bin" }, judge);
+  if ("refusal" in apart) throw new Error(apart.refusal);
+  expect(apart.child).toMatchObject({
+    OPENAI_API_KEY: "trial-key",
+    OPENAI_BASE_URL: connection.openAiBase,
   });
 
   // A defaulted variable takes its default, even when the worker holds one by that name: the
