@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parse } from "smol-toml";
-import { gatewayTrial } from "../src/evaluation/execution.js";
+import { gatewayTrial } from "../src/evaluation/gateway-trial.js";
 import { solverArguments } from "../src/evaluation/solver-arguments.js";
 import { getEvaluation } from "../src/evaluation/store.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";

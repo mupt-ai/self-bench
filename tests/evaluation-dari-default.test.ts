@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { credentialSchema, dariEndpoint } from "../src/db/credentials.js";
 import { dariRouter, evaluationCatalog } from "../src/evaluation/catalog.js";
 import { isDariRun } from "../src/evaluation/dari/cost.js";
-import { gatewayTrial } from "../src/evaluation/execution.js";
+import { gatewayTrial } from "../src/evaluation/gateway-trial.js";
 import { routeFor } from "../src/evaluation/models.js";
 import { initialEvaluation } from "../src/evaluation/store.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";

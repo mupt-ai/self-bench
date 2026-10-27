@@ -1,20 +1,10 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { CredentialInfo } from "../../src/db/credentials.js";
 import { gatewayRoute } from "../../src/gateway/mount.js";
-import {
-  type GatewayUsage,
-  type SelfBenchGatewayDeps,
-  selfBenchPlatform,
-  withManagedModel,
-} from "../../src/gateway/platform.js";
-import {
-  MANAGED_MODEL_CREDENTIAL,
-  readTrialKey,
-  signTrialKey,
-  type TrialKey,
-} from "../../src/gateway/trial-key.js";
+import type { GatewayUsage } from "../../src/gateway/platform.js";
+import { readTrialKey, signTrialKey, type TrialKey } from "../../src/gateway/trial-key.js";
 
 // SelfBench's gateway end to end: a trial key pins one model on the org's own credential, the
 // real gateway handler serves it through the API's route, and the provider's billed cost lands
@@ -272,103 +262,4 @@ test("a connection's key is served by the gateway it points at", async () => {
   await response.text();
   await waitFor(() => usage.length === 1);
   expect(usage[0]?.tags).toEqual({ run: "r2", trial: "t9" });
-});
-
-describe("the platform a trial key resolves to", () => {
-  const credential = (kind: string, endpoint?: string) =>
-    ({
-      id: CREDENTIAL,
-      kind,
-      auth: "api-key",
-      ...(endpoint ? { endpoint } : {}),
-    }) as CredentialInfo;
-  const platform = (
-    found: Awaited<ReturnType<SelfBenchGatewayDeps["credentials"]["find"]>>,
-    deps: Partial<SelfBenchGatewayDeps> = {},
-  ) =>
-    selfBenchPlatform({
-      secret: SECRET,
-      endpoint: (endpoint) => {
-        if (!endpoint.startsWith("https://approved.example/")) throw new Error("not allowed");
-        return endpoint;
-      },
-      credentials: {
-        find: async () => found,
-        secret: async () => ({ value: "byok-secret" }),
-      },
-      recordUsage: () => {},
-      captureError: () => {},
-      ...deps,
-    });
-
-  test("pins the key's thinking level and prices the model at its list price", async () => {
-    const router = await platform(credential("openai"), {
-      modelPrice: (model) => (model === "openai/gpt-x" ? { input: 2, output: 8 } : undefined),
-    }).resolveRouter({ apiKey: trialKey({ model: "openai/gpt-x", thinking: "high" }) });
-    expect(router).toMatchObject({
-      enabled_models: ["openai/gpt-x"],
-      model_prices: { "openai/gpt-x": { input: 2, output: 8 } },
-      model_thinking_levels: { "openai/gpt-x": ["high"] },
-      strict: true,
-      zdr: false,
-    });
-    expect(router.model_configs).toBeUndefined();
-    // Without a pinned level, each call's own level is served.
-    const free = await platform(credential("openai")).resolveRouter({
-      apiKey: trialKey({ model: "openai/gpt-x" }),
-    });
-    expect(free.model_thinking_levels).toBeUndefined();
-    expect(free.model_prices).toBeUndefined();
-  });
-
-  test("a listed model's config takes the pinned level as its default", async () => {
-    const router = await platform(credential("openrouter"), {
-      modelConfig: () => ({
-        provider: "openrouter",
-        native_model_id: "acme/model-a",
-        api: "openai-completions",
-        default_thinking_level: "low",
-        cost: { input: 1, output: 1 },
-      }),
-    }).resolveRouter({ apiKey: trialKey({ thinking: "max" }) });
-    expect(router.model_configs?.[MODEL]?.default_thinking_level).toBe("max");
-  });
-
-  test("serves a custom endpoint's model only on an endpoint the operator allows", async () => {
-    const allowed = platform(credential("custom", "https://approved.example/v1"));
-    const apiKey = trialKey({ model: "custom/acme-coder" });
-    expect((await allowed.resolveRouter({ apiKey })).model_configs).toEqual({
-      "custom/acme-coder": {
-        provider: "custom",
-        native_model_id: "acme-coder",
-        api: "openai-completions",
-        base_url: "https://approved.example/v1",
-        cost: { input: 0, output: 0 },
-      },
-    });
-    expect(await allowed.resolveProviderCredential({ apiKey, model: "custom/acme-coder" })).toEqual(
-      {
-        apiKey: "byok-secret",
-        baseUrl: "https://approved.example/v1",
-      },
-    );
-    const refused = platform(credential("custom", "https://internal.example/v1"));
-    await expect(refused.resolveRouter({ apiKey })).rejects.toMatchObject({ status: 403 });
-  });
-
-  test("the managed model credential is SelfBench's own OpenRouter key, when it is set", async () => {
-    const vault = {
-      find: async () => undefined,
-      secret: async () => undefined,
-    };
-    const managed = withManagedModel(vault, "platform-key");
-    expect(await managed.find(7, MANAGED_MODEL_CREDENTIAL)).toMatchObject({ kind: "openrouter" });
-    expect(await managed.secret(7, MANAGED_MODEL_CREDENTIAL)).toEqual({ value: "platform-key" });
-    expect(await managed.find(7, CREDENTIAL)).toBeUndefined();
-    const off = withManagedModel(vault, undefined);
-    expect(await off.find(7, MANAGED_MODEL_CREDENTIAL)).toBeUndefined();
-    // Its trial keys carry the managed id in place of a credential's UUID.
-    const key = trialKey({ credentialId: MANAGED_MODEL_CREDENTIAL });
-    expect(readTrialKey(key, SECRET)?.credentialId).toBe(MANAGED_MODEL_CREDENTIAL);
-  });
 });

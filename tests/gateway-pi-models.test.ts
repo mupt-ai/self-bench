@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { piGatewayModels } from "../src/evaluation/execution.js";
+import { piGatewayModels } from "../src/evaluation/gateway-trial.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";
 import { gatewayModelPrice, listedModelConfig } from "../src/gateway/models.js";
 import { gatewayIds, piModels, setGatewayListing } from "../src/gateways/index.js";

@@ -1,6 +1,6 @@
 import type { HarborEnvironment } from "../contracts/config/providers.js";
 import { harborRunArguments } from "../harnesses/harbor/command.js";
-import type { SolverTrial } from "./execution.js";
+import type { SolverTrial } from "./gateway-trial.js";
 
 /** The `harbor run` arguments for a trial's solver, as its route resolved it (gatewayTrial). */
 export function solverArguments(

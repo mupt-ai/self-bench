@@ -16,14 +16,10 @@ import {
   refuseWithoutRetry,
 } from "../harnesses/harbor/task-safety.js";
 import type { runCommand } from "../lib/process.js";
-import {
-  credentialExecution,
-  gatewayModelId,
-  gatewayTrial,
-  pinnedThinking,
-  refuseTrial,
-} from "./execution.js";
+import { credentialExecution } from "./execution.js";
+import { gatewayModelId, gatewayTrial, pinnedThinking } from "./gateway-trial.js";
 import { judgeTrial } from "./judge.js";
+import { refuseTrial } from "./refusal.js";
 import type { RunnerOptions } from "./runner.js";
 import { unpackTrialTask } from "./task-bundle.js";
 import type { EvaluationInput, EvaluationRun, EvaluationTrial } from "./types.js";

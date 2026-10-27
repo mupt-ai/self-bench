@@ -6,7 +6,6 @@ import type { ArtifactStore } from "../artifacts/index.js";
 import { trialTimeouts } from "../contracts/agent-limit.js";
 import type { CredentialInfo } from "../db/credentials.js";
 import type { Vault } from "../db/vault.js";
-import type { createGatewayUsageStore } from "../gateway/usage-store.js";
 import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
 import type { HarborOutputGuard } from "../harnesses/harbor/output-guard.js";
 import { runCommand } from "../lib/process.js";
@@ -31,16 +30,9 @@ import { scopeOf } from "./scope.js";
 import { solverArguments } from "./solver-arguments.js";
 import { evaluationPrefix, RepeatSpendError } from "./store.js";
 import { transcriptSteps } from "./transcript.js";
-import { gatewayTrialTag, setUpTrial } from "./trial-setup.js";
+import { gatewayTrialCost, type TrialGateway } from "./trial-gateway.js";
+import { setUpTrial } from "./trial-setup.js";
 import type { EvaluationInput, EvaluationRun, EvaluationTrial } from "./types.js";
-
-/** SelfBench's model gateway, which a trial on an API key reaches its model through. */
-export interface TrialGateway {
-  /** The API's address as sandboxes reach it, and the secret its trial keys are signed with. */
-  readonly api: SandboxCallback;
-  /** What the gateway recorded each trial's calls cost. */
-  readonly usage: Pick<ReturnType<typeof createGatewayUsageStore>, "trialCost">;
-}
 
 export interface RunnerOptions {
   command?: typeof runCommand;
@@ -291,27 +283,4 @@ async function runTrial(context: {
     await polling;
     trial.log = trialLog(redact(stdout), outputs);
   }
-}
-
-/**
- * What the gateway recorded the trial's calls cost, which replaces any estimate: the provider's
- * own charge where it reports one (OpenRouter, Vercel AI Gateway), else the model's list price.
- * A call neither priced leaves the total incomplete. Nothing when the trial made no call.
- */
-async function gatewayTrialCost(
-  gateway: TrialGateway,
-  orgId: number,
-  run: EvaluationRun,
-  index: number,
-): Promise<
-  Pick<EvaluationTrial, "apiCostUsd" | "billedCostUsd" | "costSource" | "costIncomplete">
-> {
-  const cost = await gateway.usage.trialCost(orgId, gatewayTrialTag(run, index));
-  if (!cost) return {};
-  return {
-    apiCostUsd: cost.costUsd,
-    billedCostUsd: cost.costUsd,
-    costSource: "gateway",
-    ...(cost.complete ? {} : { costIncomplete: true }),
-  };
 }

@@ -8,8 +8,9 @@ import { explainTrialFailure } from "./failure-summary.js";
 import { failEvaluation, failTrial, finishEvaluation, startEvaluation } from "./lifecycle.js";
 import { environmentSecrets, redactOutput } from "./output.js";
 import { prepareTaskImages } from "./prepare.js";
-import { executeTrial, type RunnerOptions, type TrialGateway } from "./runner.js";
+import { executeTrial, type RunnerOptions } from "./runner.js";
 import { auditTask, type TaskAuditRequest } from "./task-audit.js";
+import type { TrialGateway } from "./trial-gateway.js";
 import type { EvaluationInput, FailedTrial } from "./types.js";
 
 export interface EvaluationActivities {

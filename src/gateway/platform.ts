@@ -1,5 +1,10 @@
 import { createHash } from "node:crypto";
-import type { GatewayPlatform, RequestSummary, ResolvedRouter } from "@mupt-ai/dari-gateway";
+import type {
+  GatewayPlatform,
+  ProviderCredential,
+  RequestSummary,
+  ResolvedRouter,
+} from "@mupt-ai/dari-gateway";
 import { HttpError } from "@mupt-ai/dari-gateway/http/errors";
 import type { CredentialInfo, CredentialSecret } from "../db/credentials.js";
 import { MANAGED_MODEL_CREDENTIAL, readTrialKey, type TrialKey } from "./trial-key.js";
@@ -57,13 +62,28 @@ export interface SelfBenchGatewayDeps {
 const ROUTER_ID = "selfbench";
 
 /**
+ * The platform's two lookups, narrowed to what a trial key carries: the gateway's own requests
+ * also name a router and an organization, which SelfBench's single router does not need.
+ */
+export type SelfBenchPlatform = Omit<
+  GatewayPlatform,
+  "resolveRouter" | "resolveProviderCredential"
+> & {
+  resolveRouter(request: { apiKey: string }): Promise<ResolvedRouter>;
+  resolveProviderCredential(request: {
+    apiKey: string;
+    model?: string;
+  }): Promise<ProviderCredential | undefined>;
+};
+
+/**
  * SelfBench's gateway platform. A request authenticates with a trial key (trial-key.ts), which
  * pins one model on one of the org's credentials: the router is strict, so the gateway serves
  * exactly that model (at the key's thinking level, when it names one) and never falls back,
  * leases, or uses a subscription. Conversation routing state is not kept, since a strict router
  * never reads it.
  */
-export function selfBenchPlatform(deps: SelfBenchGatewayDeps): GatewayPlatform {
+export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform {
   // The key behind each api_key_id this process resolved, so recordRequest can attribute usage.
   const resolved = new Map<string, TrialKey>();
   const keyOf = (token: string) => {
@@ -107,7 +127,12 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): GatewayPlatform {
         zdr: false,
       };
     },
-    async resolveProviderCredential({ apiKey }: { apiKey: string }) {
+    async resolveProviderCredential({
+      apiKey,
+    }: {
+      apiKey: string;
+      model?: string;
+    }): Promise<ProviderCredential> {
       const key = keyOf(apiKey);
       const [info, secret] = await Promise.all([
         deps.credentials.find(key.orgId, key.credentialId),

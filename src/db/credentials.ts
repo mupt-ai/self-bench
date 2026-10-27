@@ -41,6 +41,9 @@ export const credentialSchema = z
     auth: z.enum(credentialAuths).default("api-key"),
     value: z.string().min(1).max(24_000),
     tokenId: z.string().max(4096).optional(),
+    // Accepted and ignored: clients written before the gateway still send an OpenRouter management
+    // key, and rejecting it would fail them. Nothing reads it, and create() never stores it.
+    managementKey: z.string().max(4096).optional(),
     teamId: providerId.optional(),
     projectId: providerId.optional(),
     endpoint: z.preprocess((value) => (value === "" ? undefined : value), z.url().optional()),
