@@ -23,6 +23,8 @@ templates = {f"{name}__env": value for name, value in {
     "missing-build": ("b5", None),
     "unrelated-error": ("b6", None),
     "untagged": (None, None),
+    # Its build fails once another waiter has started b8 under the same name.
+    "moved": ("b7", TemplateBuildStatus.ERROR),
 }.items()}
 # A build another trial started: it is still running when first asked, then ends as given.
 later = {"building__env": TemplateBuildStatus.READY, "waiting__env": TemplateBuildStatus.ERROR}
@@ -37,6 +39,9 @@ class AsyncTemplate:
     async def get_build_status(info):
         build, status = templates[info.template_id]
         assert info.build_id == build, info
+        if info.template_id == "moved__env" and info.build_id == "b7":
+            templates[info.template_id] = ("b8", TemplateBuildStatus.READY)
+            return types.SimpleNamespace(status=TemplateBuildStatus.ERROR)
         if info.template_id == "missing-build__env": raise BuildException(f"400: Build '{build}' not found")
         if info.template_id == "unrelated-error__env": raise BuildException("401: Unauthorized")
         if info.template_id in later:
@@ -54,10 +59,10 @@ waits = []
 async def sleep(seconds): waits.append(seconds)
 module.asyncio.sleep = sleep
 async def check():
-    found = {name: await module.SelfBenchE2BEnvironment(name)._does_template_exist() for name in ["ready", "failed", "building", "waiting", "missing-build", "untagged", "missing"]}
+    found = {name: await module.SelfBenchE2BEnvironment(name)._does_template_exist() for name in ["ready", "failed", "building", "waiting", "missing-build", "untagged", "missing", "moved"]}
     # A running build is waited for, never built again (a second build would cancel it): one that
     # finishes is used, one that fails is rebuilt. An exact missing build is rebuilt.
-    assert found == {"ready": True, "failed": False, "building": True, "waiting": False, "missing-build": False, "untagged": False, "missing": False}, found
+    assert found == {"ready": True, "failed": False, "building": True, "waiting": False, "missing-build": False, "untagged": False, "missing": False, "moved": True}, found
     assert waits == [10, 10], waits
     try:
         await module.SelfBenchE2BEnvironment("unrelated-error")._does_template_exist()
