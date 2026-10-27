@@ -70,13 +70,7 @@ export function RetryErroredTasks({
         >
           <DialogHeader title={`Retry ${tasks}?`} titleId={titleId} onClose={close} busy={busy} />
           <DialogBody>
-            <p className="text-sm text-muted-foreground">
-              A new run tries {retry.errored === 1 ? "it" : "them"} again with this run's model and
-              model credential, on the sandbox below, and may spend on the model. Tasks that have
-              completed for this setting since are skipped. Its results replace the errors in this
-              setting's score.
-            </p>
-            <label className={`${fieldStyles} mt-4`} htmlFor={`${titleId}-sandbox`}>
+            <label className={fieldStyles} htmlFor={`${titleId}-sandbox`}>
               Sandbox
               <Select
                 id={`${titleId}-sandbox`}
