@@ -60,13 +60,16 @@ test("chosen configurations chart over the accepted tasks all of them have a usa
   expect(taskSet([high, low], accepted)).toEqual([]);
 });
 
-test("unknown task costs are never plotted as free", () => {
-  const trial = { ...passed("task-1"), apiCostUsd: undefined };
-  const configurations = configurationsOf([run("partial", {}, [trial])], credentials, NOW);
-  const configuration = configurations[0];
-  if (!configuration) throw new Error("Fixture configuration missing");
-  expect(configurationPoint(configuration, ["batch-1/task-1"])).toBeUndefined();
-  expect(configuration.costPerTask).toBeUndefined();
+test("unknown and zero task costs are never plotted on the log axis", () => {
+  for (const trial of [
+    { ...passed("task-1"), apiCostUsd: undefined },
+    { ...passed("task-1"), apiCostUsd: 0 },
+  ]) {
+    const configurations = configurationsOf([run("partial", {}, [trial])], credentials, NOW);
+    const configuration = configurations[0];
+    if (!configuration) throw new Error("Fixture configuration missing");
+    expect(configurationPoint(configuration, ["batch-1/task-1"])).toBeUndefined();
+  }
 });
 
 test("the default charts the group with the most results, and a saved choice replaces it", () => {

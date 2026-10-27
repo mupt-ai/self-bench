@@ -73,7 +73,7 @@ export function chosenOptions(
   return defaultPicks(options);
 }
 
-/** A configuration's point over tasks it has a usable result on every one of. */
+/** A configuration's point over tasks it has a usable result on every one of, if it has a cost. */
 export function configurationPoint(
   configuration: Configuration,
   tasks: readonly string[],
@@ -81,7 +81,8 @@ export function configurationPoint(
   const usable = usableResults(configuration);
   const results = tasks.flatMap((task) => usable.get(task) ?? []);
   const cost = costTotal(results.map((result) => result.trial)).perTask;
-  if (!results.length || cost === undefined) return undefined;
+  // A log axis cannot place a configuration that recorded no spend.
+  if (!results.length || !cost) return undefined;
   const mean = (values: number[]) =>
     values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length);
   return {

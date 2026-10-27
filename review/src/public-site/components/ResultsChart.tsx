@@ -66,7 +66,8 @@ export function ResultsChart({
         // A quiet corner button for making the chart's text smaller or larger.
         showSettings
         points={settings
-          .filter((setting) => setting.costedTasks !== 0)
+          // A log axis cannot place a setting that recorded no spend.
+          .filter((setting) => setting.costPerTaskUsd > 0)
           .map((setting) => ({
             id: setting.id,
             label: settingLabel(setting, settings),
