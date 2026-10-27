@@ -94,7 +94,6 @@ function fingerprintOf(inputs: ReleaseInputs, all: readonly Candidate[]): string
             result.index,
             result.trial.rewards.reward,
             result.trial.apiCostUsd,
-            result.trial.costIncomplete,
           ]),
       ]),
     }),
@@ -221,7 +220,6 @@ export function buildRelease(
             {
               pass: trial?.rewards.reward === 1,
               costUsd: trial?.apiCostUsd,
-              costIncomplete: trial?.costIncomplete,
               costSource: trial?.costSource,
               tokens: trial?.tokenUsage,
               cacheWritesInferred: trial?.cacheWritesInferred,

@@ -5,6 +5,7 @@ import { loadConfig } from "../src/contracts/config/index.js";
 import { openDatabase } from "../src/db/client.js";
 import { createRunSummaryStore } from "../src/db/evaluation-summaries.js";
 import { credentials, evaluationSummaries, releases } from "../src/db/schema.js";
+import { costTotal } from "../src/evaluation/cost-total.js";
 import { dariTrialCost } from "../src/evaluation/dari/cost.js";
 import { getEvaluation, keepRunSummaries, saveEvaluation } from "../src/evaluation/store.js";
 import type { EvaluationTrial } from "../src/evaluation/types.js";
@@ -15,7 +16,7 @@ import type { ReleasePayload } from "../src/public/release-types.js";
 import { modelAuth, storedHarborFiles } from "./recompute-cost.js";
 import { partialCodexCost } from "./partial-cost.js";
 
-/** Backed-up, evidence-only repair. Missing amounts remain unknown; existing complete prices stay. */
+/** Backed-up, evidence-only repair. Missing amounts remain unknown; existing prices stay. */
 export async function main() {
   const apply = process.argv.includes("--apply");
   const url = process.env.SELFBENCH_DATABASE_URL;
@@ -24,7 +25,7 @@ export async function main() {
   const store = createArtifactStore(loadConfig().artifact);
   keepRunSummaries(store, createRunSummaryStore(database.db));
   const backup = `maintenance/cost-coverage/${new Date().toISOString().replaceAll(":", "-")}`;
-  const runs = new Map<string, Pick<EvaluationTrial, "apiCostUsd" | "costIncomplete">[]>();
+  const runs = new Map<string, Pick<EvaluationTrial, "apiCostUsd">[]>();
   const report = { apply, backup, runsScanned: 0, runsChanged: 0, trialsRecovered: 0,
     trialsStillUnknown: 0, activeRunsSkipped: 0, releasesChanged: 0 };
   try {
@@ -44,15 +45,13 @@ export async function main() {
       const original = JSON.stringify(run);
       const auth = await modelAuth(run, lookup, undefined);
       for (const trial of run.trials) {
-        if (trial.apiCostUsd !== undefined && !trial.costIncomplete) continue;
+        if (trial.apiCostUsd !== undefined) continue;
         if (trial.status !== "completed" && trial.status !== "failed") continue;
         if (run.modelName !== "openai/dari/routing" && !(trial.harness === "codex" && run.credentials?.provider === "openai" && run.pricing && auth && trial.modelVerified)) {
-          trial.costIncomplete = true;
           report.trialsStillUnknown++;
           continue;
         }
         if (run.modelName === "openai/dari/routing" && !trial.artifacts.some(name => name.endsWith("/dari-billing.jsonl"))) {
-          trial.costIncomplete = true;
           report.trialsStillUnknown++;
           continue;
         }
@@ -62,19 +61,13 @@ export async function main() {
         const recovered = returned.apiCostUsd !== undefined ? returned
           : text ? partialCodexCost(run, trial, text, auth === "codex-login" || auth === "api-key" ? auth : undefined) : undefined;
         if (recovered?.apiCostUsd !== undefined) {
-          if (trial.apiCostUsd === undefined || recovered.apiCostUsd >= trial.apiCostUsd) {
-            Object.assign(trial, recovered);
-            if (!recovered.costIncomplete) delete trial.costIncomplete;
-            report.trialsRecovered++;
-            console.error(JSON.stringify({ recovered: run.id, repo: run.repoId, model: run.modelName,
-              task: trial.taskId, cost: trial.apiCostUsd, incomplete: !!trial.costIncomplete }));
-          }
-        } else {
-          trial.costIncomplete = true;
-          report.trialsStillUnknown++;
-        }
+          Object.assign(trial, recovered);
+          report.trialsRecovered++;
+          console.error(JSON.stringify({ recovered: run.id, repo: run.repoId, model: run.modelName,
+            task: trial.taskId, cost: trial.apiCostUsd }));
+        } else report.trialsStillUnknown++;
       }
-      runs.set(run.id, run.trials.map(trial => ({ ...(trial.apiCostUsd !== undefined ? { apiCostUsd: trial.apiCostUsd } : {}), ...(trial.costIncomplete ? { costIncomplete: true as const } : {}) })));
+      runs.set(run.id, run.trials.map(trial => (trial.apiCostUsd !== undefined ? { apiCostUsd: trial.apiCostUsd } : {})));
       if (original === JSON.stringify(run)) continue;
       report.runsChanged++;
       if (apply) {
@@ -90,27 +83,24 @@ export async function main() {
       const payload = structuredClone(row.payload) as ReleasePayload;
       const detail = structuredClone(row.detail) as Record<string, unknown>;
       const results = detail.results as Record<string, Record<string, { evaluationId?: string; trialIndex?: number;
-        costUsd?: number; costIncomplete?: true }>> | undefined;
+        costUsd?: number }>> | undefined;
       if (!results || !Array.isArray(detail.tasks)) throw new Error(`Release ${row.id} lacks auditable results`);
       for (const [key, tasks] of Object.entries(results)) {
         const setting = payload.settings.find(s => s.id === settingIdOf(key));
         if (!setting) continue;
         for (const result of Object.values(tasks)) {
           const trial = result.evaluationId ? runs.get(result.evaluationId)?.[result.trialIndex ?? -1] : undefined;
-          if (trial?.apiCostUsd !== undefined && result.costUsd === undefined) {
-            result.costUsd = trial.apiCostUsd;
-            if (trial.costIncomplete) result.costIncomplete = true;
-          }
+          if (trial?.apiCostUsd !== undefined && result.costUsd === undefined) result.costUsd = trial.apiCostUsd;
         }
-        const chosen = (detail.tasks as string[]).map(task => tasks[task]);
-        const known = chosen.filter(t => typeof t?.costUsd === "number");
-        setting.totalCostUsd = known.reduce((sum, t) => sum + (t?.costUsd ?? 0), 0);
-        setting.costPerTaskUsd = setting.totalCostUsd / setting.tasks;
-        setting.costedTasks = known.length;
-        if (known.length !== setting.tasks || chosen.some(t => t?.costIncomplete)) setting.costIncomplete = true;
-        else delete setting.costIncomplete;
+        const costs = costTotal((detail.tasks as string[]).map(task => {
+          const cost = tasks[task]?.costUsd;
+          return cost === undefined ? {} : { apiCostUsd: cost };
+        }));
+        setting.totalCostUsd = costs.total;
+        setting.costPerTaskUsd = costs.perTask ?? 0;
+        setting.costedTasks = costs.known;
       }
-      const frontier = frontierOf(payload.settings.filter(s => !s.costIncomplete));
+      const frontier = frontierOf(payload.settings.filter(s => s.costedTasks !== 0));
       for (const setting of payload.settings) setting.onFrontier = frontier.has(setting.id);
       payload.frontier = payload.settings.filter(s => s.onFrontier).map(s => s.id);
       if (isDeepStrictEqual(payload, row.payload) && isDeepStrictEqual(detail, row.detail)) continue;

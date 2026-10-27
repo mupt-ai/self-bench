@@ -1,5 +1,5 @@
 import { cn } from "../primitives/cn";
-import { CostValue } from "./CostValue";
+import { dollars } from "./benchmark";
 import { NoValue, OutcomeCircle, SortIcon, StateDetails } from "./ResultsMarks";
 import { BATCH_CHEVRON, TASK_INDENT } from "./ResultsTree";
 import type { Outcome, TaskResult } from "./results-model";
@@ -209,7 +209,7 @@ export function TaskRow({ entry, onOpen }: { entry: TaskEntry; onOpen(result: Ta
         {result.trial.apiCostUsd === undefined ? (
           <NoValue width={6} />
         ) : (
-          <CostValue value={result.trial.apiCostUsd} incomplete={result.trial.costIncomplete} />
+          dollars(result.trial.apiCostUsd)
         )}
       </td>
     </tr>

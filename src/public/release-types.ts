@@ -57,10 +57,9 @@ export interface ReleaseSetting {
   passed: number;
   /** Percentage, 0 to 100. */
   accuracy: number;
+  /** Mean over the tasks with a price; a task without one is not counted as free. */
   costPerTaskUsd: number;
   totalCostUsd: number;
-  /** Known lower bound only; must not participate in cost frontiers. */
-  costIncomplete?: true;
   /** Zero means no cost evidence; an aggregate zero is not a free setting. */
   costedTasks?: number;
   onFrontier: boolean;
@@ -121,7 +120,6 @@ export interface PublishedTrial
     | "verifierTimedOut"
     | "failureSummary"
     | "apiCostUsd"
-    | "costIncomplete"
     | "costSource"
     | "tokenUsage"
     | "cacheWritesInferred"

@@ -139,7 +139,7 @@ export function ChartPreview({
     ? "Choose configurations to chart."
     : !shared.length
       ? "They share no accepted task with a usable result. Untick one to chart the rest."
-      : `Over the ${plural(shared.length, "accepted task")} all of them have a usable result on.${points.length < chosen.length ? " Settings with incomplete costs are omitted." : ""}`;
+      : `Over the ${plural(shared.length, "accepted task")} all of them have a usable result on.${points.length < chosen.length ? " Settings with no recorded cost are omitted." : ""}`;
   return (
     <>
       {variant === "button" ? (

@@ -80,8 +80,8 @@ export function configurationPoint(
 ): BenchmarkPoint | undefined {
   const usable = usableResults(configuration);
   const results = tasks.flatMap((task) => usable.get(task) ?? []);
-  if (!results.length || costTotal(results.map((result) => result.trial)).incomplete)
-    return undefined;
+  const cost = costTotal(results.map((result) => result.trial)).perTask;
+  if (!results.length || cost === undefined) return undefined;
   const mean = (values: number[]) =>
     values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length);
   return {
@@ -95,7 +95,7 @@ export function configurationPoint(
     thinking: configuration.thinking ?? "default",
     harness: configuration.harness,
     accuracy: mean(results.map((result) => result.trial.rewards.reward ?? 0)) * 100,
-    cost: mean(results.map((result) => result.trial.apiCostUsd ?? 0)),
+    cost,
     tasks: results.length,
     datasetKey: String(tasks.length),
   };
