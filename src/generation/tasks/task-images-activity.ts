@@ -4,7 +4,7 @@ import type { Database } from "../../db/client.js";
 import type { Vault } from "../../db/vault.js";
 import { holdingCapacity } from "../../sandbox/capacity.js";
 import type { TaskImageBuilder } from "../images/builder.js";
-import { removeRegistryImage } from "../images/registry.js";
+import { discardCandidateImages } from "../images/registry.js";
 import type { GateImages } from "../pipeline/harbor-gates.js";
 import { withHeartbeats } from "../pipeline/helpers.js";
 import {
@@ -100,10 +100,17 @@ function createTaskImageRebuildActivities(options: {
               serving: options.serving,
               save: (bundleKey, images) => rows.save(task, bundleKey, images),
               // A local registry keeps its images; only Artifact Registry's are deleted.
-              removeImages: async (images) => {
+              discardImages: async (keep) => {
                 if (!isArtifactRegistry(options.repository)) return;
-                for (const image of [images.agent, images.verifier])
-                  await removeRegistryImage(image);
+                const kept = keep ? [keep.agent, keep.verifier] : [];
+                await discardCandidateImages(
+                  options.repository,
+                  task.runId,
+                  task.candidateId,
+                  async (digest) =>
+                    kept.some((image) => image.endsWith(`@${digest}`)) ||
+                    (await rows.referenced([digest], task.id)),
+                );
               },
               signal,
             }),

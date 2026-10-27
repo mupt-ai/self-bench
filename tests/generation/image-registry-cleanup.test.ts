@@ -71,3 +71,14 @@ test("image removal deletes the version, tolerates a missing one, and refuses ot
     "Not an Artifact Registry image",
   );
 });
+
+test("a rebuild's cleanup asks about every version, so a lone pushed agent goes too", async () => {
+  const names = candidateImageNames("run", "cand");
+  const { access, requests } = registry({ [names.agent]: [digest("a"), digest("b")] });
+  // `b` is pinned elsewhere; `a` was pushed by a build that failed before reporting its pair.
+  const pinned = async (version: string) => version === digest("b");
+  expect(await discardCandidateImages(REPOSITORY, "run", "cand", pinned, access)).toBe(1);
+  expect(requests.filter((request) => request.method === "DELETE").map((r) => r.url)).toEqual([
+    `${API}/${encodeURIComponent(names.agent)}/versions/${digest("a")}?force=true`,
+  ]);
+});

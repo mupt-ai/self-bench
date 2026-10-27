@@ -49,22 +49,26 @@ export async function removeRegistryImage(
 }
 
 /**
- * Deletes every image a candidate built except `keep` (its accepted pair): the attempts verification
- * rejected, or all of them for a candidate that was not accepted. Returns how many went.
+ * Deletes every image a candidate built except `keep` (its accepted pair, or a test of each digest):
+ * the attempts verification rejected, or all of them for a candidate that was not accepted. Returns
+ * how many went.
  */
 export async function discardCandidateImages(
   repository: string,
   runId: string,
   candidateId: string,
-  keep: readonly string[],
+  keep: readonly string[] | ((digest: string) => Promise<boolean>),
   access: RegistryAccess = GOOGLE,
 ): Promise<number> {
-  const kept = new Set(keep.map((image) => image.slice(image.indexOf("@") + 1)));
+  const kept = new Set(
+    typeof keep === "function" ? [] : keep.map((image) => image.slice(image.indexOf("@") + 1)),
+  );
+  const keeps = typeof keep === "function" ? keep : async (digest: string) => kept.has(digest);
   let removed = 0;
   for (const name of Object.values(candidateImageNames(runId, candidateId))) {
     const image = `${repository}/${name}`;
     for (const digest of await versions(image, access)) {
-      if (kept.has(digest)) continue;
+      if (await keeps(digest)) continue;
       await removeRegistryImage(`${image}@${digest}`, access);
       removed += 1;
     }

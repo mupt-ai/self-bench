@@ -52,7 +52,11 @@ export interface RebuildDependencies {
   readonly serving: GateImages["serving"];
   /** Records the images and execution bundle unless the row changed meanwhile. */
   readonly save: (bundleKey: string, images: TaskImages) => Promise<boolean>;
-  readonly removeImages: (images: TaskImages) => Promise<void>;
+  /**
+   * Deletes every image under the task's candidate names except `keep` and what something else
+   * pins, so a push the build never reported (one image of the pair, a lost worker) goes too.
+   */
+  readonly discardImages: (keep?: TaskImages) => Promise<void>;
   readonly signal: AbortSignal;
   readonly now?: () => Date;
   readonly gates?: typeof runHarborGates;
@@ -81,14 +85,6 @@ export async function rebuildTaskImages(
   const stamp = (deps.now?.() ?? new Date()).toISOString().replace(/[:.]/g, "-");
   const outputs = `${directory}/rebuild-${stamp}`;
   // Whatever the builder pushed is deleted unless the row ends up naming it.
-  let built: TaskImages | undefined;
-  const builder: TaskImageBuilder = {
-    build: async (...args) => {
-      const result = await deps.builder.build(...args);
-      if ("images" in result) built = result.images;
-      return result;
-    },
-  };
   try {
     const gates = await withExecutionEnvironment(env, () =>
       (deps.gates ?? runHarborGates)(
@@ -98,7 +94,7 @@ export async function rebuildTaskImages(
         outputs,
         deps.signal,
         {
-          builder,
+          builder: deps.builder,
           build: {
             runId: task.runId,
             candidateId: task.candidateId,
@@ -112,7 +108,7 @@ export async function rebuildTaskImages(
     );
     const failed = (["build", "smoke", "nop", "oracle"] as const).find((name) => !gates[name].ok);
     if (failed || !gates.images) {
-      if (built) await deps.removeImages(built);
+      await deps.discardImages();
       return { status: "failed", gate: failed ?? "images", outputs };
     }
     const delivered = await publishExecutionBundle(
@@ -124,10 +120,12 @@ export async function rebuildTaskImages(
     const bundleKey = delivered.uri.slice(delivered.uri.indexOf("/runs/") + 1);
     if (!(await deps.save(bundleKey, gates.images)))
       throw new Error("Task changed during the rebuild; its row is unchanged");
+    // Earlier attempts' pushes go; only storage is at stake, so this never fails the rebuild.
+    await deps.discardImages(gates.images).catch(() => {});
     return { status: "rebuilt", bundleKey, images: gates.images };
   } catch (error) {
-    // A publish, a save the row refused, or a lost worker: nothing names these images.
-    if (built) await deps.removeImages(built);
+    // A failed build or publish, or a save the row refused: nothing names these images.
+    await deps.discardImages();
     throw error;
   }
 }

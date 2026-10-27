@@ -60,7 +60,8 @@ async function legacy() {
 
 function deps(gates: (images: TaskImages) => Awaited<ReturnType<typeof runHarborGates>>) {
   const saved: unknown[] = [];
-  const removed: TaskImages[] = [];
+  /** Each discard, by the pair it keeps; `null` keeps nothing but what is pinned elsewhere. */
+  const discarded: (TaskImages | null)[] = [];
   const builds: unknown[] = [];
   const value: RebuildDependencies = {
     builder: { build: async () => ({ images }) } satisfies TaskImageBuilder,
@@ -70,8 +71,8 @@ function deps(gates: (images: TaskImages) => Awaited<ReturnType<typeof runHarbor
       saved.push({ bundleKey, recorded });
       return true;
     },
-    removeImages: async (gone) => {
-      removed.push(gone);
+    discardImages: async (keep) => {
+      discarded.push(keep ?? null);
     },
     signal: new AbortController().signal,
     now: () => new Date("2026-10-25T00:00:00Z"),
@@ -81,7 +82,7 @@ function deps(gates: (images: TaskImages) => Awaited<ReturnType<typeof runHarbor
       return gates(images);
     },
   };
-  return { value, saved, removed, builds };
+  return { value, saved, discarded, builds };
 }
 
 const passing = (built: TaskImages) => {
@@ -92,7 +93,7 @@ const passing = (built: TaskImages) => {
 
 test("a legacy task is split once, rebuilt, checked again on its own provider, and recorded", async () => {
   const store = await legacy();
-  const { value, saved, removed, builds } = deps(passing);
+  const { value, saved, discarded, builds } = deps(passing);
   const outcome = await rebuildTaskImages(store, task, value);
   expect(outcome).toMatchObject({ status: "rebuilt", images });
   // The gate task and snapshot are now stored beside the compiled bundle.
@@ -112,12 +113,13 @@ test("a legacy task is split once, rebuilt, checked again on its own provider, a
       recorded: images,
     },
   ]);
-  expect(removed).toEqual([]);
+  // Only the recorded pair survives the cleanup of earlier attempts.
+  expect(discarded).toEqual([images]);
 });
 
 test("images that fail a gate are deleted and the row is left alone", async () => {
   const store = await legacy();
-  const { value, saved, removed } = deps((built) => ({
+  const { value, saved, discarded } = deps((built) => ({
     ...passing(built),
     oracle: notRunGates().oracle,
   }));
@@ -127,7 +129,7 @@ test("images that fail a gate are deleted and the row is left alone", async () =
     outputs: `${attempt}/rebuild-2026-10-25T00-00-00-000Z`,
   });
   expect(saved).toEqual([]);
-  expect(removed).toEqual([images]);
+  expect(discarded).toEqual([null]);
 });
 
 test("only kept tasks without images are rebuilt", async () => {
@@ -169,12 +171,12 @@ test("images the row never takes are deleted, whatever stopped the rebuild", asy
   const refused = deps(passing);
   const value = { ...refused.value, save: async () => false };
   await expect(rebuildTaskImages(store, task, value)).rejects.toThrow("Task changed");
-  expect(refused.removed).toEqual([images]);
+  expect(refused.discarded).toEqual([null]);
   const lost = deps(() => {
     throw new Error("worker lost");
   });
   await expect(rebuildTaskImages(store, task, lost.value)).rejects.toThrow("worker lost");
-  expect(lost.removed).toEqual([images]);
+  expect(lost.discarded).toEqual([null]);
 });
 
 test("a legacy split streams its gate task and snapshot from disk, never through memory", async () => {
@@ -188,4 +190,19 @@ test("a legacy split streams its gate task and snapshot from disk, never through
   const { value } = deps(passing);
   expect(await rebuildTaskImages(store, task, value)).toMatchObject({ status: "rebuilt" });
   expect(await store.stat(`${attempt}/repo.tar.gz`)).toBeTruthy();
+});
+
+test("a build that pushed only part of its pair is cleaned up, though it reported no images", async () => {
+  const store = await legacy();
+  const partial = deps(passing);
+  const value: RebuildDependencies = {
+    ...partial.value,
+    builder: {
+      build: async () => {
+        throw new Error("verifier push failed after the agent pushed");
+      },
+    },
+  };
+  await expect(rebuildTaskImages(store, task, value)).rejects.toThrow("verifier push failed");
+  expect(partial.discarded).toEqual([null]);
 });
