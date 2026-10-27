@@ -9,20 +9,29 @@ const REFRESH_MARGIN_MS = 5 * 60_000;
 const refreshing = new Map<string, Promise<string>>();
 
 /**
+ * Tokens OpenAI issued that could not be saved yet. OpenAI retires a refresh token once it is used,
+ * so the next refresh in this process must start from these, not from the stored (retired) ones.
+ */
+const unsaved = new Map<string, string>();
+
+/**
  * The plan the gateway serves a sign-in's model on, with its access token: a Claude sign-in's
  * one-year token as saved, and a ChatGPT sign-in's from its Codex auth.json, refreshed and saved
- * back (`save`) when it is about to expire. A Meta sign-in never reaches the gateway.
+ * back (`save`) when it is about to expire. A failed save keeps the new tokens in this process and
+ * is reported (`report`), so the sign-in is not locked out. A Meta sign-in never reaches the gateway.
  */
 export async function signInCredential(
   credential: Pick<CredentialInfo, "id" | "auth">,
   value: string,
   save: (value: string) => Promise<void>,
+  report: (error: unknown) => void = () => {},
   fetcher: typeof fetch = fetch,
 ): Promise<ProviderCredential | undefined> {
   if (credential.auth === "claude-login")
     return { apiKey: value, subscription: "anthropic_claude_code" };
   if (credential.auth !== "codex-login") return undefined;
-  const auth = JSON.parse(value);
+  const current = unsaved.get(credential.id) ?? value;
+  const auth = JSON.parse(current);
   const { access_token: access, refresh_token: refreshToken, account_id } = auth.tokens ?? {};
   if (typeof access !== "string" || typeof refreshToken !== "string") return undefined;
   if (expiresAt(access) > Date.now() + REFRESH_MARGIN_MS)
@@ -40,9 +49,18 @@ export async function signInCredential(
         refresh_token: tokens.refreshToken,
         account_id: tokens.accountId,
       };
-      await save(
-        JSON.stringify({ ...auth, tokens: tokensFile, last_refresh: new Date().toISOString() }),
-      );
+      const renewed = JSON.stringify({
+        ...auth,
+        tokens: tokensFile,
+        last_refresh: new Date().toISOString(),
+      });
+      try {
+        await save(renewed);
+        unsaved.delete(credential.id);
+      } catch (error) {
+        unsaved.set(credential.id, renewed);
+        report(error);
+      }
       return tokens.accessToken;
     })().finally(() => refreshing.delete(credential.id));
     refreshing.set(credential.id, pending);

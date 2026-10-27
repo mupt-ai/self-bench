@@ -89,6 +89,8 @@ export async function setUpTrial(
       orgId: execution.credential.orgId,
       ...(gatewayed ? { credentialId: execution.credential.id, model: gatewayModelId(input) } : {}),
       ...(thinking ? { thinking } : {}),
+      // Codex speaks Responses; a custom endpoint must serve it that way, as its direct route did.
+      ...(gatewayed && trial.harness === "codex" ? { api: "openai-responses" as const } : {}),
       ...(execution.judge ? { judge: execution.judge } : {}),
       tags: { run: run.id, trial: gatewayTrialTag(run, index), harness: trial.harness },
     });

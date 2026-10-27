@@ -229,3 +229,33 @@ describe("the platform a trial key resolves to", () => {
     expect(readTrialKey(key, SECRET)?.credentialId).toBe(MANAGED_MODEL_CREDENTIAL);
   });
 });
+
+describe("a custom endpoint's protocol", () => {
+  test("Codex's trial calls the custom endpoint with Responses; other harnesses with Chat Completions", async () => {
+    const custom = () =>
+      selfBenchPlatform({
+        secret: SECRET,
+        endpoint: (endpoint) => endpoint,
+        credentials: {
+          find: async () =>
+            ({
+              id: CREDENTIAL,
+              kind: "custom",
+              auth: "api-key",
+              endpoint: "https://approved.example/v1",
+            }) as CredentialInfo,
+          secret: async () => ({ value: "byok-secret" }),
+          renew: async () => {},
+        },
+        recordUsage: () => {},
+        captureError: () => {},
+      });
+    const model = "custom/acme-coder";
+    const responses = await custom().resolveRouter({
+      apiKey: trialKey({ model, api: "openai-responses" }),
+    });
+    expect(responses.model_configs?.[model]).toMatchObject({ api: "openai-responses" });
+    const completions = await custom().resolveRouter({ apiKey: trialKey({ model }) });
+    expect(completions.model_configs?.[model]).toMatchObject({ api: "openai-completions" });
+  });
+});

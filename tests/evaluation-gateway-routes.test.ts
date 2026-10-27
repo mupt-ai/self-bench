@@ -166,3 +166,18 @@ test("a Meta key stays in the vault for the gateway, and reaches only Muse Code 
   expect(prepare.route).toBeUndefined();
   expect(JSON.stringify(prepare)).not.toContain("meta-secret");
 });
+
+test("a judge on a direct trial lets the sandbox reach the gateway it calls", () => {
+  const dari = input("custom", "openai/dari/routing");
+  const connection = {
+    key: "trial-key",
+    openAiBase: "https://api.selfbench.test/gateway/v1",
+    anthropicBase: "https://api.selfbench.test/gateway",
+    host: "api.selfbench.test",
+  };
+  const endpoint = { OPENAI_API_KEY: "key", OPENAI_BASE_URL: "https://models.example/v1" };
+  expect(gatewayTrial(dari, "pi", dari.modelName, endpoint, connection).extraAllowedHosts).toEqual([
+    "models.example",
+    "api.selfbench.test",
+  ]);
+});

@@ -108,7 +108,11 @@ export function gatewayTrial(
       ...(muse ? [] : ["--agent-kwarg", "model_api=openai-completions"]),
     ],
     child: { ...env },
-    extraAllowedHosts: muse ? ["api.meta.ai"] : host(env.OPENAI_BASE_URL),
+    // A judge on a direct trial still calls the gateway, from the sandbox.
+    extraAllowedHosts: [
+      ...(muse ? ["api.meta.ai"] : host(env.OPENAI_BASE_URL)),
+      ...(connection ? [connection.host] : []),
+    ],
   };
 }
 

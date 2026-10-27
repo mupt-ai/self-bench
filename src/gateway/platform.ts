@@ -106,8 +106,7 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
       const credential = credentialId && (await deps.credentials.find(key.orgId, credentialId));
       if (credentialId && !credential) throw unavailable("The trial's credential");
       const id = createHash("sha256").update(apiKey).digest("base64url").slice(0, 22);
-      const config =
-        model && credential ? modelConfig(deps, model, thinking, credential) : undefined;
+      const config = model && credential ? modelConfig(deps, key, credential) : undefined;
       const price = model && deps.modelPrice?.(model);
       for (const [stale, entry] of resolved)
         if (entry.expiresAt <= Date.now()) resolved.delete(stale);
@@ -147,8 +146,11 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
       const supplied =
         info.auth === "api-key"
           ? { apiKey: secret.value }
-          : await signInCredential(info, secret.value, (value) =>
-              deps.credentials.renew(key.orgId, id, value),
+          : await signInCredential(
+              info,
+              secret.value,
+              (value) => deps.credentials.renew(key.orgId, id, value),
+              deps.captureError,
             );
       if (!supplied) throw unavailable("The trial's sign-in");
       // A custom credential's own endpoint replaces the provider's.
@@ -228,17 +230,18 @@ function allowedEndpoint(deps: SelfBenchGatewayDeps, endpoint: string): string {
  */
 function modelConfig(
   deps: SelfBenchGatewayDeps,
-  model: string,
-  thinking: TrialKey["thinking"],
+  key: TrialKey,
   credential: Pick<CredentialInfo, "kind" | "endpoint">,
 ): GatewayModelConfig | undefined {
+  const { model, thinking } = key;
+  if (!model) return undefined;
   const config =
     deps.modelConfig?.(model) ??
     (credential.kind === "custom" && credential.endpoint
       ? {
           provider: "custom",
           native_model_id: model.slice(model.indexOf("/") + 1),
-          api: "openai-completions",
+          api: key.api ?? "openai-completions",
           base_url: allowedEndpoint(deps, credential.endpoint),
           cost: { input: 0, output: 0 },
         }

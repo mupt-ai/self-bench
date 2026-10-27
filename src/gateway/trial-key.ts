@@ -34,6 +34,8 @@ export interface TrialKey {
    * request itself (Codex's is dropped by the gateway). Absent, each call's own level is served.
    */
   readonly thinking?: PinnedThinking;
+  /** The protocol a custom endpoint is called with: Responses for Codex, else Chat Completions. */
+  readonly api?: "openai-responses";
   /** A task's LLM judge: any model of its credential's provider (TrialJudge). */
   readonly judge?: TrialJudge;
   /** Attribution for the requests it makes, recorded with their usage and cost. */
@@ -56,6 +58,7 @@ const keySchema = z
       .regex(/^[^/\s]+\/\S+$/)
       .optional(),
     thinking: z.enum(pinnedLevels).optional(),
+    api: z.literal("openai-responses").optional(),
     judge: z.object({ credentialId: z.uuid(), provider: z.string().min(1) }).optional(),
     tags: z.record(z.string(), z.string()),
     expiresAt: z.number(),
