@@ -8,7 +8,7 @@ test("solver invocation carries the trial's agent, model and arguments", () => {
     "/task",
     "/jobs",
     {
-      agent: "harbor_gateway:SelfBenchCodex",
+      agent: "harbor_gateway:GatewayCodex",
       model: "openai/gpt-6-astra",
       agentArguments: ["--agent-kwarg", "reasoning_effort=max"],
     },
@@ -16,7 +16,7 @@ test("solver invocation carries the trial's agent, model and arguments", () => {
   );
   expect(args.slice(-2)).toEqual(["--agent-kwarg", "reasoning_effort=max"]);
   expect(args[args.indexOf("--model") + 1]).toBe("openai/gpt-6-astra");
-  expect(args[args.indexOf("--agent") + 1]).toBe("harbor_gateway:SelfBenchCodex");
+  expect(args[args.indexOf("--agent") + 1]).toBe("harbor_gateway:GatewayCodex");
 });
 
 test("Dari's router on a custom endpoint keeps Harbor's explicit Chat Completions API style", () => {
@@ -34,9 +34,6 @@ test("Dari's router on a custom endpoint keeps Harbor's explicit Chat Completion
     "model_api=openai-completions",
   ]);
   expect(pi.extraAllowedHosts).toEqual(["routing.dari.dev"]);
-  expect(gatewayTrial(input, "codex", input.modelName, env).agentArguments).not.toContain(
-    "model_api=openai-completions",
-  );
 });
 
 test("solver argv cannot trigger author/oracle gates or implicit retries", () => {

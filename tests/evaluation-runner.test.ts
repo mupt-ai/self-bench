@@ -253,8 +253,7 @@ test("a gateway trial's cost is what the gateway recorded for its calls", async 
     );
     return { stdout: "", stderr: "", exitCode: 0 };
   };
-  // One of its calls went unpriced, so the total is known spend but not complete.
-  const gateway = testGateway({ [`${input.id}/0`]: { costUsd: 0.42, complete: false } });
+  const gateway = testGateway({ [`${input.id}/0`]: { costUsd: 0.42, complete: true } });
   await runEvaluation(store, input, { env: {}, vault, command, gateway });
   expect(tags).toEqual({ run: input.id, trial: `${input.id}/0`, harness: "codex" });
   expect((await getEvaluation(store, input, input.id))?.trials[0]).toMatchObject({
@@ -262,6 +261,5 @@ test("a gateway trial's cost is what the gateway recorded for its calls", async 
     apiCostUsd: 0.42,
     billedCostUsd: 0.42,
     costSource: "gateway",
-    costIncomplete: true,
   });
 });

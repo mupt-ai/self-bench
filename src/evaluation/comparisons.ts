@@ -75,7 +75,6 @@ export async function createComparison(
   owner: ComparisonOwner & { scope: { repoId: number } },
   draft: ComparisonDraft,
   environment: NodeJS.ProcessEnv = process.env,
-  fetcher: typeof fetch = fetch,
 ): Promise<ComparisonRecord> {
   const selection = comparisonSchema.parse(draft);
   return saveComparison(
@@ -87,7 +86,6 @@ export async function createComparison(
     JSON.stringify(selection),
     () => repositoryTasks(tasks, owner.scope.repoId, selection.tasks),
     environment,
-    fetcher,
   );
 }
 
@@ -103,7 +101,6 @@ export async function createBenchmarkComparison(
   tasks: FrozenTask[],
   draft: BenchmarkComparisonDraft,
   environment: NodeJS.ProcessEnv = process.env,
-  fetcher: typeof fetch = fetch,
 ): Promise<ComparisonRecord> {
   const selection = benchmarkComparisonSchema.parse(draft);
   return saveComparison(
@@ -115,7 +112,6 @@ export async function createBenchmarkComparison(
     JSON.stringify(selection),
     async () => tasks,
     environment,
-    fetcher,
     (tasks, saved) => judgeCredential(tasks, saved, selection.judgeCredentialId),
   );
 }
@@ -134,7 +130,7 @@ function judgeCredential(
   const credential = id ? saved.get(id) : undefined;
   if (!credential)
     throw new Error("These tasks grade with an LLM judge: select a judge credential");
-  const refusal = judgeCredentialRefusal(credential, needs);
+  const refusal = judgeCredentialRefusal(credential);
   if (refusal) throw new Error(refusal);
   return credential.id;
 }

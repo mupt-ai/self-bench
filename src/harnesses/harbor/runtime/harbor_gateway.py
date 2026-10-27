@@ -23,13 +23,7 @@ class SkipsSystemNode:
         await super().ensure_system_dependencies(environment, dependencies)
 
 
-class SelfBenchCodex(SkipsSystemNode, Codex):
-    async def exec_as_agent(self, environment, command, **kwargs):
-        command = 'export NVM_DIR="$HOME/.nvm"; ' + command
-        return await super().exec_as_agent(environment, command=command, **kwargs)
-
-
-class GatewayCodex(SelfBenchCodex):
+class GatewayCodex(SkipsSystemNode, Codex):
     def _build_effective_config(self, openai_base_url=None):
         # Codex tries the Responses API over a WebSocket first, which the gateway (and a custom
         # endpoint) need not serve: give it a provider that speaks HTTPS only.
@@ -46,6 +40,7 @@ class GatewayCodex(SelfBenchCodex):
         return config
 
     async def exec_as_agent(self, environment, command, **kwargs):
+        command = 'export NVM_DIR="$HOME/.nvm"; ' + command
         if "codex exec " in command:
             # Harbor's adapter keeps only the model name's last segment, but the gateway serves
             # `dari/model/<provider>/<model>` (the runner passes it as `openai/dari/model/...`).

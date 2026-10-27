@@ -1,68 +1,33 @@
-import { getBuiltinModel } from "@earendil-works/pi-ai/providers/all";
 import type { ThinkingLevel } from "../contracts/models.js";
+import type { CredentialInfo } from "../db/credentials.js";
 import type { GatewayConnection } from "../gateway/connection.js";
 import type { PinnedThinking } from "../gateway/trial-key.js";
-import { gateways, isGateway, listedModel, modelApiKeyVariable } from "../gateways/index.js";
-import { type CompatibleEndpoint, compatibleEndpoint } from "./compatible-endpoints.js";
+import type { createGatewayUsageStore } from "../gateway/usage-store.js";
+import { catalogEntry } from "../gateways/catalog.js";
+import { gateways } from "../gateways/index.js";
+import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
 import { isDariRun } from "./dari/cost.js";
 import { thinkingArguments } from "./models.js";
 import { refuseTrial } from "./refusal.js";
-import type { EvaluationInput, Harness } from "./types.js";
-
-function hostsFromEnvironment(env: NodeJS.ProcessEnv): string[] {
-  return ["OPENAI_BASE_URL", "OPENAI_API_BASE", "ANTHROPIC_BASE_URL"]
-    .flatMap((key) => {
-      const value = env[key];
-      if (!value) return [];
-      try {
-        return [new URL(value).hostname];
-      } catch {
-        return [];
-      }
-    })
-    .filter((host, index, hosts) => hosts.indexOf(host) === index);
-}
-
-/** The hosts a trial that calls its vendor directly (a sign-in, or Dari's router) must reach. */
-function directHosts(provider: string | undefined, env: NodeJS.ProcessEnv): string[] {
-  // Codex subscription traffic goes to ChatGPT, not the OpenAI API.
-  if (env.CODEX_AUTH_JSON_PATH) return ["chatgpt.com", "*.chatgpt.com", "auth.openai.com"];
-  const endpointHosts = hostsFromEnvironment(env);
-  if (endpointHosts.length) return endpointHosts;
-  if (provider === "anthropic") return ["api.anthropic.com"];
-  if (provider === "meta") return ["api.meta.ai"];
-  return [];
-}
+import type { EvaluationInput, EvaluationRun, EvaluationTrial, Harness } from "./types.js";
 
 /**
- * How a trial's agent reaches its model. An API key goes through SelfBench's gateway, which pins
- * the model, holds the key, and records each call's cost. Routes that stay direct: a sign-in (the
- * gateway serves no subscriptions yet), Dari's router (dari/cost.ts prices it by its own response),
- * a Meta key until DIRECT_API_KEY_PROVIDERS drops it (the gateway's Meta provider is unreleased),
- * and Muse Code on a Meta key (its CLI takes bare model ids, which the gateway's `dari/model/` ids
- * are not, so it keeps Meta's endpoint).
+ * How a trial's agent reaches its model. Every API key and ChatGPT or Claude sign-in goes through
+ * SelfBench's gateway, which pins the model, holds the key or plan, and records each call's cost.
+ * Routes that stay direct: Dari's router on Pi (the gateway reads a reported cost only from
+ * OpenRouter and Vercel, so dari/cost.ts prices it by its own response), and Muse Code on a Meta
+ * sign-in or key (its sign-in key is minted inside its CLI, and its CLI reads its model list from
+ * its endpoint's origin and takes the endpoint only from its own settings).
  */
 export type TrialRoute = "gateway" | "direct";
-
-/**
- * Providers whose API keys stay on their direct route. Meta stays here until the gateway's built-in
- * Meta provider (dari-mono #1052, combined with #1054) ships in a published @mupt-ai/dari-gateway:
- * until then the gateway cannot serve Meta, so those trials would fail there. Remove "meta" with
- * that release to route Meta API-key trials through the gateway like every other key.
- */
-export const DIRECT_API_KEY_PROVIDERS: ReadonlySet<string> = new Set(["meta"]);
 
 export function trialRoute(
   input: Pick<EvaluationInput, "credentials" | "modelName">,
   harness: Harness,
-  auth = input.credentials?.auth ?? "api-key",
-  directProviders: ReadonlySet<string> = DIRECT_API_KEY_PROVIDERS,
+  auth: CredentialInfo["auth"] = input.credentials?.auth ?? "api-key",
 ): TrialRoute {
-  if (auth !== "api-key" || isDariRun(input)) return "direct";
-  const provider = input.credentials?.provider ?? "";
-  if (directProviders.has(provider)) return "direct";
-  if (harness === "muse-code" && provider === "meta") return "direct";
-  return "gateway";
+  if (auth === "muse-login" || (harness === "pi" && isDariRun(input))) return "direct";
+  return harness === "muse-code" && input.credentials?.provider === "meta" ? "direct" : "gateway";
 }
 
 /** The gateway's id for the trial's model, `provider/model`: a custom endpoint's under `custom/`. */
@@ -118,7 +83,8 @@ export interface SolverTrial {
 /**
  * Adapts a trial's connection to its harness. Through the gateway (`connection`), every harness
  * gets the gateway's address and the trial key under the variables its protocol reads, and asks
- * for the one model the key serves. Direct, it keeps the sign-in or Dari router's own settings.
+ * for the one model the key serves. Direct, Muse Code keeps its Meta sign-in or key, and Pi Dari's
+ * router endpoint.
  */
 export function gatewayTrial(
   input: EvaluationInput,
@@ -127,74 +93,23 @@ export function gatewayTrial(
   env: NodeJS.ProcessEnv,
   connection?: GatewayConnection,
 ): SolverTrial {
-  if (connection) return gatewayRouted(input, harness, env, connection);
-  if (trialRoute(input, harness) === "gateway")
-    throw refuseTrial("Model gateway connection is missing");
-  const provider = input.credentials?.provider;
-  const endpoint = compatibleEndpoint(provider, harness);
-  if (endpoint) return endpointTrial(endpoint, input, harness, model, env);
-  const dari = provider === "dari" || isDariRun(input);
-  const child = { ...env };
+  if (trialRoute(input, harness) === "gateway") {
+    if (!connection) throw refuseTrial("Model gateway connection is missing");
+    return gatewayRouted(input, harness, env, connection);
+  }
+  const muse = harness === "muse-code";
+  const host = (url: string | undefined) => (url ? [new URL(url).hostname] : []);
   return {
-    model: provider === "dari" ? "openai/dari/routing" : model,
-    agent: directAgent(harness, input),
+    model: input.credentials?.provider === "dari" ? "openai/dari/routing" : model,
+    agent: muse ? "harbor_muse:SelfBenchMuseCode" : "harbor_dari:DariPi",
     // Harbor needs an explicit API style for Dari's Chat Completions endpoint.
     agentArguments: [
       ...thinkingArguments(harness, input.thinking),
-      ...(harness === "pi" && dari ? ["--agent-kwarg", "model_api=openai-completions"] : []),
+      ...(muse ? [] : ["--agent-kwarg", "model_api=openai-completions"]),
     ],
-    child,
-    extraAllowedHosts: directHosts(provider, child),
+    child: { ...env },
+    extraAllowedHosts: muse ? ["api.meta.ai"] : host(env.OPENAI_BASE_URL),
   };
-}
-
-/** A direct key at a provider endpoint that speaks the harness's protocol (compatible-endpoints.ts). */
-function endpointTrial(
-  endpoint: CompatibleEndpoint,
-  input: EvaluationInput,
-  harness: Harness,
-  model: string,
-  env: NodeJS.ProcessEnv,
-): SolverTrial {
-  const provider = input.credentials?.provider ?? "";
-  const keyVariable = modelApiKeyVariable(provider);
-  const key = env[keyVariable];
-  if (!key) throw refuseTrial("Model credential is unavailable");
-  const child = { ...env };
-  delete child[keyVariable];
-  const modelId = model.slice(provider.length + 1);
-  if (harness === "claude-code") {
-    Object.assign(child, { ANTHROPIC_AUTH_TOKEN: key, ANTHROPIC_BASE_URL: endpoint.anthropicBase });
-  } else {
-    Object.assign(child, {
-      OPENAI_API_KEY: key,
-      OPENAI_BASE_URL: endpoint.openAiBase,
-      OPENAI_API_BASE: endpoint.openAiBase,
-    });
-  }
-  return {
-    model: harness === "claude-code" ? modelId : `openai/${modelId}`,
-    agent: harness === "codex" ? "harbor_gateway:GatewayCodex" : directAgent(harness, input),
-    // Meta recommends Responses for Pi: Chat Completions drops reasoning between turns.
-    agentArguments: [
-      ...thinkingArguments(harness, input.thinking),
-      ...(harness === "pi" ? ["--agent-kwarg", "model_api=openai-responses"] : []),
-    ],
-    child,
-    extraAllowedHosts: directHosts(provider, {}),
-  };
-}
-
-/** The Harbor agent for a harness on a direct route. */
-function directAgent(harness: Harness, input: EvaluationInput): string {
-  if (harness === "claude-code") return "harbor_gateway:SelfBenchClaudeCode";
-  if (harness === "muse-code") return "harbor_muse:SelfBenchMuseCode";
-  if (harness === "pi") return isDariRun(input) ? "harbor_dari:DariPi" : "pi";
-  if (harness === "codex")
-    return input.credentials?.provider === "custom"
-      ? "harbor_gateway:GatewayCodex"
-      : "harbor_gateway:SelfBenchCodex";
-  return harness;
 }
 
 function gatewayRouted(
@@ -205,7 +120,8 @@ function gatewayRouted(
 ): SolverTrial {
   const child = { ...env };
   for (const name of MODEL_VARIABLES) delete child[name];
-  const { requestModel, key } = connection;
+  const { key } = connection;
+  const requestModel = gatewayRequestModel(input);
   const extraAllowedHosts = [connection.host];
   if (harness === "claude-code") {
     // With a base URL, Harbor sends the model name as given and pins every Claude tier to it.
@@ -248,32 +164,17 @@ function gatewayRouted(
   };
 }
 
-/** The part of a model's catalog entry a gateway trial's models.json keeps. */
-interface CatalogEntry {
-  name: string;
-  input: readonly string[];
-  contextWindow?: number;
-  maxTokens?: number;
-}
-
 /**
  * Pi's models.json for a gateway trial: one provider at the gateway's Chat Completions endpoint,
  * keyed by OPENAI_API_KEY, with the one model the key serves. Pi sends no thinking level (the
- * gateway pins it), but takes its context window and output limit from Pi's catalog entry for the
- * model, or else from a gateway listing's, so it compacts and caps replies as it would directly.
+ * gateway pins it), but takes its context window and output limit from the model catalog's entry
+ * for the model, so it compacts and caps replies as it would directly.
  */
 export function piGatewayModels(
   input: Pick<EvaluationInput, "credentials" | "modelName">,
-  connection: Pick<GatewayConnection, "openAiBase" | "requestModel">,
+  connection: Pick<GatewayConnection, "openAiBase">,
 ): object {
-  const model = gatewayModelId(input);
-  const slash = model.indexOf("/");
-  const provider = model.slice(0, slash);
-  const id = model.slice(slash + 1);
-  const catalog = getBuiltinModel(provider as never, id as never) as unknown as
-    | CatalogEntry
-    | undefined;
-  const known = catalog ?? (isGateway(provider) ? listedModel(provider, id)?.pi : undefined);
+  const known = catalogEntry(gatewayModelId(input));
   return {
     providers: {
       [PI_GATEWAY_PROVIDER]: {
@@ -282,18 +183,53 @@ export function piGatewayModels(
         apiKey: "$OPENAI_API_KEY",
         models: [
           {
-            id: connection.requestModel,
+            id: gatewayRequestModel(input),
             ...(known
               ? {
                   name: known.name,
-                  input: known.input,
-                  ...(known.contextWindow ? { contextWindow: known.contextWindow } : {}),
-                  ...(known.maxTokens ? { maxTokens: known.maxTokens } : {}),
+                  input: known.input_modalities.includes("image") ? ["text", "image"] : ["text"],
+                  ...(known.context_window ? { contextWindow: known.context_window } : {}),
+                  ...(known.max_output_tokens ? { maxTokens: known.max_output_tokens } : {}),
                 }
               : {}),
           },
         ],
       },
     },
+  };
+}
+
+/** The tag the gateway records a trial's calls under, unique within its organization. */
+export function gatewayTrialTag(run: Pick<EvaluationRun, "id">, index: number): string {
+  return `${run.id}/${index}`;
+}
+
+/** SelfBench's model gateway, which a trial's agent and judge reach their models through. */
+export interface TrialGateway {
+  /** The API's address as sandboxes reach it, and the secret its trial keys are signed with. */
+  readonly api: SandboxCallback;
+  /** What the gateway recorded each trial's calls cost. */
+  readonly usage: Pick<ReturnType<typeof createGatewayUsageStore>, "trialCost">;
+}
+
+/**
+ * What the gateway recorded the trial's calls cost, which replaces any estimate: the provider's
+ * own charge where it reports one (OpenRouter, Vercel AI Gateway), else the model's list price,
+ * which on a sign-in's plan bills nothing. A trial with a call neither priced has no gateway cost;
+ * nor does one that made no call.
+ */
+export async function gatewayTrialCost(
+  gateway: TrialGateway,
+  orgId: number,
+  run: EvaluationRun,
+  index: number,
+  auth: CredentialInfo["auth"],
+): Promise<Pick<EvaluationTrial, "apiCostUsd" | "billedCostUsd" | "costSource">> {
+  const cost = await gateway.usage.trialCost(orgId, gatewayTrialTag(run, index));
+  if (!cost?.complete) return {};
+  return {
+    apiCostUsd: cost.costUsd,
+    ...(auth === "api-key" ? { billedCostUsd: cost.costUsd } : {}),
+    costSource: "gateway",
   };
 }

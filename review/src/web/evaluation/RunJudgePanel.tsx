@@ -6,12 +6,9 @@ import type { JudgeNeeds } from "../../../../src/harnesses/harbor/host-variables
 import { fieldStyles, Select } from "../ui";
 
 /** The org's credentials that can call a benchmark's LLM judge (judgeCredentialRefusal). */
-export function judgeCredentials(
-  credentials: readonly CredentialInfo[],
-  needs: JudgeNeeds,
-): CredentialInfo[] {
+export function judgeCredentials(credentials: readonly CredentialInfo[]): CredentialInfo[] {
   return credentials.filter(
-    (credential) => credential.id !== "managed-model" && !judgeCredentialRefusal(credential, needs),
+    (credential) => credential.id !== "managed-model" && !judgeCredentialRefusal(credential),
   );
 }
 
@@ -34,7 +31,7 @@ export function RunJudgePanel({
   onChange(credentialId: string): void;
   disabled: boolean;
 }) {
-  const eligible = judgeCredentials(credentials, needs);
+  const eligible = judgeCredentials(credentials);
   return (
     <section className="panel mb-5 p-4" aria-labelledby="judge-heading">
       <div className="flex items-start gap-3">

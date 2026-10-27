@@ -1,4 +1,4 @@
-import type { TrialGateway } from "../../src/evaluation/trial-gateway.js";
+import type { TrialGateway } from "../../src/evaluation/gateway-trial.js";
 
 /** The API's address and signing secret as a test worker's trial keys name them. */
 export const TEST_GATEWAY_API = { url: "https://api.selfbench.test", secret: "g".repeat(40) };

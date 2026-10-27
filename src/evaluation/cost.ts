@@ -101,8 +101,8 @@ export function trialCost(
           costSource: cacheWritesInferred ? ("reference-rates" as const) : ("harbor" as const),
         };
   // Harbor prices a gateway route from LiteLLM's table for it, which may carry a discount or
-  // another provider's rates; those runs are priced at their vendor's list rates (runPricing),
-  // and Harbor's figure stands in only where those cannot price the trial. A Meta key's figure
+  // another provider's rates; those runs are priced at the run's own list rates, and Harbor's
+  // figure stands in only where those cannot price the trial. A Meta key's figure
   // for a harness other than Muse Code is another vendor's harness pricing it, so it is the same.
   // (A trial through SelfBench's gateway takes the gateway's recorded cost instead; runner.ts.)
   const provider = run.credentials?.provider;

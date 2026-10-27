@@ -6,7 +6,6 @@ All commands default to a dry run. Inspect the report before passing `--apply`:
 
 ```sh
 node dist/maintenance/recompute-cost.js <repoId> <evaluationId> [--apply] [--auth=codex-login|api-key]
-node dist/maintenance/reprice-vendor-rates.js <repoId> <evaluationId> [--apply]
 node dist/maintenance/reprice-dari-router.js <repoId> <evaluationId> [--apply]
 node dist/maintenance/backfill-timeouts.js <repoId | benchmark:<id>>... [--apply] [--auth=codex-login|api-key]
 node dist/maintenance/records-migration.js [--apply]

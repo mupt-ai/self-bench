@@ -17,17 +17,12 @@ import {
 } from "../harnesses/harbor/task-safety.js";
 import type { runCommand } from "../lib/process.js";
 import { credentialExecution } from "./execution.js";
-import { gatewayModelId, gatewayTrial, pinnedThinking } from "./gateway-trial.js";
-import { judgeTrial } from "./judge.js";
+import { gatewayModelId, gatewayTrial, gatewayTrialTag, pinnedThinking } from "./gateway-trial.js";
+import { judgeEnvironment, judgeTrial } from "./judge.js";
 import { refuseTrial } from "./refusal.js";
 import type { RunnerOptions } from "./runner.js";
 import { unpackTrialTask } from "./task-bundle.js";
 import type { EvaluationInput, EvaluationRun, EvaluationTrial } from "./types.js";
-
-/** The tag the gateway records a trial's calls under, unique within its organization. */
-export function gatewayTrialTag(run: Pick<EvaluationRun, "id">, index: number): string {
-  return `${run.id}/${index}`;
-}
 
 /**
  * Readies a claimed trial for its solver under `root`: its credentials, a supported Harbor, its
@@ -83,18 +78,18 @@ export async function setUpTrial(
     ...(options.snapshotLink ? { snapshotLink: options.snapshotLink } : {}),
     ...(options.setupSignal ? { signal: options.setupSignal } : {}),
   });
-  // An API key's trial reaches its model through the gateway, under a key that pins the model.
+  // The trial reaches its model through the gateway, under a key that pins the model, unless its
+  // route is direct; its judge always does, under the same key, as any model of its provider.
+  const gatewayed = execution.route === "gateway";
   let connection: GatewayConnection | undefined;
-  if (execution.route === "gateway") {
+  if (gatewayed || execution.judge) {
     if (!options.gateway) throw refuseTrial("The model gateway is not configured on this worker");
-    const thinking = pinnedThinking(trial.harness, input.thinking);
-    connection = gatewayConnection({
-      apiUrl: options.gateway.api.url,
-      secret: options.gateway.api.secret,
+    const thinking = gatewayed ? pinnedThinking(trial.harness, input.thinking) : undefined;
+    connection = gatewayConnection(options.gateway.api.url, options.gateway.api.secret, {
       orgId: execution.credential.orgId,
-      credentialId: execution.credential.id,
-      model: gatewayModelId(input),
+      ...(gatewayed ? { credentialId: execution.credential.id, model: gatewayModelId(input) } : {}),
       ...(thinking ? { thinking } : {}),
+      ...(execution.judge ? { judge: execution.judge } : {}),
       tags: { run: run.id, trial: gatewayTrialTag(run, index), harness: trial.harness },
     });
     secrets.push(connection.key);
@@ -111,7 +106,11 @@ export async function setUpTrial(
   ).catch(refuseWithoutRetry);
   // A registry task's env tables read their host variables from the judge credential alone.
   const judged = task.registry
-    ? judgeTrial(hostVariables(await readTaskConfig(taskPath)), prepared.env, execution.judge)
+    ? judgeTrial(
+        hostVariables(await readTaskConfig(taskPath)),
+        prepared.env,
+        execution.judge && connection ? judgeEnvironment(connection) : {},
+      )
     : { child: prepared.env, verifierEnv: [] };
   if ("refusal" in judged) throw refuseTrial(judged.refusal);
   // Every provider starts from the images the task's checks ran on, when it has them.
@@ -126,7 +125,7 @@ export async function setUpTrial(
     ...gateway,
     modelAuth: execution.auth,
     // A gateway trial's cost is what the gateway recorded for its calls (runner.ts).
-    ...(connection ? { gatewayOrgId: execution.credential.orgId } : {}),
+    ...(gatewayed ? { gatewayOrgId: execution.credential.orgId } : {}),
     child: { ...judged.child, ...pull },
     verifierEnv: judged.verifierEnv,
     guard: prepared.guard,

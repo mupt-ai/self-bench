@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { dariEndpoint, validateEndpoint } from "../db/credentials.js";
 import type { Vault } from "../db/vault.js";
+import type { TrialJudge } from "../gateway/trial-key.js";
 import { MANAGED_MODEL_CREDENTIAL } from "../gateway/trial-key.js";
 import { modelApiKeyVariable } from "../gateways/index.js";
 import {
@@ -11,7 +12,7 @@ import {
 } from "../generation/billing/managed.js";
 import { providerCredentialEnvironment } from "../sandbox/provider-environment.js";
 import { trialRoute } from "./gateway-trial.js";
-import { judgeEnvironment } from "./judge.js";
+import { judgeCredentialRefusal } from "./judge.js";
 import { signInRefusal } from "./models.js";
 import { refuseTrial } from "./refusal.js";
 import { sameScope } from "./scope.js";
@@ -25,9 +26,10 @@ export function evaluationCredentialOrg(
 
 /**
  * Resolves the comparison's saved credentials into a clean Harbor process environment for one
- * harness's trial. A gateway route (an API key) leaves the key in the vault: the gateway reads it
- * itself, so the worker puts a model credential in the environment only on a direct route, and
- * none without a harness (building task images calls no model).
+ * harness's trial. A gateway route (an API key or a ChatGPT or Claude sign-in) leaves the secret in
+ * the vault: the gateway reads it itself, so the worker puts a model credential in the environment
+ * only on a direct route, and none without a harness (building task images calls no model). A
+ * judge's key stays in the vault too.
  */
 export async function credentialExecution(
   input: EvaluationInput,
@@ -93,24 +95,12 @@ export async function credentialExecution(
   const secrets = [modelSecret ?? "", sandboxSecret.value, sandboxSecret.tokenId ?? ""].filter(
     Boolean,
   );
-  if (modelSecret && info.auth === "codex-login") {
-    const authPath = join(home, "codex-auth.json");
-    await writeFile(authPath, modelSecret, { mode: 0o600 });
-    child.CODEX_AUTH_JSON_PATH = authPath;
-    const auth = JSON.parse(modelSecret);
-    secrets.push(
-      ...Object.values(auth.tokens).filter((value): value is string => typeof value === "string"),
-    );
-  } else if (modelSecret && info.auth === "muse-login") {
+  if (modelSecret && info.auth === "muse-login") {
     // Muse Code mints its subscription key from the sign-in's token at startup (harbor_muse.py).
     const authPath = join(home, "muse-auth.json");
     await writeFile(authPath, modelSecret, { mode: 0o600 });
     child.MUSE_AUTH_JSON_PATH = authPath;
     secrets.push(JSON.parse(modelSecret).providers.meta.access_token);
-  } else if (modelSecret && info.auth === "claude-login") {
-    // Harbor's Claude Code passes the token through and drops any API key once forced.
-    child.CLAUDE_CODE_OAUTH_TOKEN = modelSecret;
-    child.CLAUDE_FORCE_OAUTH = "1";
   } else if (modelSecret) {
     // A direct API key: Dari's router (or a custom endpoint serving it), or Muse Code's Meta key.
     child[modelApiKeyVariable(info.kind)] = modelSecret;
@@ -123,8 +113,6 @@ export async function credentialExecution(
     providerCredentialEnvironment(input.sandbox, { ...sandboxSecret, domain: managedE2B?.domain }),
     managedModal ? { MODAL_ENVIRONMENT: managedModal.MODAL_ENVIRONMENT } : {},
   );
-  const judge = await judgeCredentialEnvironment(input, orgId, credentials, env);
-  if (judge.secret) secrets.push(judge.secret);
   return {
     profile: { model: input.modelName },
     child,
@@ -132,23 +120,19 @@ export async function credentialExecution(
     auth: info.auth,
     route,
     credential: { orgId, id: info.id },
-    judge: judge.env,
+    judge: await trialJudge(input, orgId, credentials),
   };
 }
 
-/** The judge variables a benchmark's LLM judge calls with, from its judge credential. */
-async function judgeCredentialEnvironment(
+/** The credential a benchmark's LLM judge calls with through the gateway, if it has one. */
+async function trialJudge(
   input: EvaluationInput,
   orgId: number,
   credentials: Vault["credentials"],
-  env: NodeJS.ProcessEnv,
-): Promise<{ env: Record<string, string>; secret?: string }> {
+): Promise<TrialJudge | undefined> {
   const id = input.credentials?.judgeCredentialId;
-  if (!id) return { env: {} };
+  if (!id) return undefined;
   const info = await credentials.find(orgId, id);
-  const secret = info ? (await credentials.secret(orgId, id))?.value : undefined;
-  if (!info || !secret || info.auth !== "api-key")
-    throw refuseTrial("Judge credential unavailable");
-  const endpoint = info.endpoint ? validateEndpoint(info.endpoint, env) : undefined;
-  return { env: judgeEnvironment({ ...info, ...(endpoint ? { endpoint } : {}) }, secret), secret };
+  if (!info || judgeCredentialRefusal(info)) throw refuseTrial("Judge credential unavailable");
+  return { credentialId: info.id, provider: info.kind };
 }

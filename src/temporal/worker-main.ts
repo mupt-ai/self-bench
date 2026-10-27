@@ -13,7 +13,7 @@ import { createVault } from "../db/vault.js";
 import { createEvaluationActivities } from "../evaluation/activities.js";
 import { keepRunSummaries } from "../evaluation/store.js";
 import { createGatewayUsageStore } from "../gateway/usage-store.js";
-import { keepGatewaysFresh } from "../gateways/refresh.js";
+import { keepGatewaysFresh } from "../gateways/catalog.js";
 import { createBatchActivities } from "../generation/batches/activities.js";
 import { taskImageBuilder } from "../generation/images/builder.js";
 import { createActivities } from "../generation/pipeline/activities.js";

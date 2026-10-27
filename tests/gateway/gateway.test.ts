@@ -51,6 +51,7 @@ beforeAll(async () => {
       find: async (orgId, id) => (orgId === 7 && id === CREDENTIAL ? credential : undefined),
       secret: async (orgId, id) =>
         orgId === 7 && id === CREDENTIAL ? { value: "byok-secret" } : undefined,
+      renew: async () => {},
     },
     modelConfig: (model) =>
       model === MODEL
@@ -229,6 +230,8 @@ test("usage rows sum to a trial's cost, flagging unpriced calls", async () => {
     await store.record(row("a", "t1", 0.25)); // a repeat delivery is ignored
     await store.record(row("b", "t1", 0.5));
     await store.record(row("c", "t2", null));
+    // A refused call used no tokens: it costs nothing rather than leaving the total unknown.
+    await store.record({ ...row("d", "t1", null), inputTokens: null, outputTokens: null });
     expect(await store.trialCost(7, "t1")).toEqual({ costUsd: 0.75, complete: true });
     expect(await store.trialCost(7, "t2")).toEqual({ costUsd: 0, complete: false });
     expect(await store.trialCost(8, "t1")).toBeUndefined();
@@ -239,9 +242,7 @@ test("usage rows sum to a trial's cost, flagging unpriced calls", async () => {
 
 test("a connection's key is served by the gateway it points at", async () => {
   const { gatewayConnection } = await import("../../src/gateway/connection.js");
-  const connection = gatewayConnection({
-    apiUrl: `${apiUrl}/`,
-    secret: SECRET,
+  const connection = gatewayConnection(`${apiUrl}/`, SECRET, {
     orgId: 7,
     credentialId: CREDENTIAL,
     model: MODEL,
@@ -253,7 +254,7 @@ test("a connection's key is served by the gateway it points at", async () => {
     method: "POST",
     headers: { authorization: `Bearer ${connection.key}`, "content-type": "application/json" },
     body: JSON.stringify({
-      model: connection.requestModel,
+      model: `dari/model/${MODEL}`,
       stream: true,
       messages: [{ role: "user", content: "hello" }],
     }),

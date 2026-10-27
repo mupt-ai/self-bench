@@ -14,6 +14,7 @@ import { trialCost } from "./cost.js";
 import { DARI_BILLING, retainDariBilling } from "./dari/billing.js";
 import { dariTrialCost, isDariRun } from "./dari/cost.js";
 import { failureMaterial, keepFailureMaterial } from "./failure-material.js";
+import { gatewayTrialCost, type TrialGateway } from "./gateway-trial.js";
 import {
   collectOutput,
   completeLines,
@@ -30,7 +31,6 @@ import { scopeOf } from "./scope.js";
 import { solverArguments } from "./solver-arguments.js";
 import { evaluationPrefix, RepeatSpendError } from "./store.js";
 import { transcriptSteps } from "./transcript.js";
-import { gatewayTrialCost, type TrialGateway } from "./trial-gateway.js";
 import { setUpTrial } from "./trial-setup.js";
 import type { EvaluationInput, EvaluationRun, EvaluationTrial } from "./types.js";
 
@@ -206,7 +206,13 @@ async function runTrial(context: {
       if (context.gatewayOrgId !== undefined && options.gateway)
         Object.assign(
           trial,
-          await gatewayTrialCost(options.gateway, context.gatewayOrgId, run, index),
+          await gatewayTrialCost(
+            options.gateway,
+            context.gatewayOrgId,
+            run,
+            index,
+            context.modelAuth,
+          ),
         );
       trial.rewards = verifierRewards(parsed);
       const stopped = timeLimitScores(parsed);

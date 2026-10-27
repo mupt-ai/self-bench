@@ -276,6 +276,13 @@ export function createCredentialStore(db: Database, key: string) {
         })
         .where(live(orgId, id));
     },
+    /** Replaces a sign-in's saved tokens with refreshed ones (gateway/sign-in.ts). */
+    async renew(orgId: number, id: string, value: string): Promise<void> {
+      await db
+        .update(credentials)
+        .set({ secret: seal(id, { value }) })
+        .where(live(orgId, id));
+    },
     /** Soft delete: the row stays for history, the secret is erased. */
     async remove(orgId: number, id: string): Promise<void> {
       const removed = await db

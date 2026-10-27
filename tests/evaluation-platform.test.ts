@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { credentialSchema, validateEndpoint } from "../src/db/credentials.js";
@@ -153,7 +153,7 @@ test("credential validation rejects auth mixing and unsafe custom endpoints", as
   ).toBe("https://api.example/v1");
 });
 
-test("Codex sign-in is explicit, scoped and never falls back to an API key", async () => {
+test("Codex sign-in is explicit, scoped, served through the gateway, never an API key", async () => {
   const records = memoryVault();
   const fixture = await evaluationServer(records);
   const home = await mkdtemp(join(tmpdir(), "codex-auth-fixture-"));
@@ -200,12 +200,35 @@ test("Codex sign-in is explicit, scoped and never falls back to an API key", asy
       records,
       "codex",
     );
+    // The gateway serves the sign-in's plan: its tokens never leave the vault for the sandbox.
+    expect(execution.route).toBe("gateway");
     expect(execution.child.OPENAI_API_KEY).toBeUndefined();
-    expect(await readFile(execution.child.CODEX_AUTH_JSON_PATH ?? "", "utf8")).toBe(auth);
-    expect(execution.secrets).toContain("fake-refresh");
+    expect(JSON.stringify(execution)).not.toContain("fake-refresh");
     expect(execution.auth).toBe("codex-login");
   } finally {
     await fixture.close();
     await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("the credentials API still takes an OpenRouter management key from older clients, and drops it", async () => {
+  const records = memoryVault();
+  const fixture = await evaluationServer(records);
+  try {
+    const response = await fixture.request(
+      credentialsUrl,
+      post({
+        name: "OpenRouter",
+        kind: "openrouter",
+        value: "inference-secret",
+        managementKey: "management-secret",
+      }),
+    );
+    expect(response.status).toBe(201);
+    const saved = await response.json();
+    expect(JSON.stringify(saved)).not.toContain("management-secret");
+    expect(await records.credentials.secret(1, saved.id)).toEqual({ value: "inference-secret" });
+  } finally {
+    await fixture.close();
   }
 });

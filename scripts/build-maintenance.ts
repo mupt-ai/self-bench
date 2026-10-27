@@ -8,7 +8,6 @@ const result = await Bun.build({
   entrypoints: [
     "recompute-cost",
     "repair-cost-coverage",
-    "reprice-vendor-rates",
     "reprice-dari-router",
     "backfill-timeouts",
     "compact-task-bundles",

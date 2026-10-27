@@ -4,7 +4,6 @@ import { credentialSchema } from "../src/db/credentials.js";
 import { catalog } from "../src/evaluation/catalog.js";
 import { credentialExecution } from "../src/evaluation/execution.js";
 import {
-  DIRECT_API_KEY_PROVIDERS,
   gatewayModelId,
   gatewayTrial,
   piGatewayModels,
@@ -27,55 +26,23 @@ function input(provider: string, modelName: string, thinking?: string): Evaluati
   } as EvaluationInput;
 }
 
-test("Meta API keys stay direct until the gateway's Meta provider ships; dropping it from the set routes them", () => {
-  const meta = input("meta", "meta/muse-spark-1.3");
-  expect([...DIRECT_API_KEY_PROVIDERS]).toEqual(["meta"]);
-  for (const harness of ["codex", "claude-code", "pi", "muse-code"] as const)
-    expect(trialRoute(meta, harness)).toBe("direct");
-  const direct = gatewayTrial(meta, "codex", meta.modelName, { PATH: "/bin", META_API_KEY: "k" });
-  expect(direct.extraAllowedHosts).toEqual(["api.meta.ai"]);
-  // Meta's endpoints speak the other harnesses' protocols, so each gets its key where it reads one.
-  expect(direct.model).toBe("openai/muse-spark-1.3");
-  expect(direct.agent).toBe("harbor_gateway:GatewayCodex");
-  expect(direct.child).toMatchObject({
-    OPENAI_API_KEY: "k",
-    OPENAI_BASE_URL: "https://api.meta.ai/v1",
-  });
-  expect(direct.child.META_API_KEY).toBeUndefined();
-  const claude = gatewayTrial(meta, "claude-code", meta.modelName, {
-    PATH: "/bin",
-    META_API_KEY: "k",
-  });
-  expect(claude.model).toBe("muse-spark-1.3");
-  expect(claude.child).toMatchObject({
-    ANTHROPIC_AUTH_TOKEN: "k",
-    ANTHROPIC_BASE_URL: "https://api.meta.ai",
-  });
-  const pi = gatewayTrial(meta, "pi", meta.modelName, { PATH: "/bin", META_API_KEY: "k" });
-  expect(pi.agentArguments).toContain("model_api=openai-responses");
-  // The one switch: with Meta out of the set, the same key takes the gateway on every harness
-  // but Muse Code, which keeps Meta's endpoint.
-  const released = new Set<string>();
-  for (const harness of ["codex", "claude-code", "pi"] as const)
-    expect(trialRoute(meta, harness, "api-key", released)).toBe("gateway");
-  expect(trialRoute(meta, "muse-code", "api-key", released)).toBe("direct");
-  // Sign-ins are unaffected by the set.
-  expect(trialRoute(input("meta", "meta/muse-spark-1.3"), "pi", "muse-login", released)).toBe(
-    "direct",
-  );
-});
-
-test("sign-ins and Dari's router stay direct, as does Muse Code on a Meta key", () => {
+test("every API key and ChatGPT or Claude sign-in takes the gateway; Dari's router on Pi and Muse Code stay direct", () => {
   const signIn = (provider: string, auth: string) =>
     ({ modelName: `${provider}/model`, credentials: { provider, auth } }) as EvaluationInput;
-  expect(trialRoute(signIn("openai", "codex-login"), "codex")).toBe("direct");
-  expect(trialRoute(signIn("anthropic", "claude-login"), "claude-code")).toBe("direct");
+  const meta = input("meta", "meta/muse-spark-1.3", "high");
+  for (const harness of ["codex", "claude-code", "pi", "mini-swe-agent"] as const)
+    expect(trialRoute(meta, harness)).toBe("gateway");
+  expect(trialRoute(signIn("openai", "codex-login"), "codex")).toBe("gateway");
+  expect(trialRoute(signIn("anthropic", "claude-login"), "claude-code")).toBe("gateway");
   expect(trialRoute(signIn("meta", "muse-login"), "muse-code")).toBe("direct");
   expect(trialRoute(input("dari", "dari/routing"), "pi")).toBe("direct");
   expect(trialRoute(input("custom", "openai/dari/routing"), "pi")).toBe("direct");
-  expect(trialRoute(input("meta", "meta/muse-spark-1.3"), "muse-code")).toBe("direct");
+  // A custom endpoint serving Dari's router is a custom endpoint to every other harness.
+  expect(trialRoute(input("custom", "openai/dari/routing"), "codex")).toBe("gateway");
+  expect(trialRoute(meta, "muse-code")).toBe("direct");
+  // A gateway trial without its connection never falls back to a direct call.
+  expect(() => gatewayTrial(meta, "codex", meta.modelName, {})).toThrow(/connection is missing/);
   // Muse Code keeps Meta's key, endpoint and bare model name.
-  const meta = input("meta", "meta/muse-spark-1.3", "high");
   const env = { PATH: "/bin", META_API_KEY: "meta-key" };
   expect(gatewayTrial(meta, "muse-code", meta.modelName, env)).toEqual({
     model: "meta/muse-spark-1.3",
@@ -84,17 +51,12 @@ test("sign-ins and Dari's router stay direct, as does Muse Code on a Meta key", 
     child: env,
     extraAllowedHosts: ["api.meta.ai"],
   });
-  // A custom endpoint naming Dari's router keeps Harbor's endpoint adapters.
   const dari = input("custom", "openai/dari/routing");
   const endpoint = { OPENAI_API_KEY: "key", OPENAI_BASE_URL: "https://models.example/v1" };
-  expect(gatewayTrial(dari, "codex", dari.modelName, endpoint)).toMatchObject({
-    model: "openai/dari/routing",
-    agent: "harbor_gateway:GatewayCodex",
-    extraAllowedHosts: ["models.example"],
-  });
   expect(gatewayTrial(dari, "pi", dari.modelName, endpoint)).toMatchObject({
     agent: "harbor_dari:DariPi",
     agentArguments: ["--agent-kwarg", "model_api=openai-completions"],
+    extraAllowedHosts: ["models.example"],
   });
 });
 
@@ -109,11 +71,11 @@ test("the gateway pins the run's level for every harness but Claude Code", () =>
   );
 });
 
-test("gateway Pi takes the model's context window and output limit from Pi's catalog", () => {
+test("gateway Pi takes the model's context window and output limit from the model catalog", () => {
   const known = getBuiltinModels("anthropic").find((model) => model.contextWindow > 128_000);
   if (!known) throw new Error("Missing Pi catalog fixture");
   const trialInput = input("anthropic", `anthropic/${known.id}`);
-  const connection = { openAiBase: "https://gateway/v1", requestModel: "dari/model/x" };
+  const connection = { openAiBase: "https://gateway/v1" };
   expect(piGatewayModels(trialInput, connection)).toEqual({
     providers: {
       selfbench: {
@@ -122,7 +84,7 @@ test("gateway Pi takes the model's context window and output limit from Pi's cat
         apiKey: "$OPENAI_API_KEY",
         models: [
           {
-            id: "dari/model/x",
+            id: `dari/model/anthropic/${known.id}`,
             name: known.name,
             input: known.input,
             contextWindow: known.contextWindow,
@@ -134,7 +96,9 @@ test("gateway Pi takes the model's context window and output limit from Pi's cat
   });
   // A model no catalog describes takes Pi's defaults.
   const custom = piGatewayModels(input("custom", "openai/acme-coder"), connection);
-  expect(custom).toMatchObject({ providers: { selfbench: { models: [{ id: "dari/model/x" }] } } });
+  expect(custom).toMatchObject({
+    providers: { selfbench: { models: [{ id: "dari/model/custom/acme-coder" }] } },
+  });
   expect(JSON.stringify(custom)).not.toContain("contextWindow");
 });
 
@@ -175,7 +139,7 @@ test("gateways and Meta keys offer every harness they speak; OpenAI and Anthropi
   ).toThrow();
 });
 
-test("a Meta key stays in the vault and reaches its harnesses directly while Meta is off the gateway", async () => {
+test("a Meta key stays in the vault for the gateway, and reaches only Muse Code directly", async () => {
   const vault = memoryVault();
   const meta = await vault.credentials.create(
     1,
@@ -194,11 +158,9 @@ test("a Meta key stays in the vault and reaches its harnesses directly while Met
   expect(muse.route).toBe("direct");
   expect(muse.child.META_API_KEY).toBe("meta-secret");
   expect(muse.secrets).toContain("meta-secret");
-  // Until the gateway serves Meta, a Meta key takes the direct route on every harness.
   const codex = await credentialExecution(trialInput, "/home", {}, vault, "codex");
-  expect(codex.route).toBe("direct");
-  // Direct trials keep the key in their environment, as they did before the gateway.
-  expect(codex.child.META_API_KEY).toBe("meta-secret");
+  expect(codex.route).toBe("gateway");
+  expect(JSON.stringify(codex)).not.toContain("meta-secret");
   // Building task images calls no model, so it gets no model credential at all.
   const prepare = await credentialExecution(trialInput, "/home", {}, vault);
   expect(prepare.route).toBeUndefined();

@@ -1,9 +1,8 @@
 import { afterEach, expect, test } from "bun:test";
 import { piGatewayModels } from "../src/evaluation/gateway-trial.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";
-import { gatewayModelPrice, listedModelConfig } from "../src/gateway/models.js";
+import { gatewayModelPrice, listedModelConfig, refreshGateway } from "../src/gateways/catalog.js";
 import { gatewayIds, piModels, setGatewayListing } from "../src/gateways/index.js";
-import { refreshGateway } from "../src/gateways/refresh.js";
 import { piModelsFiles } from "../src/generation/settings/models.js";
 
 afterEach(() => {
@@ -13,7 +12,7 @@ afterEach(() => {
 const respond = (data: unknown[]) =>
   (async () => Response.json({ data })) as unknown as typeof fetch;
 
-test("Pi is told how Vercel AI Gateway takes each model, from the gateway's own listing", async () => {
+test("Pi is told how Vercel AI Gateway takes each model, from the gateway's catalog", async () => {
   await refreshGateway(
     "vercel-ai-gateway",
     respond([
@@ -21,7 +20,7 @@ test("Pi is told how Vercel AI Gateway takes each model, from the gateway's own 
         id: "mistral/mistral-large-4",
         name: "Mistral Large 4",
         type: "language",
-        tags: ["reasoning", "tool-use", "vision"],
+        supported_parameters: ["tools", "reasoning"],
         modalities: { input: ["text", "image"], output: ["text"] },
         context_window: 524288,
         max_tokens: 262144,
@@ -35,7 +34,7 @@ test("Pi is told how Vercel AI Gateway takes each model, from the gateway's own 
         id: "vendor/plain",
         name: "Plain",
         type: "language",
-        tags: ["tool-use"],
+        supported_parameters: ["tools"],
         modalities: { input: ["text"], output: ["text"] },
         pricing: { input: "0.000001", output: "0.000002" },
       },
@@ -91,8 +90,7 @@ test("Pi is told how Vercel AI Gateway takes each model, from the gateway's own 
     modelName: name,
     credentials: { provider: "vercel-ai-gateway" },
   } as EvaluationInput;
-  const connection = { openAiBase: "https://gateway/v1", requestModel: `dari/model/${name}` };
-  expect(piGatewayModels(trial, connection)).toMatchObject({
+  expect(piGatewayModels(trial, { openAiBase: "https://gateway/v1" })).toMatchObject({
     providers: {
       selfbench: {
         models: [
@@ -107,20 +105,24 @@ test("Pi is told how Vercel AI Gateway takes each model, from the gateway's own 
       },
     },
   });
-  // The gateway itself serves a model Pi's catalog lacks as the listing describes it, and leaves
+  // The gateway itself serves a model Pi's catalog lacks as the catalog describes it, and leaves
   // one Pi lists (as Mistral Large 4), and every model of a provider that is no gateway, to Pi.
   expect(listedModelConfig("vercel-ai-gateway/vendor/plain")).toEqual({
     provider: "vercel-ai-gateway",
     native_model_id: "vendor/plain",
     api: "openai-completions",
-    cost: { input: 1, output: 2, cached_input: 1, cache_write: 1 },
+    context_window: null,
+    max_output_tokens: null,
+    supported_thinking_levels: ["off"],
+    cost: { input: 1, output: 2, cached_input: null, cache_write: null, tiers: [] },
   });
   expect(listedModelConfig(name)).toBeUndefined();
   expect(gatewayModelPrice(name)).toEqual({
     input: 0.68,
     output: 2.09,
     cached_input: 0.07,
-    cache_write: 0.68,
+    cache_write: null,
+    tiers: [],
   });
   expect(listedModelConfig("vercel-ai-gateway/vendor/unlisted")).toBeUndefined();
   expect(listedModelConfig("openai/gpt-6.1-sol")).toBeUndefined();
@@ -146,7 +148,7 @@ test("Pi is told how Vercel AI Gateway takes each model, from the gateway's own 
   expect(piModelsFiles("openai", "gpt-6.1-sol")).toBeUndefined();
 });
 
-test("a vendor's own key is priced at the catalog's reference rates, with long prompts tiered", () => {
+test("a vendor's own key is priced at Pi's catalog rates, with long prompts tiered", () => {
   const price = gatewayModelPrice("openai/gpt-6.1-sol");
   expect(price).toMatchObject({ input: expect.any(Number), output: expect.any(Number) });
   expect(gatewayModelPrice("anthropic/gpt-6.1-sol")).toBeUndefined();

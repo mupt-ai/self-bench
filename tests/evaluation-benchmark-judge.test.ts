@@ -55,9 +55,10 @@ test("a benchmark graded by an LLM judge runs with the judge credential the user
     expect(await refusal({ id: crypto.randomUUID() })).toBe(
       "These tasks grade with an LLM judge: select a judge credential",
     );
-    expect(await refusal({ id: crypto.randomUUID(), judgeCredentialId: openai })).toContain(
-      "The judge credential can't provide ANTHROPIC_API_KEY",
-    );
+    // A sandbox's key is no model credential, so it can't judge.
+    expect(
+      await refusal({ id: crypto.randomUUID(), judgeCredentialId: selection.sandboxCredentialId }),
+    ).toBe("The judge credential must be an API key for a model provider or a gateway");
     expect(fixture.starts).toHaveLength(0);
 
     const accepted = await fixture.request(

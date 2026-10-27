@@ -98,7 +98,6 @@ export async function handleScopedEvaluations(
             { ...owner, scope: { repoId: scope.repoId } },
             draft,
             env,
-            options.fetch,
           );
         } else if (benchmark && options.benchmarks && scope.benchmarkId !== undefined) {
           const draft = benchmarkComparisonSchema.parse(body);
@@ -111,7 +110,6 @@ export async function handleScopedEvaluations(
             await options.benchmarks.tasks(benchmark.id),
             draft,
             env,
-            options.fetch,
           );
         } else throw new Error("Benchmark not found");
         const submitted = await resume(

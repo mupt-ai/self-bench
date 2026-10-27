@@ -58,55 +58,43 @@ test("a published task may read judge variables, literal values, and defaulted v
   expect(hostVariables({ metadata: { env: { X: `\${SECRET}` } } })).toEqual([]);
 });
 
-test("each kind of API key provides the judge variables its provider answers", () => {
-  const key = (kind: string) => ({ kind, auth: "api-key" }) as const;
-  expect(judgeEnvironment(key("openai") as never, "sk-1")).toEqual({
-    OPENAI_API_KEY: "sk-1",
-    OPENAI_BASE_URL: "https://api.openai.com/v1",
-    OPENAI_API_BASE: "https://api.openai.com/v1",
+/** The gateway connection a trial's judge calls through. */
+const connection = {
+  key: "trial-key",
+  openAiBase: "https://api.selfbench.test/gateway/v1",
+  anthropicBase: "https://api.selfbench.test/gateway",
+};
+
+test("a judge reaches any model of its credential's provider through the gateway", () => {
+  const key = (kind: string, auth = "api-key") => ({ kind, auth }) as never;
+  // The gateway speaks both protocols for every provider, so every judge variable is given.
+  expect(judgeEnvironment(connection)).toEqual({
+    OPENAI_API_KEY: "trial-key",
+    OPENAI_BASE_URL: connection.openAiBase,
+    OPENAI_API_BASE: connection.openAiBase,
+    ANTHROPIC_API_KEY: "trial-key",
+    ANTHROPIC_BASE_URL: connection.anthropicBase,
+    OPENROUTER_API_KEY: "trial-key",
+    OPENROUTER_API_BASE: connection.openAiBase,
   });
-  expect(judgeEnvironment(key("anthropic") as never, "sk-2")).toEqual({
-    ANTHROPIC_API_KEY: "sk-2",
-    ANTHROPIC_BASE_URL: "https://api.anthropic.com",
-  });
-  expect(Object.keys(judgeEnvironment(key("openrouter") as never, "sk-3")).sort()).toEqual([
-    "ANTHROPIC_API_KEY",
-    "ANTHROPIC_BASE_URL",
-    "OPENAI_API_BASE",
-    "OPENAI_API_KEY",
-    "OPENAI_BASE_URL",
-    "OPENROUTER_API_BASE",
-    "OPENROUTER_API_KEY",
-  ]);
-  expect(
-    judgeEnvironment(
-      { kind: "custom", auth: "api-key", endpoint: "https://router.example/v1" },
-      "sk-4",
-    ).OPENAI_BASE_URL,
-  ).toBe("https://router.example/v1");
-  // A subscription sign-in drives only its own CLI, never a judge.
-  expect(judgeEnvironment({ kind: "anthropic", auth: "claude-login" }, "token")).toEqual({});
-  const anthropic = { variables: ["ANTHROPIC_API_KEY"], required: ["ANTHROPIC_API_KEY"] };
-  expect(judgeCredentialRefusal(key("openai") as never, anthropic)).toBe(
-    "The judge credential can't provide ANTHROPIC_API_KEY; select an API key for that provider or a gateway",
-  );
-  expect(judgeCredentialRefusal(key("vercel-ai-gateway") as never, anthropic)).toBeUndefined();
-  expect(
-    judgeCredentialRefusal(key("openai") as never, {
-      variables: ["ANTHROPIC_API_KEY"],
-      required: [],
-    }),
-  ).toBe("The judge credential can't provide any of ANTHROPIC_API_KEY");
+  for (const kind of ["openai", "anthropic", "meta", "openrouter", "vercel-ai-gateway"])
+    expect(judgeCredentialRefusal(key(kind))).toBeUndefined();
+  // A custom endpoint or Dari's router has no catalog to serve any model of, and a sign-in drives
+  // only its own CLI.
+  for (const credential of [key("custom"), key("dari"), key("anthropic", "claude-login")])
+    expect(judgeCredentialRefusal(credential)).toBe(
+      "The judge credential must be an API key for a model provider or a gateway",
+    );
 });
 
 test("a trial gives the judge its key without touching the solver's own", () => {
-  const judge = judgeEnvironment({ kind: "anthropic", auth: "api-key" }, "judge-key");
+  const judge = judgeEnvironment(connection);
   const solver = { PATH: "/usr/bin", OPENAI_API_KEY: "solver-key" };
   // The verifier gets the key by --verifier-env, as a template the run's environment answers.
   const graded = judgeTrial(hostVariables(harvey), solver, judge);
   if ("refusal" in graded) throw new Error(graded.refusal);
   expect(graded.verifierEnv).toEqual([`ANTHROPIC_API_KEY=\${SELFBENCH_JUDGE_ANTHROPIC_API_KEY}`]);
-  expect(graded.child).toEqual({ ...solver, SELFBENCH_JUDGE_ANTHROPIC_API_KEY: "judge-key" });
+  expect(graded.child).toEqual({ ...solver, SELFBENCH_JUDGE_ANTHROPIC_API_KEY: "trial-key" });
   expect(
     harborRunArguments({
       taskPath: "/task",
@@ -118,39 +106,34 @@ test("a trial gives the judge its key without touching the solver's own", () => 
     }).join(" "),
   ).toContain(`--ve ANTHROPIC_API_KEY=\${SELFBENCH_JUDGE_ANTHROPIC_API_KEY}`);
 
-  // A sandbox variable is Harbor's own environment, which the solver may share only if they agree.
-  const openAi = judgeEnvironment({ kind: "openai", auth: "api-key" }, "judge-key");
-  const clash = judgeTrial(hostVariables(tau3), solver, openAi);
-  expect(clash).toEqual({
-    refusal:
-      "The task's sandbox reads OPENAI_API_KEY, which the model being tested also uses: pick the same credential for the judge",
-  });
-  const shared = judgeTrial(hostVariables(tau3), { OPENAI_API_KEY: "judge-key" }, openAi);
+  // A sandbox variable is Harbor's own environment. A gateway solver holds the same key and
+  // address there; only Dari's router, called directly, holds its own.
+  const shared = judgeTrial(
+    hostVariables(tau3),
+    { OPENAI_API_KEY: "trial-key", OPENAI_BASE_URL: connection.openAiBase },
+    judge,
+  );
   if ("refusal" in shared) throw new Error(shared.refusal);
-  expect(shared.child.OPENAI_BASE_URL).toBe("https://api.openai.com/v1");
+  expect(shared.child.OPENAI_BASE_URL).toBe(connection.openAiBase);
+  expect(judgeTrial(hostVariables(tau3), solver, judge)).toEqual({
+    refusal:
+      "The task's sandbox reads OPENAI_API_KEY, which Dari's router also uses: judge this task with another model",
+  });
 
   // A defaulted variable takes its default, even when the worker holds one by that name: the
   // verifier's is set to the default outright, and the sandbox's is refused.
   const pinned = judgeTrial(hostVariables(harvey), { JUDGE_CONCURRENCY: "64" }, judge);
   if ("refusal" in pinned) throw new Error(pinned.refusal);
   expect(pinned.verifierEnv).toContain("JUDGE_CONCURRENCY=8");
-  expect(judgeTrial(hostVariables(tau3), { TAU2_USER_MODEL: "worker" }, openAi as never)).toEqual({
+  expect(judgeTrial(hostVariables(tau3), { TAU2_USER_MODEL: "worker" }, judge)).toEqual({
     refusal: "The task reads TAU2_USER_MODEL from the worker",
   });
-  // An optional judge key the judge credential lacks never falls through to the solver's own key.
-  const optional = {
-    verifier: { env: { OPENAI_API_KEY: `\${OPENAI_API_KEY:-}`, KEY: `\${ANTHROPIC_API_KEY}` } },
-  };
-  const separate = judgeTrial(hostVariables(optional), solver, judge);
-  if ("refusal" in separate) throw new Error(separate.refusal);
-  expect(separate.verifierEnv).toContain("OPENAI_API_KEY=");
-  expect(separate.child.OPENAI_API_KEY).toBe("solver-key");
   expect(judgeTrial(hostVariables(harvey), {}, {})).toEqual({
     refusal: "The task's judge needs ANTHROPIC_API_KEY: select a judge credential",
   });
 });
 
-test("a trial resolves the judge's key from its judge credential, apart from the solver's", async () => {
+test("a trial names its judge credential for the gateway, and never reads its key", async () => {
   const vault = memoryVault();
   const judgeKey = await vault.credentials.create(
     1,
@@ -161,13 +144,8 @@ test("a trial resolves the judge's key from its judge credential, apart from the
     if (draft.credentials) draft.credentials.judgeCredentialId = judgeKey.id;
   });
   const execution = await credentialExecution(input, "/home", { PATH: "/bin" }, vault);
-  expect(execution.judge).toEqual({
-    ANTHROPIC_API_KEY: "judge-secret",
-    ANTHROPIC_BASE_URL: "https://api.anthropic.com",
-  });
-  // The judge's key is redacted from output like the solver's, and stays out of its environment.
-  expect(execution.secrets).toContain("judge-secret");
-  expect(execution.child.ANTHROPIC_API_KEY).toBeUndefined();
+  expect(execution.judge).toEqual({ credentialId: judgeKey.id, provider: "anthropic" });
+  expect(JSON.stringify(execution)).not.toContain("judge-secret");
   const signIn = await vault.credentials.create(
     1,
     { name: "Claude", kind: "anthropic", auth: "claude-login", value: "sk-ant-oat01-token" },

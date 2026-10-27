@@ -38,9 +38,7 @@ function input(provider: string, modelName: string, thinking?: string): Evaluati
 
 function connect(trialInput: EvaluationInput, harness: Harness) {
   const thinking = pinnedThinking(harness, trialInput.thinking);
-  return gatewayConnection({
-    apiUrl: "https://api.selfbench.test",
-    secret: SECRET,
+  return gatewayConnection("https://api.selfbench.test", SECRET, {
     orgId: 7,
     credentialId: CREDENTIAL,
     model: gatewayModelId(trialInput),
@@ -54,10 +52,10 @@ test("Codex keeps the gateway's full model id and speaks HTTPS to it", async () 
     solverArguments(
       "task",
       "jobs",
-      { agent: "harbor_gateway:SelfBenchCodex", model: "openai/gpt-6-sol", agentArguments: [] },
+      { agent: "harbor_gateway:GatewayCodex", model: "openai/gpt-6-sol", agentArguments: [] },
       "modal",
     ),
-  ).toContain("harbor_gateway:SelfBenchCodex");
+  ).toContain("harbor_gateway:GatewayCodex");
   const result = await runCommand("python3", [
     "-c",
     `import asyncio, importlib.util, os, subprocess, sys, types
@@ -75,7 +73,7 @@ spec = importlib.util.spec_from_file_location("adapter", sys.argv[1])
 adapter = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(adapter)
 async def check():
-    command, options = await adapter.SelfBenchCodex().exec_as_agent(None, 'printf %s "$NVM_DIR"', timeout_sec=30)
+    command, options = await adapter.GatewayCodex().exec_as_agent(None, 'printf %s "$NVM_DIR"', timeout_sec=30)
     output = subprocess.check_output(["bash", "-c", command], env={**os.environ, "HOME": "/root", "NVM_DIR": "/usr/local/share/nvm"}, text=True)
     assert output == "/root/.nvm"
     assert options == {"timeout_sec": 30}
@@ -151,7 +149,7 @@ async def check():
     await agent.ensure_system_dependencies(None, DEPENDENCIES)
     assert agent.ensured == DEPENDENCIES
     # Debian's npm conflicts with an image's NodeSource Node, so Codex installs only what it runs.
-    codex = adapter.SelfBenchCodex("apt-get")
+    codex = adapter.GatewayCodex("apt-get")
     await codex.ensure_system_dependencies(None, ("curl", "bash", "nodejs", "npm", "ripgrep"))
     assert codex.ensured == ("curl", "bash", "ripgrep"), codex.ensured
     # The gateway takes the key as x-api-key: no bearer-token rewrite is left to apply.
@@ -216,6 +214,7 @@ const gatewayKinds = [
   ["openrouter", "openrouter/anthropic/claude-sonnet-5"],
   ["vercel-ai-gateway", "vercel-ai-gateway/anthropic/claude-sonnet-5"],
   ["custom", "openai/acme-coder"],
+  ["meta", "meta/muse-spark-1.3"],
 ] as const;
 
 for (const [provider, modelName] of gatewayKinds) {
@@ -233,13 +232,12 @@ for (const [provider, modelName] of gatewayKinds) {
       META_API_KEY: "raw-meta",
     };
     const original = { ...env };
-    // Muse Code runs only on Meta keys, which stay direct (see the Meta test below).
+    // Muse Code runs only on Meta keys, and stays direct on them.
     const harnesses = harnessIds.filter((harness) => harness !== "muse-code");
     for (const harness of harnesses) {
       expect(trialRoute(trialInput, harness)).toBe("gateway");
       const connection = connect(trialInput, harness);
       const trial = gatewayTrial(trialInput, harness, modelName, env, connection);
-      expect(connection.requestModel).toBe(request);
       expect(trial.extraAllowedHosts).toEqual(["api.selfbench.test"]);
       expect(Object.values(trial.child).filter((value) => value?.startsWith("raw-"))).toEqual([]);
       const keyed = Object.entries(trial.child).filter(([name]) => name !== "PATH");

@@ -17,6 +17,7 @@ import {
 const SECRET = "s".repeat(40);
 const CREDENTIAL = "8d6b2c4e-1f3a-4b5c-9d7e-0a1b2c3d4e5f";
 const MODEL = "openrouter/acme/model-a";
+const JUDGE = "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9";
 
 function trialKey(overrides: Partial<Parameters<typeof signTrialKey>[0]> = {}): string {
   return signTrialKey(
@@ -53,6 +54,7 @@ describe("the platform a trial key resolves to", () => {
       credentials: {
         find: async () => found,
         secret: async () => ({ value: "byok-secret" }),
+        renew: async () => {},
       },
       recordUsage: () => {},
       captureError: () => {},
@@ -114,51 +116,107 @@ describe("the platform a trial key resolves to", () => {
     await expect(refused.resolveRouter({ apiKey })).rejects.toMatchObject({ status: 403 });
   });
 
-  test("a call with no list price is recorded unpriced, not as a free call", async () => {
-    const recorded: { costUsd: number | null; costSource: string | null }[] = [];
-    const record = (
-      modelPrice?: (model: string) => undefined | { input: number; output: number },
-    ) => {
-      const gateway = platform(credential("custom", "https://approved.example/v1"), {
-        recordUsage: (usage) => recorded.push(usage),
-        ...(modelPrice ? { modelPrice } : {}),
-      });
-      return gateway;
-    };
-    const summarise = (gateway: ReturnType<typeof record>, model: string) =>
-      gateway.resolveRouter({ apiKey: trialKey({ model }) }).then((router) =>
-        gateway.recordRequest?.({
-          summary: {
-            request_id: `r-${model}`,
-            status: "completed",
-            api_key_id: router.api_key_id,
-            input_tokens: 8,
-            output_tokens: 3,
-            cache_read_tokens: 0,
-            cache_write_tokens: 0,
-            total_cost_usd: 0,
-            cost_source: "pricing",
-          } as never,
-          tags: {},
-        } as never),
-      );
-    // No list price for the model: the gateway's zero placeholder is not a cost.
-    await summarise(record(), "custom/acme-coder");
-    // With a list price, the same call is priced.
-    await summarise(
-      record(() => ({ input: 2, output: 8 })),
-      "custom/acme-coder",
-    );
+  test("records each call as the gateway priced it, a judge's apart from the solver's", async () => {
+    const recorded: { credentialId: string; model: string; tags: object; costUsd: unknown }[] = [];
+    const gateway = platform(credential("openai"), {
+      recordUsage: (usage) => recorded.push(usage),
+    });
+    const apiKey = trialKey({
+      model: "openai/gpt-x",
+      judge: { credentialId: JUDGE, provider: "anthropic" },
+    });
+    const router = await gateway.resolveRouter({ apiKey });
+    const summary = (model: string, cost: number | null) =>
+      gateway.recordRequest?.({
+        summary: {
+          request_id: `r-${model}`,
+          status: "completed",
+          api_key_id: router.api_key_id,
+          selected_model: model,
+          total_cost_usd: cost,
+          cost_source: cost === null ? null : "pricing",
+        } as never,
+        tags: {},
+      } as never);
+    summary("openai/gpt-x", 0.5);
+    // Neither the provider nor a list price priced it: unpriced, not free.
+    summary("anthropic/claude-x", null);
     expect(recorded).toEqual([
-      expect.objectContaining({ costUsd: null, costSource: null }),
-      expect.objectContaining({ costUsd: 0, costSource: "pricing" }),
+      expect.objectContaining({ credentialId: CREDENTIAL, model: "openai/gpt-x", costUsd: 0.5 }),
+      expect.objectContaining({
+        credentialId: JUDGE,
+        model: "anthropic/claude-x",
+        tags: { run: "r1", trial: "t1", judge: "true" },
+        costUsd: null,
+      }),
     ]);
+  });
+
+  test("a judge may call any model of its credential's provider, on the judge's key", async () => {
+    const keys: Record<string, string> = { [CREDENTIAL]: "solver-key", [JUDGE]: "judge-key" };
+    const gateway = platform(credential("openai"), {
+      credentials: {
+        find: async (_orgId, id) => ({ ...credential("openai"), id }),
+        secret: async (_orgId, id) => ({ value: keys[id] ?? "" }),
+        renew: async () => {},
+      },
+    });
+    const apiKey = trialKey({
+      model: "openai/gpt-x",
+      judge: { credentialId: JUDGE, provider: "anthropic" },
+    });
+    expect(await gateway.resolveRouter({ apiKey })).toMatchObject({
+      enabled_models: ["openai/gpt-x"],
+      strict: true,
+      strict_providers: ["anthropic"],
+      model_fallback_enabled: false,
+    });
+    expect(await gateway.resolveProviderCredential({ apiKey, model: "openai/gpt-x" })).toEqual({
+      apiKey: "solver-key",
+    });
+    expect(
+      await gateway.resolveProviderCredential({ apiKey, model: "anthropic/claude-x" }),
+    ).toEqual({ apiKey: "judge-key" });
+    await expect(
+      gateway.resolveProviderCredential({ apiKey, model: "openai/gpt-y" }),
+    ).rejects.toMatchObject({ status: 401 });
+    // A direct trial's key carries the judge alone: no solver model is enabled.
+    const judgeOnly = signTrialKey(
+      {
+        orgId: 7,
+        judge: { credentialId: JUDGE, provider: "anthropic" },
+        tags: {},
+        expiresAt: Date.now() + 60_000,
+      },
+      SECRET,
+    );
+    expect(await gateway.resolveRouter({ apiKey: judgeOnly })).toMatchObject({
+      enabled_models: [],
+      strict_providers: ["anthropic"],
+    });
+    // A key must name a solver or a judge, and a solver's model with its credential.
+    for (const key of [{}, { model: "openai/gpt-x" }, { credentialId: CREDENTIAL }])
+      expect(
+        readTrialKey(
+          signTrialKey({ orgId: 7, tags: {}, expiresAt: Date.now() + 60_000, ...key }, SECRET),
+          SECRET,
+        ),
+      ).toBeUndefined();
+  });
+
+  test("a sign-in is served on the plan the platform supplies, never as an API key", async () => {
+    const claude = platform({ ...credential("anthropic"), auth: "claude-login" } as never);
+    const apiKey = trialKey({ model: "anthropic/claude-x" });
+    expect(await claude.resolveProviderCredential({ apiKey, model: "anthropic/claude-x" })).toEqual(
+      { apiKey: "byok-secret", subscription: "anthropic_claude_code" },
+    );
   });
 
   test("the managed model credential is SelfBench's own OpenRouter key, when it is set", async () => {
     const vault = {
       find: async () => undefined,
       secret: async () => undefined,
+      renew: async () => {},
     };
     const managed = withManagedModel(vault, "platform-key");
     expect(await managed.find(7, MANAGED_MODEL_CREDENTIAL)).toMatchObject({ kind: "openrouter" });

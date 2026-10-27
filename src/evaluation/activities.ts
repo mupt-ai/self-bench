@@ -5,12 +5,12 @@ import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
 import { runCommand } from "../lib/process.js";
 import { holdingCapacity } from "../sandbox/capacity.js";
 import { explainTrialFailure } from "./failure-summary.js";
+import type { TrialGateway } from "./gateway-trial.js";
 import { failEvaluation, failTrial, finishEvaluation, startEvaluation } from "./lifecycle.js";
 import { environmentSecrets, redactOutput } from "./output.js";
 import { prepareTaskImages } from "./prepare.js";
 import { executeTrial, type RunnerOptions } from "./runner.js";
 import { auditTask, type TaskAuditRequest } from "./task-audit.js";
-import type { TrialGateway } from "./trial-gateway.js";
 import type { EvaluationInput, FailedTrial } from "./types.js";
 
 export interface EvaluationActivities {

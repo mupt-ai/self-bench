@@ -36,7 +36,7 @@ export interface EvaluationRoutesOptions {
   /** Audits tasks on request (auditTaskRoute); without it, none can be asked for. */
   audit?: TaskAuditor;
   env?: NodeJS.ProcessEnv;
-  /** Reaches OpenRouter for a gateway model's vendor list price (runPricing), and GitHub. */
+  /** Reaches GitHub. */
   fetch?: typeof fetch;
   /** Where GitHub's API is, to confirm a repository is still public before explaining failures. */
   githubApiUrl?: string;

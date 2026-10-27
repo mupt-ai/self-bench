@@ -69,7 +69,6 @@ try {
     "dist/api/main.js",
     "dist/temporal/worker-main.js",
     "dist/maintenance/recompute-cost.js",
-    "dist/maintenance/reprice-vendor-rates.js",
     "dist/maintenance/backfill-timeouts.js",
     "dist/maintenance/compact-task-bundles.js",
     "dist/maintenance/records-migration.js",
@@ -99,7 +98,6 @@ try {
   }
   for (const [program, usage] of [
     ["recompute-cost", "Usage: recompute-cost.js"],
-    ["reprice-vendor-rates", "Usage: reprice-vendor-rates.js"],
     ["backfill-timeouts", "Usage: backfill-timeouts.js"],
     ["compact-task-bundles", "Usage: compact-task-bundles.js"],
     ["records-migration", "Set SELFBENCH_DATABASE_URL and SELFBENCH_EVAL_CREDENTIAL_KEY"],

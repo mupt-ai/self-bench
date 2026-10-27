@@ -26,8 +26,8 @@ export function createGatewayUsageStore(db: Database) {
         .onConflictDoNothing();
     },
     /**
-     * A trial's total cost, and whether every call was priced: undefined when it made no calls
-     * through the gateway.
+     * A trial's solver's total cost (its judge's calls aside), and whether every call was priced:
+     * undefined when it made no calls through the gateway.
      */
     async trialCost(
       orgId: number,
@@ -37,11 +37,14 @@ export function createGatewayUsageStore(db: Database) {
         .select({
           calls: sql<number>`count(*)::int`,
           costUsd: sql<number>`coalesce(sum(${gatewayRequests.costUsd}), 0)::float8`,
-          unpriced: sql<number>`count(*) filter (where ${gatewayRequests.costUsd} is null)::int`,
+          // A call refused before it reached the provider used no tokens, and cost nothing.
+          unpriced: sql<number>`count(*) filter (where ${gatewayRequests.costUsd} is null
+            and coalesce(${gatewayRequests.inputTokens}, 0) + coalesce(${gatewayRequests.outputTokens}, 0) > 0)::int`,
         })
         .from(gatewayRequests)
         .where(
-          sql`${gatewayRequests.orgId} = ${orgId} and ${gatewayRequests.tags}->>'trial' = ${trial}`,
+          sql`${gatewayRequests.orgId} = ${orgId} and ${gatewayRequests.tags}->>'trial' = ${trial}
+            and ${gatewayRequests.tags}->>'judge' is null`,
         );
       if (!row?.calls) return undefined;
       return { costUsd: row.costUsd, complete: row.unpriced === 0 };

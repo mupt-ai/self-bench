@@ -12,20 +12,6 @@ import { runEvaluation } from "./support/evaluation-run.js";
 import { runnerFixture } from "./support/evaluation-runner-fixture.js";
 
 test.each([
-  [
-    "openai",
-    "codex-login",
-    "codex",
-    { CODEX_AUTH_JSON_PATH: "/private/auth.json" },
-    ["chatgpt.com", "*.chatgpt.com", "auth.openai.com"],
-  ],
-  [
-    "anthropic",
-    "claude-login",
-    "claude-code",
-    { CLAUDE_CODE_OAUTH_TOKEN: "test-token" },
-    ["api.anthropic.com"],
-  ],
   ["meta", "muse-login", "muse-code", {}, ["api.meta.ai"]],
   // Muse Code keeps a Meta key on Meta's own host.
   ["meta", "api-key", "muse-code", { META_API_KEY: "test-key" }, ["api.meta.ai"]],

@@ -56,6 +56,10 @@ export function memoryVault(records: EncryptedRecordStore = new MemoryRecords())
     async secret(orgId, id) {
       return structuredClone(live(orgId, id)?.secret);
     },
+    async renew(orgId, id, value) {
+      const row = live(orgId, id);
+      if (row) row.secret = { value };
+    },
     async create(orgId, draft, env, id = crypto.randomUUID()) {
       const parsed = credentialSchema.parse(draft);
       const endpoint = credentialEndpoint(parsed, env);

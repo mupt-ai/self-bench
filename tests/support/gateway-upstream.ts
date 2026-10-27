@@ -1,11 +1,32 @@
-// A stand-in for the three providers the trial path reaches, each speaking its own wire protocol and
+// A stand-in for the providers the trial path reaches (OpenAI, Anthropic, OpenRouter and Meta, and
+// ChatGPT's Codex backend and Anthropic for Claude sign-ins), each speaking its own wire protocol and
 // streaming a real reply. It checks the key a provider would be sent, so a request carrying the
 // trial's key (rather than the vault's) fails with 401.
+
+/** An unsigned JWT for a ChatGPT account, as a Codex sign-in's access token, valid for an hour. */
+const codexAccess = `h.${Buffer.from(
+  JSON.stringify({
+    exp: Math.floor(Date.now() / 1000) + 3600,
+    "https://api.openai.com/auth": { chatgpt_account_id: "acct-1" },
+  }),
+).toString("base64url")}.s`;
 
 export const VAULT_SECRETS = {
   openai: "vault-openai-key-111",
   anthropic: "vault-anthropic-key-222",
   openrouter: "vault-openrouter-key-333",
+  meta: "vault-meta-key-444",
+  "claude-login": "sk-ant-oat01-vault-claude-555",
+  "codex-login": JSON.stringify({
+    auth_mode: "chatgpt",
+    tokens: { access_token: codexAccess, refresh_token: "vault-refresh-666", account_id: "acct-1" },
+  }),
+} as const;
+
+/** The bearer token each credential reaches its provider with. */
+export const UPSTREAM_KEYS = {
+  ...VAULT_SECRETS,
+  "codex-login": codexAccess,
 } as const;
 
 export interface UpstreamCall {
@@ -194,17 +215,28 @@ export function startUpstream() {
     hostname: "127.0.0.1",
     async fetch(request) {
       const url = new URL(request.url);
-      const body = (await request.json()) as { model: string };
+      // Pi tries Codex's backend over a WebSocket first, then falls back to HTTPS.
+      if (request.method !== "POST") return new Response("not found", { status: 404 });
+      // Pi compresses its requests to Codex's backend, as Codex does.
+      const raw = new Uint8Array(await request.arrayBuffer());
+      const text =
+        request.headers.get("content-encoding") === "zstd" ? Bun.zstdDecompressSync(raw) : raw;
+      const body = JSON.parse(new TextDecoder().decode(text)) as { model: string };
       const authorization = request.headers.get("authorization");
       const xApiKey = request.headers.get("x-api-key");
       calls.push({ path: url.pathname, authorization, xApiKey, model: body.model });
       const denied = () => new Response("bad key", { status: 401 });
+      const bearer = (key: string) => authorization === `Bearer ${key}`;
       if (url.pathname === "/v1/responses")
-        return authorization === `Bearer ${VAULT_SECRETS.openai}`
+        return bearer(VAULT_SECRETS.openai) || bearer(VAULT_SECRETS.meta)
           ? responsesStream(body.model)
           : denied();
+      if (url.pathname === "/codex/responses")
+        return bearer(UPSTREAM_KEYS["codex-login"]) ? responsesStream(body.model) : denied();
       if (url.pathname === "/v1/messages")
-        return xApiKey === VAULT_SECRETS.anthropic ? messagesStream(body.model) : denied();
+        return xApiKey === VAULT_SECRETS.anthropic || bearer(VAULT_SECRETS["claude-login"])
+          ? messagesStream(body.model)
+          : denied();
       if (url.pathname === "/api/v1/chat/completions")
         return authorization === `Bearer ${VAULT_SECRETS.openrouter}`
           ? completionStream(body.model)
@@ -220,6 +252,9 @@ export function startUpstream() {
       openai: `${url}/v1`,
       anthropic: url,
       openrouter: `${url}/api/v1`,
+      meta: `${url}/v1`,
+      "claude-login": url,
+      "codex-login": url,
     } as const,
     stop: () => server.stop(true),
   };
