@@ -1,7 +1,11 @@
 import { ActivityFailure, ApplicationFailure, sleep } from "@temporalio/workflow";
 import { SandboxCapacityError } from "../sandbox/contracts.js";
 
-/** Capacity waits belong to the workflow, not a worker slot or an activity execution budget. */
+/**
+ * Starts an activity, and while it is refused at a credential's or provider's sandbox limit
+ * (SandboxCapacityError, src/sandbox/capacity.ts), waits 1, 2, 4, then 8 minutes between tries.
+ * The wait belongs to the workflow, so it holds no worker slot and spends no activity retries.
+ */
 export async function whenSandboxFree<T>(start: () => Promise<T>): Promise<T> {
   for (let minutes = 1; ; minutes = Math.min(minutes * 2, 8)) {
     try {

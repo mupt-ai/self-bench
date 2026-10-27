@@ -26,6 +26,7 @@ import { checkSandboxBackends } from "../sandbox/index.js";
 import { removeEmptyModalCredentialOverrides } from "../sandbox/providers/modal/auth.js";
 import { activityErrorInterceptor } from "./activity-errors.js";
 import { activityEventInterceptor } from "./activity-events.js";
+import { harborQueue } from "./activity-options.js";
 import { connectTemporalWorker } from "./connection.js";
 import { idleTracker } from "./idle-exit.js";
 import { resolveHarborConcurrency } from "./worker-memory.js";
@@ -122,7 +123,7 @@ const workers = await Promise.all([
         Worker.create({
           connection,
           namespace: config.temporal.namespace,
-          taskQueue: `${config.temporal.taskQueue}-harbor`,
+          taskQueue: harborQueue(config.temporal.taskQueue),
           activities: {
             verifyCompiled,
             runSolverTrial,

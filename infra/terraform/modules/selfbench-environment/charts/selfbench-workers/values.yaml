@@ -14,5 +14,8 @@ temporal:
   namespace: ""
   queue: ""
 maxReplicas: 20
+# Harbor checks or solver trials one Harbor pod runs at once; KEDA starts a pod per this many
+# waiting on the queue.
+harborSlots: 10
 workflowReplicas: 1
 activityConcurrency: 8

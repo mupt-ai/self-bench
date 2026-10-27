@@ -1,10 +1,4 @@
-import {
-  type ActivityOptions,
-  CancellationScope,
-  isCancellation,
-  proxyActivities,
-  workflowInfo,
-} from "@temporalio/workflow";
+import { CancellationScope, isCancellation, proxyActivities } from "@temporalio/workflow";
 import {
   type ArtifactRef,
   AUTHOR_VERIFY_BUDGET,
@@ -17,6 +11,7 @@ import {
   MAX_AUTHORING_ROUNDS,
   type TaskProgress,
 } from "../../contracts/index.js";
+import { harbor, record, task } from "../../temporal/activity-options.js";
 import { whenSandboxFree } from "../../temporal/sandbox-capacity.js";
 import type { TaskActivities } from "../tasks/activities.js";
 import type { DiscoveryShardInput, SelfBenchActivities, WorkerActivities } from "./activities.js";
@@ -25,51 +20,32 @@ import { verifyReportSummary } from "./verify-report.js";
 /** How long a candidate may take, waits for sandbox capacity included, before it gives up. */
 const CANDIDATE_DEADLINE_MS = 14 * 24 * 60 * 60_000;
 
-const retry = { initialInterval: "5 seconds", backoffCoefficient: 2, maximumInterval: "2 minutes" };
-// A started sandbox heartbeats through the callback API every minute until it reports back.
-const started = (startToCloseTimeout: string, maximumAttempts: number): ActivityOptions => ({
-  startToCloseTimeout,
-  heartbeatTimeout: "5 minutes",
-  cancellationType: "WAIT_CANCELLATION_COMPLETED",
-  retry: { ...retry, maximumAttempts },
-});
-const finishing: ActivityOptions = {
-  startToCloseTimeout: "15 minutes",
-  retry: { ...retry, maximumAttempts: 5 },
-};
+// Each sandbox step starts a sandbox and waits for its callback, then reads what it reported.
 const agents = proxyActivities<Pick<WorkerActivities, "startAuthoringTurn" | "startReviewRound">>(
-  started("5 hours", 4),
+  task({ timeout: "5 hours", attempts: 4, heartbeat: "5 minutes" }),
 );
-const compile = proxyActivities<Pick<WorkerActivities, "compileTask">>(started("1 hour", 4));
+const compile = proxyActivities<Pick<WorkerActivities, "compileTask">>(
+  task({ timeout: "1 hour", attempts: 4, heartbeat: "5 minutes" }),
+);
 const discovery = proxyActivities<Pick<WorkerActivities, "startDiscoveryShard">>(
-  started("1 hour", 3),
+  task({ timeout: "1 hour", attempts: 3, heartbeat: "5 minutes" }),
 );
-const finish =
-  proxyActivities<
-    Pick<
-      WorkerActivities,
-      "finishDiscoveryShard" | "finishAuthoringTurn" | "finishReviewRound" | "finishCompile"
-    >
-  >(finishing);
-const harbor = () =>
-  proxyActivities<Pick<WorkerActivities, "verifyCompiled">>({
-    startToCloseTimeout: "7 hours",
-    heartbeatTimeout: "10 minutes",
-    cancellationType: "WAIT_CANCELLATION_COMPLETED",
-    retry: { ...retry, maximumAttempts: 4 },
-    taskQueue: `${workflowInfo().taskQueue}-harbor`,
-  });
-
+const finish = proxyActivities<
+  Pick<
+    WorkerActivities,
+    "finishDiscoveryShard" | "finishAuthoringTurn" | "finishReviewRound" | "finishCompile"
+  >
+>(task({ timeout: "15 minutes", attempts: 5 }));
 // A row write waits out a database outage rather than leave its task unsettled.
-const rows = proxyActivities<TaskActivities>({ startToCloseTimeout: "1 minute", retry });
-
+const rows = proxyActivities<TaskActivities>(record({ attempts: Number.POSITIVE_INFINITY }));
 // Compaction streams each green attempt's full bundle once to check it before deleting it.
-const compaction = () =>
-  proxyActivities<Pick<WorkerActivities, "compactCandidateBundles">>({
-    startToCloseTimeout: "2 hours",
-    heartbeatTimeout: "5 minutes",
-    retry: { ...retry, maximumAttempts: 3 },
-  });
+const compaction = proxyActivities<Pick<WorkerActivities, "compactCandidateBundles">>(
+  task({ timeout: "2 hours", attempts: 3, heartbeat: "5 minutes" }),
+);
+const checks = () =>
+  proxyActivities<Pick<WorkerActivities, "verifyCompiled">>(
+    harbor({ timeout: "7 hours", attempts: 4, heartbeat: "10 minutes" }),
+  );
 
 /**
  * The workflow's steps. Each starts a sandbox that reports back through the callback API, then
@@ -94,7 +70,7 @@ const workflowActivities: SelfBenchActivities = {
   compileAndVerify: async (input) => {
     const compiled = await whenSandboxFree(() => compile.compileTask(input));
     const finished = await finish.finishCompile({ ...input, compiled });
-    return await whenSandboxFree(() => harbor().verifyCompiled({ ...input, compiled: finished }));
+    return await whenSandboxFree(() => checks().verifyCompiled({ ...input, compiled: finished }));
   },
 };
 
@@ -151,7 +127,7 @@ async function compact(input: CandidateWorkflowInput, result: CandidateWorkflowR
   const kept = result.task ? artifactKey(result.task.bundle.uri) : undefined;
   // A task bundle outside the run's artifacts is never expected; compaction then keeps everything.
   if (result.task && !kept) return;
-  await compaction()
+  await compaction
     .compactCandidateBundles({
       runId: input.run.runId,
       candidateId: input.candidate.candidateId,
