@@ -5,6 +5,7 @@ import type { SelfBenchConfig } from "../contracts/config/index.js";
 import { isArtifactRegistry } from "../contracts/config/task-images.js";
 import { apiKeyDenies } from "../db/api-keys.js";
 import { openDatabase } from "../db/client.js";
+import { createRegistryGrantStore } from "../db/registry-grants.js";
 import { createGenerationBatches, RunNotFoundError } from "../generation/batches/service.js";
 import { googleAccessToken } from "../lib/google-access-token.js";
 import { reportError } from "../lib/telemetry/sentry.js";
@@ -24,6 +25,7 @@ import {
 import { sendIdentityError } from "./routes/auth.js";
 import { STRIPE_WEBHOOK_PATH } from "./routes/billing.js";
 import { taskImageRegistry } from "./routes/registry.js";
+import { handleRegistryGrantRoute } from "./routes/registry-grants.js";
 import { handleRunArtifactRoute } from "./routes/run-artifacts.js";
 import { handleRunRoute } from "./routes/runs.js";
 import { handleSandboxRoute } from "./routes/sandbox.js";
@@ -59,12 +61,22 @@ export async function startApi(
     (localDatabase
       ? createGenerationBatches(localDatabase.db, client, artifacts, config.temporal.taskQueue)
       : undefined);
+  const database = site?.database ?? localDatabase;
   // Sandbox providers pull from Artifact Registry through here; a local registry serves Docker.
   const repository = config.taskImages?.repository;
+  const artifactRepository = repository && isArtifactRegistry(repository) ? repository : undefined;
+  // Customers who run tasks themselves pull through the same registry with a grant of their own.
+  const registryGrants =
+    artifactRepository && database
+      ? createRegistryGrantStore(database.db, secret, artifactRepository)
+      : undefined;
   const registry =
-    repository &&
-    isArtifactRegistry(repository) &&
-    taskImageRegistry({ repository, token: googleAccessToken });
+    artifactRepository &&
+    taskImageRegistry({
+      repository: artifactRepository,
+      token: googleAccessToken,
+      ...(registryGrants ? { customerGrant: (password) => registryGrants.resolve(password) } : {}),
+    });
   const runStatus = async (runId: string) => {
     if (!batches) throw new RunNotFoundError(runId);
     return batches.status(runId);
@@ -114,6 +126,16 @@ export async function startApi(
         sendJson(response, 401, { error: "unauthorized" });
         return;
       }
+      if (
+        registryGrants &&
+        (await handleRegistryGrantRoute(request, url, response, {
+          store: registryGrants,
+          origin: config.sandboxCallback?.url ?? `http://${request.headers.host ?? "localhost"}`,
+          // The operator holds the API token; a deployment without one is local and open.
+          operator: config.apiToken !== undefined ? bearerMatches(request, config.apiToken) : !site,
+        }))
+      )
+        return;
       const denied = user ? apiKeyDenies(user, request.method) : undefined;
       if (denied) {
         sendJson(response, 403, { error: denied });

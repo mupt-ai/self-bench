@@ -5,8 +5,16 @@ import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 
-export async function passthrough(method: "GET" | "POST", path: string): Promise<void> {
-  console.log(JSON.stringify(await requestJson(path, { method }), null, 2));
+export async function passthrough(
+  method: "GET" | "POST",
+  path: string,
+  json?: unknown,
+): Promise<void> {
+  const body =
+    json === undefined
+      ? {}
+      : { body: new TextEncoder().encode(JSON.stringify(json)), contentType: "application/json" };
+  console.log(JSON.stringify(await requestJson(path, { method, ...body }), null, 2));
 }
 
 export async function download(runId: string, outputPath: string): Promise<void> {

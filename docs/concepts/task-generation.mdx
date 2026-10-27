@@ -107,3 +107,24 @@ Exports include hidden tests and reference solutions, unencrypted. Keep them pri
 ```bash
 harbor run --path ./harbor-task --agent codex --model gpt-6-sol --env docker
 ```
+
+### Delivering Tasks to Customers
+
+A customer who runs tasks themselves pulls the images through the API's registry with a grant of their own, never with access to the whole repository. The operator issues one with the API token:
+
+```bash
+self-bench grant create --label "Acme" --task 412 --task 418 --days 30 --with-verifier
+```
+
+The response holds a registry login (the API's host, the user `selfbench`, and a password shown only once) and the image references the grant reaches. A grant reaches only accepted tasks with exported images, and only those tasks' images. It includes the verifier images, which hold the tests, only with `--with-verifier`; without them a customer can run agents but not grade them. `self-bench grant list` shows every grant, and `self-bench grant revoke GRANT_ID` cuts one off at its next request. Copies a customer has already pulled stay with them.
+
+The task's Dockerfiles name the images in SelfBench's Artifact Registry repository, which the customer cannot reach, so point them at the API's registry before running:
+
+```bash
+docker login api.selfbench.dev -u selfbench   # the grant's password
+grep -rl --include=Dockerfile '<region>-docker.pkg.dev/<project>/selfbench-tasks/' ./harbor-task \
+  | xargs sed -i 's#<region>-docker.pkg.dev/<project>/selfbench-tasks/#api.selfbench.dev/#'
+harbor run --path ./harbor-task --agent codex --model gpt-6-sol --env docker
+```
+
+The digests stay the same, so the customer runs exactly the images that passed verification.

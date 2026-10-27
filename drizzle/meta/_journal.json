@@ -162,6 +162,13 @@
       "when": 1792976236326,
       "tag": "0022_task_images_by_digest",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1793123176729,
+      "tag": "0023_registry_grants",
+      "breakpoints": true
     }
   ]
 }
