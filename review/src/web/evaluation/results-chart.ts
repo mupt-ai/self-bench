@@ -73,15 +73,16 @@ export function chosenOptions(
   return defaultPicks(options);
 }
 
-/** A configuration's point over tasks it has a usable result on every one of. */
+/** A configuration's point over tasks it has a usable result on every one of, if it has a cost. */
 export function configurationPoint(
   configuration: Configuration,
   tasks: readonly string[],
 ): BenchmarkPoint | undefined {
   const usable = usableResults(configuration);
   const results = tasks.flatMap((task) => usable.get(task) ?? []);
-  if (!results.length || costTotal(results.map((result) => result.trial)).incomplete)
-    return undefined;
+  const cost = costTotal(results.map((result) => result.trial)).perTask;
+  // A log axis cannot place a configuration that recorded no spend.
+  if (!results.length || !cost) return undefined;
   const mean = (values: number[]) =>
     values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length);
   return {
@@ -95,7 +96,7 @@ export function configurationPoint(
     thinking: configuration.thinking ?? "default",
     harness: configuration.harness,
     accuracy: mean(results.map((result) => result.trial.rewards.reward ?? 0)) * 100,
-    cost: mean(results.map((result) => result.trial.apiCostUsd ?? 0)),
+    cost,
     tasks: results.length,
     datasetKey: String(tasks.length),
   };

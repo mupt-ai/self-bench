@@ -178,14 +178,7 @@ function publicSetting(
   setting: Setting,
 ): Omit<
   ReleaseSetting,
-  | "tasks"
-  | "passed"
-  | "accuracy"
-  | "costPerTaskUsd"
-  | "totalCostUsd"
-  | "costIncomplete"
-  | "costedTasks"
-  | "onFrontier"
+  "tasks" | "passed" | "accuracy" | "costPerTaskUsd" | "totalCostUsd" | "costedTasks" | "onFrontier"
 > {
   return {
     id: setting.id,
@@ -209,19 +202,17 @@ export function scores(chosen: readonly Candidate[], tasks: readonly string[]): 
     });
     const passed = trials.filter((trial) => trial.rewards.reward === 1).length;
     const costs = costTotal(trials);
-    const totalCostUsd = costs.total;
     return {
       ...publicSetting(entry.setting),
       tasks: tasks.length,
       passed,
       accuracy: (passed / tasks.length) * 100,
-      costPerTaskUsd: totalCostUsd / tasks.length,
-      totalCostUsd,
+      costPerTaskUsd: costs.perTask ?? 0,
+      totalCostUsd: costs.total,
       costedTasks: costs.known,
-      ...(costs.incomplete ? { costIncomplete: true as const } : {}),
       onFrontier: false,
     };
   });
-  const frontier = frontierOf(scored.filter((setting) => !setting.costIncomplete));
+  const frontier = frontierOf(scored.filter((setting) => setting.costedTasks > 0));
   return scored.map((setting) => ({ ...setting, onFrontier: frontier.has(setting.id) }));
 }

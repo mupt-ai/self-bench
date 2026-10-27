@@ -25,7 +25,6 @@ interface CardSetting {
   model: { label: string };
   accuracy: number;
   costPerTaskUsd: number;
-  costIncomplete?: true;
   costedTasks?: number;
 }
 
@@ -111,7 +110,6 @@ const cardSetting = (setting: ReleaseSetting): CardSetting => ({
   model: { label: setting.model.label },
   accuracy: setting.accuracy,
   costPerTaskUsd: setting.costPerTaskUsd,
-  ...(setting.costIncomplete ? { costIncomplete: true as const } : {}),
   ...(setting.costedTasks !== undefined ? { costedTasks: setting.costedTasks } : {}),
 });
 

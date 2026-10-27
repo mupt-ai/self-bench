@@ -90,8 +90,7 @@ const COLUMNS: readonly [string, (setting: ReleaseSetting) => string][] = [
   ["Accuracy", (setting) => percent(setting.accuracy)],
   [
     "Cost / Task",
-    (setting) =>
-      knownCostLabel(setting.costPerTaskUsd, setting.costIncomplete, dollars, setting.costedTasks),
+    (setting) => knownCostLabel(setting.costPerTaskUsd, dollars, setting.costedTasks),
   ],
   ["Frontier", (setting) => (setting.onFrontier ? "Yes" : "No")],
 ];

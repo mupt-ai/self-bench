@@ -34,14 +34,11 @@ export const SEGMENT = HOLD + MORPH;
 /** A setting id is "<catalog model>|<harness>|<reasoning>". */
 export const catalogModel = (setting: Pick<PublicSetting, "id">) => setting.id.split("|")[0] ?? "";
 
-/**
- * The repository with only the settings the site's chart plots: an incomplete cost is only a
- * lower bound, possibly zero, which a log axis cannot place (ResultsChart drops them too).
- */
+/** The repository with only the settings the site's chart plots: a log axis cannot place zero. */
 export function chartable(repo: VideoRepo): VideoRepo {
   return {
     ...repo,
-    settings: repo.settings.filter((s) => !s.costIncomplete && s.costPerTaskUsd > 0),
+    settings: repo.settings.filter((s) => s.costPerTaskUsd > 0),
   };
 }
 

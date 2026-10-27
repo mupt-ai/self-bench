@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { partialCodexCost, prefixSteps } from "../maintenance/partial-cost.js";
 import { costTotal, knownCostLabel } from "../src/evaluation/cost-total.js";
-import { responseBill } from "../src/evaluation/dari/billing.js";
+import { responseCost } from "../src/evaluation/dari/billing.js";
 import { initialEvaluation } from "../src/evaluation/store.js";
 import { evaluationInput } from "./support/evaluation-fixture.js";
 
@@ -19,37 +19,33 @@ const events = (...costs: unknown[]) =>
     ])
     .join("\n");
 
-test("missing and invalid request prices preserve unrelated known spend, never a complete zero", () => {
-  expect(responseBill(events(0.02, null, 0.03))).toEqual({
-    total: 0.05,
-    known: 2,
-    requests: 3,
-    incomplete: true,
-  });
-  expect(responseBill(events(null))).toBeUndefined();
-  expect(responseBill(events(0))).toEqual({ total: 0, known: 1, requests: 1, incomplete: false });
+test("unpriced requests add nothing to the bill, but invalid structure proves none", () => {
+  expect(responseCost(events(0.02, null, 0.03))).toBe(0.05);
+  expect(responseCost(events(null))).toBe(0);
+  expect(responseCost(`${events(0.02)}\n${JSON.stringify({ type: "request", index: 2 })}`)).toBe(
+    0.02,
+  );
+  expect(responseCost(`${events(0.02)}\n{broken`)).toBeUndefined();
+  expect(responseCost("")).toBeUndefined();
   expect(
-    responseBill(`${events(0.02)}\n${JSON.stringify({ type: "request", index: 2 })}`)?.incomplete,
-  ).toBe(true);
-  expect(responseBill(`${events(0.02)}\n{broken`)).toBeUndefined();
-  expect(
-    responseBill(
+    responseCost(
       `${events(0.02, 0.03)}\n${JSON.stringify({ type: "cost", index: 1, requestId: id, cost: null })}`,
-    )?.total,
+    ),
   ).toBe(0.03);
 });
 
-test("known aggregate spend is incomplete whenever a contributing trial is unpriced", () => {
-  expect(costTotal([{ apiCostUsd: 2 }, {}, { apiCostUsd: 3, costIncomplete: true }])).toEqual({
+test("a setting's cost per task is the mean of its priced trials", () => {
+  expect(costTotal([{ apiCostUsd: 2 }, {}, { apiCostUsd: 3 }])).toEqual({
     total: 5,
     known: 2,
-    incomplete: true,
+    perTask: 2.5,
   });
-  expect(knownCostLabel(5, true, String)).toBe("5 (Incomplete)");
-  expect(knownCostLabel(0, true, String, 0)).toBe("Not Available");
+  expect(costTotal([{}])).toEqual({ total: 0, known: 0 });
+  expect(knownCostLabel(5, String)).toBe("5");
+  expect(knownCostLabel(0, String, 0)).toBe("Not Available");
 });
 
-test("truncated JSON recovers only whole saved request metrics as an explicitly incomplete subtotal", () => {
+test("truncated JSON recovers only whole saved request metrics as a subtotal", () => {
   const run = initialEvaluation(evaluationInput(), "Sol");
   run.modelName = "openai/gpt-6.1-sol";
   run.credentials = {
@@ -79,7 +75,6 @@ test("truncated JSON recovers only whole saved request metrics as an explicitly 
   expect(partialCodexCost(run, trial, text, "codex-login")).toEqual({
     apiCostUsd: 0.0036,
     costSource: "reference-rates",
-    costIncomplete: true,
   });
   expect(partialCodexCost(run, trial, text, undefined)).toBeUndefined();
   expect(prefixSteps('[Earlier output truncated]\n{"steps":[]')).toEqual([]);

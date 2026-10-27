@@ -126,8 +126,6 @@ export interface EvaluationTrial {
   failureSummary?: FailureSummary;
   modelVerified?: boolean;
   apiCostUsd?: number;
-  /** The amount is known spend, not a complete total; some requests lack prices. */
-  costIncomplete?: true;
   tokenUsage?: TokenUsage;
   cacheWritesInferred?: boolean;
   /**

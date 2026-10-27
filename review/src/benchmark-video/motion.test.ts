@@ -34,12 +34,8 @@ describe("focusSetting", () => {
 });
 
 describe("chartable", () => {
-  test("drops settings whose cost is incomplete or zero, as the site's chart does", () => {
-    const r = repo(
-      setting("a|x|high", 50, 0.1),
-      { ...setting("b|x|high", 60, 0.2), costIncomplete: true },
-      setting("c|x|high", 70, 0),
-    );
+  test("drops settings whose cost is zero, as the site's chart does", () => {
+    const r = repo(setting("a|x|high", 50, 0.1), setting("c|x|high", 70, 0));
     expect(chartable(r).settings.map((s) => s.id)).toEqual(["a|x|high"]);
   });
 });
