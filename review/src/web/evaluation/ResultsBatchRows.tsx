@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
+import type { CredentialInfo } from "../../../../src/db/credentials";
 import { cn } from "../primitives/cn";
 import type { EvaluationRun } from "./api";
 import { CancelEvaluation } from "./CancelEvaluation";
@@ -54,6 +55,7 @@ export function ResultGroupRows({
   run,
   baseUrl,
   pages,
+  credentials = [],
   onChanged,
 }: {
   /** What the group is, for its toggle's label: "the Sep 29, 16:19 Run". */
@@ -74,6 +76,8 @@ export function ResultGroupRows({
   baseUrl?: string;
   /** Where the scope's pages live, for the comparison a retry starts. */
   pages?: string;
+  /** The org's saved credentials, for a retry's sandbox. */
+  credentials?: readonly CredentialInfo[];
   onChanged?(run: EvaluationRun): void;
 }) {
   const totals = tally(results);
@@ -137,6 +141,7 @@ export function ResultGroupRows({
                           harness={harness}
                           url={baseUrl}
                           pages={pages}
+                          credentials={credentials}
                         />
                       )}
                       {live && (

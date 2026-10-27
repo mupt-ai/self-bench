@@ -1,9 +1,10 @@
 import { expect, test } from "bun:test";
+import type { CredentialInfo } from "../../../../src/db/credentials";
 import { comparisonSchema } from "../../../../src/evaluation/comparisons";
 import { initialEvaluation } from "../../../../src/evaluation/store";
 import type { EvaluationRun } from "../../../../src/evaluation/types";
 import { evaluationInput } from "../../../../tests/support/evaluation-fixture";
-import { retrySelection } from "./run-retry";
+import { retrySandboxes, retrySelection } from "./run-retry";
 
 const ID = "6f1c2a7e-3b4d-4e5f-8a9b-0c1d2e3f4a5b";
 const MODEL_CREDENTIAL = "0b8e4f7a-1c2d-4e3f-9a8b-7c6d5e4f3a2b";
@@ -89,4 +90,30 @@ test("live, deleted, benchmark, uncredentialed and error-free runs offer no retr
     expect(retrySelection(finishedRun(change), "pi", ID)).toBeUndefined();
   // Another harness's errors are its own row's.
   expect(retrySelection(finishedRun(), "codex", ID)).toBeUndefined();
+});
+
+const E2B_KEY = "3a1e9f42-6b7c-4d8e-9f01-2a3b4c5d6e7f";
+const MODAL_KEY = "7c2d4e6f-8a9b-4c1d-8e2f-3a4b5c6d7e8f";
+const SAVED = [
+  { id: E2B_KEY, name: "Team E2B", kind: "e2b", auth: "api-key", createdAt: "2026-10-01" },
+  { id: MODAL_KEY, name: "Modal", kind: "modal", auth: "api-key", createdAt: "2026-10-01" },
+  { id: "openai-key", name: "OpenAI", kind: "openai", auth: "api-key", createdAt: "2026-10-01" },
+] as const satisfies readonly CredentialInfo[];
+
+test("a retry may move to another saved sandbox, which sets its provider", () => {
+  const retry = retrySelection(finishedRun(), "pi", ID, E2B_KEY, SAVED);
+  expect(retry?.selection).toMatchObject({ sandbox: "e2b", sandboxCredentialId: E2B_KEY });
+  expect(() => comparisonSchema.parse(retry?.selection)).not.toThrow();
+});
+
+test("the sandbox choices are the run's own first, then the org's saved sandboxes", () => {
+  expect(retrySandboxes(finishedRun(), SAVED)).toEqual([
+    { id: "managed-sandbox", label: "Managed" },
+    { id: E2B_KEY, label: "E2B · Team E2B" },
+    { id: MODAL_KEY, label: "Modal · Modal" },
+  ]);
+  const onModal = finishedRun((run) => {
+    if (run.credentials) run.credentials.sandboxCredentialId = MODAL_KEY;
+  });
+  expect(retrySandboxes(onModal, SAVED).map((choice) => choice.id)).toEqual([MODAL_KEY, E2B_KEY]);
 });

@@ -1,22 +1,27 @@
 import React from "react";
 import { useNavigate } from "react-router";
+import type { CredentialInfo } from "../../../../src/db/credentials";
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
-import { Button, Notice } from "../ui";
+import { Button, fieldStyles, Notice, Select } from "../ui";
 import { type EvaluationRun, evaluationRequestId, type Harness } from "./api";
 import { submitComparison } from "./comparison-submission";
-import { retrySelection } from "./run-retry";
+import { retrySandboxes, retrySelection } from "./run-retry";
 
 /**
  * Runs a finished run's errored tasks again after confirmation, as a new comparison with the
- * run's model, reasoning, credentials and sandbox. The setting's score takes the new results.
+ * run's model, reasoning and model credential, on the run's sandbox or another the org saved. The
+ * setting's score takes the new results.
  */
 export function RetryErroredTasks({
   run,
   harness,
   url,
   pages,
+  credentials,
 }: {
   run: EvaluationRun;
+  /** The org's saved credentials, to choose the sandbox from. */
+  credentials: readonly CredentialInfo[];
   harness: Harness;
   /** The scope's evaluations API. */
   url: string;
@@ -32,7 +37,14 @@ export function RetryErroredTasks({
   const submitting = React.useRef(false);
   const keep = React.useRef<HTMLButtonElement>(null);
   const titleId = React.useId();
-  const retry = retrySelection(run, harness, id);
+  const sandboxes = retrySandboxes(run, credentials);
+  const [sandbox, setSandbox] = React.useState<string>();
+  // The run's own sandbox while it still exists; otherwise one has to be chosen.
+  const chosen =
+    sandbox ??
+    sandboxes.find((choice) => choice.id === run.credentials?.sandboxCredentialId)?.id ??
+    "";
+  const retry = retrySelection(run, harness, id, chosen || undefined, credentials);
   if (!retry) return null;
   const tasks = `${retry.errored} Errored ${retry.errored === 1 ? "Task" : "Tasks"}`;
   const close = () => setOpen(false);
@@ -41,6 +53,7 @@ export function RetryErroredTasks({
       <Button
         onClick={() => {
           setId(evaluationRequestId());
+          setSandbox(undefined);
           setError(undefined);
           setOpen(true);
         }}
@@ -58,11 +71,35 @@ export function RetryErroredTasks({
           <DialogHeader title={`Retry ${tasks}?`} titleId={titleId} onClose={close} busy={busy} />
           <DialogBody>
             <p className="text-sm text-muted-foreground">
-              A new run tries {retry.errored === 1 ? "it" : "them"} again with this run's model,
-              credentials and sandbox, and may spend on the model. Tasks that have completed for
-              this setting since are skipped. Its results replace the errors in this setting's
-              score.
+              A new run tries {retry.errored === 1 ? "it" : "them"} again with this run's model and
+              model credential, on the sandbox below, and may spend on the model. Tasks that have
+              completed for this setting since are skipped. Its results replace the errors in this
+              setting's score.
             </p>
+            <label className={`${fieldStyles} mt-4`} htmlFor={`${titleId}-sandbox`}>
+              Sandbox
+              <Select
+                id={`${titleId}-sandbox`}
+                value={chosen}
+                disabled={busy}
+                onChange={(event) => setSandbox(event.target.value)}
+              >
+                <option value="" disabled>
+                  {sandboxes.length ? "Select Sandbox" : "No Sandbox Credentials"}
+                </option>
+                {sandboxes.map((choice) => (
+                  <option key={choice.id} value={choice.id}>
+                    {choice.label}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            {!chosen && (
+              <p className="mt-2 text-sm text-muted-foreground">
+                This run's sandbox credential no longer exists. Choose another, or add one under
+                Credentials.
+              </p>
+            )}
             {error && <Notice>{error}</Notice>}
           </DialogBody>
           <DialogFooter>
@@ -71,7 +108,7 @@ export function RetryErroredTasks({
             </Button>
             <Button
               variant="primary"
-              disabled={busy}
+              disabled={busy || !chosen}
               onClick={async () => {
                 if (submitting.current) return;
                 submitting.current = true;

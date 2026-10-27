@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
+import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { EvaluationRun } from "./api";
 import { CostValue } from "./CostValue";
 import type { AcceptedTask } from "./RepoRuns";
@@ -30,6 +31,7 @@ export function ConfigurationRows({
   onOpenTask,
   baseUrl,
   pages,
+  credentials,
   onChanged,
 }: {
   configuration: Configuration;
@@ -41,6 +43,8 @@ export function ConfigurationRows({
   baseUrl?: string;
   /** Where the scope's pages live, for the comparison a retry starts. */
   pages?: string;
+  /** The org's saved credentials, for a retry's sandbox. */
+  credentials?: readonly CredentialInfo[];
   onChanged?(run: EvaluationRun): void;
 }) {
   const open = view.configurations.includes(configuration.key);
@@ -127,6 +131,7 @@ export function ConfigurationRows({
               run={batch.results[0]?.run}
               {...(baseUrl ? { baseUrl } : {})}
               {...(pages ? { pages } : {})}
+              {...(credentials ? { credentials } : {})}
               {...(onChanged ? { onChanged } : {})}
               {...group(`${configuration.key}\n${batch.id}`)}
             />

@@ -1,3 +1,5 @@
+import type { CredentialInfo } from "../../../../src/db/credentials";
+import { hostedSandboxes } from "../../../../src/evaluation/catalog";
 import type { EvaluationRun, Harness } from "./api";
 import { outcomeOf } from "./results-model";
 
@@ -29,6 +31,9 @@ export function retrySelection(
   run: EvaluationRun,
   harness: Harness,
   id: string,
+  /** The sandbox credential to retry on: a saved one's id, or `managed-sandbox`; else the run's. */
+  sandboxCredentialId?: string,
+  saved: readonly Pick<CredentialInfo, "id" | "kind">[] = [],
 ): { errored: number; selection: RetrySelection } | undefined {
   const { credentials } = run;
   if (
@@ -44,7 +49,9 @@ export function retrySelection(
   );
   if (errored.length === 0) return undefined;
   const custom = run.model === "custom";
-  const managedSandbox = credentials.sandboxCredentialId === "managed-sandbox";
+  const sandboxId = sandboxCredentialId ?? credentials.sandboxCredentialId;
+  const managedSandbox = sandboxId === "managed-sandbox";
+  const kind = saved.find((credential) => credential.id === sandboxId)?.kind;
   return {
     errored: errored.length,
     selection: {
@@ -59,10 +66,34 @@ export function retrySelection(
           harnesses: [harness],
         },
       ],
-      sandbox: managedSandbox ? "managed" : run.sandbox,
-      sandboxCredentialId: credentials.sandboxCredentialId,
+      sandbox: managedSandbox ? "managed" : (kind ?? run.sandbox),
+      sandboxCredentialId: sandboxId,
       tasks: errored.map(({ runId, taskId }) => ({ runId, taskId })),
       skipCompleted: true,
     },
   };
+}
+
+/**
+ * The sandboxes a retry may run on: the org's saved sandbox credentials, and managed sandboxes when
+ * the run used them. The run's own comes first when it still exists.
+ */
+export function retrySandboxes(
+  run: EvaluationRun,
+  saved: readonly CredentialInfo[],
+): { id: string; label: string }[] {
+  const names: Record<string, string> = { e2b: "E2B", modal: "Modal", daytona: "Daytona" };
+  const choices = [
+    ...(run.credentials?.sandboxCredentialId === "managed-sandbox"
+      ? [{ id: "managed-sandbox", label: "Managed" }]
+      : []),
+    ...saved
+      .filter((credential) => (hostedSandboxes as readonly string[]).includes(credential.kind))
+      .map((credential) => ({
+        id: credential.id,
+        label: `${names[credential.kind] ?? credential.kind} · ${credential.name}`,
+      })),
+  ];
+  const own = (choice: { id: string }) => choice.id === run.credentials?.sandboxCredentialId;
+  return [...choices.filter(own), ...choices.filter((choice) => !own(choice))];
 }
