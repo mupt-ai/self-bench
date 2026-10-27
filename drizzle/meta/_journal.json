@@ -169,6 +169,13 @@
       "when": 1793123176729,
       "tag": "0023_registry_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793124488625,
+      "tag": "0024_gateway_requests",
+      "breakpoints": true
     }
   ]
 }
