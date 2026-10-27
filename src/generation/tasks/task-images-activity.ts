@@ -38,12 +38,18 @@ type RebuildOptions = Parameters<typeof createTaskImageRebuildActivities>[0];
 export function taskImageWorkerActivities(
   db: Database | undefined,
   store: ArtifactStore,
-  rebuild: Omit<RebuildOptions, "db" | "store"> | undefined,
+  /** The task image repository, whose images are deleted only in Artifact Registry. */
+  repository: string | undefined,
+  rebuild: Omit<RebuildOptions, "db" | "store" | "repository"> | undefined,
 ): { taskImages: Partial<TaskImageActivities>; rebuilds: Partial<TaskImageRebuildActivities> } {
   if (!db) return { taskImages: {}, rebuilds: {} };
+  const builds = !!rebuild && !!repository;
   return {
-    taskImages: createTaskImageActivities({ db, store, builds: !!rebuild }),
-    rebuilds: rebuild ? createTaskImageRebuildActivities({ ...rebuild, db, store }) : {},
+    taskImages: createTaskImageActivities({ db, store, repository, builds }),
+    rebuilds:
+      rebuild && repository
+        ? createTaskImageRebuildActivities({ ...rebuild, db, store, repository })
+        : {},
   };
 }
 
@@ -51,6 +57,7 @@ export function taskImageWorkerActivities(
 function createTaskImageActivities(options: {
   readonly db: Database;
   readonly store: ArtifactStore;
+  readonly repository: string | undefined;
   /** Whether this deployment builds images, so a kept task without them can be given them. */
   readonly builds: boolean;
 }): TaskImageActivities {

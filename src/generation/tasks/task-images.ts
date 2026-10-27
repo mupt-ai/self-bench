@@ -2,6 +2,7 @@ import { dirname } from "node:path";
 import { and, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import type { ArtifactStore } from "../../artifacts/index.js";
+import { isArtifactRegistry } from "../../contracts/config/task-images.js";
 import type { TaskImages } from "../../contracts/index.js";
 import type { Database } from "../../db/client.js";
 import { comparisons, releases, tasks } from "../../db/schema.js";
@@ -164,12 +165,17 @@ export function taskImageRows(db: Database) {
 export function taskImageReconciler(options: {
   readonly db: Database;
   readonly store: ArtifactStore;
+  /** The task image repository; a local registry keeps its images, so only the row changes. */
+  readonly repository: string | undefined;
 }) {
+  const deletes = !!options.repository && isArtifactRegistry(options.repository);
   const rows = taskImageRows(options.db);
   return async (task: ReviewedTask): Promise<TaskImageOutcome> =>
     await reconcileTaskImages(options.store, task, {
       save: (bundleKey) => rows.save(task, bundleKey),
       referenced: rows.referenced,
-      removeImage: (image) => removeRegistryImage(image),
+      removeImage: async (image) => {
+        if (deletes) await removeRegistryImage(image);
+      },
     });
 }

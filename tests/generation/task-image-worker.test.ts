@@ -15,7 +15,7 @@ afterEach(async () => {
   database = undefined;
 });
 
-async function taskWithoutImages() {
+async function seed(row: Partial<typeof tasks.$inferInsert> = {}) {
   database = await testDatabase();
   const { db } = database;
   const [user] = await db
@@ -49,6 +49,7 @@ async function taskWithoutImages() {
       pipelineStatus: "accepted",
       stage: "accepted",
       bundleKey: "runs/run-1/execution-task.tar.gz",
+      ...row,
     })
     .returning();
   if (!task) throw new Error("seed failed");
@@ -57,20 +58,38 @@ async function taskWithoutImages() {
 }
 
 test("a worker that cannot rebuild never asks for a rebuild", async () => {
-  const { db, store, task } = await taskWithoutImages();
-  const { taskImages, rebuilds } = taskImageWorkerActivities(db, store, undefined);
+  const { db, store, task } = await seed();
+  const { taskImages, rebuilds } = taskImageWorkerActivities(
+    db,
+    store,
+    "localhost:5000/tasks",
+    undefined,
+  );
   expect(rebuilds).not.toHaveProperty("rebuildTaskImages");
   expect((await taskImages.reconcileTaskImages?.(task.id))?.status).not.toBe("unbuilt");
 });
 
 test("a worker that rebuilds registers the rebuild it asks for", async () => {
-  const { db, store, task } = await taskWithoutImages();
-  const { taskImages, rebuilds } = taskImageWorkerActivities(db, store, {
+  const { db, store, task } = await seed();
+  const { taskImages, rebuilds } = taskImageWorkerActivities(db, store, "localhost:5000/tasks", {
     vault: {} as Pick<Vault, "records" | "credentials">,
     builder: {} as TaskImageBuilder,
-    repository: "localhost:5000/tasks",
     serving: { env: {} },
   });
   expect(rebuilds).toHaveProperty("rebuildTaskImages");
   expect((await taskImages.reconcileTaskImages?.(task.id))?.status).toBe("unbuilt");
+});
+
+test("a rejected task's local images leave its row without a call to Artifact Registry", async () => {
+  const local = {
+    agent: `localhost:5000/tasks/run-1/c1/agent@sha256:${"a".repeat(64)}`,
+    verifier: `localhost:5000/tasks/run-1/c1/verifier@sha256:${"b".repeat(64)}`,
+  };
+  const { db, store, task } = await seed({ images: local, reviewDecision: "reject" });
+  await store.put("runs/harbor-task.tar.gz", new Uint8Array([1]), "application/gzip");
+  const { taskImages } = taskImageWorkerActivities(db, store, "localhost:5000/tasks", undefined);
+  expect(await taskImages.reconcileTaskImages?.(task.id)).toEqual({
+    status: "removed",
+    bundleKey: "runs/harbor-task.tar.gz",
+  });
 });

@@ -91,11 +91,11 @@ const builder = taskImageBuilder(config.taskImages);
 const { taskImages, rebuilds } = taskImageWorkerActivities(
   database?.db,
   artifacts,
-  vault && builder && config.taskImages && snapshotSecret && snapshotOrigin
+  config.taskImages?.repository,
+  vault && builder && snapshotSecret && snapshotOrigin
     ? {
         vault,
         builder,
-        repository: config.taskImages.repository,
         serving: { env: process.env, callback: { url: snapshotOrigin, secret: snapshotSecret } },
       }
     : undefined,
