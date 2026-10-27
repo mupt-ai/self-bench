@@ -44,12 +44,11 @@ export type ModelAuthLookup = (
 
 export type CostFields = Pick<
   EvaluationTrial,
-  "modelVerified" | "apiCostUsd" | "costIncomplete" | "tokenUsage" | "costSource" | "cacheWritesInferred"
+  "modelVerified" | "apiCostUsd" | "tokenUsage" | "costSource" | "cacheWritesInferred"
 >;
 export const costKeys = [
   "modelVerified",
   "apiCostUsd",
-  "costIncomplete",
   "tokenUsage",
   "costSource",
   "cacheWritesInferred",
@@ -229,9 +228,9 @@ export async function recomputeEvaluationCost(
     }
     const parsed = record(JSON.parse(result));
     const after = trialCost(run, trial.harness, files, parsed, auth);
-    // Prefix recovery is a known lower bound, not a complete aggregate-token estimate.
+    // A cost without token usage was recovered from a cut transcript's prefix (partial-cost.ts).
     // Replace it only when the saved evidence proves a complete price at least as large.
-    if (before.costIncomplete && before.apiCostUsd !== undefined &&
+    if (!before.tokenUsage && before.apiCostUsd !== undefined &&
         (after.apiCostUsd === undefined || after.apiCostUsd < before.apiCostUsd)) {
       report.trials.push({ index, before, changed: false });
       continue;

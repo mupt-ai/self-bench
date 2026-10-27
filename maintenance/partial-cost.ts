@@ -28,7 +28,7 @@ export function prefixSteps(text: string): Record<string, unknown>[] {
 
 /** Saved complete request metrics support a subtotal, not the unseen rest of a trajectory. */
 export function partialCodexCost(run: EvaluationRun, trial: EvaluationTrial, text: string,
-  auth: "codex-login" | "api-key" | undefined): Pick<EvaluationTrial, "apiCostUsd" | "costSource" | "costIncomplete"> | undefined {
+  auth: "codex-login" | "api-key" | undefined): Pick<EvaluationTrial, "apiCostUsd" | "costSource"> | undefined {
   if (trial.harness !== "codex" || run.credentials?.provider !== "openai" ||
       !run.pricing || !auth || trial.modelVerified !== true) return undefined;
   const steps = prefixSteps(text);
@@ -41,6 +41,6 @@ export function partialCodexCost(run: EvaluationRun, trial: EvaluationTrial, tex
       ? { ...call, cacheWrite: call.input, input: 0 } : call);
   const cost = requestsCost(run.pricing, usage);
   return cost !== undefined && cost > 0
-    ? { apiCostUsd: cost, costSource: "reference-rates", costIncomplete: true }
+    ? { apiCostUsd: cost, costSource: "reference-rates" }
     : undefined;
 }

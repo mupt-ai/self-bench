@@ -44,11 +44,6 @@ export function ResultsChart({
   const lowest = Math.min(...settings.map((setting) => setting.accuracy));
   return (
     <div ref={frame}>
-      {settings.some((setting) => setting.costIncomplete) && (
-        <p className="text-xs text-muted-foreground">
-          Settings with incomplete costs are omitted from the chart.
-        </p>
-      )}
       <ResultsPlot
         title="Accuracy versus cost per task for every model setting"
         showTitle={false}
@@ -71,7 +66,8 @@ export function ResultsChart({
         // A quiet corner button for making the chart's text smaller or larger.
         showSettings
         points={settings
-          .filter((setting) => !setting.costIncomplete)
+          // A log axis cannot place a setting that recorded no spend.
+          .filter((setting) => setting.costPerTaskUsd > 0)
           .map((setting) => ({
             id: setting.id,
             label: settingLabel(setting, settings),

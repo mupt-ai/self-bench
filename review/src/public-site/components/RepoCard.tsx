@@ -170,12 +170,7 @@ function CardPicks({ picks }: { picks: PublicRepoSummary["picks"] }) {
           <span className="min-w-0 flex-1 truncate font-medium">{pick.setting.model.label}</span>
           <span className="shrink-0 font-mono tabular-nums">{percent(pick.setting.accuracy)}</span>
           <span className="w-14 shrink-0 text-right font-mono tabular-nums text-muted-foreground">
-            {knownCostLabel(
-              pick.setting.costPerTaskUsd,
-              pick.setting.costIncomplete,
-              dollars,
-              pick.setting.costedTasks,
-            )}
+            {knownCostLabel(pick.setting.costPerTaskUsd, dollars, pick.setting.costedTasks)}
           </span>
         </li>
       ))}
@@ -238,12 +233,7 @@ function FrontierPreview({ card }: { card: PublicRepoSummary }) {
             <span className="min-w-0 flex-1 truncate font-medium">{entry.model.label}</span>
             <span className="shrink-0 font-mono tabular-nums">{percent(entry.accuracy)}</span>
             <span className="w-14 text-right font-mono tabular-nums text-muted-foreground">
-              {knownCostLabel(
-                entry.costPerTaskUsd,
-                entry.costIncomplete,
-                dollars,
-                entry.costedTasks,
-              )}
+              {knownCostLabel(entry.costPerTaskUsd, dollars, entry.costedTasks)}
             </span>
           </p>
         );

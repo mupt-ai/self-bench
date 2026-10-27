@@ -60,16 +60,15 @@ test("chosen configurations chart over the accepted tasks all of them have a usa
   expect(taskSet([high, low], accepted)).toEqual([]);
 });
 
-test("unknown and incomplete task costs are never plotted as free", () => {
+test("unknown and zero task costs are never plotted on the log axis", () => {
   for (const trial of [
     { ...passed("task-1"), apiCostUsd: undefined },
-    { ...passed("task-1"), costIncomplete: true as const },
+    { ...passed("task-1"), apiCostUsd: 0 },
   ]) {
     const configurations = configurationsOf([run("partial", {}, [trial])], credentials, NOW);
     const configuration = configurations[0];
     if (!configuration) throw new Error("Fixture configuration missing");
     expect(configurationPoint(configuration, ["batch-1/task-1"])).toBeUndefined();
-    expect(configuration.costIncomplete).toBe(true);
   }
 });
 

@@ -17,7 +17,6 @@ test("recompute preserves a recovered prefix subtotal with no complete transcrip
   if (!trial) throw new Error("Fixture trial missing");
   trial.status = "completed";
   trial.apiCostUsd = 0.2;
-  trial.costIncomplete = true;
   trial.costSource = "reference-rates";
   trial.modelVerified = true;
   trial.artifacts = ["0/solver/task/result.json", "0/solver/task/agent/trajectory.json"];
@@ -35,6 +34,5 @@ test("recompute preserves a recovered prefix subtotal with no complete transcrip
   expect((await recomputeEvaluationCost(store, run.repoId, run.id, true)).applied).toBe(false);
   expect((await getEvaluation(store, { repoId: run.repoId }, run.id))?.trials[0]).toMatchObject({
     apiCostUsd: 0.2,
-    costIncomplete: true,
   });
 });

@@ -6,16 +6,11 @@ import { record } from "../output.js";
 export const DARI_BILLING = "solver/dari-billing.jsonl";
 const UUID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
 
-/** Compatibility helper for callers that require a complete total. */
+/**
+ * The sum of the prices Dari returned. A request without one (cut off by the agent's time limit,
+ * or refused before it was billed) adds nothing; invalid structure or no requests prove no bill.
+ */
 export function responseCost(text: string): number | undefined {
-  const bill = responseBill(text);
-  return bill && !bill.incomplete ? bill.total : undefined;
-}
-
-/** Retain valid request prices as a lower bound; invalid structure cannot prove any bill. */
-export function responseBill(
-  text: string,
-): { total: number; incomplete: boolean; known: number; requests: number } | undefined {
   const requests = new Map<number, number | null>();
   const ids = new Map<string, number>();
   const unpriced = new Set<number>();
@@ -58,17 +53,9 @@ export function responseBill(
       requests.set(index, unpriced.has(index) ? null : (cost as number));
     } else return undefined;
   }
-  const prices = [...requests.values()].filter((cost): cost is number => cost !== null);
-  if (!prices.length) return undefined;
-  const total = prices.reduce((sum, cost) => sum + cost, 0);
-  return Number.isFinite(total)
-    ? {
-        total,
-        known: prices.length,
-        requests: requests.size,
-        incomplete: prices.length !== requests.size,
-      }
-    : undefined;
+  if (!requests.size) return undefined;
+  const total = [...requests.values()].reduce<number>((sum, cost) => sum + (cost ?? 0), 0);
+  return Number.isFinite(total) ? total : undefined;
 }
 
 /** Read the compact bill directly, independent of collectOutput's shared transcript budget. */

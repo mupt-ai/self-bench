@@ -6,7 +6,7 @@ import { ListSkeleton } from "../LoadingSkeleton";
 import { useSession } from "../session";
 import { Notice } from "../ui";
 import { type EvaluationRun, type EvaluationTrial, evaluationRequest } from "./api";
-import { CostValue } from "./CostValue";
+import { dollars } from "./benchmark";
 import { FailureExplanationForm } from "./FailureExplanationForm";
 import { OutcomeCircle } from "./ResultsMarks";
 import { outcomeOf } from "./results-model";
@@ -166,7 +166,7 @@ function TrialDialogContent({
         )}
         {trial.apiCostUsd !== undefined && (
           <span className="font-mono text-xs text-muted-foreground">
-            <CostValue value={trial.apiCostUsd} incomplete={trial.costIncomplete} />
+            {dollars(trial.apiCostUsd)}
           </span>
         )}
         <a

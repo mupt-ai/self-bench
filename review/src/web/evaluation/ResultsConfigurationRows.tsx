@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { EvaluationRun } from "./api";
-import { CostValue } from "./CostValue";
+import { dollars } from "./benchmark";
 import type { AcceptedTask } from "./RepoRuns";
 import { BatchHeading, ResultGroupRows, startersOf } from "./ResultsBatchRows";
 import { resultStates } from "./ResultsFilters";
@@ -112,10 +112,7 @@ export function ConfigurationRows({
           {configuration.costPerTask === undefined ? (
             <NoValue width={6} />
           ) : (
-            <CostValue
-              value={configuration.costPerTask}
-              incomplete={configuration.costIncomplete}
-            />
+            dollars(configuration.costPerTask)
           )}
         </td>
       </tr>

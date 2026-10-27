@@ -46,7 +46,7 @@ for (const invalid of ['{"usage":{"cost":null}}', '{"usage":{"cost":"bad"}}', "{
       const bill = await readFile(path, "utf8");
       expect(bill).toContain('"cost":0.02');
       expect(bill).toContain('"cost":null');
-      expect(responseCost(bill)).toBeUndefined();
+      expect(responseCost(bill)).toBe(0);
     } finally {
       hooks.get("session_shutdown")?.();
       globalThis.fetch = original;

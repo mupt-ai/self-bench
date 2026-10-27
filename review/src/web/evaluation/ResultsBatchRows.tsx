@@ -3,8 +3,8 @@ import { Link } from "react-router";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import { cn } from "../primitives/cn";
 import type { EvaluationRun } from "./api";
+import { dollars } from "./benchmark";
 import { CancelEvaluation } from "./CancelEvaluation";
-import { CostValue } from "./CostValue";
 import { DeleteRun } from "./DeleteRun";
 import { OutcomeFilter } from "./ResultsFilters";
 import { NoValue, ResultsStatus } from "./ResultsMarks";
@@ -117,11 +117,7 @@ export function ResultGroupRows({
           {totals.passRate === undefined ? <NoValue width={3} /> : `${totals.passRate.toFixed(0)}%`}
         </td>
         <td className="text-right font-mono tabular-nums">
-          {totals.costPerTask === undefined ? (
-            <NoValue width={6} />
-          ) : (
-            <CostValue value={totals.costPerTask} incomplete={totals.costIncomplete} />
-          )}
+          {totals.costPerTask === undefined ? <NoValue width={6} /> : dollars(totals.costPerTask)}
         </td>
       </tr>
       {open && (

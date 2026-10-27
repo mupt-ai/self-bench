@@ -164,7 +164,6 @@ export function publishedTrial(
     ...(trial.verifierTimedOut ? { verifierTimedOut: true } : {}),
     ...(run.agentMinutes !== undefined ? { agentMinutes: run.agentMinutes } : {}),
     ...(trial.apiCostUsd !== undefined ? { apiCostUsd: trial.apiCostUsd } : {}),
-    ...(trial.costIncomplete ? { costIncomplete: true as const } : {}),
     ...(trial.costSource ? { costSource: trial.costSource } : {}),
     ...(trial.tokenUsage ? { tokenUsage: trial.tokenUsage } : {}),
     ...(trial.cacheWritesInferred ? { cacheWritesInferred: true } : {}),

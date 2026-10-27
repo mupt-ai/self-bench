@@ -92,7 +92,7 @@ export function ModelTable({
       cell: (row) => (
         <Bar
           value={row.costPerTaskUsd / maxCost}
-          label={knownCostLabel(row.costPerTaskUsd, row.costIncomplete, dollars, row.costedTasks)}
+          label={knownCostLabel(row.costPerTaskUsd, dollars, row.costedTasks)}
           color="var(--muted-fg)"
         />
       ),

@@ -2,16 +2,13 @@ import { expect, test } from "bun:test";
 import { buildRelease, previewRelease } from "../src/public/release-build.js";
 import { approvedTasks, inputs, run } from "./support/release-fixture.js";
 
-test("public releases keep known spend but do not place incomplete settings on the frontier", () => {
+test("a public release prices a setting by the mean of its priced tasks", () => {
   const source = inputs({
     tasks: approvedTasks(["t1", "t2"]),
-    runs: [
-      run({
-        model: "sol",
-        results: { t1: { apiCostUsd: 2 }, t2: { apiCostUsd: 1, costIncomplete: true } },
-      }),
-    ],
+    runs: [run({ model: "sol", results: { t1: { apiCostUsd: 2 }, t2: 1 } })],
   });
+  // The second task has no price.
+  delete source.runs[0]?.trials[1]?.apiCostUsd;
   const preview = previewRelease(source);
   const release = buildRelease(
     source,
@@ -22,11 +19,9 @@ test("public releases keep known spend but do not place incomplete settings on t
     },
   );
   expect(release.payload.settings[0]).toMatchObject({
-    totalCostUsd: 3,
-    costPerTaskUsd: 1.5,
-    costIncomplete: true,
-    costedTasks: 2,
-    onFrontier: false,
+    totalCostUsd: 2,
+    costPerTaskUsd: 2,
+    costedTasks: 1,
+    onFrontier: true,
   });
-  expect(release.payload.frontier).toEqual([]);
 });

@@ -1,6 +1,5 @@
 import type { EvaluationTrial } from "./api";
 import { dollars } from "./benchmark";
-import { CostValue } from "./CostValue";
 
 export function TokenCosts({
   trial,
@@ -8,12 +7,7 @@ export function TokenCosts({
   trial: Partial<
     Pick<
       EvaluationTrial,
-      | "tokenUsage"
-      | "apiCostUsd"
-      | "costIncomplete"
-      | "costSource"
-      | "cacheWritesInferred"
-      | "billedCostUsd"
+      "tokenUsage" | "apiCostUsd" | "costSource" | "cacheWritesInferred" | "billedCostUsd"
     >
   >;
 }) {
@@ -37,13 +31,7 @@ export function TokenCosts({
         ))}
         <div>
           <dt>Estimated Model Cost</dt>
-          <dd>
-            {trial.apiCostUsd === undefined ? (
-              "Not Available"
-            ) : (
-              <CostValue value={trial.apiCostUsd} incomplete={trial.costIncomplete} />
-            )}
-          </dd>
+          <dd>{trial.apiCostUsd === undefined ? "Not Available" : dollars(trial.apiCostUsd)}</dd>
         </div>
         {trial.billedCostUsd !== undefined && (
           <div>

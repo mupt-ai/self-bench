@@ -62,7 +62,6 @@ export interface Tally {
   passRate?: number;
   /** Mean model cost of the priced results. */
   costPerTask?: number;
-  costIncomplete?: true;
 }
 
 export interface Configuration extends Tally {
@@ -165,8 +164,7 @@ export function tally(results: readonly TaskResult[]): Tally {
     counts,
     finished: results.length - counts.running - counts.queued - counts.cancelled,
     ...(scored ? { passRate: (counts.passed / scored) * 100 } : {}),
-    ...(costs.known ? { costPerTask: costs.total / finished.length } : {}),
-    ...(costs.incomplete ? { costIncomplete: true as const } : {}),
+    ...(costs.perTask !== undefined ? { costPerTask: costs.perTask } : {}),
   };
 }
 

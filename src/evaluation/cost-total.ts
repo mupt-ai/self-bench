@@ -1,23 +1,21 @@
+import type { EvaluationTrial } from "./types.js";
+
+/** A cost per task, or "Not Available" when no task had a price. */
 export function knownCostLabel(
   value: number | undefined,
-  incomplete: boolean | undefined,
   format: (value: number) => string,
   known?: number,
 ): string {
-  if (value === undefined || known === 0) return "Not Available";
-  return `${format(value)}${incomplete ? " (Incomplete)" : ""}`;
+  return value === undefined || known === 0 ? "Not Available" : format(value);
 }
 
-import type { EvaluationTrial } from "./types.js";
-
-/** Known spend is a lower bound whenever any contributing trial is unpriced or incomplete. */
-export function costTotal(
-  trials: readonly Pick<EvaluationTrial, "apiCostUsd" | "costIncomplete">[],
-) {
+/** The priced trials' spend; a trial without a price counts as their mean, not as free. */
+export function costTotal(trials: readonly Pick<EvaluationTrial, "apiCostUsd">[]) {
   const priced = trials.filter((trial) => trial.apiCostUsd !== undefined);
+  const total = priced.reduce((sum, trial) => sum + (trial.apiCostUsd ?? 0), 0);
   return {
-    total: priced.reduce((sum, trial) => sum + (trial.apiCostUsd ?? 0), 0),
+    total,
     known: priced.length,
-    incomplete: priced.length !== trials.length || trials.some((trial) => trial.costIncomplete),
+    ...(priced.length ? { perTask: total / priced.length } : {}),
   };
 }
