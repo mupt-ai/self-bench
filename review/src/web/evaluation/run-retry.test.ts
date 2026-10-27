@@ -117,3 +117,24 @@ test("the sandbox choices are the run's own first, then the org's saved sandboxe
   });
   expect(retrySandboxes(onModal, SAVED).map((choice) => choice.id)).toEqual([MODAL_KEY, E2B_KEY]);
 });
+
+test("a bring-your-own sandbox stays a choice while the saved list has not loaded", () => {
+  const onModal = finishedRun((run) => {
+    if (run.credentials) run.credentials.sandboxCredentialId = MODAL_KEY;
+  });
+  expect(retrySandboxes(onModal, [])).toEqual([
+    { id: MODAL_KEY, label: "Modal · Run's Credential" },
+  ]);
+  expect(retrySelection(onModal, "pi", ID, MODAL_KEY, [])?.selection).toMatchObject({
+    sandbox: "modal",
+    sandboxCredentialId: MODAL_KEY,
+  });
+});
+
+test("a loaded saved list without the run's sandbox means it was deleted", () => {
+  const onModal = finishedRun((run) => {
+    if (run.credentials) run.credentials.sandboxCredentialId = MODAL_KEY;
+  });
+  const others = SAVED.filter((credential) => credential.id !== MODAL_KEY);
+  expect(retrySandboxes(onModal, others).map((choice) => choice.id)).not.toContain(MODAL_KEY);
+});

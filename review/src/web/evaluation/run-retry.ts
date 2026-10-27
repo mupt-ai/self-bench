@@ -76,24 +76,30 @@ export function retrySelection(
 
 /**
  * The sandboxes a retry may run on: the org's saved sandbox credentials, and managed sandboxes when
- * the run used them. The run's own comes first when it still exists.
+ * the run used them. The run's own comes first when it still exists. An empty list may just not
+ * have loaded, so the run's own bring-your-own sandbox is kept then, and the server has the final
+ * say on it.
  */
 export function retrySandboxes(
   run: EvaluationRun,
   saved: readonly CredentialInfo[],
 ): { id: string; label: string }[] {
   const names: Record<string, string> = { e2b: "E2B", modal: "Modal", daytona: "Daytona" };
+  const own = run.credentials?.sandboxCredentialId;
+  const listed = saved
+    .filter((credential) => (hostedSandboxes as readonly string[]).includes(credential.kind))
+    .map((credential) => ({
+      id: credential.id,
+      label: `${names[credential.kind] ?? credential.kind} · ${credential.name}`,
+    }));
+  const unknown = own !== undefined && own !== "managed-sandbox" && saved.length === 0;
   const choices = [
-    ...(run.credentials?.sandboxCredentialId === "managed-sandbox"
-      ? [{ id: "managed-sandbox", label: "Managed" }]
+    ...(own === "managed-sandbox" ? [{ id: "managed-sandbox", label: "Managed" }] : []),
+    ...(unknown
+      ? [{ id: own, label: `${names[run.sandbox] ?? run.sandbox} · Run's Credential` }]
       : []),
-    ...saved
-      .filter((credential) => (hostedSandboxes as readonly string[]).includes(credential.kind))
-      .map((credential) => ({
-        id: credential.id,
-        label: `${names[credential.kind] ?? credential.kind} · ${credential.name}`,
-      })),
+    ...listed,
   ];
-  const own = (choice: { id: string }) => choice.id === run.credentials?.sandboxCredentialId;
-  return [...choices.filter(own), ...choices.filter((choice) => !own(choice))];
+  const isOwn = (choice: { id: string }) => choice.id === own;
+  return [...choices.filter(isOwn), ...choices.filter((choice) => !isOwn(choice))];
 }
