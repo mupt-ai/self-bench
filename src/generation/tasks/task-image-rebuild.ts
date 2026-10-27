@@ -13,6 +13,11 @@ import {
   providerCredentialEnvironment,
   providerEnvironment,
 } from "../../sandbox/provider-environment.js";
+import {
+  managedHarborEnvironment,
+  managedModalEnvironment,
+  managedSandboxCredentials,
+} from "../billing/managed.js";
 import type { TaskImageBuilder } from "../images/builder.js";
 import { publishExecutionBundle } from "../pipeline/execution-bundle.js";
 import { type GateImages, runHarborGates } from "../pipeline/harbor-gates.js";
@@ -37,17 +42,17 @@ export function needsImages(task: ReviewedTask & { readonly pipelineStatus: stri
   );
 }
 
-/** Where a run checked its tasks: the provider, its Harbor environment, and whose credential. */
+/** The rebuild's verification provider and account; managed accounts have no vault credential. */
 export interface Verification {
   readonly provider: HarborEnvironment;
   readonly env: NodeJS.ProcessEnv;
   readonly orgId: number;
-  readonly credentialId: string;
+  readonly credentialId?: string;
 }
 
 export interface RebuildDependencies {
   readonly builder: TaskImageBuilder;
-  /** The provider and Harbor environment the task's own run checked it on. */
+  /** The run's saved customer account, or the deployment's managed verification account. */
   readonly verification: Verification;
   readonly serving: GateImages["serving"];
   /** Records the images and execution bundle unless the row changed meanwhile. */
@@ -65,8 +70,8 @@ export interface RebuildDependencies {
 /**
  * Gives a task that runs on its Dockerfiles (accepted before images were built, or re-approved
  * after a rejection removed them) the images every new task gets: its own compiled task is built
- * and goes through the smoke, nop and oracle gates again on those images, on the provider and
- * account its run checked it on. Only images that pass every gate are recorded, with the
+ * and goes through the smoke, nop and oracle gates again on those images, using its saved customer
+ * account or the deployment's managed account. Only images that pass every gate are recorded, with the
  * execution bundle that runs them; the task's files never change. Images that fail are deleted.
  */
 export async function rebuildTaskImages(
@@ -166,8 +171,8 @@ async function gateSource(
 
 /**
  * The provider and Harbor environment a run checked its tasks on, from its saved settings and the
- * organization's own credential; never the worker's. Managed runs stamp their provider on the run
- * rather than saving it, so they are refused rather than guessed.
+ * organization's own credential; never the worker's. Managed rebuilds run fresh gates on the
+ * deployment's currently configured managed provider, using only its platform credentials.
  */
 export async function verificationEnvironment(
   vault: Pick<Vault, "records" | "credentials">,
@@ -177,8 +182,19 @@ export async function verificationEnvironment(
   const saved = await vault.records.read<GenerationReference>(generationRecordPath(runId));
   if (!saved) throw new Error("Original generation configuration is missing");
   const { settings } = saved.value;
-  if (settings.sandbox === "managed")
-    throw new Error("Managed runs do not save their verification provider");
+  if (settings.sandbox === "managed") {
+    const provider = managedHarborEnvironment(base);
+    const env = providerEnvironment(base, "docker");
+    if (provider === "modal") Object.assign(env, managedModalEnvironment(base));
+    else {
+      const managed = managedSandboxCredentials(base);
+      Object.assign(
+        env,
+        providerCredentialEnvironment("e2b", { value: managed.apiKey, domain: managed.domain }),
+      );
+    }
+    return { provider, env, orgId: saved.value.orgId ?? saved.value.ownerId };
+  }
   const provider = settings.harborEnvironment ?? settings.sandbox;
   const id = settings.harborEnvironment
     ? settings.harborCredentialId
