@@ -145,7 +145,7 @@ test("only kept tasks without images are rebuilt", async () => {
   expect(builds).toEqual([]);
 });
 
-test("verification runs with the run's own saved credential, never a managed guess", async () => {
+test("verification uses saved customer credentials or explicit managed platform credentials", async () => {
   const vault = (settings: Record<string, unknown>) =>
     ({
       records: { read: async () => ({ value: { ownerId: 7, orgId: 42, settings } }) },
@@ -161,9 +161,39 @@ test("verification runs with the run's own saved credential, never a managed gue
   );
   expect(found).toMatchObject({ provider: "modal", orgId: 42, credentialId: "modal-key" });
   expect(found.env.MODAL_TOKEN_ID).not.toBe("worker-own");
-  await expect(verificationEnvironment(vault({ sandbox: "managed" }), "run-1", {})).rejects.toThrow(
-    "Managed runs",
-  );
+  const managed = vault({ sandbox: "managed" });
+  managed.credentials.find = async () => {
+    throw new Error("Managed runs must not read customer credentials");
+  };
+  const base = {
+    PATH: "/usr/bin",
+    SELFBENCH_MANAGED_OFFERING: "true",
+    SELFBENCH_MANAGED_E2B_API_KEY: "platform-e2b",
+    E2B_API_KEY: "worker-e2b",
+    MODAL_TOKEN_ID: "worker-modal",
+    MODAL_TOKEN_SECRET: "worker-secret",
+  };
+  const e2b = await verificationEnvironment(managed, "run-1", base);
+  expect(e2b).toMatchObject({ provider: "e2b", orgId: 42 });
+  expect(e2b.credentialId).toBeUndefined();
+  expect(e2b.env.E2B_API_KEY).toBe("platform-e2b");
+  expect(e2b.env.MODAL_TOKEN_ID).toBeUndefined();
+  const modal = await verificationEnvironment(managed, "run-1", {
+    ...base,
+    SELFBENCH_MANAGED_MODAL_TOKEN_ID: "platform-modal",
+    SELFBENCH_MANAGED_MODAL_TOKEN_SECRET: "platform-secret",
+    SELFBENCH_MANAGED_MODAL_ENVIRONMENT: "production",
+  });
+  expect(modal.provider).toBe("modal");
+  expect(modal.credentialId).toBeUndefined();
+  expect(modal.env.MODAL_TOKEN_ID).toBe("platform-modal");
+  expect(modal.env.MODAL_TOKEN_SECRET).toBe("platform-secret");
+  expect(modal.env.MODAL_ENVIRONMENT).toBe("production");
+  expect(modal.env.E2B_API_KEY).toBeUndefined();
+  for (const env of [{}, { ...base, SELFBENCH_MANAGED_OFFERING: "false" }])
+    await expect(verificationEnvironment(managed, "run-1", env)).rejects.toThrow(
+      "Managed sandboxes are not configured",
+    );
 });
 
 test("images the row never takes are deleted, whatever stopped the rebuild", async () => {
