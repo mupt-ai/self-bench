@@ -10,8 +10,7 @@ import {
   harborPython,
   harborPythonPath,
 } from "../harnesses/harbor/command.js";
-import { pinnedImageKwargs } from "../harnesses/harbor/pinned-images.js";
-import { startFromExportedImages } from "../harnesses/harbor/registry-pull.js";
+import { startFromTaskImages } from "../harnesses/harbor/registry-pull.js";
 import {
   assertHostSafePublishedTask,
   assertHostSafeTask,
@@ -29,8 +28,8 @@ const PREPARE_TIMEOUT_MS = 60 * 60 * 1000;
 /**
  * Builds the images of the one task in `input` with the evaluation's own sandbox credentials,
  * exactly as its trials' Harbor would (runtime/selfbench_prepare.py), so none of its trials builds
- * them, and trials of the same task never build them side by side. A task verified in this Modal
- * workspace keeps its pinned images and builds nothing. Returns what it did, one line per image.
+ * them, and trials of the same task never build them side by side. Returns what it did, one line
+ * per image.
  */
 export async function prepareTaskImages(
   store: ArtifactStore,
@@ -68,27 +67,13 @@ export async function prepareTaskImages(
     if (task.registry) await assertHostSafePublishedTask(taskPath, child);
     else await assertHostSafeTask(taskPath, child, trialTimeouts(input.agentMinutes).agentSeconds);
     // An E2B template is then made from the task's exported image instead of its Dockerfile.
-    const pull = await startFromExportedImages(
-      taskPath,
-      task.images,
-      input.sandbox,
-      {
-        env: options.env ?? process.env,
-        ...(options.snapshotLink ? { callback: options.snapshotLink } : {}),
-      },
-      root,
-    );
-    const pins = Object.entries(
-      pinnedImageKwargs(input.sandbox === "modal" ? task.images : undefined),
-    );
+    const pull = await startFromTaskImages(taskPath, task.images, input.sandbox, {
+      env: options.env ?? process.env,
+      ...(options.snapshotLink ? { callback: options.snapshotLink } : {}),
+    });
     const result = await command(
       await harborPython(child),
-      [
-        join(harborPythonPath(), "selfbench_prepare.py"),
-        taskPath,
-        input.sandbox,
-        ...pins.map(([key, value]) => `${key}=${value}`),
-      ],
+      [join(harborPythonPath(), "selfbench_prepare.py"), taskPath, input.sandbox],
       {
         env: { ...child, ...pull },
         timeoutMs: PREPARE_TIMEOUT_MS,

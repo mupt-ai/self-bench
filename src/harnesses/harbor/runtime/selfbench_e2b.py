@@ -73,7 +73,6 @@ from e2b import (
 
 import harbor.environments.e2b as harbor_e2b
 from harbor.environments.e2b import E2BEnvironment
-from registry_auth import record_image
 
 TAG = "default"
 CAPACITY_WAIT_SECS = (15, 120)
@@ -126,9 +125,8 @@ T = TypeVar("T")
 
 
 class SelfBenchE2BEnvironment(E2BEnvironment):
-    def __init__(self, *args, image_record_dir: str | None = None, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._selfbench_record = image_record_dir
         self._template_name += TEMPLATE_SUFFIX
 
     def _registry_grant(self) -> tuple[str, str] | None:
@@ -139,12 +137,6 @@ class SelfBenchE2BEnvironment(E2BEnvironment):
         if not image or not host or not password or not image.startswith(f"{host}/"):
             return None
         return os.environ.get("SELFBENCH_REGISTRY_USERNAME", "selfbench"), password
-
-    async def start(self, force_build: bool):
-        await super().start(force_build)
-        # The template verification ran on, which the worker exports once the task is accepted.
-        if self._selfbench_record:
-            record_image(self._selfbench_record, self.environment_dir, self._template_name)
 
     async def _when_free(self, what: str, start: Callable[[], Awaitable[T]]) -> T:
         """Runs `start`, waiting while E2B refuses it at the team's concurrency limit."""

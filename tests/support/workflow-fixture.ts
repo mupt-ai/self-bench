@@ -14,7 +14,7 @@ import type {
   DiscoveryShardInput,
   SelfBenchActivities,
 } from "../../src/generation/pipeline/activities.js";
-import { executeCandidate } from "../../src/generation/pipeline/workflows.js";
+import { executeCandidate } from "../../src/generation/pipeline/candidate.js";
 
 export const artifact: ArtifactRef = {
   uri: "file:///artifact",

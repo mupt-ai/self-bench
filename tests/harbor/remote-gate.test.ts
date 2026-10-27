@@ -6,11 +6,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { handleSnapshotRoute } from "../../src/api/routes/snapshots.js";
 import { LocalArtifactStore } from "../../src/artifacts/local.js";
-import { fetchSnapshotInBuild, remoteGate } from "../../src/generation/pipeline/remote-gate.js";
+import { fetchSnapshotInBuild } from "../../src/generation/pipeline/remote-gate.js";
 import { runCommand } from "../../src/lib/process.js";
 import { signSandboxGrant } from "../../src/sandbox/callback-grant.js";
 import { GATE_TASK_FILE, SNAPSHOT_FILE, splitGateBundle } from "../../src/sandbox/gate-bundle.js";
-import type { SandboxJobOutcome } from "../../src/sandbox/jobs.js";
 import { readSnapshotLink, snapshotLinkUrl } from "../../src/sandbox/snapshot-link.js";
 
 const secret = "s".repeat(32);
@@ -101,12 +100,14 @@ test("the compiler splits the task from its repository snapshot", async () => {
     "tests/test.sh",
   ]);
 
-  // Tasks with services build through Compose and keep the full bundle.
+  // A task with services splits the same way: its images are built before its checks too.
   const composed = await temporary();
   await writeFile(join(task, "tests/docker-compose.yaml"), "services: {}\n");
   await runCommand("tar", ["-czf", compiled, "-C", join(work, "src"), "harbor-task"]);
   await splitGateBundle(compiled, composed);
-  expect(await readdir(composed)).toEqual([]);
+  expect((await readdir(composed)).sort()).toEqual(
+    [GATE_TASK_FILE, "gate", SNAPSHOT_FILE, "snapshot"].sort(),
+  );
 });
 
 test("both gate images fetch the snapshot by digest instead of copying it", async () => {
@@ -130,25 +131,6 @@ test("both gate images fetch the snapshot by digest instead of copying it", asyn
     );
   }
   await expect(fetchSnapshotInBuild(task, remote)).rejects.toThrow("snapshot");
-});
-
-test("only Modal checks with a split compile build from the snapshot link", () => {
-  const callback = { url: "https://app.example.dev", secret };
-  const compiled = {
-    prefix: "runs/r/verify/c/compile/attempt-2",
-    files: { [GATE_TASK_FILE]: ref("gate"), [SNAPSHOT_FILE]: ref("repo") },
-  } as unknown as SandboxJobOutcome;
-
-  const remote = remoteGate("modal", compiled, callback);
-  expect(remote?.bundle).toEqual(ref("gate"));
-  expect(remote?.snapshotSha256).toBe("repo-sha");
-  expect(readSnapshotLink(new URL(remote?.snapshotUrl ?? "").pathname, secret)).toEqual({
-    key: "runs/r/verify/c/compile/attempt-2/repo.tar.gz",
-    sha256: "repo-sha",
-  });
-  expect(remoteGate("docker", compiled, callback)).toBeUndefined();
-  const older = { ...compiled, files: { "harbor-task.tar.gz": ref("full") } };
-  expect(remoteGate("modal", older, callback)).toBeUndefined();
 });
 
 function ref(name: string) {

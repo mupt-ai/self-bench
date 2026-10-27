@@ -188,7 +188,7 @@ export const tasks = pgTable(
     reason: text("reason"),
     bundleKey: text("bundle_key"),
     definition: jsonb("definition").$type<Record<string, unknown>>(),
-    /** The Modal images the accepted revision was verified on; trials on Modal start from them. */
+    /** The images the accepted task was checked on, by digest; every trial starts from them. */
     images: jsonb("images").$type<TaskImages>(),
     reviewDecision: text("review_decision", { enum: ["approve", "reject"] }),
     reviewNote: text("review_note"),

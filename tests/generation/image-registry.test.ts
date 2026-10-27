@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import type { TaskEnvironment } from "../../src/contracts/index.js";
-import { cachedImageConfig } from "../../src/generation/task/image-config.js";
 import {
   parseImageReference,
   pinEnvironmentImages,
@@ -176,26 +175,5 @@ describe("resolving images", () => {
     expect(pinned.problems).toEqual([
       expect.stringContaining("service cache image redis:nope: docker.io/library/redis"),
     ]);
-  });
-});
-
-describe("image configs", () => {
-  test("each digest's config is read from its registry once", async () => {
-    const real = globalThis.fetch;
-    const requests: string[] = [];
-    globalThis.fetch = (async (input: string | URL | Request) => {
-      const url = new URL(String(input));
-      requests.push(url.pathname);
-      if (url.pathname.includes("/blobs/")) return Response.json({ config: { Env: ["A=1"] } });
-      return Response.json({ config: { digest: other } });
-    }) as typeof fetch;
-    try {
-      const image = `ghcr.io/org/base@${digest}`;
-      expect(await cachedImageConfig(image)).toEqual({ Env: ["A=1"] });
-      expect(await cachedImageConfig(image)).toEqual({ Env: ["A=1"] });
-      expect(requests).toEqual([`/v2/org/base/manifests/${digest}`, `/v2/org/base/blobs/${other}`]);
-    } finally {
-      globalThis.fetch = real;
-    }
   });
 });

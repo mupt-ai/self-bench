@@ -4,7 +4,6 @@ import { join } from "node:path";
 import { ApplicationFailure } from "@temporalio/common";
 import type { ArtifactStore } from "../artifacts/index.js";
 import { trialTimeouts } from "../contracts/agent-limit.js";
-import type { TaskImages } from "../contracts/task.js";
 import type { CredentialInfo } from "../db/credentials.js";
 import type { Vault } from "../db/vault.js";
 import { OPENROUTER_BILLING, openRouterManifest } from "../gateways/openrouter/billing.js";
@@ -151,7 +150,6 @@ async function runTrial(context: {
   child: NodeJS.ProcessEnv;
   extraAllowedHosts?: readonly string[];
   verifierEnv?: readonly string[];
-  images?: TaskImages;
   command: typeof runCommand;
   redact: (text: string) => string;
   options: RunnerOptions;
@@ -260,7 +258,6 @@ async function runTrial(context: {
           run.sandbox,
           run.thinking,
           context.extraAllowedHosts,
-          context.images,
           run.credentials?.provider,
           context.verifierEnv,
         ),

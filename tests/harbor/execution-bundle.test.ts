@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { parse } from "smol-toml";
 import { LocalArtifactStore } from "../../src/artifacts/local.js";
-import type { AuthoredTask } from "../../src/contracts/index.js";
+import type { AuthoredTask, TaskImages } from "../../src/contracts/index.js";
 import { unpackTrialTask } from "../../src/evaluation/task-bundle.js";
 import { publishExecutionBundle } from "../../src/generation/pipeline/execution-bundle.js";
 import { candidateArtifacts } from "../../src/generation/runs/artifacts.js";
@@ -62,10 +62,20 @@ async function fixture(extra: Record<string, string> = {}) {
     archive,
     "application/gzip",
   );
-  // Split sibling must never be selected for the new execution bundle.
-  await store.putFile(
+  // The gate task the execution bundle is read from: the compiled task without its snapshots.
+  const gateArchive = join(root, "gate.tar.gz");
+  await runCommand("tar", [
+    "-czf",
+    gateArchive,
+    "--exclude=harbor-task/environment/repo.tar.gz",
+    "--exclude=harbor-task/tests/repo.tar.gz",
+    "-C",
+    dirname(source),
+    "harbor-task",
+  ]);
+  const gate = await store.putFile(
     "runs/run-native/verify/candidate/authoring-round-1/gate-task.tar.gz",
-    archive,
+    gateArchive,
     "application/gzip",
   );
   const task: AuthoredTask = {
@@ -75,26 +85,20 @@ async function fixture(extra: Record<string, string> = {}) {
     definition: bundle,
     sourceBundle: bundle,
     images: {
-      provider: "modal",
-      agent: "im-agent",
-      verifier: "im-verifier",
-      registry: {
-        agent: `registry.example/tasks/agent@sha256:${"a".repeat(64)}`,
-        verifier: `registry.example/tasks/verifier@sha256:${"b".repeat(64)}`,
-      },
+      agent: `registry.example/tasks/agent@sha256:${"a".repeat(64)}`,
+      verifier: `registry.example/tasks/verifier@sha256:${"b".repeat(64)}`,
     },
   };
-  return { root, store, task };
+  return { root, store, task: task as AuthoredTask & { images: TaskImages }, gate };
 }
+const signal = new AbortController().signal;
 
 test("accepted tasks deliver native Harbor files, while build inputs remain immutable provenance", async () => {
-  const { root, store, task } = await fixture();
-  const result = await publishExecutionBundle(store, task, new AbortController().signal);
-  expect(result.bundle.uri).not.toBe(task.bundle.uri);
-  expect(result.definition).toEqual(task.definition);
-  expect(result.sourceBundle).toEqual(task.sourceBundle);
+  const { root, store, task, gate } = await fixture();
+  const result = await publishExecutionBundle(store, task, gate, signal);
+  expect(result.uri).not.toBe(task.bundle.uri);
   expect(await store.get(task.bundle)).toEqual(await readFile(join(root, "compiled.tar.gz")));
-  const bundleKey = result.bundle.uri.slice(result.bundle.uri.indexOf("/runs/") + 1);
+  const bundleKey = result.uri.slice(result.uri.indexOf("/runs/") + 1);
   const trial = join(root, "trial");
   await mkdir(trial);
   const directory = await unpackTrialTask(
@@ -103,7 +107,7 @@ test("accepted tasks deliver native Harbor files, while build inputs remain immu
       runId: "run-native",
       taskId: "task",
       bundleKey,
-      ...(result.images ? { images: result.images } : {}),
+      images: task.images,
     },
     "modal",
     trial,
@@ -118,10 +122,10 @@ test("accepted tasks deliver native Harbor files, while build inputs remain immu
       .sort(),
   ).toEqual(delivered);
   expect(await readFile(join(directory, "environment/Dockerfile"), "utf8")).toBe(
-    `FROM ${task.images?.registry?.agent}\n`,
+    `FROM ${task.images.agent}\n`,
   );
   expect(await readFile(join(directory, "tests/Dockerfile"), "utf8")).toBe(
-    `FROM ${task.images?.registry?.verifier}\n`,
+    `FROM ${task.images.verifier}\n`,
   );
   expect(await readFile(join(directory, "tests/test.patch"), "utf8")).toBe("hidden-tests");
   await assertHostSafeTask(directory, {}, 60);
@@ -154,56 +158,33 @@ test("accepted tasks deliver native Harbor files, while build inputs remain immu
       {},
     );
     expect(await readFile(join(fallback, "environment/Dockerfile"), "utf8")).toBe(
-      `FROM ${task.images?.registry?.agent}\n`,
+      `FROM ${task.images.agent}\n`,
     );
   }
-  const retried = await publishExecutionBundle(store, task, new AbortController().signal);
-  expect(retried.bundle).toEqual(result.bundle);
-  expect(await publishExecutionBundle(store, result, new AbortController().signal)).toBe(result);
-});
-
-test("tasks without both exported images retain runnable build bundles", async () => {
-  const { store, task } = await fixture();
-  const unexported = { ...task, images: { provider: "modal" as const, agent: "im-agent" } };
-  expect(await publishExecutionBundle(store, unexported, new AbortController().signal)).toBe(
-    unexported,
-  );
-  if (task.images?.provider !== "modal" || !task.images.registry)
-    throw new Error("Missing fixture images");
-  const noVerifier = {
-    ...task,
-    images: { ...task.images, registry: { agent: task.images.registry.agent } },
-  };
-  expect(await publishExecutionBundle(store, noVerifier, new AbortController().signal)).toBe(
-    noVerifier,
-  );
+  const retried = await publishExecutionBundle(store, task, gate, signal);
+  expect(retried).toEqual(result);
+  const published = { ...task, bundle: result };
+  expect(await publishExecutionBundle(store, published, gate, signal)).toBe(result);
 });
 
 test("native execution bundles retain service compose contexts and reject invalid image references", async () => {
   const compose = `{"services":{"main":{"build":"."},"redis":{"image":"redis@sha256:${"c".repeat(64)}"}}}\n`;
-  const { root, store, task } = await fixture({ "tests/docker-compose.yaml": compose });
-  const result = await publishExecutionBundle(store, task, new AbortController().signal);
+  const { root, store, task, gate } = await fixture({ "tests/docker-compose.yaml": compose });
+  const result = await publishExecutionBundle(store, task, gate, signal);
   const archive = join(root, "native.tar.gz");
-  await writeFile(archive, await store.get(result.bundle));
+  await writeFile(archive, await store.get(result));
   const directory = join(root, "extracted");
   await mkdir(directory);
   await runCommand("tar", ["-xzf", archive, "-C", directory]);
   expect(await readFile(join(directory, "harbor-task/tests/docker-compose.yaml"), "utf8")).toBe(
     compose,
   );
-  if (task.images?.provider !== "modal" || !task.images.registry)
-    throw new Error("Missing fixture images");
   await expect(
     publishExecutionBundle(
       store,
-      {
-        ...task,
-        images: {
-          ...task.images,
-          registry: { agent: "image\nRUN malicious", verifier: task.images.registry.verifier },
-        },
-      },
-      new AbortController().signal,
+      { ...task, images: { ...task.images, agent: "image\nRUN malicious" } },
+      gate,
+      signal,
     ),
   ).rejects.toThrow("Invalid environment image digest");
 });

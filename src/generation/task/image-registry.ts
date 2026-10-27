@@ -139,7 +139,7 @@ export async function pinEnvironmentImages(
   };
 }
 
-export async function manifestRequest(
+async function manifestRequest(
   image: ImageReference,
   target: string,
   method: "HEAD" | "GET",
@@ -154,7 +154,7 @@ export async function manifestRequest(
   );
 }
 
-export async function registryRequest(
+async function registryRequest(
   image: ImageReference,
   path: string,
   method: "HEAD" | "GET",

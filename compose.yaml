@@ -2,7 +2,10 @@
 # containers, volumes, and image tags. Host ports are ephemeral; resolve them with
 # `docker compose port api 8080`. Docker generation also needs the sandbox image:
 # `docker compose --profile sandbox up -d --build`. Local Stripe webhooks:
-# `docker compose --profile stripe up -d`.
+# `docker compose --profile stripe up -d`. Task images built before each check, as hosted
+# deployments do: `docker compose --profile images up -d`, with
+# SELFBENCH_TASK_IMAGE_REPOSITORY=localhost:5000/selfbench-tasks and SELFBENCH_TASK_IMAGE_BUILDER=docker
+# (Docker checks only; hosted sandboxes pull from Artifact Registry through the API).
 #
 # Older checkouts used the fixed project name `selfbench` (volumes `selfbench_*`).
 # To keep that data: `COMPOSE_PROJECT_NAME=selfbench docker compose up -d --build`.
@@ -27,6 +30,10 @@ x-selfbench-environment: &selfbench-environment
   SELFBENCH_VERCEL_TIMEOUT_CAP: ${SELFBENCH_VERCEL_TIMEOUT_CAP:-}
   SELFBENCH_E2B_TEMPLATE: ${SELFBENCH_E2B_TEMPLATE:-}
   SELFBENCH_E2B_TIMEOUT_CAP: ${SELFBENCH_E2B_TIMEOUT_CAP:-}
+  # Where task images live, and what builds them before each check (none: Harbor builds the
+  # task's Dockerfiles itself).
+  SELFBENCH_TASK_IMAGE_REPOSITORY: ${SELFBENCH_TASK_IMAGE_REPOSITORY:-}
+  SELFBENCH_TASK_IMAGE_BUILDER: ${SELFBENCH_TASK_IMAGE_BUILDER:-}
   # Managed generation: one switch turns on model access and sandboxes on SelfBench's own
   # accounts and the Billing page; with it on, each managed option follows from its key.
   # The OpenRouter key is worker-only; the E2B key is shared because the API runs managed
@@ -186,6 +193,18 @@ services:
     restart: "no"
     entrypoint: ["true"]
 
+  # A registry the worker's Docker pushes task images to, on the host's loopback where the same
+  # daemon pulls them back for Docker checks. Its port is fixed so the daemon can reach it: another
+  # stack's images profile needs another SELFBENCH_REGISTRY_PORT (and repository).
+  registry:
+    image: registry:2.8.3
+    profiles: ["images"]
+    ports:
+      - "127.0.0.1:${SELFBENCH_REGISTRY_PORT:-5000}:5000"
+    volumes:
+      - registry:/var/lib/registry
+    restart: on-failure
+
   # Forwards Stripe events to the API. The tunnel is not a public Stripe webhook
   # target, so local billing needs this instead of a Dashboard endpoint. The
   # wrapper stores the generated signing secret for the API automatically.
@@ -205,6 +224,7 @@ services:
 
 volumes:
   artifacts:
+  registry:
   site-postgres:
   temporal-postgres:
   stripe-secrets:

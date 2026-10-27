@@ -1,17 +1,12 @@
 import { dirname } from "node:path";
-import { and, eq, isNull, ne, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import type { ArtifactStore } from "../../artifacts/index.js";
+import { isArtifactRegistry } from "../../contracts/config/task-images.js";
 import type { TaskImages } from "../../contracts/index.js";
 import type { Database } from "../../db/client.js";
 import { comparisons, releases, tasks } from "../../db/schema.js";
-import type { Vault } from "../../db/vault.js";
-import { harborProcessEnvironment } from "../../harnesses/harbor/command.js";
-import { googleAccessToken } from "../../lib/google-access-token.js";
-import { publishExecutionBundle } from "../pipeline/execution-bundle.js";
-import { exportTaskImages } from "../pipeline/task-image-export.js";
-import { exportEnvironment } from "./task-image-credentials.js";
-import { registryImageExists, removeRegistryImage } from "./task-image-registry.js";
+import { removeRegistryImage } from "../images/registry.js";
 
 const EXECUTION_BUNDLE = "/execution-task.tar.gz";
 const COMPILED_BUNDLE = "/harbor-task.tar.gz";
@@ -20,171 +15,62 @@ export type ReviewedTask = Pick<
   typeof tasks.$inferSelect,
   | "id"
   | "runId"
+  | "candidateId"
   | "taskId"
+  | "pipelineStatus"
   | "bundleKey"
   | "images"
-  | "pipelineStatus"
   | "reviewDecision"
   | "deletedAt"
 >;
 
 export type TaskImageOutcome =
-  | { readonly status: "planned"; readonly action: "export" | "publish" | "remove" }
-  | { readonly status: "exported"; readonly bundleKey: string }
   | { readonly status: "removed"; readonly bundleKey: string }
+  /** A kept task without images, which a rebuild gives them (task-image-rebuild.ts). */
+  | { readonly status: "unbuilt" }
   | { readonly status: "kept"; readonly reason: string }
   | { readonly status: "skipped"; readonly reason: string };
 
 export interface TaskImageDependencies {
-  readonly apply: boolean;
-  readonly repository: string;
-  /** The Harbor credentials of the account that verified the task. */
-  readonly environment: (provider: TaskImages["provider"]) => Promise<NodeJS.ProcessEnv>;
-  /** Switches the row's bundle and images unless the task changed meanwhile. */
-  readonly save: (bundleKey: string, images: TaskImages) => Promise<boolean>;
+  /** Returns the row to `bundleKey` without images, unless the task changed meanwhile. */
+  readonly save: (bundleKey: string) => Promise<boolean>;
   /**
    * Whether a saved comparison, a release, or another approved task row names any of these
    * digests. The task's own row (`exceptTaskId`) does not count, nor do rows nobody approved.
    */
   readonly referenced: (digests: readonly string[], exceptTaskId: number) => Promise<boolean>;
-  /** The row as it is now, so a cleanup never removes what a concurrent save just named. */
-  readonly current: (taskRowId: number) => Promise<ReviewedTask | undefined>;
-  /** Whether the registry still holds this image by digest. */
-  readonly imageExists: (image: string) => Promise<boolean>;
   readonly removeImage: (image: string) => Promise<void>;
-  readonly signal?: AbortSignal;
-  readonly exportImages?: typeof exportTaskImages;
-  readonly publish?: typeof publishExecutionBundle;
+}
+
+/** A task a person rejected or deleted gives up its images; any other keeps them. */
+export function removesImages(task: ReviewedTask): boolean {
+  return (
+    !!task.images && !!task.bundleKey && (!!task.deletedAt || task.reviewDecision === "reject")
+  );
 }
 
 /**
- * What a task's exported images should be, given its human review. A task a person approved should
- * have its images exported ("export") or, when its row already claims them, verified against the
- * registry ("verify"). One a person rejected or deleted loses the images its row claims ("remove").
- * Any other task is left alone, so a cleared review or a task still awaiting one changes nothing.
- */
-export function imageAction(task: ReviewedTask): "export" | "verify" | "remove" | undefined {
-  const images = task.images;
-  if (!images || !task.bundleKey) return undefined;
-  if (task.deletedAt || task.reviewDecision === "reject")
-    return images.registry ? "remove" : undefined;
-  const approved = task.pipelineStatus === "accepted" && task.reviewDecision === "approve";
-  if (!approved) return undefined;
-  return images.registry ? "verify" : "export";
-}
-
-/**
- * Reconciles one task row with the registry. The row is a claim, and a save can fail after the
- * registry has changed, so "verify" checks the claimed digests exist before trusting them: a
- * re-approved task whose images a failed removal deleted is exported again.
+ * Removes a rejected or deleted task's images, unless something still pins them, and returns its
+ * row to the compiled bundle (which builds the task's Dockerfiles) without them. The images go
+ * before the row forgets them: a failed deletion leaves the row naming them, so the retry deletes
+ * them again (a missing image counts as gone) rather than leaking them.
  */
 export async function reconcileTaskImages(
   store: ArtifactStore,
   task: ReviewedTask,
   deps: TaskImageDependencies,
 ): Promise<TaskImageOutcome> {
-  const action = imageAction(task);
-  if (!action) return { status: "skipped", reason: "Nothing to change for this review" };
-  if (action === "remove") {
-    if (!deps.apply) return { status: "planned", action };
-    return await removeExported(store, task, deps);
-  }
+  if (!removesImages(task))
+    return { status: "skipped", reason: "Nothing to change for this review" };
   const images = task.images as TaskImages;
-  const present = images.registry ? await allPresent(images.registry, deps) : false;
-  // Exported and in the registry: only a bundle published before execution bundles is left.
-  const unpublished =
-    !!images.registry?.verifier && !(task.bundleKey ?? "").endsWith(EXECUTION_BUNDLE);
-  if (present && !unpublished)
-    return { status: "skipped", reason: "Exported images are in the registry" };
-  if (!deps.apply) return { status: "planned", action: present ? "publish" : "export" };
-  return present
-    ? await exportReviewed(store, task, deps, images, { fresh: false })
-    : await exportReviewed(store, task, deps, withoutRegistry(images), { fresh: true });
-}
-
-async function allPresent(
-  registry: NonNullable<TaskImages["registry"]>,
-  deps: TaskImageDependencies,
-): Promise<boolean> {
-  const images = [registry.agent, ...(registry.verifier ? [registry.verifier] : [])];
-  return (await Promise.all(images.map((image) => deps.imageExists(image)))).every(Boolean);
-}
-
-function withoutRegistry(images: TaskImages): TaskImages {
-  const { registry: _claimed, ...unexported } = images;
-  return unexported as TaskImages;
-}
-
-async function exportReviewed(
-  store: ArtifactStore,
-  task: ReviewedTask,
-  deps: TaskImageDependencies,
-  images: TaskImages,
-  options: { readonly fresh: boolean },
-): Promise<TaskImageOutcome> {
-  // Exports and publishes from the compiled bundle, which an execution bundle was published beside.
-  const bundleKey = compiledBundleKey(task.bundleKey as string);
-  const metadata = await store.stat(bundleKey);
-  if (!metadata) throw new Error("Original compiled bundle is missing");
-  const original = {
-    taskId: task.taskId,
-    bundle: { ...metadata, contentType: "application/gzip" },
-    images,
-  };
-  const exported = options.fresh
-    ? await (deps.exportImages ?? exportTaskImages)(store, original, {
-        repository: deps.repository,
-        env: harborProcessEnvironment(await deps.environment(images.provider)),
-        token: googleAccessToken,
-        signal: deps.signal ?? new AbortController().signal,
-      })
-    : original;
-  if (!exported.images?.registry?.agent) throw new Error("Export produced no agent image");
-  // Tasks with services have no separate verifier image and keep their full build bundle.
-  const delivered = await (deps.publish ?? publishExecutionBundle)(
-    store,
-    exported,
-    deps.signal ?? new AbortController().signal,
-  );
-  const deliveredKey = artifactKey(delivered.bundle.uri);
-  if (await deps.save(deliveredKey, delivered.images as TaskImages))
-    return { status: "exported", bundleKey: deliveredKey };
-  // The row did not take the images just pushed, so nothing names them. Remove them, unless a
-  // comparison, a release or another row does, and rethrow so the reconcile runs again.
-  if (options.fresh) {
-    const pushed = [exported.images.registry.agent, exported.images.registry.verifier].filter(
-      (image): image is string => !!image,
-    );
-    // Content-addressed: a concurrent reconcile of this row may have saved the same digests.
-    const row = await deps.current(task.id);
-    const named = new Set([row?.images?.registry?.agent, row?.images?.registry?.verifier]);
-    const orphans = pushed.filter((image) => !named.has(image));
-    const digests = orphans.map((image) => image.slice(image.indexOf("@") + 1));
-    if (orphans.length && !(await deps.referenced(digests, task.id)))
-      for (const image of orphans) await deps.removeImage(image);
-  }
-  throw new Error("Task changed during export; the next review reconciles it");
-}
-
-async function removeExported(
-  store: ArtifactStore,
-  task: ReviewedTask,
-  deps: TaskImageDependencies,
-): Promise<TaskImageOutcome> {
-  const images = task.images as TaskImages;
-  const registry = images.registry as NonNullable<TaskImages["registry"]>;
-  const exported = [registry.agent, ...(registry.verifier ? [registry.verifier] : [])];
-  const digests = exported.map((image) => image.slice(image.indexOf("@") + 1));
-  // Another row or a pin still uses these images: keep them, and keep the row's claim with them.
+  const named = [images.agent, images.verifier];
+  const digests = named.map((image) => image.slice(image.indexOf("@") + 1));
   if (await deps.referenced(digests, task.id))
     return { status: "kept", reason: "A comparison, a release or another task pins these images" };
   const bundleKey = compiledBundleKey(task.bundleKey as string);
   if (!(await store.stat(bundleKey))) throw new Error("Original compiled bundle is missing");
-  // Delete before the row loses its digests: a failed delete leaves the row naming them, so the
-  // retry deletes them again (a missing image counts as done) rather than forgetting them.
-  for (const image of exported) await deps.removeImage(image);
-  // Back to the compiled bundle, so a later approval can export again from it.
-  if (!(await deps.save(bundleKey, withoutRegistry(images))))
+  for (const image of named) await deps.removeImage(image);
+  if (!(await deps.save(bundleKey)))
     throw new Error("Task changed during removal; the next review reconciles it");
   return { status: "removed", bundleKey };
 }
@@ -195,12 +81,6 @@ export function compiledBundleKey(bundleKey: string): string {
   return `${dirname(dirname(bundleKey))}${COMPILED_BUNDLE}`;
 }
 
-function artifactKey(uri: string): string {
-  const index = uri.indexOf("/runs/");
-  if (index < 0) throw new Error("Task bundle has no generation artifact key");
-  return uri.slice(index + 1);
-}
-
 /** The database side of reconciling one task row, guarded against concurrent changes. */
 export function taskImageRows(db: Database) {
   return {
@@ -208,10 +88,11 @@ export function taskImageRows(db: Database) {
       const [row] = await db.select().from(tasks).where(eq(tasks.id, taskRowId));
       return row;
     },
-    async save(task: ReviewedTask, bundleKey: string, images: TaskImages): Promise<boolean> {
+    /** Switches the row's bundle and images unless the task changed since it was read. */
+    async save(task: ReviewedTask, bundleKey: string, images?: TaskImages): Promise<boolean> {
       const changed = await db
         .update(tasks)
-        .set({ bundleKey, images })
+        .set({ bundleKey, images: images ?? null })
         .where(
           and(
             eq(tasks.id, task.id),
@@ -228,18 +109,35 @@ export function taskImageRows(db: Database) {
         .returning({ id: tasks.id });
       return changed.length === 1;
     },
+    /** Accepted, kept rows that run on their Dockerfiles, optionally within some repositories. */
+    async withoutImages(repoIds?: readonly number[]): Promise<number[]> {
+      const rows = await db
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(
+          and(
+            eq(tasks.pipelineStatus, "accepted"),
+            isNull(tasks.images),
+            isNull(tasks.deletedAt),
+            or(isNull(tasks.reviewDecision), ne(tasks.reviewDecision, "reject")),
+            repoIds?.length ? inArray(tasks.repoId, [...repoIds]) : undefined,
+          ),
+        )
+        .orderBy(tasks.id);
+      return rows.map((row) => row.id);
+    },
     async referenced(digests: readonly string[], exceptTaskId: number): Promise<boolean> {
       const patterns = digests.map((digest) => `%${digest}%`);
       const named = (column: AnyPgColumn) =>
         or(...patterns.map((pattern) => sql`${column}::text like ${pattern}`));
-      // Only a row a person approved, still live, needs its images; a rejected row never does.
+      // A live row nobody rejected still runs on its images.
       const [other] = await db
         .select({ id: tasks.id })
         .from(tasks)
         .where(
           and(
             ne(tasks.id, exceptTaskId),
-            eq(tasks.reviewDecision, "approve"),
+            or(isNull(tasks.reviewDecision), eq(tasks.reviewDecision, "approve")),
             eq(tasks.pipelineStatus, "accepted"),
             isNull(tasks.deletedAt),
             named(tasks.images),
@@ -263,33 +161,21 @@ export function taskImageRows(db: Database) {
   };
 }
 
-/**
- * Reconciles one task row's exported images with its review, with the credentials that verified
- * the task. Used by the worker after each review and by the maintenance backfill.
- */
+/** Reconciles one task row's images with its review. */
 export function taskImageReconciler(options: {
   readonly db: Database;
-  readonly vault: Pick<Vault, "records" | "credentials">;
   readonly store: ArtifactStore;
-  readonly repository: string;
-  readonly env?: NodeJS.ProcessEnv;
+  /** The task image repository; a local registry keeps its images, so only the row changes. */
+  readonly repository: string | undefined;
 }) {
+  const deletes = !!options.repository && isArtifactRegistry(options.repository);
   const rows = taskImageRows(options.db);
-  return async (
-    task: ReviewedTask,
-    apply: boolean,
-    signal?: AbortSignal,
-  ): Promise<TaskImageOutcome> =>
+  return async (task: ReviewedTask): Promise<TaskImageOutcome> =>
     await reconcileTaskImages(options.store, task, {
-      apply,
-      ...(signal ? { signal } : {}),
-      repository: options.repository,
-      environment: (provider) =>
-        exportEnvironment(options.vault, task.runId, provider, options.env ?? process.env),
-      save: (bundleKey, images) => rows.save(task, bundleKey, images),
+      save: (bundleKey) => rows.save(task, bundleKey),
       referenced: rows.referenced,
-      current: rows.find,
-      imageExists: (image) => registryImageExists(image),
-      removeImage: (image) => removeRegistryImage(image),
+      removeImage: async (image) => {
+        if (deletes) await removeRegistryImage(image);
+      },
     });
 }

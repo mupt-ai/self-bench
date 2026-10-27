@@ -40,7 +40,6 @@ test.each([
     "modal",
     undefined,
     trial.extraAllowedHosts,
-    undefined,
     provider,
   );
   expect(
