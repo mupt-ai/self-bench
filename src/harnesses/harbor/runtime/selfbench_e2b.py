@@ -271,9 +271,13 @@ class SelfBenchE2BEnvironment(E2BEnvironment):
                 # build is the one to wait for; building again would cancel it.
                 current = await self._default_build()
                 if current is None or current == build:
-                    self.logger.warning(f"Template {name} build {build} did not finish; building it again")
+                    self.logger.warning(
+                        f"Template {name} build {build} did not finish; building it again"
+                    )
                     return False
-                self.logger.warning(f"Template {name} build {build} did not finish; waiting for {current}")
+                self.logger.warning(
+                    f"Template {name} build {build} did not finish; waiting for {current}"
+                )
                 build, wait = current, first
                 continue
             # Another trial or evaluation is building it: a second build under the same name would
