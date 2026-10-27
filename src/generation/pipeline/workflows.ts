@@ -29,9 +29,10 @@ const finish = proxyActivities<
     "finishDiscoveryShard" | "finishAuthoringTurn" | "finishReviewRound" | "finishCompile"
   >
 >(task({ timeout: "15 minutes", attempts: 5 }));
-// A progress write waits out a database outage. A verdict also publishes an accepted task's
-// execution bundle, and keeps trying for a quarter of an hour before its fallback (settle).
-const rows = proxyActivities<Pick<TaskActivities, "recordTaskProgress">>(
+// A progress write, and any verdict but an accepted one, waits out a database outage. An accepted
+// verdict also publishes the task's execution bundle, and keeps trying for a quarter of an hour
+// before its fallback (settleVerdict).
+const rows = proxyActivities<Pick<TaskActivities, "recordTaskProgress" | "settleTask">>(
   record({ attempts: Number.POSITIVE_INFINITY }),
 );
 const verdicts = proxyActivities<Pick<TaskActivities, "settleTask">>(
@@ -108,30 +109,41 @@ export async function selfBenchAuthorWorkflow(
       },
     };
     await CancellationScope.nonCancellable(() =>
-      settleStopped(input, result, cancelled, { ...verdicts, ...compaction }),
+      settleStopped(input, result, cancelled, { ...rows, ...compaction }),
     );
     if (cancelled) throw error;
     return result;
   }
   // A finished verdict reaches the row even if a cancel lands meanwhile.
-  const settled = await CancellationScope.nonCancellable(() => settle(row, result));
+  const settled = await CancellationScope.nonCancellable(() =>
+    settleVerdict(row, result, { publish: verdicts.settleTask, record: rows.settleTask }),
+  );
   await compact(input, settled, compaction);
   return settled;
 }
 
 /**
- * Settles the candidate's row with its verdict. An accepted task whose execution bundle cannot be
- * published settles as an infrastructure failure instead: its trials must run on its images.
+ * Settles the candidate's row with its verdict. An accepted one publishes the task's execution
+ * bundle (`publish`, with a bounded budget); one that cannot settles as an infrastructure failure
+ * instead, since its trials must run on its images. Every other write waits out an outage (`record`).
  */
-async function settle(
+export async function settleVerdict(
   row: { readonly runId: string; readonly candidateId: string },
   result: CandidateWorkflowResult,
+  settles: {
+    readonly publish: TaskActivities["settleTask"];
+    readonly record: TaskActivities["settleTask"];
+  },
 ): Promise<CandidateWorkflowResult> {
+  if (result.progress.status !== "accepted") {
+    await settles.record({ ...row, result });
+    return result;
+  }
   try {
-    await verdicts.settleTask({ ...row, result });
+    await settles.publish({ ...row, result });
     return result;
   } catch (error) {
-    if (isCancellation(error) || result.progress.status !== "accepted") throw error;
+    if (isCancellation(error)) throw error;
     const failed: CandidateWorkflowResult = {
       progress: {
         ...result.progress,
@@ -139,7 +151,7 @@ async function settle(
         reason: `The accepted task could not be published: ${rootMessage(error)}`,
       },
     };
-    await verdicts.settleTask({ ...row, result: failed });
+    await settles.record({ ...row, result: failed });
     return failed;
   }
 }
