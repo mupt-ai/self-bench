@@ -34,6 +34,25 @@ test("Meta API keys stay direct until the gateway's Meta provider ships; droppin
     expect(trialRoute(meta, harness)).toBe("direct");
   const direct = gatewayTrial(meta, "codex", meta.modelName, { PATH: "/bin", META_API_KEY: "k" });
   expect(direct.extraAllowedHosts).toEqual(["api.meta.ai"]);
+  // Meta's endpoints speak the other harnesses' protocols, so each gets its key where it reads one.
+  expect(direct.model).toBe("openai/muse-spark-1.3");
+  expect(direct.agent).toBe("harbor_gateway:GatewayCodex");
+  expect(direct.child).toMatchObject({
+    OPENAI_API_KEY: "k",
+    OPENAI_BASE_URL: "https://api.meta.ai/v1",
+  });
+  expect(direct.child.META_API_KEY).toBeUndefined();
+  const claude = gatewayTrial(meta, "claude-code", meta.modelName, {
+    PATH: "/bin",
+    META_API_KEY: "k",
+  });
+  expect(claude.model).toBe("muse-spark-1.3");
+  expect(claude.child).toMatchObject({
+    ANTHROPIC_AUTH_TOKEN: "k",
+    ANTHROPIC_BASE_URL: "https://api.meta.ai",
+  });
+  const pi = gatewayTrial(meta, "pi", meta.modelName, { PATH: "/bin", META_API_KEY: "k" });
+  expect(pi.agentArguments).toContain("model_api=openai-responses");
   // The one switch: with Meta out of the set, the same key takes the gateway on every harness
   // but Muse Code, which keeps Meta's endpoint.
   const released = new Set<string>();

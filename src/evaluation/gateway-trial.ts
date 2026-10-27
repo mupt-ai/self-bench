@@ -2,7 +2,8 @@ import { getBuiltinModel } from "@earendil-works/pi-ai/providers/all";
 import type { ThinkingLevel } from "../contracts/models.js";
 import type { GatewayConnection } from "../gateway/connection.js";
 import type { PinnedThinking } from "../gateway/trial-key.js";
-import { gateways, isGateway, listedModel } from "../gateways/index.js";
+import { gateways, isGateway, listedModel, modelApiKeyVariable } from "../gateways/index.js";
+import { type CompatibleEndpoint, compatibleEndpoint } from "./compatible-endpoints.js";
 import { isDariRun } from "./dari/cost.js";
 import { thinkingArguments } from "./models.js";
 import { refuseTrial } from "./refusal.js";
@@ -130,6 +131,8 @@ export function gatewayTrial(
   if (trialRoute(input, harness) === "gateway")
     throw refuseTrial("Model gateway connection is missing");
   const provider = input.credentials?.provider;
+  const endpoint = compatibleEndpoint(provider, harness);
+  if (endpoint) return endpointTrial(endpoint, input, harness, model, env);
   const dari = provider === "dari" || isDariRun(input);
   const child = { ...env };
   return {
@@ -142,6 +145,43 @@ export function gatewayTrial(
     ],
     child,
     extraAllowedHosts: directHosts(provider, child),
+  };
+}
+
+/** A direct key at a provider endpoint that speaks the harness's protocol (compatible-endpoints.ts). */
+function endpointTrial(
+  endpoint: CompatibleEndpoint,
+  input: EvaluationInput,
+  harness: Harness,
+  model: string,
+  env: NodeJS.ProcessEnv,
+): SolverTrial {
+  const provider = input.credentials?.provider ?? "";
+  const keyVariable = modelApiKeyVariable(provider);
+  const key = env[keyVariable];
+  if (!key) throw refuseTrial("Model credential is unavailable");
+  const child = { ...env };
+  delete child[keyVariable];
+  const modelId = model.slice(provider.length + 1);
+  if (harness === "claude-code") {
+    Object.assign(child, { ANTHROPIC_AUTH_TOKEN: key, ANTHROPIC_BASE_URL: endpoint.anthropicBase });
+  } else {
+    Object.assign(child, {
+      OPENAI_API_KEY: key,
+      OPENAI_BASE_URL: endpoint.openAiBase,
+      OPENAI_API_BASE: endpoint.openAiBase,
+    });
+  }
+  return {
+    model: harness === "claude-code" ? modelId : `openai/${modelId}`,
+    agent: harness === "codex" ? "harbor_gateway:GatewayCodex" : directAgent(harness, input),
+    // Meta recommends Responses for Pi: Chat Completions drops reasoning between turns.
+    agentArguments: [
+      ...thinkingArguments(harness, input.thinking),
+      ...(harness === "pi" ? ["--agent-kwarg", "model_api=openai-responses"] : []),
+    ],
+    child,
+    extraAllowedHosts: directHosts(provider, {}),
   };
 }
 
