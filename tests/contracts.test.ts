@@ -215,27 +215,17 @@ test("verifier results reject retired fixed checkpoints", () => {
   expect(reviewRoundResultSchema.safeParse({ kind: "fixed" }).success).toBe(false);
 });
 
-test("exported registry images are digests beside the Modal pins, which still parse alone", () => {
+test("task images are both roles by digest in the task image repository", () => {
   const repository = "us-central1-docker.pkg.dev/selfbench-prod/selfbench-tasks";
   const images = {
-    provider: "modal" as const,
-    agent: "im-Agent1",
-    verifier: "im-Verifier1",
-    registry: {
-      agent: `${repository}/task-1@sha256:${"a".repeat(64)}`,
-      verifier: `${repository}/task-1@sha256:${"b".repeat(64)}`,
-    },
+    agent: `${repository}/task-1@sha256:${"a".repeat(64)}`,
+    verifier: `${repository}/task-1@sha256:${"b".repeat(64)}`,
   };
   expect(taskImagesSchema.parse(images)).toEqual(images);
-  expect(taskImagesSchema.parse({ provider: "modal", agent: "im-Agent1" })).toEqual({
-    provider: "modal",
-    agent: "im-Agent1",
-  });
-  // A tag can move under a task; only a digest names what verification passed on.
+  // Both images are required, and a tag can move under a task; only a digest names what the
+  // checks passed on.
+  expect(taskImagesSchema.safeParse({ agent: images.agent }).success).toBe(false);
   expect(
-    taskImagesSchema.safeParse({
-      ...images,
-      registry: { agent: `${repository}/task-1:latest` },
-    }).success,
+    taskImagesSchema.safeParse({ ...images, agent: `${repository}/task-1:latest` }).success,
   ).toBe(false);
 });

@@ -1,11 +1,16 @@
-import { and, desc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { TaskImages } from "../contracts/index.js";
-import { TaskNotFoundError, tombstoneTask } from "../generation/tasks/deletion.js";
+import {
+  TaskNotFoundError,
+  TaskNotSettledError,
+  tombstoneTask,
+} from "../generation/tasks/deletion.js";
 import { reserveTaskStart } from "../generation/tasks/start-reservation.js";
 import type { Database } from "./client.js";
 import { tasks, users } from "./schema.js";
 import { taskCountsForRepos } from "./task-counts.js";
+import { type PlannedTask, taskLifecycle } from "./task-lifecycle.js";
 import { taskFrom } from "./task-record.js";
 
 export type PipelineStatus = (typeof tasks.$inferSelect)["pipelineStatus"];
@@ -27,7 +32,7 @@ export interface TaskRecord {
   readonly reason?: string;
   readonly bundleKey?: string;
   readonly definition?: Record<string, unknown>;
-  /** The Modal images the accepted revision was verified on. */
+  /** The images the accepted task's trials start from. */
   readonly images?: TaskImages;
   readonly review?: {
     readonly decision: ReviewDecision;
@@ -45,33 +50,11 @@ export interface TaskRecord {
   readonly feedback?: string;
 }
 
-/** What a sync writes; identity is (runId, candidateId), reviews are never touched by a sync. */
-export type TaskUpsert = Omit<
-  TaskRecord,
-  | "id"
-  | "review"
-  | "syncedAt"
-  | "workflowId"
-  | "startedBy"
-  | "startedAt"
-  | "revisedFrom"
-  | "feedback"
->;
-
-/** A task the site just started: no verdict yet, a workflow to watch. */
-interface TaskStart extends TaskUpsert {
-  readonly workflowId: string;
+/** A task the site just started: no verdict yet, a workflow to own it. */
+interface TaskStart extends Omit<PlannedTask, "workflowId"> {
   readonly startedBy: number;
   /** A revision: the row it revises and the feedback it addresses. */
   readonly revision?: { readonly from: number; readonly feedback: string };
-}
-
-interface TaskProgressPatch {
-  readonly stage: string;
-  readonly round?: number;
-  readonly pipelineStatus: PipelineStatus;
-  readonly reason?: string;
-  readonly taskId?: string;
 }
 
 interface RepoTaskCounts {
@@ -83,14 +66,12 @@ interface RepoTaskCounts {
   readonly lastPr?: number;
 }
 
-export interface TaskStore {
-  upsertMany(rows: readonly TaskUpsert[], completedWorkflowId?: string): Promise<void>;
-  /** Inserts a site-started task; rejects when the workflow id is already known. */
-  insertStarted(row: TaskStart): Promise<TaskRecord>;
+export interface TaskStore extends ReturnType<typeof taskLifecycle> {
+  /** Reserves a site-started task's row under a run ID of its own, before its workflow starts. */
   reserveStarted(row: TaskStart): Promise<TaskRecord>;
-  inProgress(repoId: number): Promise<TaskRecord[]>;
-  progress(taskRowId: number, patch: TaskProgressPatch): Promise<TaskRecord>;
   listForRepo(repoId: number): Promise<TaskRecord[]>;
+  /** Every visible task of one run. */
+  listForRun(runId: string): Promise<TaskRecord[]>;
   /** Every task of a repository, deleted ones included; a release records them all. */
   listWithDeleted(repoId: number): Promise<(TaskRecord & { readonly deleted: boolean })[]>;
   /** By the agent's task id or the candidate id, within one run. */
@@ -136,61 +117,44 @@ export function createTaskStore(db: Database, options: { now?: () => Date } = {}
     if (!row) throw new TaskNotFoundError();
     return taskFrom(row);
   };
-  const values = (row: TaskUpsert) => ({
-    repoId: row.repoId,
-    runId: row.runId,
-    candidateId: row.candidateId,
-    taskId: row.taskId,
-    sourcePr: row.sourcePr ?? null,
-    sourceUrl: row.sourceUrl ?? null,
-    difficulty: row.difficulty,
-    pipelineStatus: row.pipelineStatus,
-    stage: row.stage,
-    round: row.round ?? null,
-    reason: row.reason ?? null,
-    bundleKey: row.bundleKey ?? null,
-    definition: row.definition ?? null,
-    // Only an accepted row carries images; a later sync without them keeps what was pinned.
-    ...(row.images ? { images: row.images } : {}),
-    syncedAt: now(),
-  });
+  // A person reviews only a task its workflow has settled.
+  const reviewSettled = async (
+    taskRowId: number,
+    review: Pick<
+      typeof tasks.$inferInsert,
+      "reviewDecision" | "reviewNote" | "reviewedBy" | "reviewedAt"
+    >,
+  ): Promise<TaskRecord> => {
+    const changed = await db
+      .update(tasks)
+      .set(review)
+      .where(
+        and(
+          eq(tasks.id, taskRowId),
+          isNull(tasks.deletedAt),
+          ne(tasks.pipelineStatus, "in_progress"),
+        ),
+      )
+      .returning({ id: tasks.id });
+    const task = await byId(taskRowId, true);
+    if (changed.length === 0) throw new TaskNotSettledError();
+    return task;
+  };
   return {
-    async upsertMany(rows, completedWorkflowId) {
-      if (rows.length === 0) return;
-      await db.transaction(async (tx) => {
-        for (const row of rows) {
-          const { repoId: _repo, runId: _run, candidateId: _candidate, ...set } = values(row);
-          await tx
-            .insert(tasks)
-            .values(values(row))
-            .onConflictDoUpdate({
-              target: [tasks.runId, tasks.candidateId],
-              set,
-              setWhere: sql`${tasks.repoId} = ${row.repoId}
-                and ${tasks.deletedAt} is null
-                and (${tasks.workflowId} is null or ${tasks.pipelineStatus} <> 'in_progress'
-                  or ${tasks.workflowId} = ${completedWorkflowId ?? null})`,
-            });
-        }
-      });
-    },
-    async insertStarted(row) {
-      const [inserted] = await db
-        .insert(tasks)
-        .values({
-          ...values(row),
-          workflowId: row.workflowId,
-          startedBy: row.startedBy,
-          startedAt: now(),
-        })
-        .returning({ id: tasks.id });
-      if (!inserted) throw new Error("task insert returned no row");
-      return byId(inserted.id);
-    },
+    ...taskLifecycle(db, now),
     async reserveStarted(row) {
       return byId(
         await reserveTaskStart(db, {
-          ...values(row),
+          repoId: row.repoId,
+          runId: row.runId,
+          candidateId: row.candidateId,
+          taskId: row.taskId,
+          sourcePr: row.sourcePr ?? null,
+          sourceUrl: row.sourceUrl ?? null,
+          difficulty: row.difficulty,
+          pipelineStatus: "in_progress",
+          stage: row.stage,
+          syncedAt: now(),
           startedBy: row.startedBy,
           startedAt: now(),
           ...(row.revision
@@ -199,35 +163,16 @@ export function createTaskStore(db: Database, options: { now?: () => Date } = {}
         }),
       );
     },
-    async inProgress(repoId) {
-      const rows = await select().where(
-        and(
-          eq(tasks.repoId, repoId),
-          isNull(tasks.deletedAt),
-          eq(tasks.pipelineStatus, "in_progress"),
-          isNotNull(tasks.workflowId),
-        ),
-      );
-      return rows.map(taskFrom);
-    },
-    async progress(taskRowId, patch) {
-      await db
-        .update(tasks)
-        .set({
-          stage: patch.stage,
-          round: patch.round ?? null,
-          pipelineStatus: patch.pipelineStatus,
-          reason: patch.reason ?? null,
-          ...(patch.taskId ? { taskId: patch.taskId } : {}),
-          syncedAt: now(),
-        })
-        .where(and(eq(tasks.id, taskRowId), isNull(tasks.deletedAt)));
-      return byId(taskRowId);
-    },
     async listForRepo(repoId) {
       const rows = await select()
         .where(and(eq(tasks.repoId, repoId), isNull(tasks.deletedAt)))
         .orderBy(tasks.runId, tasks.taskId);
+      return rows.map(taskFrom);
+    },
+    async listForRun(runId) {
+      const rows = await select()
+        .where(and(eq(tasks.runId, runId), isNull(tasks.deletedAt)))
+        .orderBy(tasks.candidateId);
       return rows.map(taskFrom);
     },
     async listWithDeleted(repoId) {
@@ -257,25 +202,20 @@ export function createTaskStore(db: Database, options: { now?: () => Date } = {}
       return rows.map(taskFrom);
     },
     deleteTask: (repoId, runId, taskId) => tombstoneTask(db, repoId, runId, taskId, now),
-    async review(taskRowId, verdict) {
-      await db
-        .update(tasks)
-        .set({
-          reviewDecision: verdict.decision,
-          reviewNote: verdict.note,
-          reviewedBy: verdict.userId,
-          reviewedAt: now(),
-        })
-        .where(and(eq(tasks.id, taskRowId), isNull(tasks.deletedAt)));
-      return byId(taskRowId, true);
-    },
-    async clearReview(taskRowId) {
-      await db
-        .update(tasks)
-        .set({ reviewDecision: null, reviewNote: null, reviewedBy: null, reviewedAt: null })
-        .where(and(eq(tasks.id, taskRowId), isNull(tasks.deletedAt)));
-      return byId(taskRowId, true);
-    },
+    review: (taskRowId, verdict) =>
+      reviewSettled(taskRowId, {
+        reviewDecision: verdict.decision,
+        reviewNote: verdict.note,
+        reviewedBy: verdict.userId,
+        reviewedAt: now(),
+      }),
+    clearReview: (taskRowId) =>
+      reviewSettled(taskRowId, {
+        reviewDecision: null,
+        reviewNote: null,
+        reviewedBy: null,
+        reviewedAt: null,
+      }),
     countsForRepos: (repoIds) => taskCountsForRepos(db, repoIds),
   };
 }

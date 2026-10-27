@@ -5,12 +5,12 @@ import { join } from "node:path";
 import { LocalArtifactStore } from "../src/artifacts/index.js";
 import { createRepoStore } from "../src/db/repos.js";
 import { createTaskStore } from "../src/db/tasks.js";
-import type { WorkflowSnapshot } from "../src/generation/tasks/status.js";
 import { bearerToken } from "../src/lib/util.js";
 import { mint } from "./support/api-keys.js";
 import { evaluationServer } from "./support/evaluation-fixture.js";
 import { signedIn } from "./support/sign-in.js";
 import { type AuthServer, fakeGitHub, startAuthServer } from "./support/site-fixture.js";
+import { seedTasks } from "./support/task-rows.js";
 
 let server: AuthServer | undefined;
 afterEach(async () => {
@@ -19,12 +19,12 @@ afterEach(async () => {
 });
 
 describe("what an api key may reach", () => {
-  test("a single task is readable by run and task id, refreshed against its workflow", async () => {
+  test("a single task is readable by run and task id, as its workflow last wrote it", async () => {
     const artifacts = new LocalArtifactStore(await mkdtemp(join(tmpdir(), "api-keys-tasks-")));
-    const snapshot = mock(async (): Promise<WorkflowSnapshot> => ({ kind: "running" }));
+    const liveCost = mock(async () => undefined);
     server = await startAuthServer({
       artifacts,
-      status: { snapshot },
+      workflows: { cancel: async () => undefined, liveCost },
       fetchImpl: fakeGitHub({ orgs: ["Mupt-AI"], repos: [{ full_name: "Mupt-AI/self-bench" }] })
         .fetch,
     });
@@ -41,7 +41,7 @@ describe("what an api key may reach", () => {
     const repo = await createRepoStore(server.db).find(org?.id ?? 0, "Mupt-AI/self-bench");
     if (!repo) throw new Error("repo missing");
     const taskStore = createTaskStore(server.db);
-    await taskStore.upsertMany([
+    await seedTasks(server.db, [
       {
         repoId: repo.id,
         runId: "batch-one",
@@ -53,55 +53,43 @@ describe("what an api key may reach", () => {
         bundleKey: "runs/batch-one/bundle.tar.gz",
       },
     ]);
-    await taskStore.insertStarted({
-      repoId: repo.id,
-      runId: "batch-one",
-      candidateId: "w0s2-beta",
-      taskId: "beta-task",
-      pipelineStatus: "in_progress",
-      stage: "authoring",
-      difficulty: "easy",
-      workflowId: "batch-one/candidate/w0s2-beta",
-      startedBy: user?.id ?? 0,
-    });
+    await taskStore.plan([
+      {
+        repoId: repo.id,
+        runId: "batch-one",
+        candidateId: "w0s2-beta",
+        taskId: "beta-task",
+        stage: "authoring",
+        difficulty: "easy",
+        workflowId: "batch-one/candidate/w0s2-beta",
+      },
+    ]);
     const path = "/api/orgs/mupt-ai/repos/Mupt-AI/self-bench/tasks/batch-one";
     const byTask = await server.request(`${path}/alpha-task`, { headers: keyHeaders });
     expect(byTask.status).toBe(200);
     expect(await byTask.json()).toMatchObject({
       task: { runId: "batch-one", taskId: "alpha-task", state: "needs_review" },
     });
-    expect(snapshot).toHaveBeenCalledWith("batch-one/candidate/w0s2-beta");
     const byCandidate = await server.request(`${path}/w0s1-alpha`, { headers: keyHeaders });
     expect(byCandidate.status).toBe(200);
-    snapshot.mockImplementation(async () => ({
-      kind: "running",
-      progress: {
-        candidateId: "w0s2-beta",
-        difficulty: "easy",
-        status: "verifying",
-        stage: "review",
-        round: 2,
-        taskId: "beta-renamed",
-      },
-    }));
-    const renamed = await server.request(`${path}/beta-task`, { headers: keyHeaders });
-    expect(renamed.status).toBe(200);
-    expect((await renamed.json()).task).toMatchObject({
-      taskId: "beta-renamed",
-      candidateId: "w0s2-beta",
-      stage: "review",
+    await taskStore.progress("batch-one", "w0s2-beta", {
+      stage: "verifying",
       round: 2,
+      taskId: "beta-renamed",
     });
-    snapshot.mockImplementation(async () => ({
-      kind: "failed",
-      status: "TERMINATED",
-      detail: "worker lost",
-    }));
+    const renamed = await server.request(`${path}/beta-task`, { headers: keyHeaders });
+    expect(renamed.status).toBe(404);
     const running = await server.request(`${path}/beta-renamed`, { headers: keyHeaders });
     expect((await running.json()).task).toMatchObject({
-      state: "failed",
-      pipelineStatus: "infrastructure_failed",
+      taskId: "beta-renamed",
+      candidateId: "w0s2-beta",
+      stage: "verifying",
+      round: 2,
+      state: "in_progress",
     });
+    // Only a running task's live sandbox cost is read from Temporal.
+    expect(liveCost).toHaveBeenCalledWith("batch-one/candidate/w0s2-beta");
+    expect(liveCost).toHaveBeenCalledTimes(1);
     expect((await server.request(`${path}/missing`, { headers: keyHeaders })).status).toBe(404);
   });
 });

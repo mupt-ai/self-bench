@@ -2,17 +2,17 @@ import { expect, test } from "bun:test";
 import { ApplicationFailure } from "@temporalio/common";
 import { orgRecords } from "../../src/db/encrypted-records.js";
 import { readSandboxGrant, signSandboxGrant } from "../../src/sandbox/callback-grant.js";
-import { withCredentialCapacity } from "../../src/sandbox/capacity-wait.js";
+import {
+  capacityLimitedSandbox,
+  credentialCapacity,
+  credentialsCapacity,
+  holdingCapacity,
+} from "../../src/sandbox/capacity.js";
 import {
   SandboxCapacityError,
   type SandboxExecutor,
   type StartedSandbox,
 } from "../../src/sandbox/contracts.js";
-import {
-  capacityLimitedSandbox,
-  credentialCapacity,
-  credentialsCapacity,
-} from "../../src/sandbox/credential-capacity.js";
 import { MemoryRecords, memoryVault } from "../support/evaluation-vault.js";
 
 const request = { runId: "batch-test", stage: "discover", command: ["true"], timeoutMs: 60_000 };
@@ -80,18 +80,28 @@ test("credential reservations recover expiration, isolate organizations, and sha
   ).rejects.toBeInstanceOf(SandboxCapacityError);
   await credentialCapacity(orgRecords(records, 2), "key", 1).acquire(60_000);
   await capacity.release(lease);
-  await capacity.acquire(-1); // expired worker reservation
+
+  // A Harbor process holds one slot of the same record for its whole run.
+  const vault = memoryVault();
+  const key = await vault.credentials.create(
+    1,
+    { name: "e2b", kind: "e2b", auth: "api-key", value: "k", maxSandboxes: 1 },
+    {},
+  );
+  const held = credentialCapacity(orgRecords(vault.records, 1), key.id, 1);
+  await held.acquire(-1); // expired worker reservation
+  const hold = (run: () => Promise<void>) => holdingCapacity(vault, 1, [key.id], run);
   let entered = false;
-  const harbor = withCredentialCapacity(capacity, 60_000, async () => {
+  const harbor = hold(async () => {
     entered = true;
-    await expect(capacity.acquire(60_000)).rejects.toBeInstanceOf(SandboxCapacityError);
+    await expect(held.acquire(60_000)).rejects.toBeInstanceOf(SandboxCapacityError);
     throw new Error("Harbor failed");
   });
   await expect(harbor).rejects.toThrow("Harbor failed");
   expect(entered).toBe(true);
-  await capacity.acquire(60_000); // failed Harbor action released its slot
+  await held.acquire(60_000); // failed Harbor action released its slot
   entered = false;
-  const waiting = withCredentialCapacity(capacity, 60_000, async () => {
+  const waiting = hold(async () => {
     entered = true;
   });
   await expect(waiting).rejects.toMatchObject({
@@ -100,7 +110,7 @@ test("credential reservations recover expiration, isolate organizations, and sha
   });
   await expect(waiting).rejects.toBeInstanceOf(ApplicationFailure);
   expect(entered).toBe(false);
-  await expect(capacity.acquire(60_000)).rejects.toBeInstanceOf(SandboxCapacityError);
+  await expect(held.acquire(60_000)).rejects.toBeInstanceOf(SandboxCapacityError);
 });
 
 // A model key's limit carries into the sandboxes whose agent calls it, alongside the sandbox

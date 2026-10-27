@@ -1,7 +1,7 @@
 import { createArtifactStore } from "../../artifacts/index.js";
 import type { SelfBenchWorkerConfig } from "../../contracts/config/index.js";
+import { isArtifactRegistry } from "../../contracts/config/task-images.js";
 import type {
-  AuthoredTask,
   AuthoringTurnResult,
   DiscoveryResult,
   ReviewRoundResult,
@@ -11,6 +11,8 @@ import type { UsageLedger } from "../../db/usage.js";
 import type { Vault } from "../../db/vault.js";
 import { createSandboxExecutor } from "../../sandbox/index.js";
 import type { SandboxJobOutcome } from "../../sandbox/jobs.js";
+import { taskImageBuilder } from "../images/builder.js";
+import { discardCandidateImages } from "../images/registry.js";
 import { type Compaction, compactCandidate, keptBundles } from "../runs/compact.js";
 import {
   type AuthoringTurnInput,
@@ -32,7 +34,6 @@ import {
   startReviewRound,
 } from "./review.js";
 import { withGenerationRuntime } from "./runtime.js";
-import { type ExportTaskImagesInput, exportAcceptedTask } from "./task-image-export.js";
 import {
   type CompileAndVerifyInput,
   compileTask,
@@ -50,6 +51,13 @@ interface CompactCandidateInput {
   readonly kept: readonly string[];
 }
 
+/** One finished candidate, and the images its accepted task runs on. */
+interface DiscardImagesInput {
+  readonly runId: string;
+  readonly candidateId: string;
+  readonly keep: readonly string[];
+}
+
 /**
  * The steps the workflows take. Each is two activities in sequence: one starts a sandbox that
  * reports back through the callback API, the next reads what it reported.
@@ -59,8 +67,6 @@ export interface SelfBenchActivities {
   runAuthoringTurn(input: AuthoringTurnInput): Promise<AuthoringTurnResult>;
   compileAndVerify(input: CompileAndVerifyInput): Promise<VerifyOutcome>;
   runReviewRound(input: ReviewRoundInput): Promise<ReviewRoundResult>;
-  /** The accepted task, with its verified images exported when the deployment keeps them. */
-  exportTaskImages(input: ExportTaskImagesInput): Promise<AuthoredTask>;
 }
 
 /** The activities the worker registers. */
@@ -74,8 +80,9 @@ export interface WorkerActivities {
   verifyCompiled(input: VerifyCompiledInput): Promise<VerifyOutcome>;
   startReviewRound(input: ReviewRoundInput): Promise<SandboxJobOutcome>;
   finishReviewRound(input: FinishReviewRoundInput): Promise<ReviewRoundResult>;
-  exportTaskImages(input: ExportTaskImagesInput): Promise<AuthoredTask>;
   compactCandidateBundles(input: CompactCandidateInput): Promise<Compaction>;
+  /** Deletes the images a finished candidate built, except its accepted pair; returns how many. */
+  discardCandidateImages(input: DiscardImagesInput): Promise<number>;
 }
 
 /** Each activity resolves the run's sandbox, credentials, and metering, then does its stage. */
@@ -91,6 +98,8 @@ export function createActivities(
     throw new Error("SELFBENCH_SANDBOX_SECRET and SELFBENCH_SANDBOX_CALLBACK_URL are required");
   }
   const callback = { secret, url };
+  const builder = taskImageBuilder(config.taskImages);
+  const repository = config.taskImages?.repository;
   const runtime = <T>(
     run: AuthoringTurnInput["run"],
     stage: "author" | "verifier",
@@ -127,7 +136,8 @@ export function createActivities(
       runtime(
         input.run,
         "author",
-        (_sandbox, harbor, run) => verifyCompiled(store, harbor, { ...input, run }, callback),
+        (_sandbox, harbor, run) =>
+          verifyCompiled(store, harbor, { ...input, run }, callback, builder),
         "harbor",
       ),
     startReviewRound: (input) =>
@@ -138,14 +148,6 @@ export function createActivities(
       runtime(input.run, "verifier", (sandbox, _harbor, run) =>
         finishReviewRound(store, sandbox, { ...input, run }),
       ),
-    exportTaskImages: (input) =>
-      runtime(
-        input.run,
-        "author",
-        (_sandbox, harbor) =>
-          exportAcceptedTask(store, harbor, input.task, config.taskImages?.repository),
-        "harbor",
-      ),
     compactCandidateBundles: (input) =>
       withHeartbeats(`compacting ${input.candidateId}'s bundles`, () =>
         compactCandidate(store, input.runId, input.candidateId, {
@@ -153,5 +155,10 @@ export function createActivities(
           apply: true,
         }),
       ),
+    // A local registry keeps its images; only Artifact Registry's are deleted.
+    discardCandidateImages: async ({ runId, candidateId, keep }) =>
+      repository && isArtifactRegistry(repository)
+        ? await discardCandidateImages(repository, runId, candidateId, keep)
+        : 0,
   };
 }

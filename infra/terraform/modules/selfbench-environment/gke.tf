@@ -8,7 +8,7 @@ locals {
   workload_pool    = "${var.project_id}.svc.id.goog"
 }
 data "google_project" "this" {
-  count      = local.gke
+  count      = local.gke == 1 || var.task_images ? 1 : 0
   project_id = var.project_id
 }
 locals {

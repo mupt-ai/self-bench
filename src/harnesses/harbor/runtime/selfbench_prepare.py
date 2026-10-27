@@ -1,13 +1,13 @@
 """Builds a task's Harbor images once, before any of an evaluation's trials start.
 
-    python selfbench_prepare.py <task dir> <modal|e2b> [agent_image=im-…] [verifier_image=im-…]
+    python selfbench_prepare.py <task dir> <modal|e2b>
 
 Each image is built the way Harbor's environment builds it for a trial, so every trial finds it
 instead of building it again (and parallel trials of one task never build it side by side):
 
-- Modal: a pinned image the workspace can still use is kept; otherwise the image is built into
-  the workspace's image cache, which the trial's identical image then hits: the task's prebuilt
-  `docker_image` (a Harbor registry task), pulled as Harbor pulls it, or else its Dockerfile. A
+- Modal: the image is built into the workspace's image cache, which the trial's identical image
+  then hits: the task's prebuilt `docker_image` (a Harbor registry task), pulled as Harbor pulls
+  it, or else its Dockerfile. A
   compose verifier runs Docker-in-Docker and is left to the trial, and so is an image in
   SelfBench's registry, which a trial pulls with its own grant (selfbench_modal.py).
   Registries throttle many pulls that start together (public.ecr.aws answers "toomanyrequests:
@@ -16,7 +16,7 @@ instead of building it again (and parallel trials of one task never build it sid
 - E2B: the template Harbor names after the environment's content hash is built unless its last
   build is ready (selfbench_e2b.py), as the trial's environment checks it.
 
-Prints one line per image: `<role> <pinned|built|exists|skipped> [image]`.
+Prints one line per image: `<role> <built|exists|skipped> [image]`.
 """
 
 from __future__ import annotations
@@ -41,10 +41,9 @@ def _images(task: Task):
         yield "verifier", task.paths.tests_dir, verifier
 
 
-async def _modal(context: Path, docker_image: str | None, pin: str | None) -> str:
+async def _modal(context: Path, docker_image: str | None) -> str:
     from modal import App, Image
     from modal.exception import ImageBuildError
-    from selfbench_modal import UNUSABLE_PIN
 
     registry = os.environ.get("SELFBENCH_REGISTRY_HOST")
     if (context / "docker-compose.yaml").exists():
@@ -53,12 +52,6 @@ async def _modal(context: Path, docker_image: str | None, pin: str | None) -> st
         return "skipped"
     # Harbor's Modal environment builds in its default app.
     app = await App.lookup.aio(name="__harbor__", create_if_missing=True)
-    if pin:
-        try:
-            await Image.from_id(pin).build.aio(app)  # only looks the image up
-            return f"pinned {pin}"
-        except UNUSABLE_PIN:
-            pass
 
     def image():
         # As Harbor's Modal environment makes it (_ModalDirect.start), so the trial's matches.
@@ -97,15 +90,14 @@ async def _e2b(task: Task, context: Path, config, scratch: Path) -> str:
     return f"built {environment._template_name}"
 
 
-async def main(path: str, backend: str, *pins: str) -> None:
+async def main(path: str, backend: str) -> None:
     task = Task(Path(path))
-    pinned = dict(pin.split("=", 1) for pin in pins)
     with tempfile.TemporaryDirectory() as scratch:
 
         async def prepare(role: str, context: Path, config) -> None:
             if backend == "modal":
                 image = getattr(config, "docker_image", None)
-                outcome = await _modal(context, image, pinned.get(f"{role}_image"))
+                outcome = await _modal(context, image)
             elif backend == "e2b":
                 outcome = await _e2b(task, context, config, Path(scratch) / role)
             else:

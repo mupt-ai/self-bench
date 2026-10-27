@@ -8,7 +8,7 @@ import {
   harborProcessEnvironment,
 } from "../harnesses/harbor/command.js";
 import { hostVariables } from "../harnesses/harbor/host-variables.js";
-import { startFromExportedImages } from "../harnesses/harbor/registry-pull.js";
+import { startFromTaskImages } from "../harnesses/harbor/registry-pull.js";
 import {
   prepareHarborRun,
   readTaskConfig,
@@ -82,19 +82,15 @@ export async function setUpTrial(
     ? judgeTrial(hostVariables(await readTaskConfig(taskPath)), prepared.env, execution.judge)
     : { child: prepared.env, verifierEnv: [] };
   if ("refusal" in judged) throw refuseTrial(judged.refusal);
-  // E2B and Docker start from the images verification ran on, when the task has them exported.
-  const pull = await startFromExportedImages(
-    taskPath,
-    task.images,
-    run.sandbox,
-    { env: options.env, ...(options.snapshotLink ? { callback: options.snapshotLink } : {}) },
-    trialRoot,
-  );
+  // Every provider starts from the images the task's checks ran on, when it has them.
+  const pull = await startFromTaskImages(taskPath, task.images, run.sandbox, {
+    env: options.env,
+    ...(options.snapshotLink ? { callback: options.snapshotLink } : {}),
+  });
   if (pull.SELFBENCH_REGISTRY_PASSWORD) secrets.push(pull.SELFBENCH_REGISTRY_PASSWORD);
   return {
     taskPath,
     jobs: join(trialRoot, "jobs"),
-    ...(task.images ? { images: task.images } : {}),
     ...gateway,
     modelAuth: execution.auth,
     ...(execution.billingKey ? { billingKey: execution.billingKey } : {}),

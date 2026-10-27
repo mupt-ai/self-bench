@@ -13,9 +13,8 @@ afterEach(async () => {
 
 const digest = `sha256:${"b".repeat(64)}`;
 const images = {
-  provider: "modal" as const,
-  agent: "im-agent",
-  registry: { agent: `us-central1-docker.pkg.dev/p/selfbench-tasks/task-1@${digest}` },
+  agent: `us-central1-docker.pkg.dev/p/selfbench-tasks/run-1/c1/agent@${digest}`,
+  verifier: `us-central1-docker.pkg.dev/p/selfbench-tasks/run-1/c1/verifier@sha256:${"e".repeat(64)}`,
 };
 
 function one<T>(rows: T[]): T {
@@ -68,25 +67,19 @@ async function seeded() {
   return { db, rows: taskImageRows(db), task, org, user };
 }
 
-test("saves only when the row still matches what was reconciled", async () => {
+test("a removal saves only when the row still matches what was reconciled", async () => {
   const { db, rows, task } = await seeded();
-  const { registry: _registry, ...unexported } = images;
-  expect(
-    await rows.save(
-      { ...task, reviewDecision: "approve" },
-      "runs/run-1/harbor-task.tar.gz",
-      unexported,
-    ),
-  ).toBe(false);
-  expect(await rows.save(task, "runs/run-1/harbor-task.tar.gz", unexported)).toBe(true);
-  expect(await rows.save(task, "runs/run-1/harbor-task.tar.gz", unexported)).toBe(false);
-  const saved = await rows.find(task.id);
-  expect(saved?.bundleKey).toBe("runs/run-1/harbor-task.tar.gz");
-  expect(saved?.images).toEqual(unexported);
+  const compiled = "runs/run-1/harbor-task.tar.gz";
+  expect(await rows.save({ ...task, reviewDecision: "approve" }, compiled)).toBe(false);
   await db.update(tasks).set({ deletedAt: new Date() });
+  expect(await rows.save(task, compiled)).toBe(false);
   const deleted = await rows.find(task.id);
   if (!deleted) throw new Error("deleted row is gone");
-  expect(await rows.save(deleted, "runs/run-1/execution-task.tar.gz", images)).toBe(true);
+  expect(await rows.save(deleted, compiled)).toBe(true);
+  expect(await rows.save(deleted, compiled)).toBe(false);
+  const saved = await rows.find(task.id);
+  expect(saved?.bundleKey).toBe(compiled);
+  expect(saved?.images).toBeNull();
 });
 
 test("an image is pinned while a comparison or release names its digest", async () => {
@@ -130,7 +123,7 @@ test("an image is pinned while a comparison or release names its digest", async 
   expect(await rows.referenced([digest], task.id)).toBe(true);
 });
 
-test("a rejected or deleted row no longer pins a shared digest", async () => {
+test("only a rejected or deleted row no longer pins a shared digest", async () => {
   const { db, rows, task } = await seeded();
   const other = { ...task, runId: "run-2", candidateId: "c2" };
   const insert = (fields: { reviewDecision: "approve" | "reject" | null; deletedAt?: Date }) =>
@@ -153,16 +146,36 @@ test("a rejected or deleted row no longer pins a shared digest", async () => {
   await db.delete(tasks).where(eq(tasks.runId, "run-2"));
   await insert({ reviewDecision: "approve" });
   expect(await rows.referenced([digest], task.id)).toBe(true);
+  // A task nobody reviewed yet runs on its images too.
+  await db.delete(tasks).where(eq(tasks.runId, "run-2"));
+  await insert({ reviewDecision: null });
+  expect(await rows.referenced([digest], task.id)).toBe(true);
 });
 
-test("images are recorded on a row that had none only while it still has none", async () => {
+test("kept accepted rows without images are the ones a backfill rebuilds", async () => {
   const { db, rows, task } = await seeded();
-  await db.update(tasks).set({ images: null, reviewDecision: null });
-  const bare = await rows.find(task.id);
-  if (!bare) throw new Error("row is gone");
-  const { registry: _registry, ...recorded } = images;
-  expect(await rows.save(bare, bare.bundleKey ?? "", recorded)).toBe(true);
-  expect((await rows.find(task.id))?.images).toEqual(recorded);
-  // A second re-verification racing the first finds images already there.
-  expect(await rows.save(bare, bare.bundleKey ?? "", recorded)).toBe(false);
+  const add = (candidateId: string, fields: Partial<typeof tasks.$inferInsert>) =>
+    db.insert(tasks).values({
+      repoId: task.repoId,
+      runId: "run-3",
+      candidateId,
+      taskId: candidateId,
+      difficulty: "medium",
+      pipelineStatus: "accepted",
+      stage: "accepted",
+      bundleKey: `runs/run-3/${candidateId}/harbor-task.tar.gz`,
+      ...fields,
+    });
+  await add("unreviewed", {});
+  await add("approved", { reviewDecision: "approve" });
+  await add("rejected", { reviewDecision: "reject" });
+  await add("deleted", { deletedAt: new Date() });
+  await add("failed", { pipelineStatus: "infrastructure_failed" });
+  await add("built", { images });
+  const found = await rows.withoutImages();
+  const names = (
+    await Promise.all(found.map(async (id) => (await rows.find(id))?.candidateId))
+  ).sort();
+  expect(names).toEqual(["approved", "unreviewed"]);
+  expect(await rows.withoutImages([task.repoId + 1])).toEqual([]);
 });

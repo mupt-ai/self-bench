@@ -4,7 +4,6 @@ import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { repos } from "../../src/db/schema.js";
-import { createTaskStore, type TaskUpsert } from "../../src/db/tasks.js";
 import { connectRepo, signedIn } from "./sign-in.js";
 import {
   type AuthServer,
@@ -14,6 +13,7 @@ import {
   startAuthServer,
   testAuthConfig,
 } from "./site-fixture.js";
+import { type SeededTask, seedTasks } from "./task-rows.js";
 
 const definition = (taskId: string, sourcePr: number) => ({
   taskId,
@@ -32,7 +32,7 @@ const definition = (taskId: string, sourcePr: number) => ({
 const BUNDLE_KEY = "runs/run-one/verification/c1/round-1/attempt-1/verify-1/harbor-task.tar.gz";
 
 /** The rows the pipeline writes for `run-one`: one accepted and one rejected candidate. */
-const RUN_ONE_ROWS: Omit<TaskUpsert, "repoId">[] = [
+const RUN_ONE_ROWS: Omit<SeededTask, "repoId">[] = [
   {
     runId: "run-one",
     candidateId: "c1",
@@ -79,7 +79,8 @@ async function seededStore(): Promise<LocalArtifactStore> {
 async function ingestRunOne(site: AuthServer) {
   const [repo] = await site.db.select().from(repos).where(eq(repos.fullName, "Mupt-AI/self-bench"));
   if (!repo) throw new Error("Test repository is not connected");
-  await createTaskStore(site.db).upsertMany(
+  await seedTasks(
+    site.db,
     RUN_ONE_ROWS.map((row) => ({ ...row, repoId: repo.id })),
   );
 }

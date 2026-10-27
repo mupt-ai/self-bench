@@ -14,5 +14,3 @@ export const MAX_FOCUS_LENGTH = 1000;
 
 /** Batch status: Temporal RPCs one read of a running batch keeps in flight. */
 export const BATCH_RPC_CONCURRENCY = 8;
-/** Batch status: how long a candidate's queried progress is reused; queries are billed. */
-export const BATCH_OBSERVE_INTERVAL_MS = 30_000;

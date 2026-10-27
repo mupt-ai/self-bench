@@ -4,18 +4,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse } from "smol-toml";
 import type { TaskImages } from "../../src/contracts/index.js";
-import { startFromExportedImages } from "../../src/harnesses/harbor/registry-pull.js";
+import { startFromTaskImages } from "../../src/harnesses/harbor/registry-pull.js";
 import { readRegistryGrant } from "../../src/sandbox/registry-grant.js";
 
 const REPOSITORY = "us-central1-docker.pkg.dev/selfbench-test/selfbench-tasks";
 const SECRET = "s".repeat(32);
-const AGENT = `task-1@sha256:${"a".repeat(64)}`;
-const VERIFIER = `task-1@sha256:${"b".repeat(64)}`;
+const AGENT = `run/candidate/agent@sha256:${"a".repeat(64)}`;
+const VERIFIER = `run/candidate/verifier@sha256:${"b".repeat(64)}`;
 const images: TaskImages = {
-  provider: "modal",
-  agent: "im-Agent1",
-  verifier: "im-Verifier1",
-  registry: { agent: `${REPOSITORY}/${AGENT}`, verifier: `${REPOSITORY}/${VERIFIER}` },
+  agent: `${REPOSITORY}/${AGENT}`,
+  verifier: `${REPOSITORY}/${VERIFIER}`,
 };
 const serving = {
   env: { SELFBENCH_TASK_IMAGE_REPOSITORY: REPOSITORY },
@@ -34,31 +32,40 @@ async function task(toml: string): Promise<string> {
   return root;
 }
 
-test("E2B, Docker and Modal can pull exported images by digest through the API", async () => {
-  for (const environment of ["e2b", "docker", "modal", "daytona", "vercel"] as const) {
-    const root = await task('schema_version = "1.4"\n[verifier.environment]\ncpus = 2\n');
-    const env = await startFromExportedImages(root, images, environment, serving, root);
+type Config = {
+  environment: { docker_image: string };
+  verifier: { environment: { docker_image: string; cpus: number } };
+};
 
-    const config = parse(await readFile(join(root, "task.toml"), "utf8")) as {
-      environment: { docker_image: string };
-      verifier: { environment: { docker_image: string; cpus: number } };
-    };
+test("every hosted provider pulls a task's images by digest through the API", async () => {
+  for (const environment of ["e2b", "modal", "daytona", "vercel"] as const) {
+    const root = await task('schema_version = "1.4"\n[verifier.environment]\ncpus = 2\n');
+    const env = await startFromTaskImages(root, images, environment, serving);
+    const config = parse(await readFile(join(root, "task.toml"), "utf8")) as Config;
     expect(config.environment.docker_image).toBe(`app.selfbench.test/${AGENT}`);
     expect(config.verifier.environment).toEqual({
       cpus: 2,
       docker_image: `app.selfbench.test/${VERIFIER}`,
     });
     expect(env.SELFBENCH_REGISTRY_HOST).toBe("app.selfbench.test");
-    // The login is a grant for exactly this task's two images, for E2B and the docker CLI alike.
+    // The login is a grant for exactly this task's two images.
     expect(readRegistryGrant(env.SELFBENCH_REGISTRY_PASSWORD ?? "", SECRET)?.images).toEqual([
       AGENT,
       VERIFIER,
     ]);
-    const docker = JSON.parse(await readFile(join(env.DOCKER_CONFIG ?? "", "config.json"), "utf8"));
-    expect(docker.auths["app.selfbench.test"].auth).toBe(
-      Buffer.from(`selfbench:${env.SELFBENCH_REGISTRY_PASSWORD}`).toString("base64"),
-    );
   }
+});
+
+test("Docker pulls straight from the repository with the host's own login", async () => {
+  const local = {
+    agent: `localhost:5000/tasks/${AGENT}`,
+    verifier: `localhost:5000/tasks/${VERIFIER}`,
+  };
+  const root = await task('schema_version = "1.4"\n');
+  expect(await startFromTaskImages(root, local, "docker", { env: {} })).toEqual({});
+  const config = parse(await readFile(join(root, "task.toml"), "utf8")) as Config;
+  expect(config.environment.docker_image).toBe(local.agent);
+  expect(config.verifier.environment.docker_image).toBe(local.verifier);
 });
 
 test("service contexts build FROM the proxied image the compose login covers", async () => {
@@ -71,7 +78,7 @@ test("service contexts build FROM the proxied image the compose login covers", a
     join(root, "tests", "docker-compose.yaml"),
     '{"services":{"main":{"build":"."}}}',
   );
-  await startFromExportedImages(root, images, "daytona", serving, root);
+  await startFromTaskImages(root, images, "daytona", serving);
   expect(await readFile(join(root, "tests", "Dockerfile"), "utf8")).toBe(
     `FROM app.selfbench.test/${VERIFIER}\n`,
   );
@@ -81,23 +88,15 @@ test("service contexts build FROM the proxied image the compose login covers", a
   );
 });
 
-test("an unexported task or deployment without image serving builds its Dockerfiles", async () => {
+test("a task without images builds its Dockerfiles; one a provider cannot pull refuses", async () => {
   const toml = 'schema_version = "1.4"\n';
-  const cases = [
-    { images: { ...images, registry: undefined }, environment: "e2b" as const, options: serving },
-    { images, environment: "e2b" as const, options: { ...serving, env: {} } },
-  ];
-  for (const { images: taskImages, environment, options } of cases) {
-    const root = await task(toml);
-    expect(
-      await startFromExportedImages(
-        root,
-        taskImages as TaskImages,
-        environment,
-        options as typeof serving,
-        root,
-      ),
-    ).toEqual({});
-    expect(await readFile(join(root, "task.toml"), "utf8")).toBe(toml);
-  }
+  const root = await task(toml);
+  expect(await startFromTaskImages(root, undefined, "e2b", serving)).toEqual({});
+  expect(await readFile(join(root, "task.toml"), "utf8")).toBe(toml);
+  await expect(startFromTaskImages(root, images, "e2b", { ...serving, env: {} })).rejects.toThrow(
+    "Artifact Registry",
+  );
+  await expect(startFromTaskImages(root, images, "modal", { env: serving.env })).rejects.toThrow(
+    "sandbox callback",
+  );
 });

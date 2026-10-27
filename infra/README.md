@@ -168,11 +168,11 @@ To turn it on:
 
 ## Task Images
 
-With `"task_images": true`, the worker exports each accepted task's verified images, the Modal images its oracle passed on, into the `selfbench-tasks` Artifact Registry repository, and E2B and Docker trials start from them by digest instead of building the task's Dockerfiles. Only accepted tasks are exported, once each. The runtime account writes the repository and the API account reads it. Sandbox providers never get a credential for the repository: they pull through the API's `/v2/` registry endpoint with a grant for one task's images, and image layers are redirected to Artifact Registry's own download URLs.
+With `"task_images": true`, every check builds the task's agent and verifier images on Google Cloud Build into the `selfbench-tasks` Artifact Registry repository before its gates, and the gates and every later trial start from them by digest. Builds run as their own service account (`<env>-task-builder`), which may only push to `selfbench-tasks` and `selfbench-task-cache` (BuildKit's layer cache, expired after two weeks), read the `dockerhub` remote repository (Docker Hub through Artifact Registry), and add objects to the `<project>-task-builds` logs bucket. The runtime account starts builds as that account, reads their logs, and deletes images a candidate did not keep or a person rejected; the API account only reads the repository. Sandbox providers never get a credential for the repository: they pull through the API's `/v2/` registry endpoint with a grant for one task's images, and image layers are redirected to Artifact Registry's own download URLs.
 
 To turn it on:
 
-1. Grant the apply role `artifactregistry.repositories.create` (already needed for `selfbench`) and `artifactregistry.repositories.setIamPolicy`.
+1. Grant the apply role `artifactregistry.repositories.create` (already needed for `selfbench`), `artifactregistry.repositories.setIamPolicy`, `iam.serviceAccounts.create`, `storage.buckets.create` and `resourcemanager.projects.setIamPolicy` (for the runtime account's `roles/cloudbuild.builds.editor`).
 2. Add `"task_images": true` to the environment's `terraform.tfvars.json`, and release.
 
 ## Operational Notes

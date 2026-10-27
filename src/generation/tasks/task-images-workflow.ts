@@ -1,5 +1,16 @@
-import { defineSignal, proxyActivities, setHandler, workflowInfo } from "@temporalio/workflow";
-import type { TaskImageActivities } from "./task-images-activity.js";
+import { WorkflowExecutionAlreadyStartedError } from "@temporalio/common";
+import {
+  defineSignal,
+  executeChild,
+  ParentClosePolicy,
+  proxyActivities,
+  setHandler,
+} from "@temporalio/workflow";
+import { harbor, task } from "../../temporal/activity-options.js";
+import { whenSandboxFree } from "../../temporal/sandbox-capacity.js";
+import type { RebuildOutcome } from "./task-image-rebuild.js";
+import type { TaskImageOutcome } from "./task-images.js";
+import type { TaskImageActivities, TaskImageRebuildActivities } from "./task-images-activity.js";
 
 /** Sent by the API after a task's review changes or the task is deleted. */
 export const taskReviewChanged = defineSignal("taskReviewChanged");
@@ -9,44 +20,80 @@ export function taskImagesWorkflowId(taskRowId: number): string {
   return `task-images/${taskRowId}`;
 }
 
-/**
- * The queue exports and removals run on, beside `<queue>-harbor`. Its workers take only a few at a
- * time (TASK_IMAGE_CONCURRENCY), so a burst of approvals waits in Temporal, where no timeout or
- * retry runs, instead of starving each other's downloads past E2B's one-hour sandbox lifetime.
- */
-export function taskImageQueue(taskQueue: string): string {
-  return `${taskQueue}-harbor-images`;
-}
-
-/** Exports one worker runs at once: each streams and hashes a whole filesystem. */
-export const TASK_IMAGE_CONCURRENCY = 2;
-
-// Exporting a large task's images streams its whole filesystem out of the provider.
-const images = () =>
-  proxyActivities<TaskImageActivities>({
-    startToCloseTimeout: "3 hours",
-    heartbeatTimeout: "10 minutes",
-    retry: {
-      initialInterval: "1 minute",
-      backoffCoefficient: 2,
-      maximumInterval: "30 minutes",
-      maximumAttempts: 5,
-    },
-    taskQueue: taskImageQueue(workflowInfo().taskQueue),
-  });
+const images = proxyActivities<TaskImageActivities>(task({ timeout: "5 minutes", attempts: 5 }));
+// A rebuild is a check: both image builds, then Harbor's smoke, nop and oracle runs.
+const rebuilding = () =>
+  proxyActivities<TaskImageRebuildActivities>(
+    harbor({ timeout: "7 hours", attempts: 3, heartbeat: "10 minutes" }),
+  );
 
 /**
- * Keeps one task's exported images in step with its human review: exports them once a person
- * approves the task, removes them once a person rejects or deletes it. Reviews that change while
- * an export or removal runs are reconciled again afterwards, against the row as it is then.
+ * Keeps one task's images in step with its review. A person rejecting or deleting the task removes
+ * them, unless something pins them; a kept task without them (accepted before images were built,
+ * or approved again after a rejection removed them) is rebuilt and checked again. A review that
+ * changes meanwhile is reconciled again afterwards, against the row as it is then.
  */
-export async function selfBenchTaskImagesWorkflow(taskRowId: number): Promise<void> {
+export async function selfBenchTaskImagesWorkflow(
+  taskRowId: number,
+): Promise<TaskImageOutcome | RebuildOutcome> {
   let changed = true;
   setHandler(taskReviewChanged, () => {
     changed = true;
   });
+  let outcome: TaskImageOutcome | RebuildOutcome = { status: "skipped", reason: "Not reconciled" };
   while (changed) {
     changed = false;
-    await images().reconcileTaskImages(taskRowId);
+    outcome = await images.reconcileTaskImages(taskRowId);
+    if (outcome.status === "unbuilt")
+      outcome = await whenSandboxFree(() => rebuilding().rebuildTaskImages(taskRowId));
   }
+  return outcome;
+}
+
+/** Which tasks an image backfill covers, and how many it rebuilds at once. */
+interface TaskImageBackfill {
+  /** Every kept task without images in these repositories, or in all when left out. */
+  readonly repoIds?: readonly number[];
+  /** Exactly these task rows instead, for a pilot. */
+  readonly rowIds?: readonly number[];
+  readonly concurrency?: number;
+  /** Lists the rows without rebuilding anything. */
+  readonly dryRun?: boolean;
+}
+
+/**
+ * An operator's one-off: gives every kept task that runs on its Dockerfiles the images new tasks
+ * get, by running each row's selfBenchTaskImagesWorkflow, a few at a time, on the normal workers.
+ * Returns each row's outcome; a row whose workflow is already running reports so and is left to it.
+ * Operators start it by name (maintenance/README.md), so nothing in the code calls it.
+ *
+ * @public
+ */
+export async function selfBenchTaskImagesBackfillWorkflow(
+  input: TaskImageBackfill,
+): Promise<{ readonly rows: number[]; readonly outcomes: Record<number, string> }> {
+  const rows = input.rowIds ? [...input.rowIds] : await images.tasksWithoutImages(input.repoIds);
+  const outcomes: Record<number, string> = {};
+  if (input.dryRun) return { rows, outcomes };
+  let next = 0;
+  const lane = async () => {
+    while (next < rows.length) {
+      const row = rows[next++] as number;
+      try {
+        const outcome = await executeChild(selfBenchTaskImagesWorkflow, {
+          workflowId: taskImagesWorkflowId(row),
+          args: [row],
+          parentClosePolicy: ParentClosePolicy.ABANDON,
+        });
+        outcomes[row] = "gate" in outcome ? `${outcome.status} at ${outcome.gate}` : outcome.status;
+      } catch (error) {
+        outcomes[row] =
+          error instanceof WorkflowExecutionAlreadyStartedError
+            ? "already running"
+            : `error: ${error instanceof Error ? error.message : String(error)}`;
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, input.concurrency ?? 4) }, lane));
+  return { rows, outcomes };
 }

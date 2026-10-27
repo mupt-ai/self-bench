@@ -1,8 +1,11 @@
 import { expect, test } from "bun:test";
 import type { ArtifactStore } from "../src/artifacts/index.js";
-import type { TaskRecord, TaskStore } from "../src/db/tasks.js";
+import type { TaskStore } from "../src/db/tasks.js";
 import { authoringPrompt } from "../src/generation/pipeline/authoring.js";
-import { infrastructureFailureSummary, refreshInProgress } from "../src/generation/tasks/status.js";
+import {
+  createTaskActivities,
+  infrastructureFailureSummary,
+} from "../src/generation/tasks/activities.js";
 import { candidate } from "./support/workflow-fixture.js";
 
 test("review feedback is the reason to revise even when mechanical gates are green", () => {
@@ -57,28 +60,30 @@ test("unrelated ENOENT does not claim the checkout is unavailable", () => {
 test("workflow failure preserves complete technical details", async () => {
   const detail = "ENOENT: missing /work/tests/result.json\nUnderlying diagnostic";
   let saved: unknown;
-  const task = {
-    id: 1,
-    workflowId: "workflow",
-    stage: "review",
-    round: 2,
-    pipelineStatus: "in_progress",
-  } as TaskRecord;
   const tasks = {
-    listForRepo: async () => [task],
-    progress: async (_id: number, patch: unknown) => {
-      saved = patch;
-      return task;
+    settle: async (_runId: string, _candidateId: string, verdict: unknown) => {
+      saved = verdict;
+      return true;
     },
   } as unknown as TaskStore;
-  await refreshInProgress({
-    tasks,
-    artifacts: {} as ArtifactStore,
-    repo: { id: 1, fullName: "a/b" },
-    status: { snapshot: async () => ({ kind: "failed", status: "FAILED", detail }) },
+  await createTaskActivities({ tasks, artifacts: {} as ArtifactStore }).settleTask({
+    runId: "run",
+    candidateId: "candidate",
+    result: {
+      progress: {
+        candidateId: "candidate",
+        taskId: "candidate",
+        difficulty: "easy",
+        status: "infrastructure_failed",
+        stage: "review",
+        round: 2,
+        reason: detail,
+      },
+    },
   });
   expect(saved).toMatchObject({
     pipelineStatus: "infrastructure_failed",
+    stage: "review",
     reason: expect.stringContaining(detail),
   });
 });

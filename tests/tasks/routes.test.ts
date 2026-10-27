@@ -53,7 +53,7 @@ describe("task routes", () => {
     });
   });
 
-  test("a human review overrides the pipeline verdict, survives a sync, and can be cleared", async () => {
+  test("a human review overrides the pipeline verdict and can be cleared", async () => {
     const { site, headers, ingest } = await signedIn();
     await ingest();
     const review = await site.request(`${REPO}/tasks/run-one/task-good/review`, {
@@ -74,7 +74,6 @@ describe("task routes", () => {
       body: JSON.stringify({ decision: "maybe" }),
     });
     expect(bad.status).toBe(400);
-    await ingest();
     const synced = (await (await site.request(`${REPO}/tasks`, { headers })).json()) as {
       tasks: { taskId: string; state: string }[];
     };

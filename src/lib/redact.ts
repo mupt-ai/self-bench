@@ -18,6 +18,9 @@ export function redactSecrets(value: string): string {
     [/\bdari_[A-Za-z0-9_-]{16,}/g, "dari_[REDACTED]"],
     [/\bsk-[A-Za-z0-9_-]{16,}/g, "sk-[REDACTED]"],
     [/\b(?:ghp|github_pat)_[A-Za-z0-9_-]{16,}/g, "github_[REDACTED]"],
+    // Sandbox provider credentials: E2B and Daytona API keys, Modal token IDs and secrets.
+    [/\b(?:e2b|dtn)_[A-Za-z0-9_-]{16,}/g, "provider_[REDACTED]"],
+    [/\ba[ks]-[A-Za-z0-9]{16,}/g, "modal_[REDACTED]"],
     [
       /\b[A-Z][A-Z0-9_]*(?:API_KEY|ACCESS_TOKEN|AUTH_TOKEN|CLIENT_SECRET)\s*[:=]\s*[^\s,;]+/g,
       "SECRET=[REDACTED]",

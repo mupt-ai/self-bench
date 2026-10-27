@@ -13,62 +13,103 @@ describe("postgres task store", () => {
     await database.close();
   });
 
-  test("upserts keep reviews, find matches either id, counts group by state", async () => {
+  async function connected(githubId: number) {
     const users = createUserStore(database.db, { secret: testAuthConfig.sessionSecret });
     const user = await users.upsert({
-      githubId: 1,
-      login: "avyay",
+      githubId,
+      login: `user-${githubId}`,
       token: "t",
       scopes: "",
       orgs: [],
     });
     const [org] = await users.orgsFor(user.id);
     if (!org) throw new Error("org missing");
-    const repos = createRepoStore(database.db);
-    const repo = await repos.connect({
+    const repo = await createRepoStore(database.db).connect({
       orgId: org.id,
-      githubId: 1,
-      fullName: "avyay/x",
+      githubId,
+      fullName: `user-${githubId}/x`,
       defaultBranch: "main",
       private: false,
       connectedBy: user.id,
     });
+    return { user, repo };
+  }
+
+  const planned = (repoId: number, runId: string, candidateId: string, sourcePr: number) => ({
+    repoId,
+    runId,
+    candidateId,
+    taskId: candidateId,
+    sourcePr,
+    difficulty: "hard" as const,
+    stage: "queued",
+    workflowId: `${runId}/candidate/${candidateId}`,
+  });
+
+  test("a row moves only forward: planned, in progress, settled once", async () => {
+    const { user, repo } = await connected(1);
     const store = createTaskStore(database.db);
-    const base = {
-      repoId: repo.id,
-      runId: "run-a",
-      stage: "accepted",
-      difficulty: "hard" as const,
-    };
-    await store.upsertMany([
-      { ...base, candidateId: "c1", taskId: "alpha", pipelineStatus: "accepted", sourcePr: 5 },
-      { ...base, candidateId: "c2", taskId: "beta", pipelineStatus: "rejected", sourcePr: 9 },
-    ]);
+    await store.plan([planned(repo.id, "run-a", "c1", 5), planned(repo.id, "run-a", "c2", 9)]);
+    // A retried plan changes nothing.
+    await store.plan([{ ...planned(repo.id, "run-a", "c1", 5), stage: "authoring" }]);
+    expect((await store.find(repo.id, "run-a", "c1"))?.stage).toBe("queued");
+
+    expect(
+      await store.progress("run-a", "c1", { stage: "verifying", round: 1, taskId: "alpha" }),
+    ).toBe(true);
     const alpha = await store.find(repo.id, "run-a", "alpha");
-    expect(alpha).toMatchObject({ candidateId: "c1", taskId: "alpha", sourcePr: 5 });
-    expect((await store.find(repo.id, "run-a", "c1"))?.id).toBe(alpha?.id ?? -1);
-    const reviewed = await store.review(alpha?.id ?? -1, {
+    expect(alpha).toMatchObject({ candidateId: "c1", stage: "verifying", round: 1 });
+    await expect(
+      store.review(alpha?.id ?? -1, { decision: "approve", note: "early", userId: user.id }),
+    ).rejects.toThrow("still in progress");
+
+    expect(
+      await store.settle("run-a", "c1", {
+        pipelineStatus: "accepted",
+        stage: "accepted",
+        bundleKey: "runs/run-a/bundle.tar.gz",
+        definition: { taskId: "alpha" },
+      }),
+    ).toBe(true);
+    // A late progress write or a second verdict from a retried activity is refused.
+    expect(await store.progress("run-a", "c1", { stage: "authoring" })).toBe(false);
+    expect(await store.settle("run-a", "c1", { pipelineStatus: "rejected", stage: "review" })).toBe(
+      false,
+    );
+    const settled = await store.find(repo.id, "run-a", "c1");
+    expect(settled).toMatchObject({
+      pipelineStatus: "accepted",
+      bundleKey: "runs/run-a/bundle.tar.gz",
+    });
+
+    const reviewed = await store.review(settled?.id ?? -1, {
       decision: "approve",
       note: "ok",
       userId: user.id,
     });
-    expect(reviewed.review).toMatchObject({ decision: "approve", note: "ok", decidedBy: "avyay" });
-    await store.upsertMany([
-      {
-        ...base,
-        candidateId: "c1",
-        taskId: "alpha-renamed",
-        pipelineStatus: "accepted",
-        sourcePr: 5,
-      },
+    expect(reviewed.review).toMatchObject({ decision: "approve", note: "ok", decidedBy: "user-1" });
+
+    await store.settleRun("run-a", {
+      pipelineStatus: "infrastructure_failed",
+      stage: "cancelled",
+      reason: "Generation cancelled.",
+    });
+    expect(await store.listForRun("run-a")).toMatchObject([
+      { candidateId: "c1", pipelineStatus: "accepted" },
+      { candidateId: "c2", pipelineStatus: "infrastructure_failed", stage: "cancelled" },
     ]);
-    const renamed = await store.find(repo.id, "run-a", "alpha-renamed");
-    expect(renamed?.id).toBe(alpha?.id ?? -1);
-    expect(renamed?.review?.decision).toBe("approve");
     expect(await store.countsForRepos([repo.id])).toEqual([
       { repoId: repo.id, total: 2, accepted: 1, needsReview: 0, rejected: 1, lastPr: 9 },
     ]);
-    expect((await store.clearReview(renamed?.id ?? -1)).review).toBeUndefined();
-    expect(await store.listForRepo(repo.id)).toHaveLength(2);
+    expect((await store.clearReview(reviewed.id)).review).toBeUndefined();
+  });
+
+  test("a candidate without a row writes nothing", async () => {
+    const store = createTaskStore(database.db);
+    expect(await store.progress("run-none", "c1", { stage: "authoring" })).toBe(false);
+    expect(
+      await store.settle("run-none", "c1", { pipelineStatus: "rejected", stage: "authoring" }),
+    ).toBe(false);
+    expect(await store.listForRun("run-none")).toEqual([]);
   });
 });

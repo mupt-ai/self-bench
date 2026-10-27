@@ -6,12 +6,8 @@ import { type TaskState, taskState } from "../../db/task-record.js";
 import type { ReviewDecision, TaskRecord, TaskStore } from "../../db/tasks.js";
 import type { User, UserStore } from "../../db/users.js";
 import { candidateArtifacts } from "../../generation/runs/artifacts.js";
-import { TaskNotFoundError } from "../../generation/tasks/deletion.js";
-import {
-  refreshInProgress,
-  refreshTask,
-  type TaskStatusSource,
-} from "../../generation/tasks/status.js";
+import { TaskNotFoundError, TaskNotSettledError } from "../../generation/tasks/deletion.js";
+import type { TaskWorkflows } from "../../generation/tasks/workflow-client.js";
 import type { SandboxCostSnapshot } from "../../sandbox/contracts.js";
 import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson } from "../http.js";
@@ -54,8 +50,8 @@ export interface TaskRoutesOptions {
   readonly repos: RepoStore;
   readonly tasks: TaskStore;
   readonly artifacts: ArtifactStore;
-  /** When present, in-progress rows are brought up to date with their workflows on each list. */
-  readonly status?: TaskStatusSource;
+  /** Cancels a running task, and reads its sandbox's live cost; rows are the workflows' to write. */
+  readonly workflows?: TaskWorkflows;
   readonly cost?: (
     runId: string,
     orgId: number,
@@ -76,7 +72,7 @@ export interface TaskRoutes {
 }
 
 export function createTaskRoutes(options: TaskRoutesOptions): TaskRoutes {
-  const { users, repos, tasks, artifacts, status } = options;
+  const { users, repos, tasks, artifacts, workflows } = options;
   // The review or deletion already succeeded; images catch up on the next change or a backfill.
   const reviewChanged = async (taskRowId: number) =>
     await options.reviewChanged?.(taskRowId).catch((error: unknown) => {
@@ -111,7 +107,6 @@ export function createTaskRoutes(options: TaskRoutesOptions): TaskRoutes {
         return true;
       }
       if (tasksRoute.test(url.pathname) && request.method === "GET") {
-        if (status) await refreshInProgress({ tasks, artifacts, status, repo });
         sendJson(response, 200, {
           tasks: (await tasks.listForRepo(repo.id)).map((task) => taskItem(task)),
         });
@@ -133,11 +128,11 @@ export function createTaskRoutes(options: TaskRoutesOptions): TaskRoutes {
           });
           return true;
         }
-        if (!found.workflowId || !status?.cancel) {
+        if (!found.workflowId || !workflows) {
           sendJson(response, 409, { error: "Cancellation is unavailable for this task." });
           return true;
         }
-        await status.cancel(found.workflowId);
+        await workflows.cancel(found.workflowId);
         sendJson(response, 202, { state: "requested" });
         return true;
       }
@@ -168,18 +163,11 @@ export function createTaskRoutes(options: TaskRoutesOptions): TaskRoutes {
         return true;
       }
       if (!leaf) {
-        let task = found;
-        let liveCost: SandboxCostSnapshot | undefined;
-        if (status) {
-          if (found.pipelineStatus === "in_progress") {
-            const refreshed = await refreshTask({ tasks, artifacts, status, repo }, found);
-            task = refreshed.task;
-            if (refreshed.snapshot?.kind === "running") liveCost = refreshed.snapshot.cost;
-          } else {
-            await refreshInProgress({ tasks, artifacts, status, repo });
-            task = (await tasks.find(repo.id, runId, found.candidateId)) ?? found;
-          }
-        }
+        const task = found;
+        const liveCost: SandboxCostSnapshot | undefined =
+          workflows && task.workflowId && task.pipelineStatus === "in_progress"
+            ? await workflows.liveCost(task.workflowId)
+            : undefined;
         const cost = options.cost
           ? await options.cost(runId, tenant.id, task.candidateId, liveCost)
           : undefined;
@@ -253,7 +241,8 @@ async function sendReview(response: ServerResponse, update: () => Promise<TaskRe
   try {
     sendJson(response, 200, { task: taskItem(await update()) });
   } catch (error) {
-    if (!(error instanceof TaskNotFoundError)) throw error;
-    sendJson(response, 404, { error: error.message });
+    if (error instanceof TaskNotSettledError) sendJson(response, 409, { error: error.message });
+    else if (error instanceof TaskNotFoundError) sendJson(response, 404, { error: error.message });
+    else throw error;
   }
 }

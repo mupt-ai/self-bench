@@ -66,7 +66,7 @@ test("custom Codex endpoints preserve namespaced models through the HTTPS adapte
   expect(model).toBe("openai/dari/routing");
   expect(solverAgent("codex", "custom", model)).toBe("harbor_gateway:GatewayCodex");
   expect(
-    solverArguments("task", "jobs", "codex", model, "modal", undefined, [], undefined, "custom"),
+    solverArguments("task", "jobs", "codex", model, "modal", undefined, [], "custom"),
   ).toContain("harbor_gateway:GatewayCodex");
   expect(solverAgent("codex", "openai")).toBe("harbor_gateway:SelfBenchCodex");
   expect(solverAgent("pi", "custom", model)).toBe("harbor_dari:DariPi");
@@ -217,7 +217,6 @@ for (const provider of gatewayIds) {
       "modal",
       undefined,
       codex.extraAllowedHosts,
-      undefined,
       provider,
     );
     expect(

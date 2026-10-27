@@ -141,9 +141,7 @@ export async function taskFeedbackRoute(
     sourcePr: task.sourcePr,
     sourceUrl: candidate.sourceUrl,
     difficulty: task.difficulty,
-    pipelineStatus: "in_progress",
     stage: "authoring",
-    workflowId: `${base}/candidate/${task.candidateId}`,
     startedBy: user.id,
     revision: { from: task.id, feedback: body.feedback },
   });

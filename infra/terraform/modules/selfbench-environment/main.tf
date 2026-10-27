@@ -14,6 +14,7 @@ locals {
     ],
     var.create_cloud_sql ? ["sqladmin.googleapis.com", "servicenetworking.googleapis.com"] : [],
     var.gke_workers ? ["container.googleapis.com"] : [],
+    var.task_images ? ["cloudbuild.googleapis.com"] : [],
   ))
 }
 resource "google_project_service" "api" {

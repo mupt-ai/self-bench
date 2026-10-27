@@ -9,6 +9,7 @@ import * as schema from "../src/db/schema.js";
 import { createTaskStore } from "../src/db/tasks.js";
 import { createUserStore } from "../src/db/users.js";
 import { testAuthConfig } from "./support/site-fixture.js";
+import { seedTasks } from "./support/task-rows.js";
 
 test("review migrations preserve batch ownership, tasks, reviews and tombstones", async () => {
   const client = new PGlite();
@@ -59,7 +60,7 @@ test("review migrations preserve batch ownership, tasks, reviews and tombstones"
       difficulty: "easy" as const,
       bundleKey: "history/bundle",
     };
-    await tasks.upsertMany([
+    await seedTasks(db, [
       { ...base, candidateId: "kept", taskId: "kept" },
       { ...base, candidateId: "deleted", taskId: "deleted" },
     ]);

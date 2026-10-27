@@ -69,3 +69,49 @@ test("only a live run offers cancellation, and every run deletion", () => {
   expect(render()).not.toContain("Cancel Run");
   expect(render()).toContain("Delete Run");
 });
+test("a finished run's row offers to retry its errored tasks", () => {
+  const run = initialEvaluation(
+    {
+      ...evaluationInput(),
+      credentials: {
+        modelCredentialId: "model",
+        sandboxCredentialId: "sandbox",
+        provider: "openai",
+      },
+    },
+    "Test model",
+  );
+  const [trial] = run.trials;
+  if (!trial) throw new Error("missing trial");
+  const render = () =>
+    renderToStaticMarkup(
+      <MemoryRouter>
+        <table>
+          <tbody>
+            <ResultGroupRows
+              run={run}
+              baseUrl="/api/evaluations"
+              pages="/repos/acme/widgets"
+              onChanged={() => {}}
+              name="test Run"
+              heading="Run"
+              results={[{ run, trial, task: "run-one/task-one", outcome: outcomeOf(trial) }]}
+              open
+              shown={new Set()}
+              sort={undefined}
+              onToggle={() => {}}
+              onToggleOutcome={() => {}}
+              onSort={() => {}}
+              onOpenTask={() => {}}
+            />
+          </tbody>
+        </table>
+      </MemoryRouter>,
+    );
+  run.status = "running";
+  trial.status = "running";
+  expect(render()).not.toContain("Retry");
+  run.status = "failed";
+  Object.assign(trial, { status: "failed", error: "Command failed (exit 1)" });
+  expect(render()).toContain("Retry 1 Errored Task");
+});

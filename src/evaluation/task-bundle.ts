@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ArtifactStore } from "../artifacts/index.js";
 import type { ArtifactRef } from "../contracts/index.js";
@@ -24,11 +24,10 @@ const COMPILED_BUNDLE = "/harbor-task.tar.gz";
 /**
  * Unpacks the Harbor task one trial runs under `trialRoot` and returns its directory.
  *
- * On Modal, a task whose compile also wrote the snapshot-free gate task is read from that, and
- * its image builds fetch the snapshot through the same link its verification used: the worker
- * never holds the two repository snapshots, and a trial whose pinned images are gone (or that
- * has none) builds the very Dockerfiles verification built, which Modal may still have cached.
- * Every other trial unpacks the full bundle.
+ * On Modal, a task without images whose compile also wrote the snapshot-free gate task is read
+ * from that, and its image builds fetch the snapshot through a signed link, so the worker never
+ * holds the two repository snapshots. A task with services builds its verifier through Compose
+ * inside the sandbox, so it, and every other trial, unpacks the full bundle.
  */
 export async function unpackTrialTask(
   store: ArtifactStore,
@@ -50,12 +49,19 @@ export async function unpackTrialTask(
       root,
       options.signal ?? new AbortController().signal,
     );
-    await fetchSnapshotInBuild(directory, {
-      bundle: split.gate,
-      snapshotUrl: snapshotLinkUrl(link.url, split.snapshot, link.secret),
-      snapshotSha256: split.snapshot.sha256,
-    });
-    return directory;
+    const composed = await access(join(directory, "tests", "docker-compose.yaml")).then(
+      () => true,
+      () => false,
+    );
+    if (!composed) {
+      await fetchSnapshotInBuild(directory, {
+        bundle: split.gate,
+        snapshotUrl: snapshotLinkUrl(link.url, split.snapshot, link.secret),
+        snapshotSha256: split.snapshot.sha256,
+      });
+      return directory;
+    }
+    await rm(root, { recursive: true, force: true });
   }
   const bundle = await store.getByKey(bundleKey);
   if (!bundle) throw refuseTrial("Task bundle is missing");

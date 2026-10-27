@@ -8,4 +8,7 @@ export {
 } from "../evaluation/workflow.js";
 export { selfBenchBatchWorkflow } from "../generation/batches/workflow.js";
 export * from "../generation/pipeline/workflows.js";
-export { selfBenchTaskImagesWorkflow } from "../generation/tasks/task-images-workflow.js";
+export {
+  selfBenchTaskImagesBackfillWorkflow,
+  selfBenchTaskImagesWorkflow,
+} from "../generation/tasks/task-images-workflow.js";

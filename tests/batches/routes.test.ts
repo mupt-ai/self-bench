@@ -1,5 +1,4 @@
 import { expect, test } from "bun:test";
-import { taskState } from "../../src/db/task-record.js";
 import { batchSubmissionSchema } from "../../src/generation/batches/start.js";
 import { fixture, ROOT } from "../support/batch-fixture.js";
 
@@ -40,7 +39,7 @@ test("authenticated repo start resolves commit, stages readable input, associate
   expect((await f.request(`${ROOT}/batch-unowned/cancel`, { method: "POST" })).status).toBe(404);
 });
 
-test("discovery, individual stages, failures, cancellation and Needs Review without overwriting human decisions", async () => {
+test("reading a batch shows its status and writes no task rows", async () => {
   const f = await fixture();
   const { runId } = await (await f.start()).json();
   const status = await (await f.request(`${ROOT}/${runId}`)).json();
@@ -51,36 +50,12 @@ test("discovery, individual stages, failures, cancellation and Needs Review with
     tasks: [
       { candidateId: "c1", taskId: "t1", difficulty: "easy", status: "accepted" },
       { candidateId: "c2", taskId: "t2", difficulty: "hard", status: "verifying", round: 2 },
-      {
-        candidateId: "c3",
-        taskId: "t3",
-        difficulty: "medium",
-        status: "rejected",
-        reason: "tests did not fail",
-      },
     ],
   });
-  expect((await f.request(`${ROOT}/${runId}`)).status).toBe(200);
-  const rows = await f.tasks.listForRepo(f.repo.id);
-  const good = rows.find((row) => row.candidateId === "c1");
-  if (!good) throw new Error("missing task");
-  expect(taskState(good)).toBe("needs_review");
-  expect(good.review).toBeUndefined();
-  expect(rows.find((row) => row.candidateId === "c2")?.round).toBe(2);
-  expect(rows.find((row) => row.candidateId === "c3")?.reason).toBe("tests did not fail");
-  await f.tasks.review(good.id, {
-    decision: "approve",
-    note: "checked",
-    userId: f.repo.connectedBy.id,
-  });
-  f.setStatus({ runId, phase: "cancelled" });
-  await f.request(`${ROOT}/${runId}`);
-  const after = await f.tasks.listForRepo(f.repo.id);
-  expect(after.find((row) => row.candidateId === "c2")?.round).toBe(2);
-  expect(after.find((row) => row.candidateId === "c2")?.pipelineStatus).toBe(
-    "infrastructure_failed",
-  );
-  expect(taskState(after.find((row) => row.candidateId === "c1") ?? good)).toBe("accepted");
+  const read = await f.request(`${ROOT}/${runId}`);
+  expect((await read.json()).tasks).toHaveLength(2);
+  // Rows are the candidate workflows' to write (tests/batches/activities.test.ts).
+  expect(await f.tasks.listForRepo(f.repo.id)).toEqual([]);
 });
 
 test("a batch focus is trimmed onto the run, and a blank or overlong one never starts", async () => {
@@ -122,39 +97,4 @@ test("a failed association never launches work", async () => {
   const f = await fixture({ failAttach: true });
   expect((await f.start()).status).toBe(500);
   expect(f.started).toHaveLength(0);
-});
-
-test("a known verdict survives when candidate queries disappear", async () => {
-  const f = await fixture();
-  const { runId } = await (await f.start()).json();
-  f.setStatus({
-    runId,
-    phase: "authoring",
-    tasks: [
-      { candidateId: "passed", taskId: "passed", difficulty: "medium", status: "accepted" },
-      { candidateId: "pending", taskId: "pending", difficulty: "medium", status: "verifying" },
-    ],
-  });
-  await f.request(`${ROOT}/${runId}`);
-  let rows = await f.tasks.listForRepo(f.repo.id);
-  expect(rows.find((row) => row.candidateId === "pending")?.pipelineStatus).toBe("in_progress");
-  expect(rows.find((row) => row.candidateId === "pending")?.reason).toBeUndefined();
-  f.setStatus({ runId, phase: "authoring" });
-  expect((await f.request(`${ROOT}/${runId}`)).status).toBe(200);
-  rows = await f.tasks.listForRepo(f.repo.id);
-  expect(rows.find((row) => row.candidateId === "pending")?.pipelineStatus).toBe("in_progress");
-  expect(rows.find((row) => row.candidateId === "passed")?.pipelineStatus).toBe("accepted");
-  f.setStatus({ runId, phase: "cancelled" });
-  await f.request(`${ROOT}/${runId}`);
-  rows = await f.tasks.listForRepo(f.repo.id);
-  expect(rows.find((row) => row.candidateId === "passed")?.pipelineStatus).toBe("accepted");
-  expect(rows.find((row) => row.candidateId === "pending")?.pipelineStatus).toBe(
-    "infrastructure_failed",
-  );
-  expect(rows.find((row) => row.candidateId === "pending")?.reason).toContain("cancelled");
-  await f.request(`${ROOT}/${runId}`);
-  expect(
-    (await f.tasks.listForRepo(f.repo.id)).find((row) => row.candidateId === "passed")
-      ?.pipelineStatus,
-  ).toBe("accepted");
 });
