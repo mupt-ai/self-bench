@@ -151,7 +151,7 @@ variable "api_max_instances" {
   default     = 3
 }
 variable "task_images" {
-  description = "Export each accepted task's verified images into the selfbench-tasks repository, so E2B and Docker trials start from them by digest."
+  description = "Build each task's images with Cloud Build into the selfbench-tasks repository before its checks, so the checks and every trial start from them by digest."
   type        = bool
   default     = false
 }

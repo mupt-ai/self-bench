@@ -40,15 +40,6 @@ async def check():
   try: assert await env._create_sandbox(Params(), daytona=client)=='sandbox'
   except RuntimeError: assert fail
   assert events[-3:]==['register','create','delete']
- # With a record directory, the snapshot each role started from is written for the export.
- import pathlib, tempfile
- record=tempfile.mkdtemp()
- for role_dir, snapshot in [('environment','harbor__a__snapshot'),('tests','harbor__b__snapshot')]:
-  env=SelfBenchDaytonaEnvironment(image_record_dir=record); env._compose_mode=False; env.fail=False
-  env.environment_dir=pathlib.Path('/task')/role_dir; env.task_env_config=types.SimpleNamespace(docker_image=None)
-  await env._create_sandbox(Params(snapshot=snapshot), daytona=client)
- assert (pathlib.Path(record)/'agent').read_text()=='harbor__a__snapshot'
- assert (pathlib.Path(record)/'verifier').read_text()=='harbor__b__snapshot'
 asyncio.run(check())
 print('ok')
 `;

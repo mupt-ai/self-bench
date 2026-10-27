@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { Client } from "@temporalio/client";
 import { createArtifactStore } from "../artifacts/index.js";
 import type { SelfBenchConfig } from "../contracts/config/index.js";
+import { isArtifactRegistry } from "../contracts/config/task-images.js";
 import { apiKeyDenies } from "../db/api-keys.js";
 import { openDatabase } from "../db/client.js";
 import { createRegistryGrantStore } from "../db/registry-grants.js";
@@ -61,15 +62,18 @@ export async function startApi(
       ? createGenerationBatches(localDatabase.db, client, artifacts, config.temporal.taskQueue)
       : undefined);
   const database = site?.database ?? localDatabase;
+  // Sandbox providers pull from Artifact Registry through here; a local registry serves Docker.
+  const repository = config.taskImages?.repository;
+  const artifactRepository = repository && isArtifactRegistry(repository) ? repository : undefined;
   // Customers who run tasks themselves pull through the same registry with a grant of their own.
   const registryGrants =
-    config.taskImages && database
-      ? createRegistryGrantStore(database.db, secret, config.taskImages.repository)
+    artifactRepository && database
+      ? createRegistryGrantStore(database.db, secret, artifactRepository)
       : undefined;
   const registry =
-    config.taskImages &&
+    artifactRepository &&
     taskImageRegistry({
-      repository: config.taskImages.repository,
+      repository: artifactRepository,
       token: googleAccessToken,
       ...(registryGrants ? { customerGrant: (password) => registryGrants.resolve(password) } : {}),
     });

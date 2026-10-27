@@ -277,7 +277,7 @@ run "task_images_off_by_default" {
     error_message = "Trials keep building Dockerfiles until task_images is set."
   }
   assert {
-    condition     = length(google_artifact_registry_repository.tasks) == 0 && length(google_artifact_registry_repository_iam_member.runtime_task_images) == 0 && length(google_artifact_registry_repository_iam_member.api_task_images) == 0
+    condition     = length(google_artifact_registry_repository.tasks) == 0 && length(google_artifact_registry_repository_iam_member.runtime_task_images) == 0 && length(google_artifact_registry_repository_iam_member.api_task_images) == 0 && length(google_service_account.task_builder) == 0 && !contains(keys(google_project_service.api), "cloudbuild.googleapis.com")
     error_message = "Task image infrastructure must not be created until enabled."
   }
 }
@@ -291,7 +291,7 @@ run "task_images" {
       for env in google_cloud_run_v2_worker_pool.worker[0].template[0].containers[0].env : env.name => env.value
       if startswith(env.name, "SELFBENCH_TASK_IMAGE_REPOSITORY")
     } == { SELFBENCH_TASK_IMAGE_REPOSITORY = "us-central1-docker.pkg.dev/selfbench-dev-testing/selfbench-tasks" }
-    error_message = "The worker exports into the task repository."
+    error_message = "The worker builds into the task repository."
   }
   assert {
     condition     = one([for env in google_cloud_run_v2_service.api.template[0].containers[0].env : env.value if env.name == "SELFBENCH_TASK_IMAGE_REPOSITORY"]) == "us-central1-docker.pkg.dev/selfbench-dev-testing/selfbench-tasks"
@@ -303,7 +303,46 @@ run "task_images" {
   }
   assert {
     condition     = google_artifact_registry_repository_iam_member.runtime_task_images[0].role == "roles/artifactregistry.repoAdmin" && google_artifact_registry_repository_iam_member.api_task_images[0].role == "roles/artifactregistry.reader"
-    error_message = "Only the worker writes task images; the API only reads them."
+    error_message = "Only the worker deletes task images; the API only reads them."
+  }
+  assert {
+    condition = {
+      for env in google_cloud_run_v2_worker_pool.worker[0].template[0].containers[0].env : env.name => env.value
+      if contains(["SELFBENCH_TASK_IMAGE_BUILDER", "SELFBENCH_TASK_IMAGE_CACHE", "SELFBENCH_DOCKER_HUB_MIRROR", "SELFBENCH_CLOUD_BUILD_LOGS_BUCKET"], env.name)
+      } == {
+      SELFBENCH_TASK_IMAGE_BUILDER      = "cloud-build"
+      SELFBENCH_TASK_IMAGE_CACHE        = "us-central1-docker.pkg.dev/selfbench-dev-testing/selfbench-task-cache"
+      SELFBENCH_DOCKER_HUB_MIRROR       = "us-central1-docker.pkg.dev/selfbench-dev-testing/dockerhub"
+      SELFBENCH_CLOUD_BUILD_LOGS_BUCKET = "selfbench-dev-testing-task-builds"
+    }
+    error_message = "The worker builds task images on Cloud Build, with a layer cache and the Docker Hub mirror."
+  }
+  assert {
+    condition     = contains(keys(google_project_service.api), "cloudbuild.googleapis.com")
+    error_message = "Task images need the Cloud Build API."
+  }
+  assert {
+    condition = (
+      google_artifact_registry_repository_iam_member.builder_task_images[0].role == "roles/artifactregistry.writer" &&
+      google_artifact_registry_repository_iam_member.builder_task_cache[0].role == "roles/artifactregistry.writer" &&
+      google_artifact_registry_repository_iam_member.builder_dockerhub[0].role == "roles/artifactregistry.reader" &&
+      google_storage_bucket_iam_member.builder_logs[0].bucket == "selfbench-dev-testing-task-builds" &&
+      # Cloud Build streams a log by rewriting its object, which Object Creator cannot do.
+      google_storage_bucket_iam_member.builder_logs[0].role == "roles/storage.admin"
+    )
+    error_message = "Builds run untrusted setup code: their account may only push images, read the mirror and keep logs in their own bucket."
+  }
+  assert {
+    condition     = google_service_account_iam_member.cloud_build_agent_builder[0].role == "roles/iam.serviceAccountTokenCreator" && endswith(google_service_account_iam_member.cloud_build_agent_builder[0].member, "@gcp-sa-cloudbuild.iam.gserviceaccount.com")
+    error_message = "Cloud Build's service agent must mint the builder account's tokens, or builds as that account are denied."
+  }
+  assert {
+    condition     = google_service_account_iam_member.runtime_acts_as_builder[0].role == "roles/iam.serviceAccountUser" && google_project_iam_member.runtime_cloud_build[0].role == "roles/cloudbuild.builds.editor"
+    error_message = "The worker starts builds as the builder's account."
+  }
+  assert {
+    condition     = google_artifact_registry_repository.dockerhub[0].mode == "REMOTE_REPOSITORY" && !google_artifact_registry_repository.task_cache[0].cleanup_policy_dry_run
+    error_message = "Docker Hub is mirrored, and the build cache expires."
   }
 }
 run "gke_workers_off_by_default" {

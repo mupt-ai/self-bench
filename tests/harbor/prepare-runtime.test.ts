@@ -38,8 +38,7 @@ class Image:
         return types.SimpleNamespace(aio=aio)
 async def lookup(name, create_if_missing): return name
 modal.Image, modal.App = Image, types.SimpleNamespace(lookup=types.SimpleNamespace(aio=lookup))
-selfbench_modal = types.ModuleType("selfbench_modal"); selfbench_modal.UNUSABLE_PIN = (LookupError,)
-stubs = {"modal": modal, "modal.exception": exception, "selfbench_modal": selfbench_modal}
+stubs = {"modal": modal, "modal.exception": exception}
 for name in ["harbor", "harbor.models", "harbor.models.task", "harbor.models.task.task", "harbor.models.trial", "harbor.models.trial.paths"]:
     stubs[name] = types.ModuleType(name)
 stubs["harbor.models.task.task"].Task = object
@@ -55,20 +54,20 @@ async def check():
     context = pathlib.Path("/task/environment")
     # A throttled pull waits longer each time, then builds the image a trial would start from.
     refusals[public] = 2
-    assert await module._modal(context, public, None) == "built im-registry"
+    assert await module._modal(context, public) == "built im-registry"
     assert waits == [30, 60] and built == [public], (waits, built)
     assert made[-1] == ("registry", public, None), made
     private = "123.dkr.ecr.us-east-1.amazonaws.com/task:v1"
-    assert await module._modal(context, private, None) == "built im-ecr"
-    assert await module._modal(context, None, None) == "built im-dockerfile"
+    assert await module._modal(context, private) == "built im-ecr"
+    assert await module._modal(context, None) == "built im-dockerfile"
     assert built[-1] == "/task/environment/Dockerfile", built
     # An image in SelfBench's registry is left to the trial, which pulls it with its grant.
     module.os.environ["SELFBENCH_REGISTRY_HOST"] = "app.selfbench.test"
-    assert await module._modal(context, "app.selfbench.test/task@sha256:abc", None) == "skipped"
+    assert await module._modal(context, "app.selfbench.test/task@sha256:abc") == "skipped"
     # A build refused every time fails once its waits run out; the trials then build it.
     refusals[public], waits[:] = 99, []
     try:
-        await module._modal(context, public, None)
+        await module._modal(context, public)
     except ImageBuildError:
         assert waits == list(module.BUILD_WAITS_SECS), waits
     else:

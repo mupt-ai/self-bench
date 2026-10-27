@@ -6,7 +6,7 @@ import base64
 
 from harbor.environments.vercel import VercelSandboxEnvironment
 from harbor.environments.vercel import environment as runtime
-from registry_auth import record_image, registry_login, stage_compose_login
+from registry_auth import registry_login, stage_compose_login
 
 
 class PullAuthenticatedBuilder:
@@ -45,17 +45,7 @@ class PullAuthenticatedBuilder:
 
 
 class SelfBenchVercelEnvironment(VercelSandboxEnvironment):
-    def __init__(self, *args, image_record_dir: str | None = None, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._selfbench_record = image_record_dir
-
     async def _prepare_vcr_image(self, *, force_build):
-        await self._prepare_pulled_image(force_build=force_build)
-        # The VCR image verification ran on, which the worker exports once the task is accepted.
-        if self._selfbench_record and not self._compose:
-            record_image(self._selfbench_record, self.environment_dir, self._resolved_task_image)
-
-    async def _prepare_pulled_image(self, *, force_build):
         login = registry_login()
         image = self.task_env_config.docker_image
         if self._compose or not login or not image or not image.startswith(f"{login[0]}/"):

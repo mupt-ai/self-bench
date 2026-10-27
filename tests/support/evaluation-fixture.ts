@@ -21,6 +21,7 @@ import { keepRunSummaries } from "../../src/evaluation/store.js";
 import type { TaskAuditRequest } from "../../src/evaluation/task-audit.js";
 import type { EvaluationInput, FailedTrial } from "../../src/evaluation/types.js";
 import { testAuthConfig, testDatabase } from "./site-fixture.js";
+import { seedTasks } from "./task-rows.js";
 
 export const evaluationEnv = {
   SELFBENCH_EVAL_CREDENTIAL_KEY: "a".repeat(64),
@@ -133,14 +134,13 @@ export async function evaluationServer(
     connectedBy: user.id,
   });
   const tasks = createTaskStore(database.db);
-  await tasks.upsertMany([
+  await seedTasks(database.db, [
     {
       repoId: repo.id,
       runId: "run-one",
       candidateId: "candidate-one",
       taskId: "task-one",
       pipelineStatus: "accepted",
-      stage: "accepted",
       difficulty: "easy",
       bundleKey: "tasks/task.tar.gz",
     },
@@ -150,7 +150,6 @@ export async function evaluationServer(
       candidateId: "candidate-other",
       taskId: "task-other",
       pipelineStatus: "accepted",
-      stage: "accepted",
       difficulty: "easy",
       bundleKey: "tasks/other.tar.gz",
     },
@@ -262,6 +261,7 @@ export async function evaluationServer(
     /** The store's directory, for a second store over it that keeps no summaries. */
     directory,
     summaries,
+    db: database.db,
     tasks,
     repos,
     repo,

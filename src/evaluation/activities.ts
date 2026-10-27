@@ -3,8 +3,7 @@ import type { ArtifactStore } from "../artifacts/index.js";
 import type { Vault } from "../db/vault.js";
 import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
 import { runCommand } from "../lib/process.js";
-import { withCredentialCapacity } from "../sandbox/capacity-wait.js";
-import { credentialsCapacity } from "../sandbox/credential-capacity.js";
+import { holdingCapacity } from "../sandbox/capacity.js";
 import { explainTrialFailure } from "./failure-summary.js";
 import { failEvaluation, failTrial, finishEvaluation, startEvaluation } from "./lifecycle.js";
 import { environmentSecrets, redactOutput } from "./output.js";
@@ -56,14 +55,13 @@ export function createEvaluationActivities(
   const limited = async <T>(input: EvaluationInput, usesModel: boolean, run: () => Promise<T>) => {
     const orgId = input.credentialOrgId ?? input.credentialOwnerId;
     const ids = input.credentials;
-    const capacity =
-      vault && orgId && ids
-        ? await credentialsCapacity(vault, orgId, [
-            ids.sandboxCredentialId,
-            ...(usesModel ? [ids.modelCredentialId] : []),
-          ])
-        : undefined;
-    return capacity ? withCredentialCapacity(capacity, 72 * 60 * 60_000, run) : run();
+    if (!vault || !orgId || !ids) return run();
+    return holdingCapacity(
+      vault,
+      orgId,
+      [ids.sandboxCredentialId, ...(usesModel ? [ids.modelCredentialId] : [])],
+      run,
+    );
   };
   return {
     startSolverEvaluation: (input) => startEvaluation(store, input),

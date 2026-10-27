@@ -24,8 +24,6 @@ export interface HarborRunCommand {
   solver?: { model: string; agentArguments: readonly string[] };
   /** Provider hosts merged into Harbor's agent network allowlist for this trial. */
   extraAllowedHosts?: readonly string[];
-  /** Harbor `--ek` settings for the environment, such as pinnedImageKwargs. */
-  environmentKwargs?: Readonly<Record<string, string>>;
   /** Harbor `--ve` entries, `KEY=VALUE`, for the verifier (an LLM judge's key, judgeTrial). */
   verifierEnv?: readonly string[];
   quiet?: boolean;
@@ -56,10 +54,6 @@ export function harborRunArguments(input: HarborRunCommand): string[] {
     "--yes",
     ...(input.quiet ? ["--quiet"] : []),
     ...(input.extraAllowedHosts ?? []).flatMap((host) => ["--allow-agent-host", host]),
-    ...Object.entries(input.environmentKwargs ?? {}).flatMap(([key, value]) => [
-      "--ek",
-      `${key}=${value}`,
-    ]),
     ...(input.verifierEnv ?? []).flatMap((entry) => ["--ve", entry]),
     ...(input.solver?.agentArguments ?? []),
   ];
@@ -74,8 +68,8 @@ const SELFBENCH_ENVIRONMENTS: Partial<Record<HarborEnvironment, string>> = {
 
 /**
  * Modal runs through SelfBench's subclass of Harbor's Modal environment (runtime/selfbench_modal.py),
- * which records the images a run built and starts trials from a task's pinned images. With no
- * pins it behaves exactly like `--env modal`. E2B's subclass (runtime/selfbench_e2b.py) rebuilds a
+ * which pulls a task's images from SelfBench's registry with the run's grant and caps each
+ * sandbox's lifetime; otherwise it behaves exactly like `--env modal`. E2B's subclass (runtime/selfbench_e2b.py) rebuilds a
  * template whose last build failed instead of starting from it, and says when a key's E2B plan is
  * too small for Harbor's 24-hour sandboxes. Daytona and Vercel adapters add scoped private-image
  * authentication during startup; Docker uses its per-run DOCKER_CONFIG.

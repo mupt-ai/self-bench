@@ -15,6 +15,19 @@ describe("provenance sanitization", () => {
     expect(value).not.toContain("postgres://");
   });
 
+  test("redacts sandbox provider credentials", () => {
+    const keys = [
+      "e2b_0123456789abcdef0123",
+      "dtn_0123456789abcdef0123",
+      "ak-0123456789abcdef0123",
+      "as-0123456789abcdef0123",
+    ];
+    const value = redactSecrets(`failed with ${keys.join(" and ")}`);
+    for (const key of keys) expect(value).not.toContain(key);
+    // Ordinary words with these prefixes survive.
+    expect(redactSecrets("ask-me as-is")).toBe("ask-me as-is");
+  });
+
   test("extracts tier-eligible pull requests from non-bot GitHub authors", () => {
     const raw = JSON.stringify([
       {

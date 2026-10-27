@@ -1,5 +1,5 @@
 {
-  "id": "fc2767ea-8c6e-4080-8704-397c62dcafe1",
+  "id": "032b882d-25d9-4bfd-9fe5-3e5c095f497c",
   "prevId": "3b5892e1-87ca-40d3-ac21-648a3f0cadbe",
   "version": "7",
   "dialect": "postgresql",
@@ -76,34 +76,34 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "api_keys_user_id_users_id_fk": {
           "name": "api_keys_user_id_users_id_fk",
           "tableFrom": "api_keys",
-          "tableTo": "users",
           "columnsFrom": [
             "user_id"
           ],
+          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "api_keys_key_hash_unique": {
           "name": "api_keys_key_hash_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "key_hash"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
       "policies": {},
@@ -170,9 +170,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "comparisons_benchmark": {
           "name": "comparisons_benchmark",
@@ -185,9 +185,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {},
@@ -280,9 +280,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {},
@@ -410,9 +410,9 @@
             }
           ],
           "isUnique": true,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "org_members_user_id": {
           "name": "org_members_user_id",
@@ -425,37 +425,37 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "org_members_org_id_orgs_id_fk": {
           "name": "org_members_org_id_orgs_id_fk",
           "tableFrom": "org_members",
-          "tableTo": "orgs",
           "columnsFrom": [
             "org_id"
           ],
+          "tableTo": "orgs",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "org_members_user_id_users_id_fk": {
           "name": "org_members_user_id_users_id_fk",
           "tableFrom": "org_members",
-          "tableTo": "users",
           "columnsFrom": [
             "user_id"
           ],
+          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
@@ -531,9 +531,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {},
@@ -541,74 +541,12 @@
       "uniqueConstraints": {
         "orgs_github_id_unique": {
           "name": "orgs_github_id_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "github_id"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.registry_grants": {
-      "name": "registry_grants",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "label": {
-          "name": "label",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "task_ids": {
-          "name": "task_ids",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "images": {
-          "name": "images",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "with_verifier": {
-          "name": "with_verifier",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "revoked_at": {
-          "name": "revoked_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -727,24 +665,24 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "releases_full_name": {
           "name": "releases_full_name",
           "columns": [
             {
               "expression": "lower(\"full_name\")",
-              "asc": true,
               "isExpression": true,
+              "asc": true,
               "nulls": "last"
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {},
@@ -752,12 +690,12 @@
       "uniqueConstraints": {
         "releases_line_predecessor": {
           "name": "releases_line_predecessor",
-          "nullsNotDistinct": true,
           "columns": [
             "org_id",
             "github_repo_id",
             "predecessor_id"
-          ]
+          ],
+          "nullsNotDistinct": true
         }
       },
       "policies": {},
@@ -812,37 +750,37 @@
             }
           ],
           "isUnique": true,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "repo_runs_repo_id_repos_id_fk": {
           "name": "repo_runs_repo_id_repos_id_fk",
           "tableFrom": "repo_runs",
-          "tableTo": "repos",
           "columnsFrom": [
             "repo_id"
           ],
+          "tableTo": "repos",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "repo_runs_attached_by_users_id_fk": {
           "name": "repo_runs_attached_by_users_id_fk",
           "tableFrom": "repo_runs",
-          "tableTo": "users",
           "columnsFrom": [
             "attached_by"
           ],
+          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -932,9 +870,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "repos_org_github_id": {
           "name": "repos_org_github_id",
@@ -953,37 +891,37 @@
             }
           ],
           "isUnique": true,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "repos_org_id_orgs_id_fk": {
           "name": "repos_org_id_orgs_id_fk",
           "tableFrom": "repos",
-          "tableTo": "orgs",
           "columnsFrom": [
             "org_id"
           ],
+          "tableTo": "orgs",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "repos_connected_by_users_id_fk": {
           "name": "repos_connected_by_users_id_fk",
           "tableFrom": "repos",
-          "tableTo": "users",
           "columnsFrom": [
             "connected_by"
           ],
+          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1179,9 +1117,9 @@
             }
           ],
           "isUnique": true,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "tasks_workflow_id": {
           "name": "tasks_workflow_id",
@@ -1194,9 +1132,9 @@
             }
           ],
           "isUnique": true,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "tasks_repo_id": {
           "name": "tasks_repo_id",
@@ -1209,9 +1147,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "tasks_repo_pr": {
           "name": "tasks_repo_pr",
@@ -1230,9 +1168,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "tasks_revised_from": {
           "name": "tasks_revised_from",
@@ -1245,63 +1183,63 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "tasks_repo_id_repos_id_fk": {
           "name": "tasks_repo_id_repos_id_fk",
           "tableFrom": "tasks",
-          "tableTo": "repos",
           "columnsFrom": [
             "repo_id"
           ],
+          "tableTo": "repos",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "tasks_reviewed_by_users_id_fk": {
           "name": "tasks_reviewed_by_users_id_fk",
           "tableFrom": "tasks",
-          "tableTo": "users",
           "columnsFrom": [
             "reviewed_by"
           ],
+          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "tasks_started_by_users_id_fk": {
           "name": "tasks_started_by_users_id_fk",
           "tableFrom": "tasks",
-          "tableTo": "users",
           "columnsFrom": [
             "started_by"
           ],
+          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "tasks_revised_from_tasks_id_fk": {
           "name": "tasks_revised_from_tasks_id_fk",
           "tableFrom": "tasks",
-          "tableTo": "tasks",
           "columnsFrom": [
             "revised_from"
           ],
+          "tableTo": "tasks",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1384,9 +1322,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {},
@@ -1394,10 +1332,10 @@
       "uniqueConstraints": {
         "users_github_id_unique": {
           "name": "users_github_id_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "github_id"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
       "policies": {},
@@ -1463,15 +1401,15 @@
         "billing_credit_grants_target_org_id_orgs_id_fk": {
           "name": "billing_credit_grants_target_org_id_orgs_id_fk",
           "tableFrom": "billing_credit_grants",
-          "tableTo": "orgs",
           "columnsFrom": [
             "target_org_id"
           ],
+          "tableTo": "orgs",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "restrict"
         }
       },
       "compositePrimaryKeys": {},
@@ -1591,61 +1529,61 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "billing_outbox_usage_id_generation_usage_id_fk": {
           "name": "billing_outbox_usage_id_generation_usage_id_fk",
           "tableFrom": "billing_outbox",
-          "tableTo": "generation_usage",
           "columnsFrom": [
             "usage_id"
           ],
+          "tableTo": "generation_usage",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "billing_outbox_refund_id_billing_refunds_id_fk": {
           "name": "billing_outbox_refund_id_billing_refunds_id_fk",
           "tableFrom": "billing_outbox",
-          "tableTo": "billing_refunds",
           "columnsFrom": [
             "refund_id"
           ],
+          "tableTo": "billing_refunds",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "billing_outbox_usage_id_unique": {
           "name": "billing_outbox_usage_id_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "usage_id"
-          ]
+          ],
+          "nullsNotDistinct": false
         },
         "billing_outbox_refund_id_unique": {
           "name": "billing_outbox_refund_id_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "refund_id"
-          ]
+          ],
+          "nullsNotDistinct": false
         },
         "billing_outbox_identifier_unique": {
           "name": "billing_outbox_identifier_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "identifier"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
       "policies": {},
@@ -1729,10 +1667,10 @@
       "uniqueConstraints": {
         "billing_rate_snapshots_config_hash_unique": {
           "name": "billing_rate_snapshots_config_hash_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "config_hash"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
       "policies": {},
@@ -1792,15 +1730,15 @@
         "billing_refunds_org_id_orgs_id_fk": {
           "name": "billing_refunds_org_id_orgs_id_fk",
           "tableFrom": "billing_refunds",
-          "tableTo": "orgs",
           "columnsFrom": [
             "org_id"
           ],
+          "tableTo": "orgs",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "restrict"
         }
       },
       "compositePrimaryKeys": {},
@@ -1989,9 +1927,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "generation_usage_sandbox_id": {
           "name": "generation_usage_sandbox_id",
@@ -2004,24 +1942,24 @@
             }
           ],
           "isUnique": true,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "generation_usage_rate_snapshot_id_billing_rate_snapshots_id_fk": {
           "name": "generation_usage_rate_snapshot_id_billing_rate_snapshots_id_fk",
           "tableFrom": "generation_usage",
-          "tableTo": "billing_rate_snapshots",
           "columnsFrom": [
             "rate_snapshot_id"
           ],
+          "tableTo": "billing_rate_snapshots",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2085,25 +2023,25 @@
         "org_billing_org_id_orgs_id_fk": {
           "name": "org_billing_org_id_orgs_id_fk",
           "tableFrom": "org_billing",
-          "tableTo": "orgs",
           "columnsFrom": [
             "org_id"
           ],
+          "tableTo": "orgs",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "org_billing_stripe_customer_id_unique": {
           "name": "org_billing_stripe_customer_id_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "stripe_customer_id"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
       "policies": {},
@@ -2144,15 +2082,15 @@
         "benchmark_summaries_benchmark_id_benchmarks_id_fk": {
           "name": "benchmark_summaries_benchmark_id_benchmarks_id_fk",
           "tableFrom": "benchmark_summaries",
-          "tableTo": "benchmarks",
           "columnsFrom": [
             "benchmark_id"
           ],
+          "tableTo": "benchmarks",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {
@@ -2241,37 +2179,37 @@
             }
           ],
           "isUnique": true,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "benchmarks_org_id_orgs_id_fk": {
           "name": "benchmarks_org_id_orgs_id_fk",
           "tableFrom": "benchmarks",
-          "tableTo": "orgs",
           "columnsFrom": [
             "org_id"
           ],
+          "tableTo": "orgs",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "benchmarks_added_by_users_id_fk": {
           "name": "benchmarks_added_by_users_id_fk",
           "tableFrom": "benchmarks",
-          "tableTo": "users",
           "columnsFrom": [
             "added_by"
           ],
+          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2314,15 +2252,15 @@
         "evaluation_summaries_repo_id_repos_id_fk": {
           "name": "evaluation_summaries_repo_id_repos_id_fk",
           "tableFrom": "evaluation_summaries",
-          "tableTo": "repos",
           "columnsFrom": [
             "repo_id"
           ],
+          "tableTo": "repos",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {
@@ -2342,10 +2280,10 @@
   },
   "enums": {},
   "schemas": {},
+  "views": {},
   "sequences": {},
   "roles": {},
   "policies": {},
-  "views": {},
   "_meta": {
     "columns": {},
     "schemas": {},

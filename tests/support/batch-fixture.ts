@@ -8,7 +8,7 @@ import { createBatchRoutes } from "../../src/api/routes/batches.js";
 import { createTaskRoutes } from "../../src/api/routes/tasks.js";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { loadConfig } from "../../src/contracts/config/index.js";
-import type { Candidate, RunRequest, TaskProgress } from "../../src/contracts/index.js";
+import type { RunRequest } from "../../src/contracts/index.js";
 import { createBillingStore } from "../../src/db/billing.js";
 import { createRepoStore } from "../../src/db/repos.js";
 import { createRunStore } from "../../src/db/runs.js";
@@ -62,7 +62,6 @@ export async function fixture(
   const cancelled: string[] = [];
   const github: string[] = [];
   let snapshot: BatchStatus | undefined;
-  const seen = new Map<string, TaskProgress>();
   const routes = createBatchRoutes({
     config: loadConfig({}),
     ...(options.vault ? { vault: options.vault } : {}),
@@ -77,7 +76,6 @@ export async function fixture(
           },
         }
       : runs,
-    tasks,
     artifacts,
     fetchImpl: (async (url, init) => {
       github.push(String(url));
@@ -99,25 +97,6 @@ export async function fixture(
         phase: "discovering",
         discovery: { wave: 0, totalShards: 3, completedShards: 1, failedShards: 1, candidates: 2 },
       },
-    batch: async (runId) => {
-      for (const task of snapshot?.tasks ?? []) seen.set(task.candidateId, task);
-      return {
-        run: { runId } as RunRequest,
-        taskQueue: "test",
-        phase: "authoring",
-        shards: [],
-        candidates: [...seen.values()].map((progress) => ({
-          workflowId: `${runId}/candidate/${progress.candidateId}`,
-          candidate: {
-            candidateId: progress.candidateId,
-            difficulty: progress.difficulty,
-            sourcePr: 1,
-            sourceUrl: "https://github.com/owner/repo/pull/1",
-          } as Candidate,
-          progress,
-        })),
-      };
-    },
     cancel: async (runId) => {
       cancelled.push(runId);
     },

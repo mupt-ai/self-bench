@@ -3,7 +3,7 @@ import type { RunRequest } from "./run.js";
 import type { AuthoredTask, AuthoredTaskDraft, Candidate } from "./task.js";
 import type { PipelineStage } from "./verify.js";
 
-export type RunPhase =
+type RunPhase =
   | "queued"
   | "preparing"
   | "discovering"
@@ -81,6 +81,11 @@ export interface RunStatus {
   readonly discovery?: DiscoveryProgress;
   readonly export?: ArtifactRef;
   readonly error?: string;
+}
+
+/** The ID of a run's candidate workflow, whether a batch or the site started it. */
+export function candidateWorkflowId(runId: string, candidateId: string): string {
+  return `${runId}/candidate/${candidateId}`;
 }
 
 /** Input of one candidate child workflow. */

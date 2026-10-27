@@ -11,35 +11,28 @@ import type {
   CandidateWorkflowResult,
   DiscoveryResult,
 } from "../../contracts/index.js";
+import { record, task } from "../../temporal/activity-options.js";
 import { whenSandboxFree } from "../../temporal/sandbox-capacity.js";
 import type { DiscoveryShardInput } from "../pipeline/activities.js";
-import {
-  rootMessage,
-  selfBenchAuthorWorkflow,
-  selfBenchDiscoveryShardWorkflow,
-} from "../pipeline/workflows.js";
+import { rootMessage } from "../pipeline/candidate.js";
+import { selfBenchAuthorWorkflow, selfBenchDiscoveryShardWorkflow } from "../pipeline/workflows.js";
 import type { BatchActivities } from "./activities.js";
 import { CANCELLED, type Outcome } from "./record.js";
 
-const records = proxyActivities<BatchActivities>({
-  startToCloseTimeout: "1 minute",
-  retry: { maximumAttempts: 5 },
-});
+const records = proxyActivities<BatchActivities>(record());
 // Fetching merged PRs, thousands for a focused batch; the same fetch finding none again cannot
 // succeed.
-const preparing = proxyActivities<Pick<BatchActivities, "prepareBatch">>({
-  startToCloseTimeout: "15 minutes",
-  retry: { maximumAttempts: 3, nonRetryableErrorTypes: ["NoEligiblePullRequestsError"] },
-});
+const preparing = proxyActivities<Pick<BatchActivities, "prepareBatch">>(
+  task({ timeout: "15 minutes", attempts: 3, final: ["NoEligiblePullRequestsError"] }),
+);
 // Packaging accepted bundles in a sandbox.
-const exporting = proxyActivities<Pick<BatchActivities, "exportBatch">>({
-  startToCloseTimeout: "1 hour",
-  retry: { maximumAttempts: 3 },
-});
+const exporting = proxyActivities<Pick<BatchActivities, "exportBatch">>(
+  task({ timeout: "1 hour", attempts: 3 }),
+);
+// Candidates keep their own deadline (selfBenchAuthorWorkflow), so they settle their rows.
 const child = {
   cancellationType: ChildWorkflowCancellationType.WAIT_CANCELLATION_COMPLETED,
   parentClosePolicy: ParentClosePolicy.TERMINATE,
-  workflowExecutionTimeout: "14 days",
 };
 
 export interface BatchChildren {

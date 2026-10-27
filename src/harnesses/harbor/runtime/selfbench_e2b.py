@@ -73,10 +73,11 @@ from e2b import (
 
 import harbor.environments.e2b as harbor_e2b
 from harbor.environments.e2b import E2BEnvironment
-from registry_auth import record_image
 
 TAG = "default"
 CAPACITY_WAIT_SECS = (15, 120)
+# Polls a template build that is already running, every 10 seconds at first, then every minute.
+BUILD_POLL_SECS = (10, 60)
 # Reconnects to a command whose stream dropped, waiting 2, 4, 8, ... seconds before each.
 RECONNECTS = 6
 RECONNECT_WAIT_SECS = 2
@@ -126,9 +127,8 @@ T = TypeVar("T")
 
 
 class SelfBenchE2BEnvironment(E2BEnvironment):
-    def __init__(self, *args, image_record_dir: str | None = None, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._selfbench_record = image_record_dir
         self._template_name += TEMPLATE_SUFFIX
 
     def _registry_grant(self) -> tuple[str, str] | None:
@@ -139,12 +139,6 @@ class SelfBenchE2BEnvironment(E2BEnvironment):
         if not image or not host or not password or not image.startswith(f"{host}/"):
             return None
         return os.environ.get("SELFBENCH_REGISTRY_USERNAME", "selfbench"), password
-
-    async def start(self, force_build: bool):
-        await super().start(force_build)
-        # The template verification ran on, which the worker exports once the task is accepted.
-        if self._selfbench_record:
-            record_image(self._selfbench_record, self.environment_dir, self._template_name)
 
     async def _when_free(self, what: str, start: Callable[[], Awaitable[T]]) -> T:
         """Runs `start`, waiting while E2B refuses it at the team's concurrency limit."""
@@ -259,25 +253,43 @@ class SelfBenchE2BEnvironment(E2BEnvironment):
         if not await super()._does_template_exist():
             return False
         name = self._template_name
-        tags = await AsyncTemplate.get_tags(name)
-        build = next((tag.build_id for tag in tags if tag.tag == TAG), None)
-        if build is None:
-            return False
-        try:
-            status = (
-                await AsyncTemplate.get_build_status(
-                    BuildInfo(template_id=name, build_id=build, name=name, alias=name, tags=[TAG])
+        build = await self._default_build()
+        first, most = BUILD_POLL_SECS
+        wait = first
+        while build is not None:
+            info = BuildInfo(template_id=name, build_id=build, name=name, alias=name, tags=[TAG])
+            try:
+                status = (await AsyncTemplate.get_build_status(info)).status
+            except BuildException as error:
+                if str(error) != f"400: Build '{build}' not found":
+                    raise
+                status = None
+            if status == TemplateBuildStatus.READY:
+                return True
+            if status is None or status == TemplateBuildStatus.ERROR:
+                # Another waiter may already have started a build since this one was read. That
+                # build is the one to wait for; building again would cancel it.
+                current = await self._default_build()
+                if current is None or current == build:
+                    self.logger.warning(
+                        f"Template {name} build {build} did not finish; building it again"
+                    )
+                    return False
+                self.logger.warning(
+                    f"Template {name} build {build} did not finish; waiting for {current}"
                 )
-            ).status
-        except BuildException as error:
-            if str(error) != f"400: Build '{build}' not found":
-                raise
-            self.logger.warning(f"Template {name} build {build} is missing; building it again")
-            return False
-        if status == TemplateBuildStatus.READY:
-            return True
-        self.logger.warning(f"Template {name} build {build} is {status.value}; building it again")
+                build, wait = current, first
+                continue
+            # Another trial or evaluation is building it: a second build under the same name would
+            # cancel the first, and its waiting trials fail with "build was cancelled".
+            self.logger.warning(f"Template {name} build {build} is {status.value}; waiting for it")
+            await asyncio.sleep(wait)
+            wait = min(wait * 2, most)
         return False
+
+    async def _default_build(self) -> str | None:
+        tags = await AsyncTemplate.get_tags(self._template_name)
+        return next((tag.build_id for tag in tags if tag.tag == TAG), None)
 
     async def _build_template(self):
         image = self.task_env_config.docker_image

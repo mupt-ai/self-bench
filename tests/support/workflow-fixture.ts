@@ -14,7 +14,7 @@ import type {
   DiscoveryShardInput,
   SelfBenchActivities,
 } from "../../src/generation/pipeline/activities.js";
-import { executeCandidate } from "../../src/generation/pipeline/workflows.js";
+import { executeCandidate } from "../../src/generation/pipeline/candidate.js";
 
 export const artifact: ArtifactRef = {
   uri: "file:///artifact",
@@ -150,7 +150,6 @@ export function acceptingActivities(discovered: readonly Candidate[]): SelfBench
       session: ref(`file:///${value.candidateId}/authoring/session/round-${round}.jsonl`),
     }),
     compileAndVerify: async ({ task, stage, round }) => greenOutcome(task, stage, round),
-    exportTaskImages: async ({ task }) => task,
     runReviewRound: async ({ candidate: value, round }) => ({
       kind: "accepted",
       session: ref(`file:///${value.candidateId}/review/session/round-${round}.jsonl`),
@@ -161,7 +160,8 @@ export function acceptingActivities(discovered: readonly Candidate[]): SelfBench
 
 /**
  * Runs each discovered candidate through the author/review loop the way selfBenchAuthorWorkflow
- * does, exposing the candidates' latest progress as a run status.
+ * does, exposing what each candidate's row would say (its progress, then its verdict) as a run
+ * status.
  */
 export async function authorCandidates(
   activities: SelfBenchActivities,
@@ -174,9 +174,13 @@ export async function authorCandidates(
   install?.(() => ({ tasks: [...tasks.values()] }) as unknown as RunStatus);
   const results = await Promise.all(
     candidates.map((value) =>
-      executeCandidate({ run, candidate: value }, activities, (progress) =>
-        tasks.set(value.candidateId, progress),
-      ),
+      executeCandidate({ run, candidate: value }, activities, async (progress) => {
+        tasks.set(value.candidateId, progress);
+      }).then((result) => {
+        // The verdict lands on the row when the workflow settles it.
+        tasks.set(value.candidateId, result.progress);
+        return result;
+      }),
     ),
   );
   return {

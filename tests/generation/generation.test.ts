@@ -130,7 +130,10 @@ describe("generation submissions", () => {
     const [original] = await site.db.select().from(taskRows);
     if (!original) throw new Error("Missing initial attempt");
     const store = createTaskStore(site.db);
-    await store.progress(original.id, { stage: "failed", pipelineStatus: "infrastructure_failed" });
+    await store.settle(original.runId, original.candidateId, {
+      stage: "authoring",
+      pipelineStatus: "infrastructure_failed",
+    });
     expect(await store.deleteTask(original.repoId, original.runId, original.candidateId)).toBe(
       "deleted",
     );

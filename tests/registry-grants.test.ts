@@ -58,7 +58,7 @@ async function seeded() {
   const task = async (
     candidateId: string,
     status: "accepted" | "rejected",
-    registry?: { agent: string; verifier?: string },
+    images?: { agent: string; verifier: string },
   ) =>
     one(
       await db
@@ -72,7 +72,7 @@ async function seeded() {
           pipelineStatus: status,
           stage: "done",
           ...(status === "accepted" ? { reviewDecision: "approve" as const } : {}),
-          ...(registry ? { images: { provider: "modal", agent: "im-1", registry } } : {}),
+          ...(images ? { images } : {}),
         })
         .returning(),
     ).id;
@@ -81,7 +81,10 @@ async function seeded() {
       agent: `${REPOSITORY}/task-1@${AGENT}`,
       verifier: `${REPOSITORY}/task-1-tests@${VERIFIER}`,
     }),
-    rejected: await task("t2", "rejected", { agent: `${REPOSITORY}/task-2@${OTHER}` }),
+    rejected: await task("t2", "rejected", {
+      agent: `${REPOSITORY}/task-2@${OTHER}`,
+      verifier: `${REPOSITORY}/task-2-tests@${OTHER}`,
+    }),
     unexported: await task("t3", "accepted"),
   };
 }

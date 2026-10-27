@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { createTaskStore } from "../../src/db/tasks.js";
 import { prFixture, pullRequest, REPO } from "../support/pr-fixture.js";
 import type { AuthServer } from "../support/site-fixture.js";
+import { seedTasks } from "../support/task-rows.js";
 
 let server: AuthServer | undefined;
 afterEach(async () => {
@@ -71,13 +72,13 @@ test("feedback starts a separate task from the submitted draft and records its l
     ),
     "application/json",
   );
-  await store.progress(originalRow.id, {
+  await store.settle(original.runId, original.candidateId, {
     stage: "accepted",
     pipelineStatus: "accepted",
     taskId: definition.taskId,
   });
   // Batch candidates have different ids, but still share a PR-derived run id namespace.
-  await store.upsertMany([
+  await seedTasks(site.db, [
     {
       repoId: originalRow.repoId,
       runId: original.runId,
@@ -122,7 +123,10 @@ test("feedback starts a separate task from the submitted draft and records its l
 
   // A staged revision draft remains revisable even before its agent submits a round result.
   if (!revisionRow) throw new Error("Missing revision task");
-  await store.progress(revisionRow.id, { stage: "rejected", pipelineStatus: "rejected" });
+  await store.settle(revisionRow.runId, revisionRow.candidateId, {
+    stage: "authoring",
+    pipelineStatus: "rejected",
+  });
   const retry = await site.request(`${REPO}/tasks/${revision.runId}/${revision.taskId}/feedback`, {
     method: "POST",
     headers,
@@ -149,7 +153,10 @@ test("feedback refuses active tasks, missing drafts, and empty feedback", async 
   const store = createTaskStore(site.db);
   const row = await store.find(1, task.runId, task.taskId);
   if (!row) throw new Error("Missing task");
-  await store.progress(row.id, { stage: "rejected", pipelineStatus: "rejected" });
+  await store.settle(row.runId, row.candidateId, {
+    stage: "authoring",
+    pipelineStatus: "rejected",
+  });
   expect((await post(" ")).status).toBe(400);
   expect((await post("Please improve it")).status).toBe(409);
   expect(started).toHaveLength(1);

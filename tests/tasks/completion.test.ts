@@ -1,10 +1,10 @@
-import { expect, mock, test } from "bun:test";
+import { expect, test } from "bun:test";
 import type { ArtifactStore } from "../../src/artifacts/index.js";
 import type { ArtifactRef } from "../../src/contracts/index.js";
 import { createRepoStore } from "../../src/db/repos.js";
 import { createTaskStore } from "../../src/db/tasks.js";
 import { createUserStore } from "../../src/db/users.js";
-import { refreshInProgress } from "../../src/generation/tasks/status.js";
+import { createTaskActivities } from "../../src/generation/tasks/activities.js";
 import { testAuthConfig, testDatabase } from "../support/site-fixture.js";
 
 const ref = (uri: string): ArtifactRef => ({
@@ -14,7 +14,7 @@ const ref = (uri: string): ArtifactRef => ({
   contentType: "application/octet-stream",
 });
 
-test("a completed workflow writes its verdict, bundle, and definition onto the task row", async () => {
+test("a settled workflow writes its verdict, bundle, and definition onto the task row once", async () => {
   const database = await testDatabase();
   try {
     const users = createUserStore(database.db, { secret: testAuthConfig.sessionSecret });
@@ -37,59 +37,62 @@ test("a completed workflow writes its verdict, bundle, and definition onto the t
     });
     const tasks = createTaskStore(database.db);
     const runId = "completion";
-    const row = await tasks.insertStarted({
-      repoId: repo.id,
-      runId,
-      candidateId: "candidate",
-      taskId: "candidate",
-      difficulty: "easy",
-      stage: "review",
-      pipelineStatus: "in_progress",
-      workflowId: `${runId}/candidate/candidate`,
-      startedBy: user.id,
-    });
-    await tasks.review(row.id, { decision: "approve", note: "Preserve review", userId: user.id });
+    await tasks.plan([
+      {
+        repoId: repo.id,
+        runId,
+        candidateId: "candidate",
+        taskId: "candidate",
+        difficulty: "easy",
+        stage: "reviewing",
+        workflowId: `${runId}/candidate/candidate`,
+      },
+    ]);
     const bundleKey = `runs/${runId}/verify/candidate/authoring-round-2/harbor-task.tar.gz`;
     const artifacts = {
       get: async () => Buffer.from(JSON.stringify({ taskId: "task", prompt: "Fix short help" })),
     } as unknown as ArtifactStore;
-    const snapshot = mock(async () => ({
-      kind: "completed" as const,
-      result: {
-        progress: {
-          candidateId: "candidate",
-          taskId: "task",
-          difficulty: "easy" as const,
-          status: "accepted" as const,
-          round: 2,
-        },
-        task: {
-          candidateId: "candidate",
-          taskId: "task",
-          definition: ref(
-            `file:///store/runs/${runId}/authoring/candidate/round-2/definition.json`,
-          ),
-          sourceBundle: ref(
-            `file:///store/runs/${runId}/authoring/candidate/round-2/source-task.tar.gz`,
-          ),
-          bundle: ref(`file:///store/${bundleKey}`),
-        },
+    const result = {
+      progress: {
+        candidateId: "candidate",
+        taskId: "task",
+        difficulty: "easy" as const,
+        status: "accepted" as const,
+        round: 2,
       },
-    }));
-    expect(await refreshInProgress({ tasks, artifacts, repo, status: { snapshot } })).toBe(1);
-    expect(await tasks.find(repo.id, runId, "candidate")).toMatchObject({
+      task: {
+        candidateId: "candidate",
+        taskId: "task",
+        definition: ref(`file:///store/runs/${runId}/authoring/candidate/round-2/definition.json`),
+        sourceBundle: ref(
+          `file:///store/runs/${runId}/authoring/candidate/round-2/source-task.tar.gz`,
+        ),
+        bundle: ref(`file:///store/${bundleKey}`),
+      },
+    };
+    const workflow = createTaskActivities({ tasks, artifacts });
+    await workflow.settleTask({ runId, candidateId: "candidate", result });
+    const settled = await tasks.find(repo.id, runId, "candidate");
+    expect(settled).toMatchObject({
       taskId: "task",
       pipelineStatus: "accepted",
       stage: "accepted",
       round: 2,
       bundleKey,
       definition: { prompt: "Fix short help" },
-      review: { decision: "approve", note: "Preserve review" },
     });
-    // Settled rows are not polled again.
-    snapshot.mockClear();
-    expect(await refreshInProgress({ tasks, artifacts, repo, status: { snapshot } })).toBe(0);
-    expect(snapshot).not.toHaveBeenCalled();
+    // Approvable at once, with nobody having opened it.
+    await tasks.review(settled?.id ?? -1, { decision: "approve", note: "ok", userId: user.id });
+    // A retried settle changes nothing.
+    await workflow.settleTask({
+      runId,
+      candidateId: "candidate",
+      result: { progress: { ...result.progress, status: "rejected", reason: "late" } },
+    });
+    expect(await tasks.find(repo.id, runId, "candidate")).toMatchObject({
+      pipelineStatus: "accepted",
+      review: { decision: "approve" },
+    });
   } finally {
     await database.close();
   }

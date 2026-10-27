@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { createTaskStore } from "../../src/db/tasks.js";
+import { createTaskActivities } from "../../src/generation/tasks/activities.js";
 import { taskRunId } from "../../src/generation/tasks/start.js";
-import type { WorkflowSnapshot } from "../../src/generation/tasks/status.js";
 import { difficultyFor, parsePullRequestRef } from "../../src/third_party/github/pr-candidate.js";
 import { MERGE, prFixture, pullRequest, REPO } from "../support/pr-fixture.js";
 import { type AuthServer, testAuthConfig } from "../support/site-fixture.js";
@@ -176,50 +177,41 @@ describe("add a PR", () => {
     expect(started).toHaveLength(0);
   });
 
-  test("listing tasks refreshes in-progress rows from their workflows", async () => {
-    const workflowId = "pr-mupt-ai-self-bench-46/candidate/self-bench-pr-46";
-    const snapshots: Record<string, WorkflowSnapshot> = {
-      [workflowId]: {
-        kind: "running",
-        progress: {
-          candidateId: "self-bench-pr-46",
-          taskId: "self-bench-pr-46",
-          difficulty: "hard",
-          status: "verifying",
-          stage: "review",
-          round: 2,
-        },
-      },
-    };
-    const { site, headers } = await boot({ pullRequests: { 46: pullRequest(46) }, snapshots });
+  test("listing tasks shows what the candidate workflow wrote to its row", async () => {
+    const { site, headers, artifacts } = await boot({ pullRequests: { 46: pullRequest(46) } });
     await site.request(`${REPO}/tasks/from-pr`, {
       method: "POST",
       headers,
       body: JSON.stringify({ pr: 46 }),
     });
+    const row = { runId: "pr-mupt-ai-self-bench-46", candidateId: "self-bench-pr-46" };
+    const workflow = createTaskActivities({ tasks: createTaskStore(site.db), artifacts });
+    const progress = {
+      candidateId: row.candidateId,
+      taskId: row.candidateId,
+      difficulty: "hard" as const,
+    };
+    await workflow.recordTaskProgress({
+      ...row,
+      progress: { ...progress, status: "verifying", stage: "review", round: 2 },
+    });
     const running = (await (await site.request(`${REPO}/tasks`, { headers })).json()) as {
       tasks: { stage: string; round?: number; state: string }[];
     };
-    expect(running.tasks[0]).toMatchObject({
-      stage: "review",
-      round: 2,
-      state: "in_progress",
-    });
+    expect(running.tasks[0]).toMatchObject({ stage: "verifying", round: 2, state: "in_progress" });
 
-    snapshots[workflowId] = {
-      kind: "completed",
+    await workflow.settleTask({
+      ...row,
       result: {
         progress: {
-          candidateId: "self-bench-pr-46",
-          taskId: "self-bench-pr-46",
-          difficulty: "hard",
+          ...progress,
           status: "rejected",
           stage: "review",
           round: 3,
           reason: "verifier: tests pass without the fix",
         },
       },
-    };
+    });
     const done = (await (await site.request(`${REPO}/tasks`, { headers })).json()) as {
       tasks: { state: string; reasonSummary?: string }[];
     };

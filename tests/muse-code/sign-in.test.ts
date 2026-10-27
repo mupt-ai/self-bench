@@ -179,7 +179,6 @@ test("an HTTP Meta sign-in runs only Muse Code, signed in through its own auth.j
       "e2b",
       input.thinking,
       trial.extraAllowedHosts,
-      undefined,
       "meta",
     );
     expect(args.join(" ")).toContain("--agent harbor_muse:SelfBenchMuseCode");

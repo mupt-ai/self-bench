@@ -1,18 +1,17 @@
 import { WorkflowExecutionAlreadyStartedError } from "@temporalio/common";
 import {
-  ActivityCancellationType,
   CancellationScope,
   ChildWorkflowCancellationType,
   executeChild,
   isCancellation,
   ParentClosePolicy,
-  patched,
   proxyActivities,
   startChild,
   workflowInfo,
 } from "@temporalio/workflow";
 import { trialTimeouts } from "../contracts/agent-limit.js";
 import { MAX_PENDING_TRIAL_WORKFLOWS } from "../contracts/config/execution-limits.js";
+import { harbor, record, task } from "../temporal/activity-options.js";
 import { whenSandboxFree } from "../temporal/sandbox-capacity.js";
 import type { EvaluationActivities } from "./activities.js";
 import { scopeOf } from "./scope.js";
@@ -28,31 +27,26 @@ const REFUSED = ["RepeatSpendError"];
 // worker before the solver started (executeTrial). Once a solver has started, a retry refuses with
 // RepeatSpendError. The last attempt records its own setup failure on the trial.
 const trial = (input: EvaluationInput) =>
-  proxyActivities<EvaluationActivities>({
-    startToCloseTimeout: trialTimeouts(input.agentMinutes, input.taskMinutes).activityMs,
-    heartbeatTimeout: "2 minutes",
-    cancellationType: ActivityCancellationType.WAIT_CANCELLATION_COMPLETED,
-    retry: { maximumAttempts: 3, nonRetryableErrorTypes: REFUSED },
-    taskQueue: `${workflowInfo().taskQueue}-harbor`,
-  });
+  proxyActivities<EvaluationActivities>(
+    harbor({
+      timeout: trialTimeouts(input.agentMinutes, input.taskMinutes).activityMs,
+      attempts: 3,
+      final: REFUSED,
+      heartbeat: "2 minutes",
+    }),
+  );
 // Building a large task's two images from cold takes minutes; retrying once covers a lost worker.
 const prepare = () =>
-  proxyActivities<EvaluationActivities>({
-    startToCloseTimeout: "90 minutes",
-    heartbeatTimeout: "2 minutes",
-    cancellationType: ActivityCancellationType.WAIT_CANCELLATION_COMPLETED,
-    retry: { maximumAttempts: 2 },
-    taskQueue: `${workflowInfo().taskQueue}-harbor`,
-  });
-const records = proxyActivities<EvaluationActivities>({
-  startToCloseTimeout: "1 minute",
-  retry: { maximumAttempts: 5, nonRetryableErrorTypes: REFUSED },
-});
+  proxyActivities<EvaluationActivities>(
+    harbor({ timeout: "90 minutes", attempts: 2, heartbeat: "2 minutes" }),
+  );
+const records = proxyActivities<EvaluationActivities>(record({ final: REFUSED }));
 // One Pi call, which gives up after five minutes, and the write of what it said.
-const explaining = proxyActivities<EvaluationActivities>({
-  startToCloseTimeout: "10 minutes",
-  retry: { maximumAttempts: 2 },
-});
+const explaining = proxyActivities<EvaluationActivities>(
+  task({ timeout: "10 minutes", attempts: 2 }),
+);
+// What a person asked for in the app runs once; they can ask again.
+const asked = proxyActivities<EvaluationActivities>(task({ timeout: "10 minutes", attempts: 1 }));
 
 /**
  * Runs each trial as its own child workflow, `<evaluation workflow ID>/trial/<index>`, all started
@@ -64,13 +58,10 @@ const explaining = proxyActivities<EvaluationActivities>({
  */
 export async function selfBenchEvaluationRunWorkflow(input: EvaluationInput): Promise<void> {
   const { workflowId } = workflowInfo();
-  // Evaluations started before images were prepared replay without it.
-  const ready = patched("prepare-task-images")
-    ? taskImagesReady(input, {
-        prepareTaskImages: (trialInput) =>
-          whenSandboxFree(() => prepare().prepareTaskImages(trialInput)),
-      })
-    : async () => undefined;
+  const ready = taskImagesReady(input, {
+    prepareTaskImages: (trialInput) =>
+      whenSandboxFree(() => prepare().prepareTaskImages(trialInput)),
+  });
   try {
     await runEvaluationTrials(
       input,
@@ -136,7 +127,7 @@ export async function selfBenchSolverTrialWorkflow(
     },
     records,
   );
-  if (input.explainFailures && patched("explain-failed-trials")) {
+  if (input.explainFailures) {
     const bundleKey = input.tasks[0]?.bundleKey;
     try {
       await startChild(selfBenchFailedTrialWorkflow, {
@@ -156,21 +147,12 @@ export async function selfBenchSolverTrialWorkflow(
  * by the trial itself, or by the app (failureExplainer), under the same workflow ID.
  */
 export async function selfBenchFailedTrialWorkflow(trial: FailedTrial): Promise<void> {
-  const activity = trial.explanation
-    ? proxyActivities<EvaluationActivities>({
-        startToCloseTimeout: "10 minutes",
-        retry: { maximumAttempts: 1 },
-      })
-    : explaining;
-  await activity.explainSolverTrial(trial);
+  await (trial.explanation ? asked : explaining).explainSolverTrial(trial);
 }
 
 /** Audits whether a task is fair from its failed attempts (task-audit.ts), on the app's request. */
 export async function selfBenchTaskAuditWorkflow(request: TaskAuditRequest): Promise<void> {
-  await proxyActivities<EvaluationActivities>({
-    startToCloseTimeout: "10 minutes",
-    retry: { maximumAttempts: 1 },
-  }).auditSolverTask(request);
+  await asked.auditSolverTask(request);
 }
 
 /**

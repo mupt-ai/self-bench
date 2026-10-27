@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ArtifactStore } from "../../artifacts/index.js";
@@ -17,7 +17,7 @@ import {
   harborRunArguments,
 } from "../../harnesses/harbor/command.js";
 import { authoredImageBuildFailure } from "../../harnesses/harbor/image-build.js";
-import { imageRecordKwargs, recordedImages } from "../../harnesses/harbor/pinned-images.js";
+import { startFromTaskImages } from "../../harnesses/harbor/registry-pull.js";
 import {
   type HarborJobResult,
   harborInfrastructureError,
@@ -25,12 +25,14 @@ import {
 } from "../../harnesses/harbor/results.js";
 import { prepareHarborRun, refuseWithoutRetry } from "../../harnesses/harbor/task-safety.js";
 import { runCommand } from "../../lib/process.js";
-import { isRecord, tail } from "../../lib/util.js";
+import { tail } from "../../lib/util.js";
 import { providerEnvironment } from "../../sandbox/provider-environment.js";
+import type { ImageBuild, TaskImageBuilder } from "../images/builder.js";
 import { type HarborLiveRun, harborLiveFeed, providerSecrets } from "./harbor-live.js";
 import { activityAttempt } from "./helpers.js";
-import { fetchSnapshotInBuild, type RemoteGate, unpackTask } from "./remote-gate.js";
+import { unpackTask } from "./remote-gate.js";
 import { smokeLog, smokeResult } from "./smoke-result.js";
+import { agentStarted, rewards, trialError } from "./trial-result.js";
 import { nopGatePassed, oracleGatePassed } from "./verify-report.js";
 
 export type HarborGates = Pick<VerifyReport, "build" | "smoke" | "nop" | "oracle">;
@@ -48,11 +50,21 @@ export function notRunGates(): HarborGates {
   };
 }
 
+/** Where a check's images come from, when the deployment builds them before its gates. */
+export interface GateImages {
+  readonly builder: TaskImageBuilder;
+  readonly build: ImageBuild;
+  /** What a provider needs to pull them: the worker's environment and the callback origin. */
+  readonly serving: Parameters<typeof startFromTaskImages>[3];
+}
+
 /**
- * Two Harbor runs over the compiled task. The first builds both images, runs smoke as the agent
- * (agent image, [agent] user, agent network allowlist), and then the real nop split; the second is
- * the oracle. Harbor or provider outages throw so Temporal retries them instead of charging the
- * author.
+ * The build gate and two Harbor runs over the compiled task. With a builder, the build gate builds
+ * both images into the task image repository (a failing Dockerfile step is the author's) and both
+ * runs start from those digests on the run's provider; without one, the first run builds the full
+ * bundle's Dockerfiles. The first run then runs smoke as the agent (agent image, [agent] user,
+ * agent network allowlist) and the real nop split; the second is the oracle. Harbor or provider
+ * outages throw so Temporal retries them instead of charging the author.
  */
 export async function runHarborGates(
   store: ArtifactStore,
@@ -60,12 +72,10 @@ export async function runHarborGates(
   harborEnvironment: SelfBenchConfig["harborEnvironment"],
   prefix: string,
   signal: AbortSignal,
-  remote?: RemoteGate,
+  images?: GateImages,
 ): Promise<HarborGates & { images?: TaskImages }> {
   const root = await mkdtemp(join(tmpdir(), `selfbench-${task.taskId}-`));
   try {
-    const directory = await unpackTask(store, remote?.bundle ?? task.bundle, root, signal);
-    if (remote) await fetchSnapshotInBuild(directory, remote);
     // Artifacts are write-once: a retried verification keeps its gate outputs in its own folder.
     const attempt = activityAttempt();
     const gateOutputs = attempt > 1 ? `${prefix}/attempt-${attempt}` : prefix;
@@ -78,25 +88,48 @@ export async function runHarborGates(
       ),
     });
     const gates = notRunGates();
-
+    let built: TaskImages | undefined;
+    if (images) {
+      const result = await images.builder.build(store, images.build, signal);
+      if ("failure" in result) {
+        gates.build = {
+          ran: true,
+          ok: false,
+          infrastructure: false,
+          ...(await log("build.log", result.failure)),
+        };
+        return gates;
+      }
+      built = result.images;
+    }
+    const pulling = built && images ? { images: built, serving: images.serving } : undefined;
+    // Starting from images rewrites task.toml, which each run's safety check reads afresh, so each
+    // run gets its own copy of the small gate task; a full bundle is unpacked once.
+    const bundle = images ? undefined : await unpackTask(store, task.bundle, root, signal);
+    const directory = async (run: HarborLiveRun) => {
+      if (bundle || !images) return bundle ?? "";
+      const folder = join(root, run);
+      await mkdir(folder);
+      return await unpackTask(store, images.build.gate, folder, signal);
+    };
     const live = (run: HarborLiveRun) => ({ store, prefix, run });
-    // Both runs record into the same directory: Daytona's snapshot must exist before the nop run
-    // builds, so the oracle reuses it rather than building again.
-    const imageRecord = join(root, "images");
-    const recording = imageRecordKwargs(harborEnvironment, imageRecord);
     const first = await harborRun(
-      directory,
+      await directory("nop"),
       root,
       task.taskId,
       "nop",
       harborEnvironment,
       signal,
       live("nop"),
-      recording,
+      pulling,
     );
     await storeResult(store, `${gateOutputs}/smoke-nop`, first);
     const smoke = smokeResult(first.trial);
     const buildError = trialError(first.trial);
+    // The images built already, so a trial that failed before smoke could not start from them:
+    // Harbor's or the provider's trouble, which Temporal retries, never the author's.
+    if (buildError && !smoke.failed && built)
+      throw new Error(`Harbor nop could not start ${task.taskId} from its images: ${buildError}`);
     if (buildError && !smoke.failed) {
       gates.build = {
         ran: true,
@@ -122,20 +155,24 @@ export async function runHarborGates(
     };
     if (!gates.nop.ok) return gates;
 
-    // The oracle's sandboxes start from exactly the images a trial would build; its record wins.
-    await rm(imageRecord, { recursive: true, force: true });
     const oracle = await harborRun(
-      directory,
+      await directory("oracle"),
       root,
       task.taskId,
       "oracle",
       harborEnvironment,
       signal,
       live("oracle"),
-      recording,
+      pulling,
     );
     await storeResult(store, `${gateOutputs}/oracle`, oracle);
     const oracleError = trialError(oracle.trial);
+    // Nop already started from these images, so an oracle trial that never reached its agent hit
+    // Harbor's or the provider's trouble, which Temporal retries, never the author's.
+    if (oracleError && built && !agentStarted(oracle.trial))
+      throw new Error(
+        `Harbor oracle could not start ${task.taskId} from its images: ${oracleError}`,
+      );
     const oracleRewards = oracleError ? {} : numericRewards(rewards(oracle.trial));
     gates.oracle = {
       ran: true,
@@ -146,9 +183,7 @@ export async function runHarborGates(
         oracleError ? failureText(oracleError, oracle) : verifierOutput(oracle),
       )),
     };
-    if (!gates.oracle.ok) return gates;
-    const images = await recordedImages(imageRecord, harborEnvironment);
-    return images ? { ...gates, images } : gates;
+    return gates.oracle.ok && built ? { ...gates, images: built } : gates;
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -164,7 +199,8 @@ export async function harborRun(
   signal: AbortSignal,
   /** Where to publish progress snapshots while the run is in flight. */
   live?: { store: ArtifactStore; prefix: string; run: HarborLiveRun },
-  environmentKwargs: Readonly<Record<string, string>> = {},
+  /** The task's images, which the run starts from instead of building its Dockerfiles. */
+  pulling?: { readonly images: TaskImages; readonly serving: GateImages["serving"] },
 ): Promise<HarborJobResult> {
   const jobsDirectory = join(root, "jobs");
   const agent = run === "nop" ? SMOKE_AGENT : "oracle";
@@ -177,11 +213,15 @@ export async function harborRun(
   });
   assertHarborVersion(version.stdout);
   const harbor = await prepareHarborRun(taskDirectory, root, env, signal).catch(refuseWithoutRetry);
+  const pull = pulling
+    ? await startFromTaskImages(taskDirectory, pulling.images, environment, pulling.serving)
+    : {};
+  const runEnv = { ...harbor.env, ...pull };
   const feed =
     live &&
     harborLiveFeed(live.store, live.prefix, live.run, join(jobsDirectory, jobName), {
       attempt: activityAttempt(),
-      secrets: providerSecrets(env),
+      secrets: providerSecrets(runEnv),
     });
   const trial = runCommand(
     "harbor",
@@ -191,12 +231,11 @@ export async function harborRun(
       jobName,
       agent,
       environment,
-      environmentKwargs,
       quiet: false,
     }),
     {
       allowFailure: true,
-      env: harbor.env,
+      env: runEnv,
       timeoutMs: HARBOR_PROCESS_TIMEOUT_MS.gate,
       signal: harbor.guard.signal,
       ...(feed ? { onOutput: feed.push } : {}),
@@ -242,19 +281,6 @@ function failureText(error: string, result: HarborJobResult): string {
   return [error, result.trialLog ?? "", verifierOutput(result)]
     .filter((part) => part.trim())
     .join("\n\n");
-}
-
-function trialError(trial: unknown): string | undefined {
-  const info = isRecord(trial) ? trial.exception_info : undefined;
-  if (info === undefined || info === null) return undefined;
-  if (!isRecord(info)) return JSON.stringify(info);
-  const type = typeof info.exception_type === "string" ? `${info.exception_type}: ` : "";
-  return `${type}${String(info.exception_message ?? "")}`;
-}
-
-function rewards(trial: unknown): Record<string, unknown> {
-  const result = isRecord(trial) ? trial.verifier_result : undefined;
-  return isRecord(result) && isRecord(result.rewards) ? result.rewards : {};
 }
 
 function numericRewards(raw: Record<string, unknown>): HarborRewards {

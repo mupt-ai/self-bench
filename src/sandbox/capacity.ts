@@ -1,8 +1,20 @@
 import { randomUUID } from "node:crypto";
+import { ApplicationFailure } from "@temporalio/common";
 import type { EncryptedRecordStore } from "../db/encrypted-records.js";
 import { orgRecords, RecordStoreError } from "../db/encrypted-records.js";
 import type { Vault } from "../db/vault.js";
 import { SandboxCapacityError, type SandboxExecutor } from "./contracts.js";
+
+/**
+ * Admission under a saved credential's limit (`maxSandboxes`): one lease per running sandbox, or
+ * per Harbor process that starts its own, in a record shared by every worker. This is the only
+ * place SelfBench counts what it runs against an account. A refusal is a SandboxCapacityError,
+ * which fails the activity at once without spending its retries; the workflow waits and starts it
+ * again (whenSandboxFree, src/temporal/sandbox-capacity.ts), as it does when a provider itself
+ * refuses a sandbox at its limit (E2B's 429, src/generation/pipeline/sandbox-job.ts). The other
+ * bounds are SelfBench's own resources, not accounts: each worker's activity and Harbor slots,
+ * and KEDA scaling Harbor workers on the Harbor queue's backlog.
+ */
 
 interface Reservation {
   id: string;
@@ -136,4 +148,36 @@ export function capacityLimitedSandbox(
     },
     close: () => sandbox.close(),
   };
+}
+
+/** Long enough for any held operation (a solver trial's longest run); a dead worker's lease expires. */
+const HELD_LEASE_MS = 72 * 60 * 60_000;
+
+/**
+ * Runs `run` holding one slot of each limited credential among `ids` throughout, for work whose
+ * sandboxes SelfBench does not start itself (a Harbor process) or that finishes before returning.
+ * A full credential refuses before any paid work, as a SandboxCapacityError the workflow waits on.
+ */
+export async function holdingCapacity<T>(
+  vault: Pick<Vault, "credentials" | "records">,
+  orgId: number,
+  ids: readonly (string | undefined)[],
+  run: () => Promise<T>,
+  unlimited = false,
+): Promise<T> {
+  const capacity = await credentialsCapacity(vault, orgId, ids, unlimited);
+  if (!capacity) return run();
+  const lease = await capacity.acquire(HELD_LEASE_MS).catch((error: unknown) => {
+    if (!(error instanceof SandboxCapacityError)) throw error;
+    throw ApplicationFailure.create({
+      type: SandboxCapacityError.type,
+      message: error.message,
+      nonRetryable: true,
+    });
+  });
+  try {
+    return await run();
+  } finally {
+    await capacity.release(lease);
+  }
 }

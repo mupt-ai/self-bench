@@ -1,3 +1,4 @@
+import { candidateWorkflowId } from "../../contracts/index.js";
 import type { Database } from "../../db/client.js";
 import { tasks } from "../../db/schema.js";
 
@@ -9,7 +10,7 @@ export async function reserveTaskStart(db: Database, row: typeof tasks.$inferIns
       .values({
         ...row,
         runId,
-        workflowId: `${runId}/candidate/${row.candidateId}`,
+        workflowId: candidateWorkflowId(runId, row.candidateId),
       })
       .onConflictDoNothing()
       .returning({ id: tasks.id });

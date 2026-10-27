@@ -71,11 +71,10 @@ export function createRegistryGrantStore(db: Database, secret: string, repositor
         if (row.deletedAt) throw new GrantRefusal(`Task ${id} was deleted`);
         if (row.status !== "accepted" || row.review !== "approve")
           throw new GrantRefusal(`Task ${id} is not an approved task`);
-        const exported = row.images?.registry;
-        if (!exported) throw new GrantRefusal(`Task ${id} has no exported images`);
-        images.push(withinRepository(repository, exported.agent));
-        if (input.withVerifier && exported.verifier)
-          images.push(withinRepository(repository, exported.verifier));
+        const built = row.images;
+        if (!built) throw new GrantRefusal(`Task ${id} has no images`);
+        images.push(withinRepository(repository, built.agent));
+        if (input.withVerifier) images.push(withinRepository(repository, built.verifier));
       }
       const [row] = await db
         .insert(registryGrants)

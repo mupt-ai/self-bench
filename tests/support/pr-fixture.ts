@@ -4,7 +4,6 @@ import { join } from "node:path";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import type { CandidateWorkflowInput } from "../../src/contracts/index.js";
 import type { Vault } from "../../src/db/vault.js";
-import type { WorkflowSnapshot } from "../../src/generation/tasks/status.js";
 import { connectRepo, signedIn } from "./sign-in.js";
 import { fakeGitHub, startAuthServer, testAuthConfig } from "./site-fixture.js";
 export const MERGE = "a".repeat(40);
@@ -25,7 +24,6 @@ export const pullRequest = (number: number, extra: Record<string, unknown> = {})
 export async function prFixture(options: {
   vault?: Vault;
   pullRequests?: Record<number, Record<string, unknown>>;
-  snapshots?: Record<string, WorkflowSnapshot>;
 }) {
   const hub = fakeGitHub({
     orgs: ["Mupt-AI"],
@@ -41,11 +39,6 @@ export async function prFixture(options: {
     fetchImpl: hub.fetch,
     start: async (workflowId, input) => {
       started.push({ workflowId, input });
-    },
-    status: {
-      async snapshot(workflowId) {
-        return options.snapshots?.[workflowId] ?? { kind: "unknown" };
-      },
     },
   });
   const headers = await signedIn(server);
