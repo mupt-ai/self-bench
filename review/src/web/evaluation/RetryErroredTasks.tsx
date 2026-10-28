@@ -4,7 +4,7 @@ import type { CredentialInfo } from "../../../../src/db/credentials";
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
 import { Button, fieldStyles, Notice, Select } from "../ui";
 import { type EvaluationRun, evaluationRequestId, type Harness } from "./api";
-import { submitComparison } from "./comparison-submission";
+import { hasUnconfirmedRuns, submitComparison } from "./comparison-submission";
 import { retrySandboxes, retrySelection } from "./run-retry";
 
 /**
@@ -109,7 +109,14 @@ export function RetryErroredTasks({
                 setBusy(true);
                 setError(undefined);
                 try {
-                  await submitComparison(url, retry.selection);
+                  const result = await submitComparison(url, retry.selection);
+                  if (hasUnconfirmedRuns(result)) {
+                    setError(
+                      result.submissionError ??
+                        "Some runs were not submitted. Resume to finish them.",
+                    );
+                    return;
+                  }
                   void navigate(`${pages}/results`);
                 } catch (cause) {
                   setError(cause instanceof Error ? cause.message : "Could not retry the tasks.");

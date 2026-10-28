@@ -9,7 +9,12 @@ import { covered, setupCoverage } from "../setup/readiness";
 import { useOrgCredentials } from "../setup/SetupStatus";
 import { Button, Notice, PageContent, PageHeader } from "../ui";
 import { evaluationRequest, evaluationRequestId } from "./api";
-import { submitComparison, UnsavedComparisonError } from "./comparison-submission";
+import {
+  hasUnconfirmedRuns,
+  resumeComparison,
+  submitComparison,
+  UnsavedComparisonError,
+} from "./comparison-submission";
 import { RunBlockerNotice, RunExecution, RunSetupCallout, runBlocker } from "./RunExecution";
 import { judgeCredentials, RunJudgePanel } from "./RunJudgePanel";
 import { RunModelsPanel } from "./RunModelsPanel";
@@ -123,7 +128,11 @@ function BenchmarkRunContent() {
       sessionStorage.setItem(key, JSON.stringify(pending));
     } catch {}
     try {
-      await submitComparison(url, frozen);
+      const result = await submitComparison(url, frozen);
+      if (hasUnconfirmedRuns(result)) {
+        setError(result.submissionError ?? "Some runs were not submitted. Resume to finish them.");
+        return;
+      }
       sessionStorage.removeItem(key);
       void navigate(`${pages}/results`);
     } catch (cause) {
@@ -133,6 +142,23 @@ function BenchmarkRunContent() {
           ? cause.message
           : "Submission not confirmed. Retry uses the same ID.",
       );
+    } finally {
+      setBusy(false);
+    }
+  };
+  const resume = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const result = await resumeComparison(url, draft.id);
+      if (hasUnconfirmedRuns(result)) {
+        setError(result.submissionError ?? "Some runs were not submitted. Resume to finish them.");
+        return;
+      }
+      sessionStorage.removeItem(key);
+      void navigate(`${pages}/results`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not resume submission");
     } finally {
       setBusy(false);
     }
@@ -154,6 +180,9 @@ function BenchmarkRunContent() {
             >
               View Results
             </Link>
+            <Button type="button" variant="primary" disabled={busy} onClick={() => void resume()}>
+              {busy ? "Resuming…" : "Resume Submission"}
+            </Button>
             <Button
               type="button"
               disabled={busy}
