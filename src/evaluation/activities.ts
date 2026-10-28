@@ -3,7 +3,7 @@ import type { ArtifactStore } from "../artifacts/index.js";
 import type { Vault } from "../db/vault.js";
 import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
 import { runCommand } from "../lib/process.js";
-import { holdingCapacity } from "../sandbox/capacity.js";
+import { holdingBuildSlot, holdingCapacity } from "../sandbox/capacity.js";
 import { explainTrialFailure } from "./failure-summary.js";
 import type { TrialGateway } from "./gateway-trial.js";
 import { failEvaluation, failTrial, finishEvaluation, startEvaluation } from "./lifecycle.js";
@@ -67,11 +67,19 @@ export function createEvaluationActivities(
       run,
     );
   };
+  // Building a task's images also holds one of the sandbox account's build slots.
+  const building = async <T>(input: EvaluationInput, run: () => Promise<T>) => {
+    const orgId = input.credentialOrgId ?? input.credentialOwnerId;
+    if (!vault || !orgId) return run();
+    return holdingBuildSlot(vault, orgId, input.credentials?.sandboxCredentialId, run);
+  };
   return {
     startSolverEvaluation: (input) => startEvaluation(store, input),
     prepareTaskImages: (input) =>
       heartbeating((options) =>
-        limited(input, false, () => prepareTaskImages(store, input, options)),
+        building(input, () =>
+          limited(input, false, () => prepareTaskImages(store, input, options)),
+        ),
       ),
     runSolverTrial: (input, index) =>
       heartbeating((options) =>

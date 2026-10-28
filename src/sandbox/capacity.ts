@@ -21,13 +21,17 @@ interface Reservation {
   expiresAt: number;
 }
 
-/** Shared across workers and batches; expired leases recover slots after a worker dies. */
+/**
+ * Shared across workers and batches; expired leases recover slots after a worker dies. A
+ * credential's sandboxes and its image builds (`maxBuilds`) are counted apart.
+ */
 export function credentialCapacity(
   records: EncryptedRecordStore,
   credentialId: string,
   limit: number,
+  counting: "sandbox" | "build" = "sandbox",
 ) {
-  const path = `sandbox-capacity/${credentialId}`;
+  const path = `${counting}-capacity/${credentialId}`;
   const update = async (change: (leases: Reservation[]) => Reservation[]) => {
     for (;;) {
       const saved = await records.read<Reservation[]>(path);
@@ -45,7 +49,7 @@ export function credentialCapacity(
     async acquire(timeoutMs: number, id: string = randomUUID()): Promise<string> {
       await update((leases) => {
         if (leases.length >= limit)
-          throw new SandboxCapacityError(`Credential sandbox limit (${limit}) reached`);
+          throw new SandboxCapacityError(`Credential ${counting} limit (${limit}) reached`);
         return [...leases, { id, expiresAt: Date.now() + timeoutMs }];
       });
       return id;
@@ -152,6 +156,20 @@ export function capacityLimitedSandbox(
 
 /** Long enough for any held operation (a solver trial's longest run); a dead worker's lease expires. */
 const HELD_LEASE_MS = 72 * 60 * 60_000;
+/** Longer than a task's image builds may take (PREPARE_TIMEOUT_MS, src/evaluation/prepare.ts). */
+const BUILD_LEASE_MS = 2 * 60 * 60_000;
+
+/** A lease of `capacity`, refused as the SandboxCapacityError a workflow waits on. */
+async function leaseOrWait(capacity: CredentialCapacity, timeoutMs: number): Promise<string> {
+  return await capacity.acquire(timeoutMs).catch((error: unknown) => {
+    if (!(error instanceof SandboxCapacityError)) throw error;
+    throw ApplicationFailure.create({
+      type: SandboxCapacityError.type,
+      message: error.message,
+      nonRetryable: true,
+    });
+  });
+}
 
 /**
  * Runs `run` holding one slot of each limited credential among `ids` throughout, for work whose
@@ -167,14 +185,34 @@ export async function holdingCapacity<T>(
 ): Promise<T> {
   const capacity = await credentialsCapacity(vault, orgId, ids, unlimited);
   if (!capacity) return run();
-  const lease = await capacity.acquire(HELD_LEASE_MS).catch((error: unknown) => {
-    if (!(error instanceof SandboxCapacityError)) throw error;
-    throw ApplicationFailure.create({
-      type: SandboxCapacityError.type,
-      message: error.message,
-      nonRetryable: true,
-    });
-  });
+  const lease = await leaseOrWait(capacity, HELD_LEASE_MS);
+  try {
+    return await run();
+  } finally {
+    await capacity.release(lease);
+  }
+}
+
+/**
+ * Runs `run`, which builds images in the sandbox account `credentialId`, holding one of its build
+ * slots (`maxBuilds`) throughout. A full account refuses as a SandboxCapacityError, which the
+ * workflow waits on as it does for sandboxes. Without a limit, `run` starts at once.
+ */
+export async function holdingBuildSlot<T>(
+  vault: Pick<Vault, "credentials" | "records">,
+  orgId: number,
+  credentialId: string | undefined,
+  run: () => Promise<T>,
+): Promise<T> {
+  const credential = credentialId ? await vault.credentials.find(orgId, credentialId) : undefined;
+  if (!credentialId || !credential?.maxBuilds) return run();
+  const capacity = credentialCapacity(
+    orgRecords(vault.records, orgId),
+    credentialId,
+    credential.maxBuilds,
+    "build",
+  );
+  const lease = await leaseOrWait(capacity, BUILD_LEASE_MS);
   try {
     return await run();
   } finally {

@@ -19,6 +19,21 @@ test("sandbox and model credential limits cap their evaluations' trials, split a
       fixture.request(`${credentialsUrl}/${id}/limit`, post({ maxSandboxes }));
     expect((await limit(sandbox.id, 0)).status).toBe(400);
     expect((await (await limit(sandbox.id, 7)).json()).maxSandboxes).toBe(7);
+    // The build limit is set apart, and leaves the sandbox limit as it was.
+    const limitBuilds = (maxBuilds: unknown) =>
+      fixture.request(`${credentialsUrl}/${sandbox.id}/limit`, post({ maxBuilds }));
+    expect((await limitBuilds(0)).status).toBe(400);
+    expect(await (await limitBuilds(10)).json()).toMatchObject({ maxSandboxes: 7, maxBuilds: 10 });
+    expect((await (await limit(sandbox.id, 7)).json()).maxBuilds).toBe(10);
+    expect((await (await limitBuilds(null)).json()).maxBuilds).toBeUndefined();
+    // Renaming keeps the limits; a blank name is refused.
+    const update = (body: unknown) =>
+      fixture.request(`${credentialsUrl}/${sandbox.id}/update`, post(body));
+    expect(await (await update({ name: "Team E2B" })).json()).toMatchObject({
+      name: "Team E2B",
+      maxSandboxes: 7,
+    });
+    expect((await update({ name: "" })).status).toBe(400);
     const compare = () =>
       fixture.request(
         `${fixture.base}/comparisons`,

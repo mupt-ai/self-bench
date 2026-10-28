@@ -93,6 +93,18 @@ test("sandbox and model credentials keep their limit on sandboxes using them at 
     expect(await store.find(1, sandbox.id)).not.toHaveProperty("maxSandboxes");
     await expect(store.limit(1, sandbox.id, 0)).rejects.toThrow();
     await expect(store.limit(2, sandbox.id, 8)).rejects.toThrow("not found");
+    await store.rename(1, sandbox.id, "  Team E2B ");
+    expect((await store.find(1, sandbox.id))?.name).toBe("Team E2B");
+    await expect(store.rename(1, sandbox.id, " ")).rejects.toThrow();
+    await expect(store.rename(2, sandbox.id, "Other")).rejects.toThrow("not found");
+    // Builds are limited apart from sandboxes.
+    await store.limit(1, sandbox.id, 10, "maxBuilds");
+    expect((await store.find(1, sandbox.id))?.maxBuilds).toBe(10);
+    expect(await store.find(1, sandbox.id)).not.toHaveProperty("maxSandboxes");
+    await store.limit(1, sandbox.id, undefined, "maxBuilds");
+    expect(await store.find(1, sandbox.id)).not.toHaveProperty("maxBuilds");
+    await expect(store.limit(1, sandbox.id, 0, "maxBuilds")).rejects.toThrow();
+    await expect(store.limit(2, sandbox.id, 8, "maxBuilds")).rejects.toThrow("not found");
     const model = await store.create(
       1,
       { name: "Model", kind: "openai", auth: "api-key", value: "k", maxSandboxes: 8 } as const,

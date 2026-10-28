@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { type CredentialInfo, validateEndpoint } from "../db/credentials.js";
+import { validateEndpoint } from "../db/credential-endpoints.js";
+import type { CredentialInfo } from "../db/credentials.js";
 import { generationModel, piModelsFiles } from "../generation/settings/models.js";
 import { defaultThinking, routeFor, thinkingOptions } from "./models.js";
 

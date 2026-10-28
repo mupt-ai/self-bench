@@ -1,9 +1,9 @@
 import type { ComparisonRecord, ComparisonStore } from "../../src/db/comparisons.js";
+import { credentialEndpoint } from "../../src/db/credential-endpoints.js";
 import {
   type CredentialInfo,
   type CredentialSecret,
   type CredentialStore,
-  credentialEndpoint,
   credentialSchema,
   maxSandboxesSchema,
 } from "../../src/db/credentials.js";
@@ -78,6 +78,7 @@ export function memoryVault(records: EncryptedRecordStore = new MemoryRecords())
         createdAt: new Date().toISOString(),
         ...(endpoint ? { endpoint } : {}),
         ...(parsed.maxSandboxes ? { maxSandboxes: parsed.maxSandboxes } : {}),
+        ...(parsed.maxBuilds ? { maxBuilds: parsed.maxBuilds } : {}),
         secret: {
           value,
           ...(tokenId ? { tokenId } : {}),
@@ -87,11 +88,16 @@ export function memoryVault(records: EncryptedRecordStore = new MemoryRecords())
       });
       return (await find(orgId, id)) as CredentialInfo;
     },
-    async limit(orgId, id, maxSandboxes) {
+    async rename(orgId, id, name) {
       const row = live(orgId, id);
       if (!row) throw new Error("Credential not found");
-      if (maxSandboxes === undefined) delete row.maxSandboxes;
-      else row.maxSandboxes = maxSandboxesSchema.parse(maxSandboxes);
+      row.name = credentialSchema.shape.name.parse(name);
+    },
+    async limit(orgId, id, value, column = "maxSandboxes") {
+      const row = live(orgId, id);
+      if (!row) throw new Error("Credential not found");
+      if (value === undefined) delete row[column];
+      else row[column] = maxSandboxesSchema.parse(value);
     },
     async remove(orgId, id) {
       const row = live(orgId, id);

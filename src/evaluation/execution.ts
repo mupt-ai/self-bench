@@ -1,7 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
-import { dariEndpoint, validateEndpoint } from "../db/credentials.js";
+import { dariEndpoint, validateEndpoint } from "../db/credential-endpoints.js";
 import type { Vault } from "../db/vault.js";
 import type { TrialJudge } from "../gateway/trial-key.js";
 import { MANAGED_MODEL_CREDENTIAL } from "../gateway/trial-key.js";

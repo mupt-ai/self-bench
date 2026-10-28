@@ -12,14 +12,21 @@ import { readBody, sendJson, trustedMutation } from "../http.js";
 import type { EvaluationRoutesOptions } from "./evaluations.js";
 
 const pattern =
-  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/credentials(?:\/(codex-login|claude-login|muse-login)(?:\/([a-f0-9-]{36})(?:\/(cancel|complete))?)?|\/([a-f0-9-]{36})\/(delete|limit))?$/;
+  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/credentials(?:\/(codex-login|claude-login|muse-login)(?:\/([a-f0-9-]{36})(?:\/(cancel|complete))?)?|\/([a-f0-9-]{36})\/(delete|limit|update))?$/;
 const loginStartSchema = z.object({ name: z.string().trim().min(1).max(80) }).strict();
 const claudeCompleteSchema = z.object({ code: z.string().trim().min(1).max(4096) }).strict();
-const limitSchema = z.object({ maxSandboxes: maxSandboxesSchema.nullable() }).strict();
+// Each field left out stays as it is; a null limit clears it. (`limit` is the old name of `update`.)
+const updateSchema = z
+  .object({
+    name: credentialSchema.shape.name.optional(),
+    maxSandboxes: maxSandboxesSchema.nullable().optional(),
+    maxBuilds: maxSandboxesSchema.nullable().optional(),
+  })
+  .strict();
 
 /**
- * Organization credentials: anyone in the org lists them; only admins add, delete, or set a
- * sandbox credential's limit.
+ * Organization credentials: anyone in the org lists them; only admins add, delete, rename, or set
+ * a credential's limits.
  */
 export async function credentialRoutes(
   options: EvaluationRoutesOptions,
@@ -79,11 +86,15 @@ export async function credentialRoutes(
         credentials: await credentials.list(org.id),
         canManage: org.role === "admin",
       });
-    } else if (mutation && credentialId && action === "limit") {
-      const { maxSandboxes } = limitSchema.parse(
+    } else if (mutation && credentialId && (action === "update" || action === "limit")) {
+      const { name, maxSandboxes, maxBuilds } = updateSchema.parse(
         JSON.parse((await readBody(request, 1024)).toString()),
       );
-      await credentials.limit(org.id, credentialId, maxSandboxes ?? undefined);
+      if (name !== undefined) await credentials.rename(org.id, credentialId, name);
+      if (maxSandboxes !== undefined)
+        await credentials.limit(org.id, credentialId, maxSandboxes ?? undefined);
+      if (maxBuilds !== undefined)
+        await credentials.limit(org.id, credentialId, maxBuilds ?? undefined, "maxBuilds");
       sendJson(response, 200, await credentials.find(org.id, credentialId));
     } else if (mutation && credentialId) {
       if (!(await credentials.find(org.id, credentialId))) throw new Error("Credential not found");
