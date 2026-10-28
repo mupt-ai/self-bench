@@ -4,7 +4,7 @@ import type { CredentialInfo } from "../../../../src/db/credentials";
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
 import { Button, fieldStyles, Notice, Select } from "../ui";
 import { type EvaluationRun, evaluationRequestId, type Harness } from "./api";
-import { hasUnconfirmedRuns, submitComparison } from "./comparison-submission";
+import { submitComparison } from "./comparison-submission";
 import { retrySandboxes, retrySelection } from "./run-retry";
 
 /**
@@ -110,7 +110,7 @@ export function RetryErroredTasks({
                 setError(undefined);
                 try {
                   const result = await submitComparison(url, retry.selection);
-                  if (hasUnconfirmedRuns(result)) {
+                  if (result.submissionError) {
                     setError(
                       result.submissionError ??
                         "Some runs were not submitted. Resume to finish them.",

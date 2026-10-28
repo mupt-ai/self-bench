@@ -10,7 +10,6 @@ import { useOrgCredentials } from "../setup/SetupStatus";
 import { Button, Notice, PageContent, PageHeader } from "../ui";
 import { type EvaluationOptions, evaluationRequest, evaluationRequestId } from "./api";
 import {
-  hasUnconfirmedRuns,
   resumeComparison,
   submitComparison,
   UnsavedComparisonError,
@@ -145,7 +144,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
     } catch {}
     try {
       const result = await submitComparison(url, frozen);
-      if (hasUnconfirmedRuns(result)) {
+      if (result.submissionError) {
         setError(result.submissionError ?? "Some runs were not submitted. Resume to finish them.");
         return;
       }
@@ -167,7 +166,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
     setError("");
     try {
       const result = await resumeComparison(url, draft.id);
-      if (hasUnconfirmedRuns(result)) {
+      if (result.submissionError) {
         setError(result.submissionError ?? "Some runs were not submitted. Resume to finish them.");
         return;
       }
