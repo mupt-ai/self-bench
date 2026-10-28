@@ -1,9 +1,12 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { taskDefinitionSchema } from "../contracts/index.js";
+import type { Candidate } from "../contracts/index.js";
 import { compileHarborTask } from "../generation/task/compiler.js";
-import { extractRegularArchive } from "../lib/archive.js";
+import { pinBaseImages } from "../generation/task/dockerfile.js";
+import type { RegistryOptions } from "../generation/task/image-registry.js";
+import { checkSubmission, readSubmission } from "../generation/task/submission.js";
 import { runCommand } from "../lib/process.js";
+import { githubRepository } from "../third_party/github/repository.js";
 import { withTemporaryDirectory } from "./temporary.js";
 
 export class TaskCompilerInfrastructureError extends Error {
@@ -11,20 +14,6 @@ export class TaskCompilerInfrastructureError extends Error {
     super(message, options);
     this.name = "TaskCompilerInfrastructureError";
   }
-}
-
-/**
- * Trusted compiler: unpacks a sandbox submission (definition.json, test.patch, gold.patch),
- * clones the pinned repository inside an isolated compiler sandbox, and renders the native Harbor task bundle.
- * Models never hand-write task.toml, Dockerfiles, or scripts.
- */
-export interface TaskCompilerInput {
-  readonly taskId: string;
-  readonly repositoryUrl: string;
-  readonly definitionBytes: Uint8Array;
-  readonly sourceBundle: Uint8Array;
-  readonly token?: string;
-  readonly signal?: AbortSignal;
 }
 
 export interface TaskCompilerServices {
@@ -35,47 +24,76 @@ export interface TaskCompilerServices {
     token?: string,
     signal?: AbortSignal,
   ): Promise<void>;
+  /** How base images are pinned; a test answers for the registries. */
+  readonly registry?: RegistryOptions;
 }
 
-export async function compileSubmittedTask(
-  input: TaskCompilerInput,
-  services: TaskCompilerServices = defaultCompilerServices,
-): Promise<Uint8Array> {
-  return await withTemporaryDirectory(`selfbench-compile-${input.taskId}-`, async (root) => {
-    const authored = join(root, "authored");
-    const repository = join(root, "repository");
-    const output = join(root, "harbor-task");
-    const archive = join(root, "source-task.tar.gz");
-    await mkdir(authored);
-    await writeFile(archive, input.sourceBundle);
-    await extractRegularArchive(archive, authored, input.signal ? { signal: input.signal } : {});
-    await writeFile(join(authored, "definition.json"), input.definitionBytes);
+export interface SubmissionCompileInput {
+  readonly repositoryUrl: string;
+  /** Where the submission bundle was unpacked. */
+  readonly directory: string;
+  readonly taskId: string;
+  readonly candidate: Pick<Candidate, "sourcePr" | "baseCommit" | "difficulty">;
+  readonly token?: string;
+  readonly signal?: AbortSignal;
+}
 
-    const definition = taskDefinitionSchema.parse(
-      JSON.parse(Buffer.from(input.definitionBytes).toString("utf8")),
-    );
-    await services
-      .cloneRepository(
-        input.repositoryUrl,
-        definition.baseCommit,
-        repository,
-        input.token,
-        input.signal,
-      )
-      .catch((error: unknown) => {
-        throw new TaskCompilerInfrastructureError("failed to materialize source repository", {
-          cause: error,
+export interface SubmissionCompileResult {
+  readonly compileErrors: readonly string[];
+  readonly auditBlockers: readonly string[];
+  /** The compiled Harbor task, once the submission compiles. */
+  readonly bundle?: Uint8Array;
+}
+
+/**
+ * Trusted compiler: checks a submission, pins its base images, and renders it as a Harbor task
+ * over the repository cloned at the candidate's base commit. What the author must fix comes back
+ * as errors; a clone or registry that fails throws, for the caller to retry.
+ */
+export async function compileSubmission(
+  input: SubmissionCompileInput,
+  services: TaskCompilerServices = defaultCompilerServices,
+): Promise<SubmissionCompileResult> {
+  const submission = await readSubmission(input.directory);
+  const check = checkSubmission(submission, input.candidate.difficulty);
+  if (check.errors.length > 0) return { compileErrors: check.errors, auditBlockers: [] };
+  const signal = input.signal ? { signal: input.signal } : {};
+  const pinned = await pinBaseImages(submission.Dockerfile, { ...services.registry, ...signal });
+  if (pinned.problems.length > 0) {
+    return { compileErrors: pinned.problems, auditBlockers: check.blockers };
+  }
+  const task = {
+    taskId: input.taskId,
+    difficulty: check.difficulty,
+    repo: githubRepository(input.repositoryUrl),
+    baseCommit: input.candidate.baseCommit,
+    sourcePr: input.candidate.sourcePr,
+  };
+  const bundle = await withTemporaryDirectory(
+    `selfbench-compile-${input.taskId}-`,
+    async (root) => {
+      const repository = join(root, "repository");
+      await services
+        .cloneRepository(
+          input.repositoryUrl,
+          task.baseCommit,
+          repository,
+          input.token,
+          input.signal,
+        )
+        .catch((error: unknown) => {
+          throw new TaskCompilerInfrastructureError("failed to materialize source repository", {
+            cause: error,
+          });
         });
-      });
-    await compileHarborTask(authored, repository, output);
-    const bundle = join(root, "harbor-task.tar.gz");
-    await runCommand(
-      "tar",
-      ["-czf", bundle, "-C", root, "harbor-task"],
-      input.signal ? { signal: input.signal } : {},
-    );
-    return await readFile(bundle);
-  });
+      const compiled = { ...submission, Dockerfile: pinned.dockerfile };
+      await compileHarborTask(compiled, task, repository, join(root, "harbor-task"));
+      const archive = join(root, "harbor-task.tar.gz");
+      await runCommand("tar", ["-czf", archive, "-C", root, "harbor-task"], signal);
+      return await readFile(archive);
+    },
+  );
+  return { compileErrors: [], auditBlockers: check.blockers, bundle };
 }
 
 const defaultCompilerServices: TaskCompilerServices = {

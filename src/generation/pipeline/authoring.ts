@@ -14,7 +14,7 @@ import {
 import type { SandboxExecutor } from "../../sandbox/index.js";
 import type { SandboxJobOutcome } from "../../sandbox/jobs.js";
 import { difficultyThresholds } from "../task/audit.js";
-import { verifierRuntimeFiles } from "../task/runtime-assets.js";
+import { TASK_LIMITS } from "../task/render.js";
 import { finishAgent, startAgent } from "./agent.js";
 import { artifactFile, readAsset } from "./helpers.js";
 import { renderPrompt } from "./prompts.js";
@@ -43,16 +43,7 @@ export interface AuthoringTurnInput {
 const SUBMISSION = "/work/submission";
 const VERIFY_REQUEST = "/work/verify";
 const DRAFT = "/work/draft.tar.gz";
-// Unpacks the draft and splits its prompt back out into instruction.md, as the agent wrote it.
-export const RESTORE_DRAFT = `mkdir -p /work/task
-tar -xzf ${DRAFT} -C /work/task
-node -e '
-const fs = require("fs");
-const path = "/work/task/definition.json";
-const { prompt, ...definition } = JSON.parse(fs.readFileSync(path, "utf8"));
-fs.writeFileSync(path, JSON.stringify(definition, null, 2) + "\\n");
-fs.writeFileSync("/work/task/instruction.md", prompt + "\\n");
-'`;
+const RESTORE_DRAFT = `mkdir -p /work/task && tar -xzf ${DRAFT} -C /work/task`;
 
 /**
  * The round's outcome: the submission, or why the round delivered nothing. Tools that package
@@ -67,13 +58,9 @@ export interface FinishAuthoringTurnInput extends AuthoringTurnInput {
 }
 
 const HAND_OFFS = [
-  { kind: "submitted", directory: SUBMISSION },
-  { kind: "verify", directory: VERIFY_REQUEST },
+  { kind: "submitted", bundle: `${SUBMISSION}/source-task.tar.gz` },
+  { kind: "verify", bundle: `${VERIFY_REQUEST}/source-task.tar.gz` },
 ] as const;
-const handOffFiles = (directory: string) => [
-  `${directory}/definition.json`,
-  `${directory}/source-task.tar.gz`,
-];
 
 function turnPrefix({ run, candidate, round, turn }: AuthoringTurnInput): string {
   return `runs/${run.runId}/authoring/${candidate.candidateId}/round-${round}/turn-${turn}`;
@@ -126,24 +113,20 @@ export async function startAuthoringTurn(
           )
         : verifyResultPrompt(verifyReport, input.verifiesLeft),
     files: [
-      ...Object.entries(verifierRuntimeFiles()).map(([path, contents]) => ({
-        path: `/work/${path}`,
-        contents,
-      })),
       { path: "/work/authoring.js", contents: extension },
       { path: "/work/sandbox-check.js", contents: checker },
       { path: "/work/provenance.json", contents: provenance },
       ...(draft ? [draft] : []),
     ],
-    outputs: HAND_OFFS.flatMap(({ directory }) => handOffFiles(directory)),
-    inline: HAND_OFFS.map(({ directory }) => `${directory}/definition.json`),
-    delivers: HAND_OFFS.map(({ directory }) => handOffFiles(directory)),
+    outputs: HAND_OFFS.map(({ bundle }) => bundle),
+    delivers: HAND_OFFS.map(({ bundle }) => [bundle]),
     environment: {
       SELFBENCH_DELIVERABLE: "/work/task",
+      SELFBENCH_BASE_COMMIT: candidate.baseCommit,
+      SELFBENCH_DIFFICULTY: candidate.difficulty,
       SELFBENCH_SUBMISSION: SUBMISSION,
       SELFBENCH_VERIFY_REQUEST: VERIFY_REQUEST,
       SELFBENCH_CHECK_PROGRAM: "/work/sandbox-check.js",
-      SELFBENCH_HARBOR_ENVIRONMENT: run.version.harborEnvironment,
       SELFBENCH_VERIFY_BUDGET: String(input.verifiesLeft),
     },
     timeoutMs: 4 * 60 * 60 * 1000,
@@ -159,12 +142,9 @@ export async function finishAuthoringTurn(
   const { run, candidate, round } = input;
   const result = await finishAgent(store, sandbox, input.outcome);
   // The extension blocks every tool call after the first hand-off, so at most one is present.
-  const handOff = HAND_OFFS.map(({ kind, directory }) => {
-    const [definition, sourceBundle] = handOffFiles(directory).map((path) => result.outputs[path]);
-    const parsed = result.inline[`${directory}/definition.json`] as
-      | { taskId?: unknown }
-      | undefined;
-    return definition && sourceBundle ? { kind, definition, sourceBundle, parsed } : undefined;
+  const handOff = HAND_OFFS.map(({ kind, bundle }) => {
+    const sourceBundle = result.outputs[bundle];
+    return sourceBundle ? { kind, sourceBundle } : undefined;
   }).find((found) => found !== undefined);
   const log = result.log?.uri ?? "none";
   const outcome: AuthoringTurnResult =
@@ -173,11 +153,8 @@ export async function finishAuthoringTurn(
           kind: handOff.kind,
           task: {
             candidateId: candidate.candidateId,
-            taskId:
-              typeof handOff.parsed?.taskId === "string" && handOff.parsed.taskId
-                ? handOff.parsed.taskId
-                : candidate.candidateId,
-            definition: handOff.definition,
+            // A revision keeps its task's name; a new task is named after its candidate.
+            taskId: input.draft?.taskId ?? candidate.candidateId,
             sourceBundle: handOff.sourceBundle,
           },
           session: result.session,
@@ -213,7 +190,7 @@ export function authoringPrompt(
   const tiers = Object.entries(difficultyThresholds)
     .map(
       ([tier, t]) =>
-        `${tier}: ≥${t.changedLines} changed implementation lines across ≥${t.implementationFiles} file${t.implementationFiles === 1 ? "" : "s"}, ≥${t.passToPass} pass-to-pass`,
+        `${tier}: ≥${t.changedLines} changed implementation lines across ≥${t.implementationFiles} file${t.implementationFiles === 1 ? "" : "s"}`,
     )
     .join("; ");
   const shared = {
@@ -234,6 +211,7 @@ export function authoringPrompt(
       difficulty: candidate.difficulty,
       request: candidate.request,
       tiers,
+      limits: `${TASK_LIMITS.cpus} CPUs, ${TASK_LIMITS.memoryMb / 1024} GB of memory, ${TASK_LIMITS.storageMb / 1024} GB of storage, ${TASK_LIMITS.buildSeconds / 60} minutes to build each image, and ${TASK_LIMITS.testsSeconds / 60} minutes for the tests (fail-to-pass runs twice)`,
       maintainer: maintainerFeedback
         ? renderPrompt("maintainer-feedback", { feedback: maintainerFeedback.trim() })
         : "",

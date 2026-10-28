@@ -1,129 +1,66 @@
-import type { Difficulty, TaskDefinition } from "../../contracts/index.js";
-import {
-  goldPassToPassOverlap,
-  passToPassOverlapMessage,
-  repositoryRelativePath,
-} from "./paths.js";
+import type { Difficulty } from "../../contracts/index.js";
+import { patchPaths } from "../../lib/patch-paths.js";
 
-export interface StaticAuditReport {
-  readonly accepted: boolean;
+export interface PatchAudit {
+  /** The hardest tier, up to the assigned one, that the gold patch reaches. */
+  readonly difficulty: Difficulty;
   readonly blockers: readonly string[];
-  readonly metrics: {
-    readonly implementationFiles: number;
-    readonly implementationChangedLines: number;
-    readonly testFiles: number;
-  };
 }
 
+/** Each tier's least gold patch, easiest first. */
 export const difficultyThresholds: Record<
   Difficulty,
-  {
-    readonly implementationFiles: number;
-    readonly changedLines: number;
-    readonly passToPass: number;
-  }
+  { readonly implementationFiles: number; readonly changedLines: number }
 > = {
-  easy: { implementationFiles: 1, changedLines: 20, passToPass: 0 },
-  medium: { implementationFiles: 2, changedLines: 50, passToPass: 1 },
-  hard: { implementationFiles: 3, changedLines: 100, passToPass: 2 },
+  easy: { implementationFiles: 1, changedLines: 20 },
+  medium: { implementationFiles: 2, changedLines: 50 },
+  hard: { implementationFiles: 3, changedLines: 100 },
 };
 
-export function auditTaskDefinition(
-  definition: TaskDefinition,
+/**
+ * Whether the patches make a benchmark: the hidden tests and the reference solution share no
+ * file, and the solution is large enough for a tier. A task is never harder than assigned.
+ */
+export function auditPatches(
   goldPatch: string,
   testPatch: string,
-): StaticAuditReport {
+  assigned: Difficulty,
+): PatchAudit {
   const gold = patchMetrics(goldPatch);
-  const tests = patchMetrics(testPatch);
-  const threshold = difficultyThresholds[definition.difficulty];
-  const testPathSet = new Set(tests.files);
+  const tests = new Set(patchPaths(testPatch));
   const blockers: string[] = [];
-  const protectedPaths = definition.testPaths.map((path) =>
-    repositoryRelativePath(definition, path),
-  );
-  const overlap = gold.files.filter(
-    (path) =>
-      testPathSet.has(path) ||
-      protectedPaths.some(
-        (protectedPath) => path === protectedPath || path.startsWith(`${protectedPath}/`),
-      ),
-  );
+  const overlap = patchPaths(goldPatch).filter((path) => tests.has(path));
   if (overlap.length > 0) {
-    blockers.push(`gold and held-out test patches overlap: ${overlap.join(", ")}`);
+    blockers.push(`gold.patch and test.patch both change ${overlap.join(", ")}`);
   }
-  const regressionOverlap = goldPassToPassOverlap(definition, goldPatch).filter(
-    (path) => !overlap.includes(path),
-  );
-  if (regressionOverlap.length > 0) {
-    blockers.push(passToPassOverlapMessage(regressionOverlap));
-  }
-  if (gold.files.length < threshold.implementationFiles) {
+  const tiers = Object.keys(difficultyThresholds) as Difficulty[];
+  const reached = tiers
+    .slice(0, tiers.indexOf(assigned) + 1)
+    .reverse()
+    .find((tier) => {
+      const threshold = difficultyThresholds[tier];
+      return gold.files >= threshold.implementationFiles && gold.lines >= threshold.changedLines;
+    });
+  if (!reached) {
+    const { implementationFiles, changedLines } = difficultyThresholds.easy;
     blockers.push(
-      `${definition.difficulty} mode requires at least ${threshold.implementationFiles} implementation files; found ${gold.files.length}`,
+      `gold.patch changes ${gold.lines} lines across ${gold.files} files; even easy needs at least ${changedLines} across ${implementationFiles}`,
     );
   }
-  if (gold.changedLines < threshold.changedLines) {
-    blockers.push(
-      `${definition.difficulty} mode requires at least ${threshold.changedLines} changed implementation lines; found ${gold.changedLines}`,
-    );
-  }
-  if (tests.files.length === 0 && definition.testSelection?.mode !== "base-only") {
-    blockers.push("held-out test patch changes no files");
-  }
-  if (definition.testSelection?.mode === "base-only" && testPatch.length > 0) {
-    blockers.push("base-only requires an empty test.patch");
-  }
-  if (definition.passToPass.length < threshold.passToPass) {
-    blockers.push(
-      `${definition.difficulty} mode requires at least ${threshold.passToPass} pass-to-pass regression tests`,
-    );
-  }
-  if (
-    definition.failToPass.some((path) => testCommandHardcodesPath(definition.testCommand, path)) ||
-    definition.passToPass.some((path) => testCommandHardcodesPath(definition.testCommand, path))
-  ) {
-    blockers.push(
-      'test command must not hard-code fail-to-pass or pass-to-pass paths outside "{tests}"',
-    );
-  }
-  if (definition.testCommand.split("{tests}").length !== 2) {
-    blockers.push('test command must contain "{tests}" exactly once');
-  }
-  if (/(["'])\{tests\}\1/.test(definition.testCommand)) {
-    blockers.push('test command must expand "{tests}" as an unquoted shell argument list');
-  }
-  return {
-    accepted: blockers.length === 0,
-    blockers,
-    metrics: {
-      implementationFiles: gold.files.length,
-      implementationChangedLines: gold.changedLines,
-      testFiles: tests.files.length,
-    },
-  };
+  return { difficulty: reached ?? "easy", blockers };
 }
 
-function testCommandHardcodesPath(command: string, path: string): boolean {
-  return command.replace("{tests}", "").includes(path);
-}
-
-function patchMetrics(patch: string): { files: string[]; changedLines: number } {
-  const files: string[] = [];
-  let changedLines = 0;
+/** How many files a patch changes, and its added and removed lines. */
+function patchMetrics(patch: string): { files: number; lines: number } {
+  let files = 0;
+  let lines = 0;
   for (const line of patch.split("\n")) {
-    if (line.startsWith("diff --git a/")) {
-      const match = /^diff --git a\/(.+) b\/(.+)$/.exec(line);
-      if (match?.[2]) {
-        files.push(match[2]);
-      }
-      continue;
-    }
-    if (
+    if (line.startsWith("diff --git ")) files += 1;
+    else if (
       (line.startsWith("+") && !line.startsWith("+++")) ||
       (line.startsWith("-") && !line.startsWith("---"))
-    ) {
-      changedLines += 1;
-    }
+    )
+      lines += 1;
   }
-  return { files, changedLines };
+  return { files, lines };
 }

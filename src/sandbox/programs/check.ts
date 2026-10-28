@@ -1,69 +1,29 @@
 #!/usr/bin/env node
 
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { isHarborEnvironment } from "../../contracts/config/providers.js";
+import { difficultySchema } from "../../contracts/index.js";
 import { patchApplyCheck } from "../../generation/task/patch.js";
-import { type StaticCheckError, staticCheckSubmission } from "../../generation/task/static.js";
+import { checkSubmission, readSubmission } from "../../generation/task/submission.js";
 
-// usage: sandbox-check DEFINITION.json TEST.patch GOLD.patch OUTPUT_DIR
-//        [--repository DIR --base REF]
-// Prints {"ok": boolean, "errors": [{"gate", "message"}], "renderedDirectory"?} and exits 0 when the
-// check itself ran; a non-zero exit means the program could not run, not that the task failed.
-// With --repository, both patches are proven with git apply --check against a clean worktree of
-// REF (test, gold, and gold on top of test), so a corrupt or conflicting patch never costs a build.
-const options: Record<string, string> = {};
-const positional: string[] = [];
-const argv = process.argv.slice(2);
-for (let index = 0; index < argv.length; index += 1) {
-  const value = argv[index] as string;
-  if (value === "--repository" || value === "--base") {
-    options[value.slice(2)] = argv[index + 1] ?? "";
-    index += 1;
-  } else {
-    positional.push(value);
-  }
+// usage: sandbox-check SUBMISSION_DIR DIFFICULTY REPOSITORY BASE
+// Prints {"ok": boolean, "errors": string[]} and exits 0 when the check itself ran; a non-zero
+// exit means the program could not run, not that the task failed. Both patches are proven with
+// git apply --check against a clean worktree of BASE in REPOSITORY (test, gold, and gold on top
+// of test), so a corrupt or conflicting patch never costs a build.
+const [directory, difficulty, repository, base] = process.argv.slice(2);
+if (!directory || !difficulty || !repository || !base) {
+  throw new Error("usage: sandbox-check SUBMISSION_DIR DIFFICULTY REPOSITORY BASE");
 }
-const [definitionPath, testPath, goldPath, outputDirectory] = positional;
-if (positional.length !== 4 || !definitionPath || !testPath || !goldPath || !outputDirectory) {
-  throw new Error(
-    "usage: sandbox-check DEFINITION.json TEST.patch GOLD.patch OUTPUT_DIR [--repository DIR --base REF]",
-  );
-}
-const [definitionJson, testPatch, goldPatch] = await Promise.all([
-  readFile(definitionPath, "utf8"),
-  readFile(testPath, "utf8"),
-  readFile(goldPath, "utf8"),
-]);
-const harborEnvironment = process.env.SELFBENCH_HARBOR_ENVIRONMENT;
-const result = staticCheckSubmission({
-  definitionJson,
-  testPatch,
-  goldPatch,
-  ...(harborEnvironment && isHarborEnvironment(harborEnvironment) ? { harborEnvironment } : {}),
-});
-const errors: StaticCheckError[] = [...result.errors];
-const patchesWellFormed = !errors.some((error) => error.gate === "patches");
-if (options.repository && patchesWellFormed) {
+const submission = await readSubmission(directory);
+const check = checkSubmission(submission, difficultySchema.parse(difficulty));
+const errors = [...check.errors, ...check.blockers];
+if (check.errors.length === 0) {
   errors.push(
     ...(await patchApplyCheck({
-      repository: options.repository,
-      base: options.base || "HEAD",
-      testPatch,
-      goldPatch,
+      repository,
+      base,
+      testPatch: submission["test.patch"],
+      goldPatch: submission["gold.patch"],
     })),
   );
 }
-let renderedDirectory: string | undefined;
-if (result.rendered) {
-  renderedDirectory = join(outputDirectory, "rendered");
-  await rm(renderedDirectory, { recursive: true, force: true });
-  for (const [name, contents] of Object.entries(result.rendered)) {
-    const path = join(renderedDirectory, name);
-    await mkdir(dirname(path), { recursive: true });
-    await writeFile(path, contents, { mode: name.endsWith(".sh") ? 0o755 : 0o644 });
-  }
-}
-process.stdout.write(
-  `${JSON.stringify({ ok: errors.length === 0, errors, ...(renderedDirectory ? { renderedDirectory } : {}) })}\n`,
-);
+process.stdout.write(`${JSON.stringify({ ok: errors.length === 0, errors })}\n`);

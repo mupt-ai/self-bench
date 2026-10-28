@@ -58,6 +58,7 @@ test("task cancellation is tenant-scoped, race-safe, and idempotent after confir
       runId: "run-active",
       candidateId: "active",
       taskId: "task-active",
+      baseCommit: "a".repeat(40),
       difficulty: "medium",
       stage: "authoring",
       workflowId: "run-active/candidate/active",

@@ -30,7 +30,7 @@ export function sharedSnapshotKey(sha256: string): string {
 
 /**
  * The repository snapshot a compile attempt wrote at `directory`: its own copy, when it still has
- * one, or the shared copy its pointer names. Undefined when it has neither (tasks with services).
+ * one, or the shared copy its pointer names. Undefined when it has neither (older tasks with services).
  */
 export async function attemptSnapshot(
   store: Pick<ArtifactStore, "stat" | "getByKey">,

@@ -63,7 +63,6 @@ export function draft(candidateId: string, suffix = ""): AuthoredTaskDraft {
   return {
     candidateId,
     taskId: `${candidateId}-task`,
-    definition: ref(`file:///${candidateId}${suffix}/definition.json`),
     sourceBundle: ref(`file:///${candidateId}${suffix}/source-task.tar.gz`),
   };
 }

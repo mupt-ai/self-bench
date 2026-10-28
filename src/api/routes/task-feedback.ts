@@ -19,7 +19,6 @@ import { taskItem } from "./tasks.js";
 
 const route =
   /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/tasks\/([a-z0-9][a-z0-9-]{2,62})\/([A-Za-z0-9][A-Za-z0-9._-]*)\/feedback$/;
-const COMMIT = /^[0-9a-f]{40}$/i;
 
 const bodySchema = z.object({
   feedback: z.string().trim().min(1).max(MAX_FEEDBACK_LENGTH),
@@ -75,7 +74,7 @@ export async function taskFeedbackRoute(
     sendJson(response, 409, { error: "Only a task built from a pull request can be revised." });
     return true;
   }
-  const draft = await submittedDraft(artifacts, task.runId, task.candidateId);
+  const draft = await submittedDraft(artifacts, task);
   if (!draft) {
     sendJson(response, 409, { error: "This task never submitted a draft to revise." });
     return true;
@@ -107,7 +106,6 @@ export async function taskFeedbackRoute(
     return true;
   }
   // The revision keeps the task's identity: the candidate, tier, and base it was authored from.
-  const baseCommit = task.definition?.baseCommit;
   const provenance = await artifacts
     .getByKey(`runs/${task.runId}/provenance/${task.candidateId}.json`)
     .catch(() => undefined);
@@ -128,9 +126,7 @@ export async function taskFeedbackRoute(
     candidateId: task.candidateId,
     difficulty: task.difficulty,
     ...(originalRequest ? { request: originalRequest } : {}),
-    ...(typeof baseCommit === "string" && COMMIT.test(baseCommit)
-      ? { baseCommit: baseCommit.toLowerCase() }
-      : {}),
+    ...(task.baseCommit ? { baseCommit: task.baseCommit } : {}),
   };
   const base = taskRevisionRunId(repo.fullName, task.sourcePr);
   const row = await tasks.reserveStarted({
@@ -140,6 +136,7 @@ export async function taskFeedbackRoute(
     taskId: task.taskId,
     sourcePr: task.sourcePr,
     sourceUrl: candidate.sourceUrl,
+    baseCommit: candidate.baseCommit,
     difficulty: task.difficulty,
     stage: "authoring",
     startedBy: user.id,

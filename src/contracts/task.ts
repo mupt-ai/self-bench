@@ -1,6 +1,5 @@
 import { z } from "zod";
-import { assertPullRequestBelongsToRepository } from "../third_party/github/repository.js";
-import { artifactRefSchema, commitSchema, difficultySchema, isGitHubRepository } from "./common.js";
+import { artifactRefSchema, commitSchema, difficultySchema } from "./common.js";
 
 export const candidateSchema = z
   .object({
@@ -25,166 +24,10 @@ export const candidateSchema = z
 
 export type Candidate = z.infer<typeof candidateSchema>;
 
-const environmentVariableNameSchema = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/);
-const repositoryPathSchema = z
-  .string()
-  .min(1)
-  .refine(
-    (path) =>
-      !path.startsWith("/") &&
-      !path.includes("\\") &&
-      !path.includes("\0") &&
-      !path.split("/").some((part) => !part || part === "." || part === ".."),
-    { message: "expected a normalized repository-relative path" },
-  );
-
-const environmentVariablesSchema = z.record(environmentVariableNameSchema, z.string());
-
-const environmentServiceSchema = z
-  .object({
-    name: z
-      .string()
-      .regex(/^[a-z][a-z0-9_-]*$/)
-      .refine((name) => name !== "main", { message: 'service name "main" is reserved' }),
-    image: z.string().min(1),
-    environmentVariables: environmentVariablesSchema,
-    command: z.array(z.string()).optional(),
-    healthcheck: z
-      .object({
-        test: z.array(z.string().min(1)).min(1),
-        intervalSeconds: z.number().int().positive(),
-        timeoutSeconds: z.number().int().positive(),
-        retries: z.number().int().positive(),
-        startPeriodSeconds: z.number().int().nonnegative(),
-      })
-      .strict(),
-  })
-  .strict();
-
-const taskEnvironmentSchema = z
-  .object({
-    schemaVersion: z.literal(1),
-    baseImage: z.string().min(1),
-    rootSetupCommand: z.string().min(1),
-    setupCommand: z.string().min(1),
-    smokeCommand: z.string().min(1),
-    environmentVariables: environmentVariablesSchema,
-    services: z.array(environmentServiceSchema),
-    source: z.enum(["repository-dockerfile", "devcontainer", "ci-adapted", "generated"]),
-    evidence: z
-      .array(
-        z
-          .object({
-            path: repositoryPathSchema,
-            reason: z.string().min(1),
-          })
-          .strict(),
-      )
-      .min(1),
-  })
-  .strict();
-
-export type TaskEnvironment = z.infer<typeof taskEnvironmentSchema>;
-
-const taskDraftDefinitionSchema = z
-  .object({
-    schemaVersion: z.literal(2),
-    difficulty: difficultySchema,
-    taskId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/),
-    repo: z
-      .string()
-      .min(1)
-      .refine((value) => isGitHubRepository(value), "expected a GitHub repository"),
-    baseCommit: commitSchema,
-    workdir: repositoryPathSchema.or(z.literal(".")),
-    testCommand: z.string().refine((value) => value.split("{tests}").length === 2, {
-      message: 'testCommand must contain "{tests}" exactly once',
-    }),
-    failToPass: z.array(z.string().min(1)).min(1),
-    passToPass: z.array(z.string().min(1)),
-    testPaths: z.array(repositoryPathSchema).min(1),
-    testSelection: z
-      .object({
-        mode: z.enum(["reused", "augmented", "authored", "base-only"]),
-        reused: z.array(z.string().min(1)),
-        added: z.array(z.string().min(1)),
-        excluded: z.array(z.string().min(1)),
-        coverage: z.string().min(1),
-      })
-      .strict()
-      .optional(),
-    sourcePr: z.number().int().positive(),
-    sourceUrl: z.string().url(),
-    prompt: z.string().min(1),
-    timeouts: z
-      .object({
-        setupSeconds: z.number().int().positive(),
-        /** Ignored: each repo sets its agent's time (trialTimeouts). Older tasks still carry it. */
-        agentSeconds: z.number().int().positive().optional(),
-        testsSeconds: z.number().int().positive(),
-      })
-      .strict(),
-    resources: z
-      .object({
-        cpus: z.number().positive(),
-        memoryMb: z.number().int().positive(),
-        storageMb: z.number().int().positive(),
-      })
-      .strict(),
-  })
-  .strict()
-  .superRefine((definition, context) => {
-    if (
-      definition.testSelection?.mode === "base-only" &&
-      (definition.testSelection.reused.length === 0 || definition.testSelection.added.length > 0)
-    )
-      context.addIssue({
-        code: "custom",
-        path: ["testSelection"],
-        message: "base-only requires reused tests and no added tests",
-      });
-    const testPaths = new Set(definition.testPaths);
-    if (testPaths.size !== definition.testPaths.length) {
-      context.addIssue({
-        code: "custom",
-        path: ["testPaths"],
-        message: "testPaths must be unique",
-      });
-    }
-    const passToPass = new Set(definition.passToPass);
-    const overlap = definition.failToPass.filter((test) => passToPass.has(test));
-    if (overlap.length > 0) {
-      context.addIssue({
-        code: "custom",
-        path: ["passToPass"],
-        message: "failToPass and passToPass must not overlap",
-      });
-    }
-    try {
-      assertPullRequestBelongsToRepository(
-        definition.repo,
-        definition.sourceUrl,
-        definition.sourcePr,
-      );
-    } catch (error) {
-      context.addIssue({
-        code: "custom",
-        path: ["sourceUrl"],
-        message: error instanceof Error ? error.message : "source pull request does not match repo",
-      });
-    }
-  });
-
-export const taskDefinitionSchema = taskDraftDefinitionSchema.safeExtend({
-  environment: taskEnvironmentSchema,
-});
-
-export type TaskDefinition = z.infer<typeof taskDefinitionSchema>;
-
+/** What an author hands off: its submission (generation/task/submission.ts) as a tarball. */
 export const authoredTaskDraftSchema = z.object({
   candidateId: z.string().min(1),
   taskId: z.string().min(1),
-  definition: artifactRefSchema,
   sourceBundle: artifactRefSchema,
 });
 
@@ -196,8 +39,8 @@ const registryImageSchema = z
 
 /**
  * The images a task's checks ran on, by digest in SelfBench's task image repository: the agent's
- * (built from `environment/`) and the separate verifier's (from `tests/`, which a task with
- * services runs as Compose's `main`). Every trial starts from exactly these.
+ * (built from `environment/`) and the separate verifier's (from `tests/`, which an older task
+ * with services runs as Compose's `main`). Every trial starts from exactly these.
  */
 export const taskImagesSchema = z.object({
   agent: registryImageSchema,
@@ -209,7 +52,6 @@ export type TaskImages = z.infer<typeof taskImagesSchema>;
 export const authoredTaskSchema = z.object({
   candidateId: z.string().min(1),
   taskId: z.string().min(1),
-  definition: artifactRefSchema,
   sourceBundle: artifactRefSchema,
   bundle: artifactRefSchema,
   images: taskImagesSchema.optional(),

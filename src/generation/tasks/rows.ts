@@ -12,19 +12,17 @@ function artifactKey(reference: ArtifactRef): string | undefined {
 }
 
 /**
- * What an accepted task's row carries: its definition, and the bundle its trials run. A task with
- * images runs its execution bundle (Dockerfiles that are each a `FROM` of an image's digest),
- * published here from its gate task; one without builds its compiled bundle's Dockerfiles.
+ * What an accepted task's row carries: the bundle its trials run. A task with images runs its
+ * execution bundle (Dockerfiles that are each a `FROM` of an image's digest), published here
+ * from its gate task; one without builds its compiled bundle's Dockerfiles.
  */
 export async function acceptedTaskFields(
   artifacts: ArtifactStore,
   task: AuthoredTask,
   signal: AbortSignal = new AbortController().signal,
-): Promise<Pick<TaskVerdict, "bundleKey" | "definition" | "images">> {
-  const definition = JSON.parse(Buffer.from(await artifacts.get(task.definition)).toString("utf8"));
+): Promise<Pick<TaskVerdict, "bundleKey" | "images">> {
   const compiled = artifactKey(task.bundle);
-  if (!task.images || !compiled)
-    return { ...(compiled ? { bundleKey: compiled } : {}), definition };
+  if (!task.images || !compiled) return compiled ? { bundleKey: compiled } : {};
   const gate = await artifacts.stat(`${dirname(compiled)}/${GATE_TASK_FILE}`);
   if (!gate) throw new Error(`${task.taskId}'s gate task is missing`);
   const bundle = await publishExecutionBundle(
@@ -35,5 +33,5 @@ export async function acceptedTaskFields(
   );
   const bundleKey = artifactKey(bundle);
   if (!bundleKey) throw new Error(`${task.taskId}'s execution bundle is outside its run`);
-  return { bundleKey, definition, images: task.images };
+  return { bundleKey, images: task.images };
 }

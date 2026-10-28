@@ -14,7 +14,7 @@ const ref = (uri: string): ArtifactRef => ({
   contentType: "application/octet-stream",
 });
 
-test("a settled workflow writes its verdict, bundle, and definition onto the task row once", async () => {
+test("a settled workflow writes its verdict and bundle onto the task row once", async () => {
   const database = await testDatabase();
   try {
     const users = createUserStore(database.db, { secret: testAuthConfig.sessionSecret });
@@ -43,15 +43,14 @@ test("a settled workflow writes its verdict, bundle, and definition onto the tas
         runId,
         candidateId: "candidate",
         taskId: "candidate",
+        baseCommit: "a".repeat(40),
         difficulty: "easy",
         stage: "reviewing",
         workflowId: `${runId}/candidate/candidate`,
       },
     ]);
     const bundleKey = `runs/${runId}/verify/candidate/authoring-round-2/harbor-task.tar.gz`;
-    const artifacts = {
-      get: async () => Buffer.from(JSON.stringify({ taskId: "task", prompt: "Fix short help" })),
-    } as unknown as ArtifactStore;
+    const artifacts = {} as ArtifactStore;
     const result = {
       progress: {
         candidateId: "candidate",
@@ -63,7 +62,6 @@ test("a settled workflow writes its verdict, bundle, and definition onto the tas
       task: {
         candidateId: "candidate",
         taskId: "task",
-        definition: ref(`file:///store/runs/${runId}/authoring/candidate/round-2/definition.json`),
         sourceBundle: ref(
           `file:///store/runs/${runId}/authoring/candidate/round-2/source-task.tar.gz`,
         ),
@@ -79,7 +77,6 @@ test("a settled workflow writes its verdict, bundle, and definition onto the tas
       stage: "accepted",
       round: 2,
       bundleKey,
-      definition: { prompt: "Fix short help" },
     });
     // Approvable at once, with nobody having opened it.
     await tasks.review(settled?.id ?? -1, { decision: "approve", note: "ok", userId: user.id });

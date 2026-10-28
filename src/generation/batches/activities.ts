@@ -102,6 +102,7 @@ export function createBatchActivities(options: {
             taskId: candidate.candidateId,
             sourcePr: candidate.sourcePr,
             sourceUrl: candidate.sourceUrl,
+            baseCommit: candidate.baseCommit,
             difficulty: candidate.difficulty,
             stage: "queued",
           })),

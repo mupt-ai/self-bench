@@ -24,7 +24,7 @@ describe("SelfBench verify turns", () => {
         turn,
         verifiesLeft: input.verifiesLeft,
         ...(input.session ? { session: input.session.uri } : {}),
-        ...(input.draft ? { draft: input.draft.definition.uri } : {}),
+        ...(input.draft ? { draft: input.draft.sourceBundle.uri } : {}),
         ...(input.report ? { report: input.report.uri } : {}),
       });
       return {
@@ -36,7 +36,7 @@ describe("SelfBench verify turns", () => {
     const checks: string[] = [];
     const original = activities.compileAndVerify;
     activities.compileAndVerify = async (input) => {
-      checks.push(`${input.task.definition.uri}@${input.turn ?? "submit"}`);
+      checks.push(`${input.task.sourceBundle.uri}@${input.turn ?? "submit"}`);
       if (input.turn === undefined) return await original(input);
       return {
         report: redReport(input.stage, input.round, input.task.taskId, { oracle: true }),
@@ -53,21 +53,21 @@ describe("SelfBench verify turns", () => {
         turn: 2,
         verifiesLeft: AUTHOR_VERIFY_BUDGET - 1,
         session: "file:///session-t1",
-        draft: "file:///turns-t1/definition.json",
+        draft: "file:///turns-t1/source-task.tar.gz",
         report: "file:///verify-t1",
       },
       {
         turn: 3,
         verifiesLeft: AUTHOR_VERIFY_BUDGET - 2,
         session: "file:///session-t2",
-        draft: "file:///turns-t2/definition.json",
+        draft: "file:///turns-t2/source-task.tar.gz",
         report: "file:///verify-t2",
       },
     ]);
     expect(checks).toEqual([
-      "file:///turns-t1/definition.json@1",
-      "file:///turns-t2/definition.json@2",
-      "file:///turns-t3/definition.json@submit",
+      "file:///turns-t1/source-task.tar.gz@1",
+      "file:///turns-t2/source-task.tar.gz@2",
+      "file:///turns-t3/source-task.tar.gz@submit",
     ]);
   });
 

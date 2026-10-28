@@ -11,7 +11,7 @@ const BASE_IMAGE_MISSING = /manifest unknown|name unknown|invalid reference form
 
 /**
  * The Modal build log of an image Harbor reported as failed, when the failure came from the task's
- * own Dockerfile steps (a missing tool, a failing setup.sh) or from a base image its registry does
+ * own Dockerfile steps (a missing tool, a failing install) or from a base image its registry does
  * not serve, rather than from Modal. Such a failure repeats on every retry, so the author gets the
  * log instead. Undefined for anything else (a registry timeout or rate limit included), which
  * stays a retried infrastructure failure.

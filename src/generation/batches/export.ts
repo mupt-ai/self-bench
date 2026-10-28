@@ -60,7 +60,9 @@ export async function exportBatch(
           {
             run: batch.run,
             tasks: batch.candidates.flatMap((item) =>
-              item.result?.task ? [item.result.task] : [],
+              item.result?.task
+                ? [{ task: item.result.task, sourcePr: item.candidate.sourcePr }]
+                : [],
             ),
           },
           `application-${crypto.randomUUID()}`,

@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import type { TaskEnvironment } from "../../src/contracts/index.js";
+import { pinBaseImages } from "../../src/generation/task/dockerfile.js";
 import {
   parseImageReference,
-  pinEnvironmentImages,
   RegistryUnavailableError,
   resolveImage,
 } from "../../src/generation/task/image-registry.js";
@@ -147,33 +146,32 @@ describe("resolving images", () => {
     expect(requests).toBe(1);
   });
 
-  test("pins every image in an environment and names the field of each missing one", async () => {
+  test("pins every base image of a Dockerfile, but not its stages, and names each missing one", async () => {
     const fetch = registry({
       "/v2/library/node:22-bookworm": digest,
       "/v2/library/postgres:16": other,
     });
-    const healthcheck = {
-      test: ["CMD", "true"],
-      intervalSeconds: 1,
-      timeoutSeconds: 1,
-      retries: 1,
-      startPeriodSeconds: 0,
-    };
-    const environment = {
-      baseImage: "node:22-bookworm",
-      services: [
-        { name: "db", image: "postgres:16", environmentVariables: {}, healthcheck },
-        { name: "cache", image: "redis:nope", environmentVariables: {}, healthcheck },
-      ],
-    } as unknown as TaskEnvironment;
-    const pinned = await pinEnvironmentImages(environment, { fetch });
-    expect(pinned.environment.baseImage).toBe(`node:22-bookworm@${digest}`);
-    expect(pinned.environment.services.map((service) => service.image)).toEqual([
-      `postgres:16@${other}`,
-      "redis:nope",
-    ]);
+    const pinned = await pinBaseImages(
+      [
+        "FROM node:22-bookworm AS build",
+        "FROM --platform=linux/amd64 postgres:16",
+        "COPY --from=build /out /out",
+        "FROM build",
+        "FROM redis:nope",
+      ].join("\n"),
+      { fetch },
+    );
+    expect(pinned.dockerfile).toBe(
+      [
+        `FROM node:22-bookworm@${digest} AS build`,
+        `FROM --platform=linux/amd64 postgres:16@${other}`,
+        "COPY --from=build /out /out",
+        "FROM build",
+        "FROM redis:nope",
+      ].join("\n"),
+    );
     expect(pinned.problems).toEqual([
-      expect.stringContaining("service cache image redis:nope: docker.io/library/redis"),
+      expect.stringContaining("redis:nope: docker.io/library/redis"),
     ]);
   });
 });

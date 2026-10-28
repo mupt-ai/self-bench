@@ -38,11 +38,11 @@ test("task tombstones retain history, exclude all public reads and cannot be ove
       runId: "run-delete",
       candidateId: "candidate",
       taskId: "task",
+      baseCommit: "a".repeat(40),
       difficulty: "easy" as const,
       stage: "accepted",
       pipelineStatus: "accepted" as const,
       bundleKey: "historical-bundle",
-      definition: { prompt: "Historical prompt" },
       workflowId: "historical-workflow",
     } satisfies SeededTask;
     await seedTasks(database.db, [row]);
@@ -85,7 +85,7 @@ test("task tombstones retain history, exclude all public reads and cannot be ove
       taskId: "task",
       pipelineStatus: "accepted",
       bundleKey: row.bundleKey,
-      definition: row.definition,
+      baseCommit: row.baseCommit,
       reviewNote: "Historical review",
     });
     expect(await database.db.select().from(evaluationRecords)).toEqual([

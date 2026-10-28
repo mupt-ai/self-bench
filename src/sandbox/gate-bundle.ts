@@ -37,16 +37,11 @@ export async function splitGateBundle(compiled: string, work: string): Promise<v
 }
 
 /**
- * Writes the compiled bundle and, when there is one, its pinned definition and gate split. Image
- * builds read the split files, so a failed split fails the compile, which is retried.
+ * Writes the compiled bundle (empty when the submission did not compile) and its gate split.
+ * Image builds read the split files, so a failed split fails the compile, which is retried.
  */
-export async function writeCompiled(
-  work: string,
-  bundle: Uint8Array,
-  pinnedDefinition: string,
-): Promise<void> {
-  await writeFile(join(work, "compiled.tar.gz"), bundle);
-  if (bundle.byteLength === 0) return;
-  await writeFile(join(work, "definition.json"), pinnedDefinition);
+export async function writeCompiled(work: string, bundle: Uint8Array | undefined): Promise<void> {
+  await writeFile(join(work, "compiled.tar.gz"), bundle ?? new Uint8Array());
+  if (!bundle) return;
   await splitGateBundle(join(work, "compiled.tar.gz"), work);
 }

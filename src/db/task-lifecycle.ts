@@ -19,6 +19,7 @@ export interface PlannedTask {
   readonly taskId: string;
   readonly sourcePr?: number;
   readonly sourceUrl?: string;
+  readonly baseCommit: string;
   readonly difficulty: "easy" | "medium" | "hard";
   readonly stage: string;
   /** The candidate workflow that owns the row. */
@@ -37,7 +38,6 @@ export interface TaskVerdict extends TaskProgressPatch {
   readonly pipelineStatus: "accepted" | "rejected" | "infrastructure_failed";
   readonly reason?: string;
   readonly bundleKey?: string;
-  readonly definition?: Record<string, unknown>;
   readonly images?: TaskImages;
 }
 
@@ -65,6 +65,7 @@ export function taskLifecycle(db: Database, now: () => Date) {
             taskId: row.taskId,
             sourcePr: row.sourcePr ?? null,
             sourceUrl: row.sourceUrl ?? null,
+            baseCommit: row.baseCommit,
             difficulty: row.difficulty,
             pipelineStatus: "in_progress" as const,
             stage: row.stage,
@@ -112,7 +113,6 @@ function settled(verdict: TaskVerdict, at: Date) {
     ...(verdict.taskId ? { taskId: verdict.taskId } : {}),
     reason: verdict.reason ?? null,
     ...(verdict.bundleKey ? { bundleKey: verdict.bundleKey } : {}),
-    ...(verdict.definition ? { definition: verdict.definition } : {}),
     ...(verdict.images ? { images: verdict.images } : {}),
     syncedAt: at,
   };

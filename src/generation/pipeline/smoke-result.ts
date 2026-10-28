@@ -31,7 +31,7 @@ export function smokeLog(smoke: SmokeResult, error: string | undefined): string 
       : `The smoke command exited ${smoke.exitCode} in the agent environment.`;
   return [
     status,
-    "It ran exactly as the solver agent will: in the agent image, as root, with network limited to the model provider. Anything the agent needs (package managers, toolchains, Corepack shims, browsers) must be installed and cached by setupCommand, not downloaded on first use.",
+    "It ran exactly as the solver agent will: in the agent image, as root, with network limited to the model provider. Anything the agent needs (package managers, toolchains, Corepack shims, browsers) must be installed and cached by the Dockerfile, not downloaded on first use.",
     smoke.output,
   ]
     .filter((part) => part.trim())

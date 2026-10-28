@@ -11,6 +11,7 @@ export interface SeededTask {
   readonly taskId: string;
   readonly sourcePr?: number;
   readonly sourceUrl?: string;
+  readonly baseCommit?: string;
   /** Medium unless named. */
   readonly difficulty?: "easy" | "medium" | "hard";
   readonly pipelineStatus: PipelineStatus;
@@ -19,7 +20,6 @@ export interface SeededTask {
   readonly round?: number;
   readonly reason?: string;
   readonly bundleKey?: string;
-  readonly definition?: Record<string, unknown>;
   readonly images?: TaskImages;
   readonly workflowId?: string;
 }

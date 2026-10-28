@@ -17,13 +17,13 @@ export function taskFrom(row: {
     taskId: task.taskId,
     ...(task.sourcePr !== null ? { sourcePr: task.sourcePr } : {}),
     ...(task.sourceUrl ? { sourceUrl: task.sourceUrl } : {}),
+    ...(task.baseCommit ? { baseCommit: task.baseCommit } : {}),
     difficulty: task.difficulty,
     pipelineStatus: task.pipelineStatus,
     stage: task.stage,
     ...(task.round !== null ? { round: task.round } : {}),
     ...(task.reason ? { reason: task.reason } : {}),
     ...(task.bundleKey ? { bundleKey: task.bundleKey } : {}),
-    ...(task.definition ? { definition: task.definition } : {}),
     ...(task.images ? { images: task.images } : {}),
     ...(task.reviewDecision
       ? {

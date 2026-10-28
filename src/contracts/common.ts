@@ -25,7 +25,7 @@ export type ArtifactRef = z.infer<typeof artifactRefSchema>;
 export const difficultySchema = z.enum(["easy", "medium", "hard"]);
 export type Difficulty = z.infer<typeof difficultySchema>;
 
-export function isGitHubRepository(value: string): boolean {
+function isGitHubRepository(value: string): boolean {
   try {
     githubRepository(value);
     return true;

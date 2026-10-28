@@ -15,20 +15,6 @@ import {
 } from "./site-fixture.js";
 import { type SeededTask, seedTasks } from "./task-rows.js";
 
-const definition = (taskId: string, sourcePr: number) => ({
-  taskId,
-  difficulty: "medium",
-  repo: "Mupt-AI/self-bench",
-  testCommand: "bun test",
-  failToPass: ["a"],
-  passToPass: [],
-  testPaths: ["tests"],
-  workdir: ".",
-  sourcePr,
-  sourceUrl: `https://github.com/Mupt-AI/self-bench/pull/${sourcePr}`,
-  baseCommit: "a".repeat(40),
-});
-
 const BUNDLE_KEY = "runs/run-one/verification/c1/round-1/attempt-1/verify-1/harbor-task.tar.gz";
 
 /** The rows the pipeline writes for `run-one`: one accepted and one rejected candidate. */
@@ -42,8 +28,8 @@ const RUN_ONE_ROWS: Omit<SeededTask, "repoId">[] = [
     difficulty: "medium",
     pipelineStatus: "accepted",
     stage: "review",
+    baseCommit: "a".repeat(40),
     bundleKey: BUNDLE_KEY,
-    definition: definition("task-good", 11),
   },
   {
     runId: "run-one",
@@ -55,7 +41,7 @@ const RUN_ONE_ROWS: Omit<SeededTask, "repoId">[] = [
     pipelineStatus: "rejected",
     stage: "authoring",
     reason: "authoring failed: tests never fail without the solution\nmore detail",
-    definition: definition("task-bad", 12),
+    baseCommit: "b".repeat(40),
   },
 ];
 
@@ -64,10 +50,9 @@ async function seededStore(): Promise<LocalArtifactStore> {
   const store = new LocalArtifactStore(await mkdtemp(join(tmpdir(), "site-tasks-")));
   const put = (key: string, value: unknown) =>
     store.put(key, Buffer.from(JSON.stringify(value)), "application/json");
-  await put("runs/run-one/authoring/c1/definition.json", definition("task-good", 11));
+  await put("runs/run-one/authoring/c1/round-1/turn-1/result.json", { kind: "verify" });
   await put("runs/run-one/verification/c1/round-1/result.json", { kind: "accepted" });
   await store.put(BUNDLE_KEY, Buffer.from("tar"), "application/gzip");
-  await put("runs/run-one/authoring/c2/definition.json", definition("task-bad", 12));
   await put("runs/run-one/authoring/c2/round-1/result.json", {
     kind: "rejected",
     reason: "authoring failed: tests never fail without the solution\nmore detail",

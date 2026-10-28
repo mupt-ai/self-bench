@@ -37,23 +37,6 @@ describe("artifact store listing", () => {
   test("lists keys under a prefix and groups candidate artifacts", async () => {
     const root = await temporaryRoot();
     const store = new LocalArtifactStore(root);
-    const definition = {
-      taskId: "task-a",
-      difficulty: "medium",
-      testCommand: "pnpm jest {tests}",
-      failToPass: ["a"],
-      passToPass: ["b", "c"],
-      testPaths: ["a", "b"],
-      workdir: ".",
-      sourcePr: 7,
-      sourceUrl: "https://github.com/o/r/pull/7",
-      baseCommit: "a".repeat(40),
-    };
-    await store.put(
-      "runs/run-1/authoring/cand-a/definition.json",
-      Buffer.from(JSON.stringify(definition)),
-      "application/json",
-    );
     await store.put(
       "runs/run-1/audits/task-a/abc.json",
       Buffer.from('{"accepted":true}'),
@@ -118,7 +101,7 @@ describe("artifact store listing", () => {
 
   test("a failed archived-run scan lists nothing and is retried on the next request", async () => {
     const store = new LocalArtifactStore(await temporaryRoot());
-    await store.put("runs/run-1/definition.json", Buffer.from("{}"), "application/json");
+    await store.put("runs/run-1/report.json", Buffer.from("{}"), "application/json");
     const list = store.list.bind(store);
     store.list = () => Promise.reject(new Error("store unavailable"));
     expect(await listArchivedRuns(store)).toEqual([]);

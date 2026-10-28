@@ -59,6 +59,7 @@ describe("what an api key may reach", () => {
         runId: "batch-one",
         candidateId: "w0s2-beta",
         taskId: "beta-task",
+        baseCommit: "a".repeat(40),
         stage: "authoring",
         difficulty: "easy",
         workflowId: "batch-one/candidate/w0s2-beta",

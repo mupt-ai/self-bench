@@ -1,4 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
+import { eq } from "drizzle-orm";
+import { tasks } from "../../src/db/schema.js";
 import { createTaskStore } from "../../src/db/tasks.js";
 import { prFixture, pullRequest, REPO } from "../support/pr-fixture.js";
 import type { AuthServer } from "../support/site-fixture.js";
@@ -32,23 +34,13 @@ test("feedback starts a separate task from the submitted draft and records its l
   const store = createTaskStore(site.db);
   const originalRow = await store.find(1, original.runId, original.taskId);
   if (!originalRow) throw new Error("Missing original task");
-  const definition = {
-    schemaVersion: 2,
-    taskId: "fix-pr-57",
-    baseCommit: "b".repeat(40),
-    prompt: "Fix the feature",
-  };
+  const taskId = "fix-pr-57";
   const originalRun = started[0]?.input.run.runId;
   if (!originalRun) throw new Error("Missing original run");
   const source = await artifacts.put(
     `runs/${originalRun}/authoring/${original.candidateId}/round-1/source-task.tar.gz`,
     Buffer.from("submitted source draft"),
     "application/gzip",
-  );
-  const definitionRef = await artifacts.put(
-    `runs/${originalRun}/authoring/${original.candidateId}/round-1/definition.json`,
-    Buffer.from(JSON.stringify(definition)),
-    "application/json",
   );
   await artifacts.put(
     `runs/${originalRun}/authoring/${original.candidateId}/round-1/result.json`,
@@ -58,8 +50,7 @@ test("feedback starts a separate task from the submitted draft and records its l
         candidateId: original.candidateId,
         task: {
           candidateId: original.candidateId,
-          taskId: definition.taskId,
-          definition: definitionRef,
+          taskId,
           sourceBundle: source,
         },
         session: {
@@ -75,8 +66,10 @@ test("feedback starts a separate task from the submitted draft and records its l
   await store.settle(original.runId, original.candidateId, {
     stage: "accepted",
     pipelineStatus: "accepted",
-    taskId: definition.taskId,
+    taskId,
   });
+  const authoredOn = "c".repeat(40);
+  await site.db.update(tasks).set({ baseCommit: authoredOn }).where(eq(tasks.id, originalRow.id));
   // Batch candidates have different ids, but still share a PR-derived run id namespace.
   await seedTasks(site.db, [
     {
@@ -90,16 +83,13 @@ test("feedback starts a separate task from the submitted draft and records its l
     },
   ]);
 
-  const response = await site.request(
-    `${REPO}/tasks/${original.runId}/${definition.taskId}/feedback`,
-    {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        feedback: "The instruction does not define the exact error wording.",
-      }),
-    },
-  );
+  const response = await site.request(`${REPO}/tasks/${original.runId}/${taskId}/feedback`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      feedback: "The instruction does not define the exact error wording.",
+    }),
+  });
   expect(response.status).toBe(201);
   const revision = (await response.json()).task as { runId: string; taskId: string; state: string };
   expect(revision.runId).not.toBe(original.runId);
@@ -108,15 +98,17 @@ test("feedback starts a separate task from the submitted draft and records its l
   expect(started[1]?.input.revision?.feedback).toBe(
     "The instruction does not define the exact error wording.",
   );
-  expect(started[1]?.input.revision?.draft.taskId).toBe(definition.taskId);
+  expect(started[1]?.input.revision?.draft.taskId).toBe(taskId);
+  // The revision starts from the commit the original task was authored on, not the PR's base now.
+  expect(started[1]?.input.candidate.baseCommit).toBe(authoredOn);
   expect(started[1]?.input.revision?.draft.sourceBundle.uri).toContain(revision.runId);
   const revisionRow = await store.find(1, revision.runId, revision.taskId);
   expect(revisionRow).toMatchObject({
-    revisedFrom: { runId: original.runId, taskId: definition.taskId },
+    revisedFrom: { runId: original.runId, taskId },
     feedback: "The instruction does not define the exact error wording.",
   });
 
-  const detail = await site.request(`${REPO}/tasks/${original.runId}/${definition.taskId}`, {
+  const detail = await site.request(`${REPO}/tasks/${original.runId}/${taskId}`, {
     headers,
   });
   expect(await detail.json()).toMatchObject({ revisions: [{ runId: revision.runId }] });

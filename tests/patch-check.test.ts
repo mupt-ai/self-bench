@@ -76,11 +76,11 @@ new file mode 100644
       testPatch: ignoredTest,
       goldPatch: ignoredGold,
     });
-    expect(errors.map((error) => error.message.split(", which")[0])).toEqual([
+    expect(errors.map((error) => error.split(", which")[0])).toEqual([
       "test.patch touches .github/scripts/check.py",
       "gold.patch touches docs/internal.md",
     ]);
-    expect(errors[0]?.message).toContain("export-ignore");
+    expect(errors[0]).toContain("export-ignore");
     const worktree = (await runCommand("git", ["-C", repo, "worktree", "list"])).stdout
       .trim()
       .split("\n");
@@ -100,12 +100,7 @@ new file mode 100644
     const corrupt = `${goldPatch.split("\n").slice(0, 5).join("\n")}\n`;
     const errors = await patchApplyCheck({ repository: repo, base, testPatch, goldPatch: corrupt });
     expect(errors).toEqual([
-      {
-        gate: "patch",
-        message: expect.stringMatching(
-          /^gold\.patch does not apply to the clean base tree: .*corrupt patch/,
-        ),
-      },
+      expect.stringMatching(/^gold\.patch does not apply to the clean base tree: .*corrupt patch/),
     ]);
   });
 
@@ -119,7 +114,7 @@ new file mode 100644
       goldPatch,
     });
     expect(errors).toHaveLength(1);
-    expect(errors[0]?.message).toMatch(
+    expect(errors[0]).toMatch(
       /^test\.patch does not apply to the clean base tree: .*patch does not apply/,
     );
   });
@@ -134,12 +129,7 @@ new file mode 100644
       goldPatch: goldTouchingTests,
     });
     expect(errors).toEqual([
-      {
-        gate: "patch",
-        message: expect.stringContaining(
-          "gold.patch does not apply on top of test.patch (the oracle order)",
-        ),
-      },
+      expect.stringContaining("gold.patch does not apply on top of test.patch (the oracle order)"),
     ]);
   });
 
@@ -151,19 +141,6 @@ new file mode 100644
       testPatch,
       goldPatch,
     });
-    expect(errors[0]?.message).toContain("is not available in");
+    expect(errors[0]).toContain("is not available in");
   });
-});
-
-test("empty test patch still checks the reference against a clean base", async () => {
-  const { repo, base } = await repository();
-  expect(await patchApplyCheck({ repository: repo, base, testPatch: "", goldPatch })).toEqual([]);
-  expect(
-    await patchApplyCheck({
-      repository: repo,
-      base,
-      testPatch: "",
-      goldPatch: goldPatch.replace("-two", "-missing"),
-    }),
-  ).not.toEqual([]);
 });

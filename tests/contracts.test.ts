@@ -2,38 +2,8 @@ import { describe, expect, test } from "bun:test";
 import {
   reviewRoundResultSchema,
   runRequestSchema,
-  taskDefinitionSchema,
   taskImagesSchema,
 } from "../src/contracts/index.js";
-
-const definition = {
-  schemaVersion: 2 as const,
-  difficulty: "easy",
-  taskId: "tiered-task",
-  repo: "https://github.com/example/repo.git",
-  baseCommit: "a".repeat(40),
-  workdir: ".",
-  testCommand: "bun test {tests}",
-  failToPass: ["new behavior"],
-  passToPass: ["existing behavior"],
-  testPaths: ["tests/held-out.test.ts"],
-  environment: {
-    schemaVersion: 1 as const,
-    baseImage: `node:22@sha256:${"d".repeat(64)}`,
-    rootSetupCommand: "apt-get update && apt-get install -y bash git passwd procps tar",
-    setupCommand: "bun install --frozen-lockfile",
-    smokeCommand: "bun --version",
-    environmentVariables: {},
-    services: [],
-    source: "ci-adapted" as const,
-    evidence: [{ path: "package.json", reason: "Pins Bun and the test script." }],
-  },
-  sourcePr: 1,
-  sourceUrl: "https://github.com/example/repo/pull/1",
-  prompt: "Implement the requested behavior.",
-  timeouts: { setupSeconds: 900, agentSeconds: 2400, testsSeconds: 900 },
-  resources: { cpus: 4, memoryMb: 8192, storageMb: 20480 },
-};
 
 const request = {
   runId: "run-tiered-candidates",
@@ -55,33 +25,6 @@ const request = {
 };
 
 describe("contracts", () => {
-  test("accepts all three task difficulties", () => {
-    for (const difficulty of ["easy", "medium", "hard"]) {
-      expect(taskDefinitionSchema.safeParse({ ...definition, difficulty }).success).toBe(true);
-    }
-  });
-
-  test("binds task definitions to one canonical repository and pull request", () => {
-    expect(
-      taskDefinitionSchema.safeParse({
-        ...definition,
-        repo: "example/other",
-      }).success,
-    ).toBe(false);
-    expect(
-      taskDefinitionSchema.safeParse({
-        ...definition,
-        testCommand: "bun test {tests} && bun test {tests}",
-      }).success,
-    ).toBe(false);
-    expect(
-      taskDefinitionSchema.safeParse({
-        ...definition,
-        testPaths: ["../outside.test.ts"],
-      }).success,
-    ).toBe(false);
-  });
-
   test("requires between one and three hundred candidates across tiers", () => {
     expect(
       runRequestSchema.safeParse({

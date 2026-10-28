@@ -33,10 +33,10 @@ test("an accepted task with images settles onto its execution bundle, with no ap
     "application/gzip",
   );
   await store.put(`${attempt}/gate-task.tar.gz`, await gzippedTar(files), "application/gzip");
-  const definition = await store.put(
-    "runs/run-1/authoring/cand/round-1/definition.json",
-    Buffer.from(JSON.stringify({ taskId: "task" })),
-    "application/json",
+  const sourceBundle = await store.put(
+    "runs/run-1/authoring/cand/round-1/source-task.tar.gz",
+    await gzippedTar({ "instruction.md": "Fix it." }),
+    "application/gzip",
   );
   const images = {
     agent: `us-central1-docker.pkg.dev/p/selfbench-tasks/run-1/cand/agent@sha256:${"a".repeat(64)}`,
@@ -58,8 +58,7 @@ test("an accepted task with images settles onto its execution bundle, with no ap
       task: {
         candidateId: "cand",
         taskId: "task",
-        definition,
-        sourceBundle: definition,
+        sourceBundle,
         bundle,
         images,
       },

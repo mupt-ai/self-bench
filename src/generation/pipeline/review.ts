@@ -28,9 +28,6 @@ export interface ReviewRoundInput {
 }
 
 const VERDICT = "/work/verdict/verdict.json";
-// Review reads only the prompt, so a candidate verified under an older definition schema (such
-// as the removed JUnit `testResults`) is still reviewed.
-const reviewedDefinitionSchema = z.object({ prompt: z.string().min(1) });
 const verdictSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("accepted"), reason: z.string().min(1) }),
   z.object({
@@ -62,18 +59,14 @@ export async function startReviewRound(
 ): Promise<SandboxJobOutcome> {
   const { run, candidate, task, round } = input;
   const attempt = Context.current().info.attempt;
-  const [reportBytes, definitionBytes, extension, program, bundle] = await Promise.all([
+  const [reportBytes, extension, program, bundle] = await Promise.all([
     store.get(input.report),
-    store.get(task.definition),
     readAsset("dist/extension-reviewer.bundle.js"),
     readAsset("dist/sandbox-verifier.bundle.js"),
     artifactFile(store, task.bundle, "/work/task.tar.gz"),
   ]);
   const report = verifyReportSchema.parse(JSON.parse(Buffer.from(reportBytes).toString("utf8")));
   if (!report.green) throw new Error("review requires a green report");
-  const definition = reviewedDefinitionSchema.parse(
-    JSON.parse(Buffer.from(definitionBytes).toString("utf8")),
-  );
   return await startAgent({
     store,
     sandbox,
@@ -87,7 +80,7 @@ export async function startReviewRound(
     tools: "read,grep,find,ls,accept_task,submit_suggestions,reject_task",
     prompt: renderPrompt("review", {
       taskId: task.taskId,
-      instruction: definition.prompt.trim(),
+      request: candidate.request.trim(),
       report: renderVerifyReport(report).trim(),
       maintainer: input.maintainerFeedback
         ? renderPrompt("review-feedback", { feedback: input.maintainerFeedback.trim() })

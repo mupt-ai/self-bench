@@ -3,8 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse } from "smol-toml";
-import type { TaskDefinition } from "../../src/contracts/index.js";
-import { serviceComposeYaml, taskToml } from "../../src/generation/task/render.js";
+import { taskToml } from "../../src/generation/task/render.js";
 import {
   assertHostSafeTask,
   UnsafeHarborTaskError,
@@ -17,33 +16,13 @@ afterEach(async () => {
 
 const harborEnv = { PATH: "/usr/bin", HOME: "/home/node", MODAL_TOKEN_SECRET: "as-secret" };
 
-const definition = {
+const task = {
   taskId: "example",
   difficulty: "medium",
   repo: "example/repo",
   baseCommit: "a".repeat(40),
-  workdir: "project",
   sourcePr: 1,
-  timeouts: { setupSeconds: 1, agentSeconds: 1, testsSeconds: 1 },
-  resources: { cpus: 1, memoryMb: 1024, storageMb: 1024 },
-  environment: {
-    services: [
-      {
-        name: "redis",
-        image: `redis:7@sha256:${"b".repeat(64)}`,
-        environmentVariables: {},
-        command: ["sh", "-c", "echo $HOME"],
-        healthcheck: {
-          test: ["CMD", "redis-cli", "ping"],
-          intervalSeconds: 2,
-          timeoutSeconds: 1,
-          retries: 10,
-          startPeriodSeconds: 0,
-        },
-      },
-    ],
-  },
-} as unknown as TaskDefinition;
+} as const;
 
 async function taskDirectory(toml: string, compose?: string): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "selfbench-task-safety-"));
@@ -55,8 +34,8 @@ async function taskDirectory(toml: string, compose?: string): Promise<string> {
 }
 
 test("a compiler-rendered task passes and task.toml is rewritten to the same configuration plus the agent's time", async () => {
-  const toml = taskToml(definition);
-  const root = await taskDirectory(toml, serviceComposeYaml(definition));
+  const toml = taskToml(task);
+  const root = await taskDirectory(toml);
   await assertHostSafeTask(root, harborEnv, 60);
   const rendered = parse(toml);
   expect(parse(await readFile(join(root, "task.toml"), "utf8"))).toEqual({

@@ -1,7 +1,7 @@
 """Run a task's smoke command where the solver runs: its image, user, and network allowlist."""
 from harbor.agents.base import BaseAgent
 
-SMOKE = "/opt/selfbench-environment/smoke.sh 2>&1"
+SMOKE = "bash /opt/selfbench-environment/smoke.sh 2>&1"
 # Whatever smoke wrote outside .gitignore stays out of agent.patch, so nop grades the snapshot.
 RESTORE = "git -C /app reset -q --hard && git -C /app clean -fdq"
 OUTPUT_LIMIT = 200_000
@@ -24,7 +24,7 @@ class SmokeAgent(BaseAgent):
 
     async def run(self, instruction, environment, context) -> None:
         # Harbor calls run() inside the agent phase: [agent] user and network policy both apply.
-        result = await environment.exec(SMOKE)
+        result = await environment.exec(SMOKE, cwd="/app")
         context.metadata = {
             "smoke_exit_code": result.return_code,
             "smoke_output": (result.stdout or "")[-OUTPUT_LIMIT:],

@@ -145,6 +145,7 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
         taskId: pullRequest.candidate.candidateId,
         sourcePr: number,
         sourceUrl: pullRequest.candidate.sourceUrl,
+        baseCommit: pullRequest.candidate.baseCommit,
         difficulty: pullRequest.candidate.difficulty,
         stage: "authoring",
         startedBy: user.id,

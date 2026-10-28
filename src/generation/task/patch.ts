@@ -12,22 +12,17 @@ export interface PatchApplyCheckInput {
   readonly goldPatch: string;
 }
 
-export interface PatchApplyError {
-  readonly gate: "patch";
-  readonly message: string;
-}
-
 /**
  * Proves both patches apply before any image is built: test.patch against the clean base tree,
  * gold.patch against the clean base tree, and gold.patch on top of test.patch (the oracle order).
  * Uses a detached temporary worktree so the agent's working-tree edits never interfere.
  */
-export async function patchApplyCheck(input: PatchApplyCheckInput): Promise<PatchApplyError[]> {
+export async function patchApplyCheck(input: PatchApplyCheckInput): Promise<string[]> {
   const scratch = await mkdtemp(join(tmpdir(), "selfbench-patch-check-"));
   const worktree = join(scratch, "base");
   const testPatch = join(scratch, "test.patch");
   const goldPatch = join(scratch, "gold.patch");
-  const errors: PatchApplyError[] = [];
+  const errors: string[] = [];
   try {
     await Promise.all([
       writeFile(testPatch, input.testPatch),
@@ -40,10 +35,7 @@ export async function patchApplyCheck(input: PatchApplyCheckInput): Promise<Patc
     );
     if (added.exitCode !== 0) {
       return [
-        {
-          gate: "patch",
-          message: `base tree ${input.base} is not available in ${input.repository}: ${added.stderr.trim()}`,
-        },
+        `base tree ${input.base} is not available in ${input.repository}: ${added.stderr.trim()}`,
       ];
     }
     for (const [label, patch] of [
@@ -52,10 +44,9 @@ export async function patchApplyCheck(input: PatchApplyCheckInput): Promise<Patc
     ] as const) {
       const ignored = await exportIgnoredPaths(worktree, patchPaths(patch));
       if (ignored.length > 0) {
-        errors.push({
-          gate: "patch",
-          message: `${label} touches ${ignored.join(", ")}, which the repository marks export-ignore in .gitattributes; the snapshot the solver and the verifier receive cannot contain such paths. Keep tests and changes outside export-ignored paths, or decline the task if the change lives only there.`,
-        });
+        errors.push(
+          `${label} touches ${ignored.join(", ")}, which the repository marks export-ignore in .gitattributes; the snapshot the solver and the verifier receive cannot contain such paths. Keep tests and changes outside export-ignored paths, or decline the task if the change lives only there.`,
+        );
       }
     }
     if (errors.length > 0) {
@@ -68,18 +59,14 @@ export async function patchApplyCheck(input: PatchApplyCheckInput): Promise<Patc
         { allowFailure: true },
       );
       if (result.exitCode !== 0) {
-        errors.push({
-          gate: "patch",
-          message: `${label} does not apply ${context}: ${gitMessage(result.stderr)}`,
-        });
+        errors.push(`${label} does not apply ${context}: ${gitMessage(result.stderr)}`);
         return false;
       }
       return true;
     };
-    const testApplies =
-      input.testPatch === "" || (await check(testPatch, "test.patch", "to the clean base tree"));
+    const testApplies = await check(testPatch, "test.patch", "to the clean base tree");
     const goldApplies = await check(goldPatch, "gold.patch", "to the clean base tree");
-    if (testApplies && goldApplies && input.testPatch !== "") {
+    if (testApplies && goldApplies) {
       await runCommand("git", [
         "-C",
         worktree,
