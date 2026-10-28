@@ -115,6 +115,8 @@ export async function askModel(
     system: string;
     ask: string;
     limit: number;
+    /** How long Pi may take; five minutes by default. */
+    timeoutMs?: number;
     /** Told what went wrong when Pi gives no answer: its error output, redacted. */
     onFailure?(detail: string): void;
   },
@@ -174,7 +176,7 @@ export async function askModel(
           LANG: "C.UTF-8",
           [modelApiKeyVariable(selected?.provider ?? "openrouter")]: key,
         },
-        timeoutMs: TIMEOUT_MS,
+        timeoutMs: prompt.timeoutMs ?? TIMEOUT_MS,
         allowFailure: true,
         ...(options.signal ? { signal: options.signal } : {}),
       },

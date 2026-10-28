@@ -24,9 +24,9 @@ function scored({ configuration, coverage }: ChartOption) {
 }
 
 /**
- * Model Summaries: a button in the Results page's actions that opens, for the configurations
- * chosen in it as the chart's are chosen, what each does well and where it fails, written by a
- * model from its scored results; and asks for new ones through a saved key and model.
+ * Model Summaries: a button in the Results page's actions that opens the latest report, in which one
+ * model compared configurations chosen as the chart's are, and asks for another through a saved
+ * key and model.
  */
 export function ModelSummaries() {
   const { session } = useSession();
@@ -40,14 +40,13 @@ export function ModelSummaries() {
     baseUrl: url,
     enabled: open && signedIn,
   });
-  const summaries = useMemo(
-    () => new Map(state?.summaries.map((summary) => [summary.configuration, summary])),
-    [state],
+  const report = state?.report;
+  const offered = useMemo(
+    () => new Map(options.map((option) => [option.configuration.key, option])),
+    [options],
   );
-  const failures = useMemo(
-    () => new Map(state?.failures.map((failure) => [failure.configuration, failure])),
-    [state],
-  );
+  const covered = new Set(report?.summaries.map((summary) => summary.configuration));
+  const uncovered = chosen.filter((option) => !covered.has(option.configuration.key)).length;
   if (!signedIn || !options.length) return null;
   return (
     <>
@@ -77,7 +76,7 @@ export function ModelSummaries() {
           <DialogHeader
             title="Model Summaries"
             titleId="model-summaries-title"
-            description="What each chosen configuration does well and where it fails, written by a model from its scored results and failure explanations on the accepted tasks."
+            description="One model compares the chosen configurations side by side: the failure modes they share, then what each can be trusted with and how it fails."
             onClose={() => setOpen(false)}
             closeRef={close}
           />
@@ -89,7 +88,7 @@ export function ModelSummaries() {
               custom={saved !== undefined}
               summary={
                 chosen.length
-                  ? "Each is summarized from its own scored results on the accepted tasks."
+                  ? "One model compares them all, from their scored results on the accepted tasks."
                   : "Choose configurations to summarize."
               }
               legend="Configurations to Summarize"
@@ -111,51 +110,62 @@ export function ModelSummaries() {
                   />
                 )}
             {error && <Notice>{error}</Notice>}
-            {chosen.length > 0 && (
-              <ul className="divide-y divide-border panel">
-                {chosen.map((option) => {
-                  const { configuration } = option;
-                  const summary = summaries.get(configuration.key);
-                  const failure = failures.get(configuration.key);
-                  const busy = running.includes(configuration.key);
-                  const now = scored(option);
-                  const changed =
-                    summary && (summary.tasks !== now.tasks || summary.passed !== now.passed);
-                  return (
-                    <li key={configuration.key} className="min-w-0 space-y-2 px-4 py-3">
-                      <ConfigurationName configuration={configuration} />
-                      {busy ? (
-                        <p role="status" className="text-sm text-muted-foreground">
-                          Summarizing…
+            {writing ? (
+              <p role="status" className="text-sm text-muted-foreground">
+                Comparing {running.length}{" "}
+                {running.length === 1 ? "configuration" : "configurations"}…
+              </p>
+            ) : (
+              state?.failure && (
+                <p className="text-sm text-destructive">
+                  The last summary failed: {state.failure.message}
+                </p>
+              )
+            )}
+            {report ? (
+              <section aria-labelledby="model-summaries-report" className="space-y-3">
+                <div className="space-y-1.5">
+                  <h3 id="model-summaries-report" className="text-sm font-semibold">
+                    Overall
+                  </h3>
+                  {report.overview && <p className="text-sm leading-6">{report.overview}</p>}
+                  <p className="text-xs text-muted-foreground">
+                    {report.model} compared {report.summaries.length}{" "}
+                    {report.summaries.length === 1 ? "configuration" : "configurations"} ·{" "}
+                    {momentLabel(report.summarizedAt)}
+                    {uncovered > 0 &&
+                      ` · ${uncovered} of the chosen ${uncovered === 1 ? "is" : "are"} not in it; summarize again to include ${uncovered === 1 ? "it" : "them"}`}
+                  </p>
+                </div>
+                <ul className="divide-y divide-border panel">
+                  {report.summaries.map((summary) => {
+                    const option = offered.get(summary.configuration);
+                    const now = option && scored(option);
+                    const changed =
+                      now && (summary.tasks !== now.tasks || summary.passed !== now.passed);
+                    return (
+                      <li key={summary.configuration} className="min-w-0 space-y-2 px-4 py-3">
+                        {option ? (
+                          <ConfigurationName configuration={option.configuration} />
+                        ) : (
+                          <span className="font-mono text-xs text-muted-foreground">
+                            {summary.configuration}
+                          </span>
+                        )}
+                        <p className="text-sm leading-6">{summary.text}</p>
+                        <p className="text-xs text-muted-foreground">
+                          From {summary.tasks} scored {summary.tasks === 1 ? "task" : "tasks"},{" "}
+                          {summary.passed} passed
+                          {changed && " · Its results have changed since"}
                         </p>
-                      ) : (
-                        <>
-                          {summary && (
-                            <>
-                              <p className="text-sm leading-6">{summary.text}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {summary.model} read {summary.tasks} scored{" "}
-                                {summary.tasks === 1 ? "task" : "tasks"}, {summary.passed} passed ·{" "}
-                                {momentLabel(summary.summarizedAt)}
-                                {changed && " · Its results have changed since"}
-                              </p>
-                            </>
-                          )}
-                          {failure ? (
-                            <p className="text-sm text-destructive">
-                              The last summary failed: {failure.message}
-                            </p>
-                          ) : (
-                            !summary && (
-                              <p className="text-sm text-muted-foreground">Not summarized yet.</p>
-                            )
-                          )}
-                        </>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ) : (
+              !writing &&
+              state && <p className="text-sm text-muted-foreground">Nothing summarized yet.</p>
             )}
           </div>
         </Dialog>

@@ -18,7 +18,7 @@ const key = configuration?.key ?? "";
 const button = (label: string) =>
   [...document.querySelectorAll("button")].find((entry) => entry.textContent === label);
 
-test("Model Summaries shows each chosen configuration's summary and asks for new ones", async () => {
+test("Model Summaries shows the last report and asks for another", async () => {
   const answered = globalThis.fetch;
   let running: string[] = [];
   globalThis.fetch = (async (url: string, init?: RequestInit) => {
@@ -41,17 +41,19 @@ test("Model Summaries shows each chosen configuration's summary and asks for new
       return Response.json({
         available: true,
         running,
-        summaries: [
-          {
-            configuration: key,
-            text: "Solid on parsers; it misses cache invalidation.",
-            model: "gpt-6-luna",
-            tasks: 1,
-            passed: 1,
-            summarizedAt: "2026-09-28T10:00:00.000Z",
-          },
-        ],
-        failures: [],
+        report: {
+          overview: "All of them stop before changes are wired through.",
+          model: "gpt-6-luna",
+          summarizedAt: "2026-09-28T10:00:00.000Z",
+          summaries: [
+            {
+              configuration: key,
+              text: "Solid on parsers; it misses cache invalidation.",
+              tasks: 1,
+              passed: 1,
+            },
+          ],
+        },
       });
     return answered(url, init);
   }) as typeof fetch;
@@ -80,6 +82,7 @@ test("Model Summaries shows each chosen configuration's summary and asks for new
   const open = button("Model Summaries");
   if (!open) throw new Error("Missing Model Summaries");
   await act(async () => open.click());
+  expect(document.body.textContent).toContain("All of them stop before changes are wired through.");
   expect(document.body.textContent).toContain("Solid on parsers; it misses cache invalidation.");
   // Summarized from one task; two are scored now.
   expect(document.body.textContent).toContain("Its results have changed since");
@@ -98,6 +101,6 @@ test("Model Summaries shows each chosen configuration's summary and asks for new
     url: `${BASE}/summaries`,
     body: { configurations: [key], summary: { credentialId: "openai-key", model: "openai-model" } },
   });
-  expect(document.body.textContent).toContain("Summarizing…");
+  expect(document.body.textContent).toContain("Comparing 1 configuration…");
   await act(async () => root.unmount());
 });

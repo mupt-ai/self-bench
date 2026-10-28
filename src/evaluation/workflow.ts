@@ -48,6 +48,10 @@ const explaining = proxyActivities<EvaluationActivities>(
 );
 // What a person asked for in the app runs once; they can ask again.
 const asked = proxyActivities<EvaluationActivities>(task({ timeout: "10 minutes", attempts: 1 }));
+// One Pi call over every chosen configuration's evidence, which may take up to twelve minutes.
+const summarizing = proxyActivities<EvaluationActivities>(
+  task({ timeout: "15 minutes", attempts: 1 }),
+);
 
 /**
  * Runs each trial as its own child workflow, `<evaluation workflow ID>/trial/<index>`, all started
@@ -156,16 +160,9 @@ export async function selfBenchTaskAuditWorkflow(request: TaskAuditRequest): Pro
   await asked.auditSolverTask(request);
 }
 
-/**
- * Summarizes each configuration a person chose (model-summary.ts) in its own activity, all at
- * once, so one that fails leaves the others' summaries; each records its own failure.
- */
+/** Summarizes the configurations a person chose in one reply (model-summary.ts). */
 export async function selfBenchModelSummaryWorkflow(request: ModelSummaryRequest): Promise<void> {
-  await Promise.allSettled(
-    request.configurations.map((configuration) =>
-      asked.summarizeSolverModel(request, configuration),
-    ),
-  );
+  await summarizing.summarizeSolverModels(request);
 }
 
 /**

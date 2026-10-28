@@ -17,8 +17,8 @@ import type { EvaluationRoutesOptions } from "./evaluations.js";
 
 const UNAVAILABLE = "Model summaries are unavailable on this deployment.";
 const BUSY = "Summaries are already being written here. Try again once they finish.";
-/** The most configurations one request summarizes: each is a model call on the chosen key. */
-const MAX_CONFIGURATIONS = 20;
+/** The most configurations one reply compares, which keeps their evidence within a model's context. */
+const MAX_CONFIGURATIONS = 12;
 
 const requestSchema = z.strictObject({
   configurations: z.array(z.string().min(1).max(1_000)).min(1).max(MAX_CONFIGURATIONS),
@@ -37,10 +37,10 @@ interface Context {
 }
 
 /**
- * `…/evaluations/summaries` (Model Summaries in the app). GET gives the scope's summaries, why the
- * latest of any gave none, and which configurations are being summarized; POST summarizes the
- * configurations it names through a saved key and model, which is explicit consent to send their
- * results there.
+ * `…/evaluations/summaries` (Model Summaries in the app). GET gives the scope's latest report, why
+ * a later one gave none, and which configurations are being summarized; POST summarizes the
+ * configurations it names together through a saved key and model, which is explicit consent to
+ * send their results there.
  */
 export async function modelSummariesRoute(
   options: Options,
@@ -49,7 +49,7 @@ export async function modelSummariesRoute(
   { scope, orgId, user, env, tasks }: Context,
 ): Promise<void> {
   if (request.method === "GET") {
-    const [{ summaries, failures }, running] = await Promise.all([
+    const [{ report, failure }, running] = await Promise.all([
       readModelSummaries(options.artifacts, scope),
       options.summarize ? options.summarize.running(scope) : [],
     ]);
@@ -57,8 +57,8 @@ export async function modelSummariesRoute(
       available: !!options.summarize,
       ...(options.summarize ? {} : { reason: UNAVAILABLE }),
       running,
-      summaries,
-      failures,
+      ...(report ? { report } : {}),
+      ...(failure ? { failure } : {}),
     });
     return;
   }

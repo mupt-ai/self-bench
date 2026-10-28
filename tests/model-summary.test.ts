@@ -6,7 +6,8 @@ import { LocalArtifactStore } from "../src/artifacts/local.js";
 import {
   type ModelSummaryRequest,
   readModelSummaries,
-  summarizeModel,
+  reportSections,
+  summarizeModels,
 } from "../src/evaluation/model-summary.js";
 import { initialEvaluation, saveEvaluation } from "../src/evaluation/store.js";
 import type { EvaluationInput, EvaluationRun } from "../src/evaluation/types.js";
@@ -54,13 +55,28 @@ function scoredRun(
 
 const configuration = (model: string) => JSON.stringify([model, "codex", "high"]);
 
-test("a summary reads the configuration's results against the others', and keeps what the model said", async () => {
+test("a report's sections are read off by heading, and text before the first is dropped", () => {
+  expect(
+    reportSections(
+      "Preamble.\n### Overall\nAll rush.\n\n### C1\nCareful.\n## c2 (GPT)\nHasty.\n### C1\nAgain.",
+    ),
+  ).toEqual(
+    new Map([
+      ["Overall", "All rush."],
+      ["C1", "Careful."],
+      ["C2", "Hasty."],
+    ]),
+  );
+});
+
+test("one report compares the chosen configurations, and keeps what the model said of each", async () => {
   const store = new LocalArtifactStore(await mkdtemp(join(tmpdir(), "selfbench-summary-")));
   const own = scoredRun("gpt-own", { parser: 1, cache: 0, outside: 0 });
   const failed = own.trials.find((trial) => trial.taskId === "cache");
   if (failed) failed.failureSummary = { text: "It never invalidated the cache.", model: "x" };
   await saveEvaluation(store, own);
   await saveEvaluation(store, scoredRun("gpt-other", { parser: 0, cache: 1 }));
+  await saveEvaluation(store, scoredRun("gpt-unchosen", { parser: 1, cache: 1 }));
   const vault = { ...memoryVault(), scopeOrg: async () => 7 };
   const key = "byok-summary-provider-secret";
   const credential = await vault.credentials.create(
@@ -70,7 +86,7 @@ test("a summary reads the configuration's results against the others', and keeps
   );
   const request: ModelSummaryRequest = {
     repoId: 1,
-    configurations: [configuration("gpt-own")],
+    configurations: [configuration("gpt-own"), configuration("gpt-other")],
     // "outside" is not accepted, so its result is left out.
     tasks: ["parser", "cache"].map((taskId) => ({
       runId: "run-one",
@@ -79,35 +95,47 @@ test("a summary reads the configuration's results against the others', and keeps
     })),
     summary: { orgId: 7, credentialId: credential.id, model: "gpt-6-sol" },
   };
-  let reply = { exitCode: 0, stdout: "Strong on parsing; misses cache invalidation.", stderr: "" };
-  const prompts: string[] = [];
+  let reply = {
+    exitCode: 0,
+    stdout:
+      "### Overall\nBoth skip edge cases.\n### C1\nStrong on parsing.\n### C2\nStrong on caching.",
+    stderr: "",
+  };
   const materials: string[] = [];
   const command = async (_name: string, args: readonly string[], options?: CommandOptions) => {
     expect(options?.env?.OPENAI_API_KEY).toBe(key);
-    prompts.push(args.join(" "));
     const path = args.find((arg) => arg.startsWith("@"))?.slice(1);
     if (path) materials.push(await Bun.file(path).text());
     return reply;
   };
   const options = { vault, command, env: {}, redact: (text: string) => text };
-  await summarizeModel(store, request, configuration("gpt-own"), options);
-  expect(prompts[0]).toContain("What does this configuration do well");
-  expect(materials[0]).toContain("Passed 1 of 2 scored tasks.");
-  expect(materials[0]).toContain('<passed_task id="parser" others_passed="0 of 1">');
-  expect(materials[0]).toContain('<failed_task id="cache" others_passed="1 of 1">');
+  await summarizeModels(store, request, options);
+  expect(materials).toHaveLength(1);
+  expect(materials[0]).toContain('<configuration label="C1" passed="1 of 2">');
+  expect(materials[0]).toContain('<task id="parser" outcomes="C1 passed, C2 failed">');
+  expect(materials[0]).toContain('<failures configuration="C1">');
   expect(materials[0]).toContain("It never invalidated the cache.");
   expect(materials[0]).not.toContain("outside");
+  expect(materials[0]).not.toContain("C3");
   expect(await readModelSummaries(store, { repoId: 1 })).toMatchObject({
-    summaries: [
-      {
-        configuration: configuration("gpt-own"),
-        text: "Strong on parsing; misses cache invalidation.",
-        model: "gpt-6-sol",
-        tasks: 2,
-        passed: 1,
-      },
-    ],
-    failures: [],
+    report: {
+      overview: "Both skip edge cases.",
+      model: "gpt-6-sol",
+      summaries: [
+        {
+          configuration: configuration("gpt-own"),
+          text: "Strong on parsing.",
+          tasks: 2,
+          passed: 1,
+        },
+        {
+          configuration: configuration("gpt-other"),
+          text: "Strong on caching.",
+          tasks: 2,
+          passed: 1,
+        },
+      ],
+    },
   });
 
   reply = {
@@ -115,16 +143,17 @@ test("a summary reads the configuration's results against the others', and keeps
     stdout: "",
     stderr: '401 {"error":{"message":"Authentication failed.","type":"authentication_error"}}',
   };
-  await expect(summarizeModel(store, request, configuration("gpt-own"), options)).rejects.toThrow(
-    "Authentication failed.",
+  await expect(summarizeModels(store, request, options)).rejects.toThrow("Authentication failed.");
+  const { report, failure } = await readModelSummaries(store, { repoId: 1 });
+  expect(report?.overview).toBe("Both skip edge cases.");
+  expect(failure?.message).toBe("Authentication failed.");
+  // A reply without the sections asked for keeps no report.
+  reply = { exitCode: 0, stdout: "They are all fine.", stderr: "" };
+  await summarizeModels(store, request, options);
+  expect((await readModelSummaries(store, { repoId: 2 })).report).toBeUndefined();
+  expect((await readModelSummaries(store, { repoId: 1 })).failure?.message).toContain(
+    "no usable answer",
   );
-  const { summaries, failures } = await readModelSummaries(store, { repoId: 1 });
-  expect(summaries).toHaveLength(1);
-  expect(failures).toMatchObject([
-    { configuration: configuration("gpt-own"), message: "Authentication failed." },
-  ]);
-  // Another scope's summaries are its own.
-  expect(await readModelSummaries(store, { repoId: 2 })).toEqual({ summaries: [], failures: [] });
 });
 
 test("Model Summaries start for configurations scored on accepted tasks, through a saved key", async () => {
@@ -163,12 +192,7 @@ test("Model Summaries start for configurations scored on accepted tasks, through
     const post = (body: unknown) =>
       fixture.request(url, { method: "POST", body: JSON.stringify(body) });
     const summary = { credentialId: own.id, model: "gpt-6-sol" };
-    expect(await (await fixture.request(url)).json()).toEqual({
-      available: true,
-      running: [],
-      summaries: [],
-      failures: [],
-    });
+    expect(await (await fixture.request(url)).json()).toEqual({ available: true, running: [] });
     expect((await post({ configurations: [], summary })).status).toBe(400);
     expect(
       (

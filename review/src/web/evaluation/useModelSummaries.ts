@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import type { ModelSummary, ModelSummaryFailure } from "../../../../src/evaluation/model-summary";
+import type {
+  ModelSummaryFailure,
+  ModelSummaryReport,
+} from "../../../../src/evaluation/model-summary";
 import { evaluationRequest } from "./api";
 import type { ExplanationSelection } from "./useFailureExplanation";
 
@@ -10,16 +13,17 @@ interface SummariesState {
   reason?: string;
   /** The configurations being summarized now. */
   running: string[];
-  summaries: ModelSummary[];
-  /** Why a configuration's latest summary gave none, when it is newer than its summary. */
-  failures: ModelSummaryFailure[];
+  /** The latest report: what the configurations chosen together share, then each. */
+  report?: ModelSummaryReport;
+  /** Why the latest request gave no report, when it is newer than the report. */
+  failure?: ModelSummaryFailure;
 }
 
 const POLL_MS = 4000;
 
 /**
- * Model Summaries for the scope at `baseUrl`: each configuration's last summary, asking for more,
- * and waiting while they are written, polling only their state.
+ * Model Summaries for the scope at `baseUrl`: the last report, asking for another, and waiting
+ * while it is written, polling only its state.
  */
 export function useModelSummaries({
   baseUrl,
@@ -89,13 +93,7 @@ export function useModelSummaries({
         configurations,
         summary,
       });
-      setState((current) => ({
-        available: true,
-        summaries: [],
-        failures: [],
-        ...current,
-        running: started.configurations,
-      }));
+      setState((current) => ({ available: true, ...current, running: started.configurations }));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not start the summaries");
       await evaluationRequest<SummariesState>(stateUrl)
