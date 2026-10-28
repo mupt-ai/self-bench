@@ -110,7 +110,14 @@ export function RetryErroredTasks({
                 setError(undefined);
                 try {
                   const result = await submitComparison(url, retry.selection);
-                  void navigate(`${pages}/comparisons/${result.id}`);
+                  if (result.submissionError) {
+                    setError(
+                      result.submissionError ??
+                        "Some runs were not submitted. Resume to finish them.",
+                    );
+                    return;
+                  }
+                  void navigate(`${pages}/results`);
                 } catch (cause) {
                   setError(cause instanceof Error ? cause.message : "Could not retry the tasks.");
                 } finally {

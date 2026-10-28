@@ -55,7 +55,6 @@ function BenchmarkFrame() {
             "min-h-0 flex-1 overflow-y-auto overscroll-contain py-8 [scrollbar-gutter:stable]",
             pageGutter,
           )}
-          // ComparisonHistory watches this pane, as on a repository's pages.
           data-slot="repository-content"
         >
           <div className={pageContainer}>

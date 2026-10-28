@@ -9,7 +9,11 @@ import { covered, setupCoverage } from "../setup/readiness";
 import { useOrgCredentials } from "../setup/SetupStatus";
 import { Button, Notice, PageContent, PageHeader } from "../ui";
 import { evaluationRequest, evaluationRequestId } from "./api";
-import { submitComparison, UnsavedComparisonError } from "./comparison-submission";
+import {
+  resumeComparison,
+  submitComparison,
+  UnsavedComparisonError,
+} from "./comparison-submission";
 import { RunBlockerNotice, RunExecution, RunSetupCallout, runBlocker } from "./RunExecution";
 import { judgeCredentials, RunJudgePanel } from "./RunJudgePanel";
 import { RunModelsPanel } from "./RunModelsPanel";
@@ -124,8 +128,12 @@ function BenchmarkRunContent() {
     } catch {}
     try {
       const result = await submitComparison(url, frozen);
+      if (result.submissionError) {
+        setError(result.submissionError ?? "Some runs were not submitted. Resume to finish them.");
+        return;
+      }
       sessionStorage.removeItem(key);
-      void navigate(`${pages}/comparisons/${result.id}`);
+      void navigate(`${pages}/results`);
     } catch (cause) {
       if (cause instanceof UnsavedComparisonError) setState({ draft: frozen, submitted: false });
       setError(
@@ -133,6 +141,23 @@ function BenchmarkRunContent() {
           ? cause.message
           : "Submission not confirmed. Retry uses the same ID.",
       );
+    } finally {
+      setBusy(false);
+    }
+  };
+  const resume = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const result = await resumeComparison(url, draft.id);
+      if (result.submissionError) {
+        setError(result.submissionError ?? "Some runs were not submitted. Resume to finish them.");
+        return;
+      }
+      sessionStorage.removeItem(key);
+      void navigate(`${pages}/results`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not resume submission");
     } finally {
       setBusy(false);
     }
@@ -150,10 +175,13 @@ function BenchmarkRunContent() {
           <div className="flex flex-wrap items-center gap-3">
             <Link
               className="text-sm font-semibold text-foreground underline underline-offset-4"
-              to={`${pages}/comparisons/${draft.id}`}
+              to={`${pages}/results`}
             >
-              View Status
+              View Results
             </Link>
+            <Button type="button" variant="primary" disabled={busy} onClick={() => void resume()}>
+              {busy ? "Resuming…" : "Resume Submission"}
+            </Button>
             <Button
               type="button"
               disabled={busy}

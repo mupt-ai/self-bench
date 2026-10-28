@@ -28,6 +28,20 @@ test("recovers an already saved comparison after a failed submission response", 
   ]);
 });
 
+test("a saved comparison with runs never started is flagged for resume", async () => {
+  responses(failure(), Response.json({ id: "same-id", runs: [{ id: "a", status: "pending" }] }));
+  expect((await submitComparison("/evaluations", { id: "same-id" })).submissionError).toContain(
+    "Submission failed",
+  );
+});
+
+test("a saved comparison whose runs all started is not flagged", async () => {
+  responses(failure(), Response.json({ id: "same-id", runs: [{ id: "a", status: "running" }] }));
+  expect(
+    (await submitComparison("/evaluations", { id: "same-id" })).submissionError,
+  ).toBeUndefined();
+});
+
 test("only a confirmed missing comparison unlocks the submitted draft", async () => {
   responses(failure(), Response.json({ error: "Comparison not found" }, { status: 404 }));
   await expect(submitComparison("/evaluations", { id: "same-id" })).rejects.toBeInstanceOf(

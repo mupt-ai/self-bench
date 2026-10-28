@@ -16,7 +16,6 @@ for (const section of [
   "/run",
   "/results",
   "/settings/credentials",
-  "/comparisons/example",
 ]) {
   test(`repository layout owns one breadcrumb and navigation on ${section || "dataset"}`, () => {
     const html = renderToStaticMarkup(
