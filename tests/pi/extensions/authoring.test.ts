@@ -47,7 +47,8 @@ function tools(): Map<string, RegisteredTool> {
 
 async function writeDeliverable(overrides: Partial<Record<string, string>> = {}): Promise<void> {
   await mkdir(deliverable, { recursive: true });
-  const files = { ...submission, "notes.txt": "scratch", ...overrides };
+  const { "services.sh": _services, ...required } = submission;
+  const files = { ...required, "notes.txt": "scratch", ...overrides };
   await Promise.all(
     Object.entries(files).map(([name, contents]) => writeFile(join(deliverable, name), contents)),
   );
@@ -101,9 +102,12 @@ describe("authoring extension directory deliverable", () => {
     const submitted = await submit.execute("1", {});
     expect(submitted.isError).toBeUndefined();
     expect(submitted.terminate).toBe(true);
-    // Only the submission's own files are packed, never the author's scratch files.
+    // Only the submission's own files are packed, never the author's scratch files, and
+    // services.sh only when the author wrote one.
     const packed = await runCommand("tar", ["-tzf", join(root, "submission/source-task.tar.gz")]);
-    expect(packed.stdout.trim().split("\n").sort()).toEqual([...SUBMISSION_FILES].sort());
+    expect(packed.stdout.trim().split("\n").sort()).toEqual(
+      SUBMISSION_FILES.filter((name) => name !== "services.sh").sort(),
+    );
 
     const requested = await tools().get("verify")?.execute("2", {});
     expect(requested?.isError).toBeUndefined();

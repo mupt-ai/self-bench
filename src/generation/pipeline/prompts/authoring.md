@@ -27,6 +27,7 @@ Six files in /work/task/:
 - Dockerfile: the environment the agent works and the tests run in.
 - smoke.sh: proves the environment is ready for the agent.
 - run-tests.sh: runs the hidden tests.
+- services.sh, only if the tests need a service such as a database: starts it.
 
 Make both patches with `git diff` against the base commit; test.patch must apply first and gold.patch on top of it. Skip paths the repository marks `export-ignore` in .gitattributes: the agent's snapshot is a `git archive` and will not contain them.
 
@@ -55,7 +56,8 @@ The Dockerfile's build context holds only `repo.tar.gz`, the base commit's files
 - The image needs bash, git, pkill (procps), runuser and useradd (passwd), and tar. Leave /app without a .git directory.
 - The agent works in its image as root, with the HOME and caches the Dockerfile left, and its network is limited to its model provider. Install everything the agent and the tests need ahead of time (package managers, Corepack shims, toolchains, browsers, databases), including dependencies gold.patch adds: nothing reinstalls after a solution is applied.
 - smoke.sh runs in /app under exactly the agent's conditions. Exercise the tools the agent needs to run the tests (for example `pnpm --version`), not just the base image.
-- run-tests.sh runs in /app as an unprivileged user, over the agent's changes with test.patch applied. Its one argument is `fail-to-pass` (the tests the request adds or changes) or `pass-to-pass` (existing tests around the change, which pass before and after it), and it exits 0 only when every one of those tests passes. It starts any service the tests need, and rebuilds changed source if the tests need that.
+- run-tests.sh runs in /app as an unprivileged user, over the agent's changes with test.patch applied. Its one argument is `fail-to-pass` (the tests the request adds or changes) or `pass-to-pass` (existing tests around the change, which pass before and after it), and it exits 0 only when every one of those tests passes. It rebuilds changed source if the tests need that.
+- Services run in the image, not beside it. Install and initialize them in the Dockerfile (for example `apt-get install postgresql`, then `initdb` and any fixtures as the `postgres` user). services.sh runs as root from /app, before the agent's changes are applied: it starts each service in the background (Postgres through `runuser -u postgres -- pg_ctl`; it refuses to run as root), waits until it accepts connections, and exits 0. The tests reach services on localhost. The agent's image has it at /opt/selfbench-environment/services.sh: smoke.sh runs it first, and instruction.md tells the agent it starts the services.
 - Every task gets {{limits}}.
 
 # Difficulty

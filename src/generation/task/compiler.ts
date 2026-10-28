@@ -11,7 +11,8 @@ import { solutionScript, testScript } from "./verifier.js";
 /**
  * Renders a checked submission (checkSubmission, its base images pinned) as a Harbor task over
  * the repository's snapshot at the task's base commit. Both image contexts get the snapshot as
- * repo.tar.gz; only the verifier's holds the hidden tests, and neither holds the solution.
+ * repo.tar.gz; only the verifier's holds the hidden tests, and neither holds the solution. A task
+ * without services gets an empty services.sh, so both images are built the same way.
  */
 export async function compileHarborTask(
   submission: Submission,
@@ -52,10 +53,12 @@ export async function compileHarborTask(
     writeFile(join(outputDirectory, "task.toml"), taskToml(task)),
     writeFile(join(environment, "Dockerfile"), agentDockerfile(submission.Dockerfile)),
     writeFile(join(environment, "smoke.sh"), submission["smoke.sh"]),
+    writeFile(join(environment, "services.sh"), submission["services.sh"]),
     writeFile(join(tests, "Dockerfile"), verifierDockerfile(submission.Dockerfile)),
     writeFile(join(tests, "test.sh"), testScript(submission["test.patch"])),
     writeFile(join(tests, "test.patch"), submission["test.patch"]),
     writeFile(join(tests, "run-tests.sh"), submission["run-tests.sh"]),
+    writeFile(join(tests, "services.sh"), submission["services.sh"]),
     ...Object.entries(verifierRuntimeFiles()).map(([path, content]) =>
       writeFile(join(tests, path), content),
     ),

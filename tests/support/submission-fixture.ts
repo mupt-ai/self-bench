@@ -26,4 +26,5 @@ export const submission: Submission = {
     'case "$1" in\n  fail-to-pass) bun test tests/feature.test.ts ;;\n  pass-to-pass) bun test tests/existing.test.ts ;;\nesac\n',
   "test.patch": testPatch,
   "gold.patch": goldPatch,
+  "services.sh": "",
 };

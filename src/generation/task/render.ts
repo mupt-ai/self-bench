@@ -96,10 +96,11 @@ export function agentDockerfile(authored: string): string {
   // The post-setup tree is committed as the baseline for agent.patch, so files that the author's
   // setup creates and does not gitignore never land in the agent's diff and never collide with
   // the verifier image, built from the same Dockerfile. The agent runs as root with the HOME and
-  // caches the Dockerfile left. Only this image runs smoke.sh, in the agent phase.
+  // caches the Dockerfile left. Only this image runs smoke.sh, in the agent phase; services.sh is
+  // here for smoke and the agent to start the task's services themselves.
   return `${baseDockerfile(authored)}
-COPY smoke.sh /opt/selfbench-environment/
-RUN chmod 755 /opt/selfbench-environment/smoke.sh \\
+COPY smoke.sh services.sh /opt/selfbench-environment/
+RUN chmod 755 /opt/selfbench-environment/smoke.sh /opt/selfbench-environment/services.sh \\
     && git -C /app add -A \\
     && git -C /app -c core.hooksPath=/dev/null commit -qm selfbench-setup --allow-empty --no-verify \\
     && mkdir -p /opt/selfbench \\
@@ -115,7 +116,7 @@ RUN useradd --create-home --shell /bin/bash verifier \\
     && mkdir -p /opt/selfbench \\
     && chmod 700 /opt/selfbench
 ENV HOME=/home/verifier
-COPY runtime/ run-tests.sh /opt/selfbench-runtime/
+COPY runtime/ run-tests.sh services.sh /opt/selfbench-runtime/
 RUN chown -R root:root /opt/selfbench-runtime && chmod 755 /opt/selfbench-runtime && chmod 644 /opt/selfbench-runtime/*
 COPY test.patch test.sh /tests/
 RUN chmod 700 /tests && chmod 600 /tests/test.patch && chmod +x /tests/test.sh

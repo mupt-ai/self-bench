@@ -12,9 +12,10 @@ git -C /app apply --binary --whitespace=nowarn /solution/gold.patch
 const RUN_TESTS = "bash /opt/selfbench-runtime/run-tests.sh";
 
 /**
- * Harbor's verifier entry point. It applies the agent's patch without its changes to any file
- * test.patch touches, applies test.patch over those files' base version, and grades the author's
- * fail-to-pass tests (twice, for determinism) and pass-to-pass tests.
+ * Harbor's verifier entry point. It starts the author's services, applies the agent's patch
+ * without its changes to any file test.patch touches, applies test.patch over those files' base
+ * version, and grades the author's fail-to-pass tests (twice, for determinism) and pass-to-pass
+ * tests.
  */
 export function testScript(testPatch: string): string {
   const heldOut = patchPaths(testPatch);
@@ -55,6 +56,14 @@ agent_base_matches() {
   [ "$(printf '%s\\n' "$trees" | wc -l)" -eq 2 ] \\
     && [ "$(printf '%s\\n' "$trees" | tail -n 1)" = "$(app_git rev-parse --verify 'HEAD^{tree}')" ]
 }
+# The task's services start as root from the image as built, before the agent's patch can change
+# anything they run. They outlive every test run, which kills only the verifier user's processes.
+if (cd /app && bash /opt/selfbench-runtime/services.sh); then
+  setup_completed=1
+else
+  echo "services.sh failed" >&2
+fi
+
 if [ ! -f /opt/selfbench/agent.patch ]; then
   patch_applied=0
 elif ! agent_base_matches; then
@@ -63,8 +72,6 @@ elif ! agent_base_matches; then
 elif [ -s /opt/selfbench/agent.patch ]; then
   app_git apply --binary --whitespace=nowarn ${exclusions} /opt/selfbench/agent.patch || patch_applied=0
 fi
-
-if [ "$patch_applied" -eq 1 ]; then setup_completed=1; fi
 
 if [ "$patch_applied" -eq 1 ] && [ "$setup_completed" -eq 1 ]; then
   kill_verifier_processes
