@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { findModel, nativePricing } from "../src/contracts/models.js";
+import { refreshGateway } from "../src/gateways/catalog.js";
 import {
   catalogModelId,
   type GatewayId,
@@ -10,7 +11,6 @@ import {
   listedModels,
   setGatewayListing,
 } from "../src/gateways/index.js";
-import { refreshGateway } from "../src/gateways/refresh.js";
 
 afterEach(() => {
   for (const gateway of gatewayIds) setGatewayListing(gateway, { models: [], rates: new Map() });
@@ -52,7 +52,7 @@ test("OpenRouter pricing comes from the models API, native pricing stays in the 
           { min_prompt_tokens: 272_000, prompt: "0.000006", completion: "0.00002" },
         ],
       }),
-      { id: "moonshotai/kimi-k3", pricing: { prompt: "0.000003", completion: "0.000015" } },
+      routed("moonshotai/kimi-k3", { prompt: "0.000003", completion: "0.000015" }),
       { id: "not/in-catalog", pricing: { prompt: "1", completion: "1" } },
     ]),
   );
@@ -102,7 +102,7 @@ test("Jev's variable price does not hide its agent-capable OpenRouter route", as
         ...routed("typesafe/jev-router", { prompt: "-1", completion: "-1" }),
         name: "TypeSafe: Jev Router",
       },
-      // Missing or partially invalid prices are not the variable-price router sentinel.
+      // Models with missing or invalid prices stay listed, unpriced.
       routed("vendor/missing-price", {}),
       routed("vendor/partial-price", { prompt: "-1", completion: "0.000002" }),
       routed("vendor/invalid-price", { prompt: "garbage", completion: "garbage" }),
@@ -112,7 +112,8 @@ test("Jev's variable price does not hide its agent-capable OpenRouter route", as
     id: "typesafe/jev-router",
     label: "Jev Router",
   });
-  expect(listedModels("openrouter")).toHaveLength(2);
+  expect(listedModels("openrouter")).toHaveLength(5);
+  expect(gatewayPricing("openrouter", "vendor/partial-price")).toBeUndefined();
   expect(gatewayServes("openrouter", "typesafe/jev-router")).toBe(true);
   expect(gatewayPricing("openrouter", "typesafe/jev-router")).toBeUndefined();
   expect(gatewayServes("openrouter", "vendor/not-listed")).toBe(false);
@@ -123,15 +124,10 @@ test("a failed or empty refresh keeps the last good rates", async () => {
   await expect(refreshGateway("vercel-ai-gateway", respond([]))).rejects.toThrow(
     /Vercel AI Gateway returned no prices/,
   );
-  // Prices but no model a harness can drive, as after a change to the response's shape.
-  const priced = { pricing: { prompt: "0.000001", completion: "0.000002" } };
-  await expect(
-    refreshGateway("openrouter", respond([{ id: "openai/gpt-6-sol", ...priced }])),
-  ).rejects.toThrow(/no models/);
   expect(solPricing("openrouter")).toMatchObject({ input: 2, output: 10 });
 });
 
-test("OpenRouter lists agent-capable models frontier first, then by popularity", async () => {
+test("OpenRouter's agent-capable models come from the gateway's catalog, in its order", async () => {
   let url = "";
   const agent = (id: string, extra: object = {}) => ({
     id,
@@ -141,98 +137,64 @@ test("OpenRouter lists agent-capable models frontier first, then by popularity",
     supported_parameters: ["tools", "reasoning"],
     ...extra,
   });
-  const scored = (index: number) => ({
-    benchmarks: { artificial_analysis: { intelligence_index: index } },
-  });
   await refreshGateway("openrouter", (async (input: string) => {
     url = input;
     return Response.json({
       data: [
         agent("z-ai/glm-5.3-flash", { reasoning: { supported_efforts: ["max", "none", "low"] } }),
-        agent("vendor/retiring", { expiration_date: "2026-10-15" }),
-        agent("vendor/any-effort", { reasoning: { supported_efforts: null }, ...scored(40) }),
         agent("vendor/no-tools", { supported_parameters: ["reasoning"] }),
         agent("vendor/images", { architecture: { output_modalities: ["image"] } }),
         agent("vendor/model:free"),
         agent("openrouter/auto"),
-        agent("vendor/varies", { pricing: { prompt: "-1", completion: "0.000002" } }),
-        agent("moonshotai/kimi-k3", { name: "", ...scored(43.6) }),
-        agent("vendor/unscored"),
+        agent("moonshotai/kimi-k3", { name: "", supported_parameters: ["tools"] }),
       ],
     });
   }) as unknown as typeof fetch);
-  expect(url).toEndWith("/api/v1/models?sort=most-popular");
+  expect(url).toBe("https://openrouter.ai/api/v1/models");
   expect(listedModels("openrouter")).toEqual([
-    { id: "moonshotai/kimi-k3", label: "moonshotai/kimi-k3" },
-    {
-      id: "vendor/any-effort",
-      label: "Name of vendor/any-effort",
-      thinking: ["off", "minimal", "low", "medium", "high", "xhigh", "max"],
-    },
     {
       id: "z-ai/glm-5.3-flash",
       label: "Name of z-ai/glm-5.3-flash",
       thinking: ["off", "low", "max"],
     },
-    { id: "vendor/unscored", label: "Name of vendor/unscored" },
+    { id: "moonshotai/kimi-k3", label: "moonshotai/kimi-k3" },
   ]);
+  // Variants and OpenRouter's own routers stay out of the picker but keep their prices.
+  expect(gatewayServes("openrouter", "vendor/model:free")).toBe(true);
   await expect(refreshGateway("openrouter", respond([], 503))).rejects.toThrow(/503/);
-  expect(listedModels("openrouter")).toHaveLength(4);
+  expect(listedModels("openrouter")).toHaveLength(2);
 });
 
-test("Vercel AI Gateway lists agent-capable language models newest first, at its prices", async () => {
-  let url = "";
-  const language = (id: string, released: number, extra: object = {}) => ({
+test("Vercel AI Gateway's language models come from the catalog, at its prices", async () => {
+  const language = (id: string, extra: object = {}) => ({
     id,
     name: `Name of ${id}`,
     type: "language",
-    released,
-    tags: ["tool-use", "reasoning"],
+    supported_parameters: ["tools"],
     modalities: { input: ["text", "image"], output: ["text"] },
     pricing: { input: "0.0000014", output: "0.0000044", input_cache_read: "0.00000014" },
     ...extra,
   });
-  await refreshGateway("vercel-ai-gateway", (async (input: string) => {
-    url = input;
-    return Response.json({
-      data: [
-        language("zai/glm-5.3", 2, {
-          reasoning_options: [{ type: "effort", values: ["low", "high", "max"] }],
-        }),
-        language("vendor/toggle-only", 3, { reasoning_options: [{ type: "toggle" }] }),
-        language("vendor/newest", 4, {
-          reasoning_options: [
-            { type: "toggle" },
-            { type: "effort", values: ["none", "low", "medium", "high"] },
+  await refreshGateway(
+    "vercel-ai-gateway",
+    respond([
+      language("zai/glm-5.3", {
+        reasoning_options: [{ type: "effort", values: ["low", "high", "max"] }],
+      }),
+      language("vendor/embedding", { type: "embedding" }),
+      language("vendor/tiered", {
+        pricing: {
+          input: "0.000001",
+          output: "0.000002",
+          input_tiers: [
+            { cost: "0.000001", min: 0, max: 128001 },
+            { cost: "0.000002", min: 128001 },
           ],
-        }),
-        language("vendor/no-tools", 5, { tags: ["reasoning"] }),
-        language("vendor/retiring", 5, { deprecated_at: 1803600000000 }),
-        language("vendor/embedding", 5, { type: "embedding" }),
-        language("vendor/image-out", 5, { modalities: { input: ["text"], output: ["image"] } }),
-        language("vendor/unpriced", 5, { pricing: {} }),
-        language("vendor/tiered", 1, {
-          pricing: {
-            input: "0.000001",
-            output: "0.000002",
-            input_tiers: [
-              { cost: "0.000001", min: 0, max: 128001 },
-              { cost: "0.000002", min: 128001 },
-            ],
-            output_tiers: [{ cost: "0.000002", min: 0 }],
-          },
-        }),
-      ],
-    });
-  }) as unknown as typeof fetch);
-  expect(url).toBe("https://ai-gateway.vercel.sh/v1/models");
+        },
+      }),
+    ]),
+  );
   expect(listedModels("vercel-ai-gateway").map(({ pi: _pi, ...model }) => model)).toEqual([
-    {
-      id: "vendor/newest",
-      label: "Name of vendor/newest",
-      thinking: ["off", "low", "medium", "high"],
-    },
-    { id: "vendor/toggle-only", label: "Name of vendor/toggle-only" },
     { id: "zai/glm-5.3", label: "Name of zai/glm-5.3", thinking: ["low", "high", "max"] },
     { id: "vendor/tiered", label: "Name of vendor/tiered" },
   ]);
@@ -253,10 +215,6 @@ test("Vercel AI Gateway lists agent-capable language models newest first, at its
     cacheWrite: 1.4,
     source: "https://vercel.com/ai-gateway/models/glm-5.3",
   });
-  expect(
-    gatewayPricing("vercel-ai-gateway", gatewayModelId("vercel-ai-gateway", glm.openRouter))
-      ?.maxInputTokens,
-  ).toBeUndefined();
 });
 
 test("gateways spell some vendors their own way; the catalog spells them as OpenRouter does", () => {

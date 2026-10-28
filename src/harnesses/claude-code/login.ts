@@ -4,7 +4,7 @@ import { orgRecords, RecordStoreError } from "../../db/encrypted-records.js";
 import type { Vault } from "../../db/vault.js";
 
 // Claude Code's `claude setup-token`: a Claude subscription sign-in scoped to inference, whose
-// one-year token Claude Code reads from CLAUDE_CODE_OAUTH_TOKEN. Anthropic shows the code on its
+// one-year token the model gateway serves Claude Code trials with. Anthropic shows the code on its
 // own callback page, so the user pastes it back instead of us hosting a redirect.
 const CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
 const AUTHORIZE_URL = "https://claude.com/cai/oauth/authorize";

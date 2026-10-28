@@ -10,7 +10,7 @@ An evaluation runs a model and harness against approved tasks in fresh sandboxes
 
 Open your repository's **Run** page. Select approved tasks, add model and harness pairs, choose a sandbox, and supply the required workspace credentials. Model choices and reference pricing come from the app's catalog. **Run Full Comparison** executes every selected task for each model/harness pair; **Run Missing Tasks** skips completed trials for those pairs. Each trial is a separate Harbor run.
 
-A ChatGPT, Claude or Meta sign-in or a model API key can run evaluations, subject to harness compatibility: each sign-in runs only its own CLI (Codex, Claude Code or Muse Code), and a Meta key runs only Muse Code. Each row offers the reasoning levels its model lists that every one of its harnesses accepts. Modal, E2B, or Daytona can run the tasks. See [Quickstart](/quickstart) for credentials and [Task Generation](/concepts/task-generation#what-the-evaluated-agent-sees) for what the evaluated agent can access.
+A ChatGPT, Claude or Meta sign-in or a model API key can run evaluations, subject to harness compatibility: each sign-in runs only its own CLI (Codex, Claude Code or Muse Code). Every API key and the ChatGPT and Claude sign-ins reach their model through SelfBench's model gateway, so a Meta key runs every harness. Each row offers the reasoning levels its model lists that every one of its harnesses accepts. Modal, E2B, or Daytona can run the tasks. See [Quickstart](/quickstart) for credentials and [Task Generation](/concepts/task-generation#what-the-evaluated-agent-sees) for what the evaluated agent can access.
 
 ## Use a Custom Router
 

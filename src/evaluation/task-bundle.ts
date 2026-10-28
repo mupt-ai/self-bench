@@ -8,7 +8,7 @@ import { attemptSnapshot } from "../generation/task/snapshot-store.js";
 import { extractRegularArchive } from "../lib/archive.js";
 import { GATE_TASK_FILE } from "../sandbox/gate-bundle.js";
 import { snapshotLinkUrl } from "../sandbox/snapshot-link.js";
-import { refuseTrial } from "./execution.js";
+import { refuseTrial } from "./refusal.js";
 import type { EvaluationInput } from "./types.js";
 
 // PostHog task bundles include compressed repository snapshots larger than 350 MiB.

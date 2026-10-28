@@ -3,7 +3,6 @@ import { findModel, nativePricing } from "../src/contracts/models.js";
 import { trialCost } from "../src/evaluation/cost.js";
 import { initialEvaluation } from "../src/evaluation/store.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";
-import { generationIds } from "../src/gateways/usage.js";
 import { evaluationInput } from "./support/evaluation-fixture.js";
 
 /** The catalog's own pricing for `id` on its vendor's key, long-context tiers included. */
@@ -93,8 +92,6 @@ test("Pi's notice ahead of its stream leaves its replies priced, each at its own
   });
   expect(priced.apiCostUsd).toBeCloseTo((short + long) / 1_000_000, 12);
   expect(trialCost(run, "pi", files(stream), {})).toEqual(priced);
-  // A gateway's bill is matched by the same replies.
-  expect(generationIds("pi", files([notice, ...stream]))).toEqual(["gen_50000", "gen_120000"]);
   // A line that is not an event inside the stream still fails closed.
   expect(trialCost(run, "pi", files([...stream, notice, reply(1, 1, 1, 1)]), {})).toEqual({});
 });

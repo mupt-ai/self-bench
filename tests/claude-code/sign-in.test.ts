@@ -95,7 +95,7 @@ test("a pasted code is exchanged with the sealed verifier and saved once as a Cl
   await expect(expiring.complete(vault, 4, 7, expired.id, "good-code")).rejects.toThrow("expired");
 });
 
-test("an HTTP Claude sign-in becomes a credential that runs only Claude Code, by forced OAuth", async () => {
+test("an HTTP Claude sign-in becomes a credential that runs only Claude Code, through the gateway", async () => {
   const { state, logins } = anthropic();
   const vault = memoryVault();
   const site = await evaluationServer(vault, { claudeLogins: logins });
@@ -150,11 +150,12 @@ test("an HTTP Claude sign-in becomes a credential that runs only Claude Code, by
       home,
       { ANTHROPIC_API_KEY: "unused" },
       vault,
+      "claude-code",
     );
+    // The gateway serves the plan: the token never leaves the vault for the sandbox.
+    expect(execution.route).toBe("gateway");
     expect(execution.child.ANTHROPIC_API_KEY).toBeUndefined();
-    expect(execution.child.CLAUDE_CODE_OAUTH_TOKEN).toBe(token);
-    expect(execution.child.CLAUDE_FORCE_OAUTH).toBe("1");
-    expect(execution.secrets).toContain(token);
+    expect(JSON.stringify(execution)).not.toContain(token);
   } finally {
     await site.close();
     await rm(home, { recursive: true, force: true });

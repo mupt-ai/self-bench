@@ -1,13 +1,6 @@
 import { expect, test } from "bun:test";
-import { fileURLToPath } from "node:url";
 import { catalog } from "../src/evaluation/catalog.js";
 import { trialCost } from "../src/evaluation/cost.js";
-import {
-  gatewayModel,
-  gatewayTrial,
-  solverAgent,
-  solverAgentArguments,
-} from "../src/evaluation/execution.js";
 import {
   credentialRunsHarness,
   harnessIds,
@@ -17,8 +10,6 @@ import {
   signInRefusal,
 } from "../src/evaluation/models.js";
 import { initialEvaluation } from "../src/evaluation/store.js";
-import type { EvaluationInput } from "../src/evaluation/types.js";
-import { runCommand } from "../src/lib/process.js";
 import { evaluationInput } from "./support/evaluation-fixture.js";
 
 test("API keys run any harness; Claude and Meta sign-ins only their CLI; ChatGPT only Codex", () => {
@@ -46,51 +37,6 @@ test("a model offers, before a credential is chosen, every harness some route ru
   expect(modelHarnesses(spark)).toEqual([...harnessIds]);
   // Muse Code stays a Meta key's default.
   expect(routeFor(spark, "meta")?.harnesses[0]).toBe("muse-code");
-});
-
-test("a Meta key reaches every other harness through Meta's OpenAI and Anthropic APIs", () => {
-  const input = { credentials: { provider: "meta" } } as EvaluationInput;
-  const name = "meta/muse-spark-1.3";
-  const env = { META_API_KEY: "test-key", PATH: "/bin" };
-  const claude = gatewayTrial(input, "claude-code", name, env);
-  expect(claude.model).toBe("muse-spark-1.3");
-  // Meta's Messages API takes the key as a bearer token, never as x-api-key.
-  expect(claude.child).toEqual({
-    PATH: "/bin",
-    ANTHROPIC_AUTH_TOKEN: "test-key",
-    ANTHROPIC_BASE_URL: "https://api.meta.ai",
-  });
-  expect(claude.extraAllowedHosts).toEqual(["api.meta.ai"]);
-  for (const harness of ["codex", "pi", "mini-swe-agent", "terminus-2"] as const) {
-    const trial = gatewayTrial(input, harness, name, env);
-    expect(trial.model).toBe("openai/muse-spark-1.3");
-    expect(trial.child).toEqual({
-      PATH: "/bin",
-      OPENAI_API_KEY: "test-key",
-      OPENAI_BASE_URL: "https://api.meta.ai/v1",
-      OPENAI_API_BASE: "https://api.meta.ai/v1",
-    });
-    expect(trial.extraAllowedHosts).toEqual(["api.meta.ai"]);
-  }
-  // Codex takes Meta's Responses API over HTTPS, as gateways do; Pi as a custom endpoint.
-  expect(solverAgent("codex", "meta")).toBe("harbor_gateway:GatewayCodex");
-  expect(solverAgent("pi", "meta")).toBe("pi");
-  expect(solverAgentArguments("pi", "meta", "openai/muse-spark-1.3")).toEqual([
-    "--agent-kwarg",
-    "model_api=openai-responses",
-  ]);
-  expect(solverAgentArguments("codex", "meta", "openai/muse-spark-1.3")).toEqual([]);
-  // Muse Code keeps Meta's own key and model name.
-  const muse = gatewayTrial(input, "muse-code", name, env);
-  expect(muse).toEqual({ model: name, child: env, extraAllowedHosts: ["api.meta.ai"] });
-  expect(solverAgent("muse-code", "meta")).toBe("harbor_muse:SelfBenchMuseCode");
-  expect(solverAgentArguments("muse-code", "meta", name)).toEqual([]);
-  // Cost verification derives the same Harbor model name the runner passes.
-  for (const harness of harnessIds)
-    expect(gatewayModel("meta", harness, name)).toBe(gatewayTrial(input, harness, name, env).model);
-  expect(() => gatewayTrial(input, "codex", name, { PATH: "/bin" })).toThrow(
-    "Model credential is unavailable",
-  );
 });
 
 test("a Meta trial on another vendor's harness is priced at reference rates", () => {
@@ -131,35 +77,4 @@ test("a Meta trial on another vendor's harness is priced at reference rates", ()
     apiCostUsd: 0.0028,
     costSource: "reference-rates",
   });
-});
-
-test("Claude Code keeps a key given only as ANTHROPIC_AUTH_TOKEN a bearer token", async () => {
-  const result = await runCommand("python3", [
-    "-c",
-    `import importlib.util, os, sys, types
-class ClaudeCode:
-    def _get_env(self, name):
-        return os.environ.get(name)
-    def _resolve_auth_env(self):
-        # Harbor sends whichever key it resolved as ANTHROPIC_API_KEY.
-        key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")
-        return {"ANTHROPIC_API_KEY": key, "ANTHROPIC_BASE_URL": "https://api.meta.ai"}
-sys.modules["harbor.agents.installed.claude_code"] = types.SimpleNamespace(ClaudeCode=ClaudeCode)
-sys.modules["harbor.agents.installed.codex"] = types.SimpleNamespace(Codex=object)
-sys.modules["harbor.agents.installed.pi"] = types.SimpleNamespace(Pi=object, PiOptions=object)
-sys.modules["harbor.agents.model_connection"] = types.SimpleNamespace(ModelConnectionSpec=lambda **kwargs: kwargs)
-spec = importlib.util.spec_from_file_location("adapter", sys.argv[1])
-adapter = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(adapter)
-agent = adapter.SelfBenchClaudeCode()
-os.environ.pop("ANTHROPIC_API_KEY", None)
-os.environ["ANTHROPIC_AUTH_TOKEN"] = "meta-key"
-assert agent._resolve_auth_env() == {"ANTHROPIC_AUTH_TOKEN": "meta-key", "ANTHROPIC_BASE_URL": "https://api.meta.ai"}
-os.environ["ANTHROPIC_API_KEY"] = "anthropic-key"
-assert agent._resolve_auth_env()["ANTHROPIC_API_KEY"] == "anthropic-key"
-`,
-    fileURLToPath(new URL("../src/harnesses/harbor/runtime/harbor_gateway.py", import.meta.url)),
-  ]);
-  expect(result.stderr).toBe("");
-  expect(result.exitCode).toBe(0);
 });

@@ -56,6 +56,10 @@ export function memoryVault(records: EncryptedRecordStore = new MemoryRecords())
     async secret(orgId, id) {
       return structuredClone(live(orgId, id)?.secret);
     },
+    async renew(orgId, id, value) {
+      const row = live(orgId, id);
+      if (row) row.secret = { value };
+    },
     async create(orgId, draft, env, id = crypto.randomUUID()) {
       const parsed = credentialSchema.parse(draft);
       const endpoint = credentialEndpoint(parsed, env);
@@ -64,7 +68,7 @@ export function memoryVault(records: EncryptedRecordStore = new MemoryRecords())
         if (existing.orgId !== orgId) throw new RecordStoreError(409, "Credential ID already used");
         return view(existing);
       }
-      const { value, tokenId, teamId, projectId, managementKey } = parsed;
+      const { value, tokenId, teamId, projectId } = parsed;
       rows.set(id, {
         id,
         orgId,
@@ -76,7 +80,6 @@ export function memoryVault(records: EncryptedRecordStore = new MemoryRecords())
         ...(parsed.maxSandboxes ? { maxSandboxes: parsed.maxSandboxes } : {}),
         secret: {
           value,
-          ...(managementKey ? { managementKey } : {}),
           ...(tokenId ? { tokenId } : {}),
           ...(teamId ? { teamId } : {}),
           ...(projectId ? { projectId } : {}),

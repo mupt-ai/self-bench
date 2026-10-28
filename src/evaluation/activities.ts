@@ -5,6 +5,7 @@ import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
 import { runCommand } from "../lib/process.js";
 import { holdingCapacity } from "../sandbox/capacity.js";
 import { explainTrialFailure } from "./failure-summary.js";
+import type { TrialGateway } from "./gateway-trial.js";
 import { failEvaluation, failTrial, finishEvaluation, startEvaluation } from "./lifecycle.js";
 import { environmentSecrets, redactOutput } from "./output.js";
 import { prepareTaskImages } from "./prepare.js";
@@ -34,6 +35,8 @@ export function createEvaluationActivities(
   vault?: Vault,
   snapshotLink?: SandboxCallback,
   stopping?: AbortSignal,
+  /** The model gateway API keys' trials call; without it, those trials are refused. */
+  gateway?: TrialGateway,
 ): EvaluationActivities {
   const heartbeating = async <T>(run: (options: RunnerOptions) => Promise<T>): Promise<T> => {
     const context = Context.current();
@@ -43,6 +46,7 @@ export function createEvaluationActivities(
         ...(vault ? { vault } : {}),
         ...(snapshotLink ? { snapshotLink } : {}),
         ...(stopping ? { stopping } : {}),
+        ...(gateway ? { gateway } : {}),
         signal: context.cancellationSignal,
         heartbeat: () => context.heartbeat(),
       });

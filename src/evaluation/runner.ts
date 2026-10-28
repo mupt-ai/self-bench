@@ -6,7 +6,6 @@ import type { ArtifactStore } from "../artifacts/index.js";
 import { trialTimeouts } from "../contracts/agent-limit.js";
 import type { CredentialInfo } from "../db/credentials.js";
 import type { Vault } from "../db/vault.js";
-import { OPENROUTER_BILLING, openRouterManifest } from "../gateways/openrouter/billing.js";
 import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
 import type { HarborOutputGuard } from "../harnesses/harbor/output-guard.js";
 import { runCommand } from "../lib/process.js";
@@ -15,7 +14,7 @@ import { trialCost } from "./cost.js";
 import { DARI_BILLING, retainDariBilling } from "./dari/billing.js";
 import { dariTrialCost, isDariRun } from "./dari/cost.js";
 import { failureMaterial, keepFailureMaterial } from "./failure-material.js";
-import { billedTrialCost } from "./gateway-cost.js";
+import { gatewayTrialCost, type TrialGateway } from "./gateway-trial.js";
 import {
   collectOutput,
   completeLines,
@@ -34,6 +33,7 @@ import { evaluationPrefix, RepeatSpendError } from "./store.js";
 import { transcriptSteps } from "./transcript.js";
 import { setUpTrial } from "./trial-setup.js";
 import type { EvaluationInput, EvaluationRun, EvaluationTrial } from "./types.js";
+
 export interface RunnerOptions {
   command?: typeof runCommand;
   env?: NodeJS.ProcessEnv;
@@ -45,6 +45,7 @@ export interface RunnerOptions {
   vault?: Pick<Vault, "credentials" | "comparisons">;
   /** Signs the snapshot links Modal image builds fetch; see unpackTrialTask. */
   snapshotLink?: SandboxCallback;
+  gateway?: TrialGateway;
   /**
    * Another attempt follows if this one throws: a trial whose setup fails before its solver
    * starts is then returned to the queue for it, unless the failure is final (refuseTrial).
@@ -82,7 +83,7 @@ export async function executeTrial(
   let retrying = false;
   try {
     const signals = [options.signal, stopping].filter((signal) => signal !== undefined);
-    const ready = await setUpTrial(store, input, run, trial, root, secrets, {
+    const ready = await setUpTrial(store, input, run, trial, index, root, secrets, {
       ...options,
       ...(signals.length > 0 ? { setupSignal: AbortSignal.any(signals) } : {}),
       command,
@@ -145,8 +146,11 @@ async function runTrial(context: {
   jobs: string;
   guard: HarborOutputGuard;
   model: string;
+  agent: string;
+  agentArguments: string[];
   modelAuth: CredentialInfo["auth"];
-  billingKey?: string;
+  /** The organization a gateway trial's calls were recorded under. */
+  gatewayOrgId?: number;
   child: NodeJS.ProcessEnv;
   extraAllowedHosts?: readonly string[];
   verifierEnv?: readonly string[];
@@ -184,8 +188,6 @@ async function runTrial(context: {
         const bill = records.get(DARI_BILLING);
         if (bill !== undefined) clean.set(DARI_BILLING, bill);
       }
-      if (run.credentials?.provider === "openrouter" && records)
-        openRouterManifest(trial.harness, records, clean);
       for (const [name, text] of clean) {
         const artifactName = `${index}/${name}`;
         await store.put(
@@ -200,18 +202,18 @@ async function runTrial(context: {
       const parsed = record(JSON.parse(result[1]));
       if (!records) throw new Error("Harbor's transcripts were not read");
       Object.assign(trial, trialCost(run, trial.harness, records, parsed, context.modelAuth));
-      Object.assign(trial, await billedTrialCost(run, trial, child, records, context.billingKey));
       Object.assign(trial, await dariTrialCost(run, trial, child, records));
-      const billing = records.get(OPENROUTER_BILLING);
-      if (billing) {
-        const name = `${index}/${OPENROUTER_BILLING}`;
-        await store.put(
-          `${evaluationPrefix(run, run.id)}artifacts/${name}`,
-          Buffer.from(redact(billing)),
-          "application/json",
+      if (context.gatewayOrgId !== undefined && options.gateway)
+        Object.assign(
+          trial,
+          await gatewayTrialCost(
+            options.gateway,
+            context.gatewayOrgId,
+            run,
+            index,
+            context.modelAuth,
+          ),
         );
-        trial.artifacts.push(name);
-      }
       trial.rewards = verifierRewards(parsed);
       const stopped = timeLimitScores(parsed);
       if (stopped) Object.assign(trial, stopped);
@@ -253,12 +255,9 @@ async function runTrial(context: {
         solverArguments(
           taskPath,
           jobs,
-          trial.harness,
-          model,
+          { agent: context.agent, model, agentArguments: context.agentArguments },
           run.sandbox,
-          run.thinking,
           context.extraAllowedHosts,
-          run.credentials?.provider,
           context.verifierEnv,
         ),
         {

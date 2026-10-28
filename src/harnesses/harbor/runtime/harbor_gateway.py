@@ -1,5 +1,6 @@
-"""Isolate Codex installation, preserve gateway model IDs, make Codex and Claude Code install
-reliably, and pass Pi its gateway key and model."""
+"""Harbor agents for trials on SelfBench's model gateway: Codex over HTTPS with the gateway's full
+model id, Pi with a provider at the gateway, and Codex and Claude Code installs that work on any
+task image."""
 import json
 import shlex
 from typing import Any
@@ -22,17 +23,10 @@ class SkipsSystemNode:
         await super().ensure_system_dependencies(environment, dependencies)
 
 
-class SelfBenchCodex(SkipsSystemNode, Codex):
-    async def exec_as_agent(self, environment, command, **kwargs):
-        command = 'export NVM_DIR="$HOME/.nvm"; ' + command
-        return await super().exec_as_agent(environment, command=command, **kwargs)
-
-
-class GatewayCodex(SelfBenchCodex):
+class GatewayCodex(SkipsSystemNode, Codex):
     def _build_effective_config(self, openai_base_url=None):
-        # Codex tries the Responses API over a WebSocket first. OpenRouter refuses the upgrade
-        # and Codex falls back to HTTPS; Vercel AI Gateway accepts it, then rejects a model it
-        # serves only over HTTPS and the turn fails. Gateways get a provider that speaks HTTPS.
+        # Codex tries the Responses API over a WebSocket first, which the gateway (and a custom
+        # endpoint) need not serve: give it a provider that speaks HTTPS only.
         config = super()._build_effective_config(None)
         if openai_base_url:
             config["model_provider"] = "gateway"
@@ -46,9 +40,10 @@ class GatewayCodex(SelfBenchCodex):
         return config
 
     async def exec_as_agent(self, environment, command, **kwargs):
+        command = 'export NVM_DIR="$HOME/.nvm"; ' + command
         if "codex exec " in command:
-            # Harbor's pinned adapter keeps only the final slash component.
-            # Our runner uses openai/<gateway-model-id> for its Responses endpoint.
+            # Harbor's adapter keeps only the model name's last segment, but the gateway serves
+            # `dari/model/<provider>/<model>` (the runner passes it as `openai/dari/model/...`).
             model = self.model_name.removeprefix("openai/")
             original = f"--model {self.model_name.split('/')[-1]} "
             if command.count(original) != 1:
@@ -73,56 +68,28 @@ class SelfBenchClaudeCode(SkipsSystemNode, ClaudeCode):
             )
         await super().install(environment)
 
-    def _resolve_auth_env(self):
-        # Harbor sends any key as ANTHROPIC_API_KEY (x-api-key). A key given as ANTHROPIC_AUTH_TOKEN
-        # alone, as Meta's Anthropic-compatible API takes it, stays a bearer token.
-        env = super()._resolve_auth_env()
-        token = self._get_env("ANTHROPIC_AUTH_TOKEN")
-        if token and not self._get_env("ANTHROPIC_API_KEY") and env.get("ANTHROPIC_API_KEY") == token:
-            env["ANTHROPIC_AUTH_TOKEN"] = env.pop("ANTHROPIC_API_KEY")
-        return env
-
 
 class GatewayPiOptions(PiOptions):
-    # Pi's models.json describing the trial's model as the gateway lists it (piModels): `models`
-    # for a Pi whose catalog lacks the model, `modelOverrides` for one that lists it.
+    # Pi's models.json: a provider at the gateway serving the trial's one model (piGatewayModels).
     models_json: dict[str, Any] | None = None
 
 
 class GatewayPi(Pi):
-    # Harbor knows Vercel AI Gateway only as vercel_ai_gateway, keyed by VERCEL_AI_GATEWAY_API_KEY,
-    # so Pi's vercel-ai-gateway provider would start without AI_GATEWAY_API_KEY, the key it reads.
-    MODEL_CONNECTION = ModelConnectionSpec(passthrough=True, api_key_envs=("AI_GATEWAY_API_KEY",))
+    # The runner names the model `selfbench/dari/model/...`, a provider Harbor does not know, so
+    # Harbor writes no models.json of its own and passes Pi only the gateway key.
+    MODEL_CONNECTION = ModelConnectionSpec(passthrough=True, api_key_envs=("OPENAI_API_KEY",))
     options_model = GatewayPiOptions
 
     async def run(self, instruction, environment, context):
-        provider, _, model = self.model_name.partition("/")
-        if self.options.models_json and model:
-            await self.exec_as_agent(
-                environment,
-                command=self._models_json_command(provider, model),
-                env=dict(self.model_connection.env),
-            )
-        await super().run(instruction, environment, context)
-
-    def _models_json_command(self, provider, model):
-        # A `models` entry replaces Pi's own for the same model, which Pi tunes by hand, so a Pi
-        # that lists the model gets only the overrides. A failed listing counts as Pi lacking
-        # the model: without the entry Pi would guess. Pi reads models.json from its own
-        # directory, which Harbor leaves at its default.
-        full = self.options.models_json
-        listed = {
-            "providers": {
-                name: rest
-                for name, config in full["providers"].items()
-                if (rest := {key: value for key, value in config.items() if key != "models"})
-            }
-        }
-        write = 'mkdir -p "$HOME/.pi/agent" && printf %s {} > "$HOME/.pi/agent/models.json"'
-        model = shlex.quote(model)
-        lists = (
-            f". ~/.nvm/nvm.sh; pi --list-models {model} | awk -v p={shlex.quote(provider)} "
-            f"-v m={model} '$1 == p && $2 == m {{ found = 1 }} END {{ exit !found }}'"
+        if not self.options.models_json:
+            raise ValueError("GatewayPi needs the gateway's models.json")
+        # Pi reads models.json from its own directory, which Harbor leaves at its default.
+        models = shlex.quote(json.dumps(self.options.models_json))
+        await self.exec_as_agent(
+            environment,
+            command=(
+                'mkdir -p "$HOME/.pi/agent" && '
+                f'printf %s {models} > "$HOME/.pi/agent/models.json"'
+            ),
         )
-        known = write.format(shlex.quote(json.dumps(listed))) if listed["providers"] else "true"
-        return f"if {lists}; then {known}; else {write.format(shlex.quote(json.dumps(full)))}; fi"
+        await super().run(instruction, environment, context)

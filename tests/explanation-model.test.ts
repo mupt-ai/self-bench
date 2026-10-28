@@ -4,7 +4,8 @@ import {
   explanationModel,
   explanationSelectionSchema,
 } from "../src/evaluation/explanation-model.js";
-import { gateways, setGatewayListing } from "../src/gateways/index.js";
+import { refreshGateway } from "../src/gateways/catalog.js";
+import { setGatewayListing } from "../src/gateways/index.js";
 
 const key = (
   kind: CredentialInfo["kind"],
@@ -58,30 +59,25 @@ test("custom explanation endpoints are saved, approved and use an environment ke
   ).toBe(false);
 });
 
-test("Vercel explanations preserve registry model compatibility", () => {
+test("Vercel explanations preserve registry model compatibility", async () => {
   const gateway = "vercel-ai-gateway";
   try {
-    setGatewayListing(
-      gateway,
-      gateways[gateway].parse(
-        {
-          data: [
-            {
-              id: "openai/gpt-6-sol",
-              name: "GPT-6 Sol",
-              type: "language",
-              tags: ["tool-use", "reasoning"],
-              modalities: { input: ["text"], output: ["text"] },
-              context_window: 200000,
-              max_tokens: 32000,
-              pricing: { input: "0.000002", output: "0.00001" },
-              reasoning_options: [{ type: "effort", values: ["low", "high"] }],
-            },
-          ],
-        },
-        "2026-10-14",
-      ),
-    );
+    await refreshGateway(gateway, (async () =>
+      Response.json({
+        data: [
+          {
+            id: "openai/gpt-6-sol",
+            name: "GPT-6 Sol",
+            type: "language",
+            supported_parameters: ["tools"],
+            modalities: { input: ["text"], output: ["text"] },
+            context_window: 200000,
+            max_tokens: 32000,
+            pricing: { input: "0.000002", output: "0.00001" },
+            reasoning_options: [{ type: "effort", values: ["low", "high"] }],
+          },
+        ],
+      })) as never);
     const model = explanationModel(key(gateway), "gpt-6-sol", {});
     const definition = JSON.parse(model.models).providers[gateway].models[0];
     expect(definition.contextWindow).toBe(200000);

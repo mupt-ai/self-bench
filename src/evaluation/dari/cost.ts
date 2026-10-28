@@ -1,7 +1,7 @@
 import type { EvaluationRun, EvaluationTrial } from "../types.js";
 import { DARI_BILLING, responseCost } from "./billing.js";
 
-export function isDariRun(run: EvaluationRun): boolean {
+export function isDariRun(run: Pick<EvaluationRun, "credentials" | "modelName">): boolean {
   return (
     run.credentials?.provider === "dari" ||
     (run.credentials?.provider === "custom" && run.modelName === "openai/dari/routing")

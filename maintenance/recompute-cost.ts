@@ -31,7 +31,7 @@ import { record } from "../src/evaluation/output.js";
 import { evaluationPrefix, getEvaluation, saveEvaluation } from "../src/evaluation/store.js";
 import type { EvaluationRun, EvaluationTrial } from "../src/evaluation/types.js";
 import { isGateway } from "../src/gateways/index.js";
-import { refreshGateway } from "../src/gateways/refresh.js";
+import { refreshGateway } from "../src/gateways/catalog.js";
 import { HOUR_CACHE_WRITE_MULTIPLIER } from "../src/harnesses/claude-code/cost.js";
 import { releaseCredentials } from "../src/public/release-sources.js";
 

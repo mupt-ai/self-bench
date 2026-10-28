@@ -5,8 +5,14 @@ import type { SelfBenchConfig } from "../contracts/config/index.js";
 import { isArtifactRegistry } from "../contracts/config/task-images.js";
 import { apiKeyDenies } from "../db/api-keys.js";
 import { openDatabase } from "../db/client.js";
+import { validateEndpoint } from "../db/credentials.js";
 import { createRegistryGrantStore } from "../db/registry-grants.js";
+import { gatewayRoute } from "../gateway/mount.js";
+import { withManagedModel } from "../gateway/platform.js";
+import { createGatewayUsageStore } from "../gateway/usage-store.js";
+import { gatewayModelPrice, listedModelConfig } from "../gateways/catalog.js";
 import { createGenerationBatches, RunNotFoundError } from "../generation/batches/service.js";
+import { platformModelKey } from "../generation/billing/managed.js";
 import { googleAccessToken } from "../lib/google-access-token.js";
 import { reportError } from "../lib/telemetry/sentry.js";
 import { connectTemporalClient } from "../temporal/connection.js";
@@ -81,6 +87,26 @@ export async function startApi(
     if (!batches) throw new RunNotFoundError(runId);
     return batches.status(runId);
   };
+  // The model gateway trials call with a trial key; it needs the vault for the org's own keys,
+  // and the platform's OpenRouter key for managed model access.
+  const gateway = site?.vault
+    ? (() => {
+        const usage = createGatewayUsageStore(site.database.db);
+        return gatewayRoute({
+          secret,
+          credentials: withManagedModel(site.vault.credentials, platformModelKey(process.env)),
+          modelConfig: listedModelConfig,
+          modelPrice: gatewayModelPrice,
+          endpoint: (endpoint) => validateEndpoint(endpoint, process.env),
+          recordUsage: (entry) => {
+            usage
+              .record(entry)
+              .catch((error) => reportError(error, { tags: { route: "gateway" } }));
+          },
+          captureError: (error) => reportError(error, { tags: { route: "gateway" } }),
+        });
+      })()
+    : undefined;
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
@@ -112,6 +138,8 @@ export async function startApi(
         await sendReviewAsset(response, url.pathname, head);
         return;
       }
+      // Trial agents authenticate with their own signed trial key, not a user or the API token.
+      if (gateway && (await gateway(request, url, response))) return;
       // Sandbox jobs authenticate with their own signed grant, not a user or the API token.
       if (await handleSandboxRoute(request, url, response, { secret, store: artifacts, client }))
         return;

@@ -1,25 +1,99 @@
 /**
  * Model gateways: one key that reaches every vendor's models. Each serves the catalog's models
  * under its own ids, which the catalog spells as OpenRouter does (catalogModelId, gatewayModelId).
- * Server processes load each gateway's live models and list prices (refresh.ts); until then,
- * and in the browser, only curated models route through them, at reference rates.
+ * Server processes load each gateway's live models and list prices from @mupt-ai/dari-gateway's
+ * catalog (refresh.ts); until then, and in the browser, only curated models route through them,
+ * at reference rates.
  */
 import {
   type ModelPricing,
   type PromptTiers,
   type Rates,
   ratesPricing,
+  type ThinkingLevel,
 } from "../contracts/models.js";
-import type { Gateway, GatewayListing, ListedModel, PiModel } from "./gateway.js";
-import { openRouter } from "./openrouter/index.js";
-import { vercelAiGateway } from "./vercel-ai-gateway.js";
 
-export type { ListedModel } from "./gateway.js";
+/** A model a gateway lists that a coding agent can drive. */
+export interface ListedModel {
+  /** The gateway's id for it. */
+  readonly id: string;
+  readonly label: string;
+  /** The reasoning efforts the gateway says it accepts, in display order. */
+  readonly thinking?: readonly ThinkingLevel[];
+  /**
+   * Pi's models.json entry for it. Pi guesses at a model its catalog lacks, and its own entry can
+   * still take thinking as the gateway does not, so generation gives Pi the whole entry or only
+   * its thinking (piModels). Evaluation trials read its limits.
+   */
+  readonly pi?: PiModel;
+}
+
+/** A model in Pi's models.json (Pi's docs/models.md); what is left out takes Pi's defaults. */
+export interface PiModel {
+  readonly id: string;
+  readonly name: string;
+  readonly reasoning: boolean;
+  readonly input: readonly ("text" | "image")[];
+  readonly contextWindow?: number;
+  readonly maxTokens?: number;
+  /** $ per million tokens. */
+  readonly cost?: { input: number; output: number; cacheRead: number; cacheWrite: number };
+  /** Pi's thinking levels to the efforts the endpoint takes. */
+  readonly thinkingLevelMap?: Readonly<Partial<Record<ThinkingLevel, string>>>;
+  readonly compat?: Readonly<Record<string, boolean>>;
+}
+
+/** A gateway's list price for one model, with what it charges longer prompts. */
+export interface ListedRates extends PromptTiers {
+  readonly rates: Rates;
+  readonly asOf: string;
+}
+
+/** A gateway's agent-capable models and its prices. */
+export interface GatewayListing {
+  readonly models: readonly ListedModel[];
+  /** List prices by the gateway's model id. */
+  readonly rates: ReadonlyMap<string, ListedRates>;
+}
+
+/**
+ * One API key that reaches every vendor's models. Its id (the key of `gateways`) is also its
+ * credential kind and Pi's provider name for it.
+ */
+interface Gateway {
+  readonly label: string;
+  /** The variable its key travels under, for Pi in generation. */
+  readonly keyVariable: string;
+  /**
+   * Vendors it spells differently from the catalog, which spells them as OpenRouter does: its
+   * spelling to the catalog's ("zai" to "z-ai").
+   */
+  readonly vendorAliases?: Readonly<Record<string, string>>;
+  /** The page describing a model, by the gateway's id for it. */
+  modelPage(id: string): string;
+}
 
 /** Gateways in the order the model picker merges their models. */
 export const gateways = {
-  openrouter: openRouter,
-  "vercel-ai-gateway": vercelAiGateway,
+  openrouter: {
+    label: "OpenRouter",
+    keyVariable: "OPENROUTER_API_KEY",
+    modelPage: (id) => `https://openrouter.ai/${id}`,
+  },
+  "vercel-ai-gateway": {
+    label: "Vercel AI Gateway",
+    keyVariable: "AI_GATEWAY_API_KEY",
+    vendorAliases: {
+      alibaba: "qwen",
+      bytedance: "bytedance-seed",
+      meta: "meta-llama",
+      mistral: "mistralai",
+      spacexai: "x-ai",
+      zai: "z-ai",
+    },
+    // Model pages drop the vendor: /ai-gateway/models/glm-5.3.
+    modelPage: (id) => `https://vercel.com/ai-gateway/models/${id.slice(id.indexOf("/") + 1)}`,
+  },
 } as const satisfies Record<string, Gateway>;
 export type GatewayId = keyof typeof gateways;
 export const gatewayIds = Object.keys(gateways) as GatewayId[];
@@ -48,6 +122,11 @@ function listing(gateway: GatewayId): Loaded {
 /** The gateway's agent-capable models, frontier first; empty until a server process loads them. */
 export function listedModels(gateway: GatewayId): readonly ListedModel[] {
   return listing(gateway).models;
+}
+
+/** The gateway's listed model by the gateway's own id for it. */
+function listedModel(gateway: GatewayId, id: string): ListedModel | undefined {
+  return listing(gateway).models.find((entry) => entry.id === id);
 }
 
 /** A listed model by its catalog id, from the first gateway that lists it. */
@@ -87,7 +166,7 @@ export function piModelOverrides(gateway: GatewayId, id: string): object | undef
 }
 
 function listedPiModel(gateway: GatewayId, id: string): PiModel | undefined {
-  return listing(gateway).models.find((entry) => entry.id === id)?.pi;
+  return listedModel(gateway, id)?.pi;
 }
 
 function piThinking({ thinkingLevelMap, compat }: PiModel): object | undefined {
@@ -109,13 +188,14 @@ export function gatewayServes(gateway: GatewayId, id: string): boolean {
 
 /** The catalog's id for the model a gateway names `id`. */
 export function catalogModelId(gateway: GatewayId, id: string): string {
-  const aliases: Readonly<Record<string, string>> = gateways[gateway].vendorAliases ?? {};
-  return respell(id, (vendor) => aliases[vendor]);
+  const { vendorAliases = {} }: Gateway = gateways[gateway];
+  return respell(id, (vendor) => vendorAliases[vendor]);
 }
 
 /** The gateway's id for the catalog's model `id`. */
 export function gatewayModelId(gateway: GatewayId, id: string): string {
-  const aliases = Object.entries(gateways[gateway].vendorAliases ?? {});
+  const { vendorAliases = {} }: Gateway = gateways[gateway];
+  const aliases = Object.entries(vendorAliases);
   return respell(id, (vendor) => aliases.find(([, catalog]) => catalog === vendor)?.[0]);
 }
 
@@ -142,8 +222,8 @@ export function gatewayPricing(
 }
 
 /**
- * The variable a model provider's API key travels under, for Pi and every Harbor harness.
- * OpenAI-compatible providers (OpenAI, Codex, custom endpoints) share OPENAI_API_KEY.
+ * The variable a model provider's API key travels under, for Pi and a harness that calls its
+ * provider directly. OpenAI-compatible providers (OpenAI, custom endpoints) share OPENAI_API_KEY.
  */
 export function modelApiKeyVariable(provider: string): string {
   if (isGateway(provider)) return gateways[provider].keyVariable;

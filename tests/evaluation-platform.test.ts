@@ -1,12 +1,12 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { credentialSchema, validateEndpoint } from "../src/db/credentials.js";
 import type { ComparisonDraft } from "../src/evaluation/comparisons.js";
 import { credentialExecution } from "../src/evaluation/execution.js";
 import { initialEvaluation, saveEvaluation } from "../src/evaluation/store.js";
-import { evaluationEnv, evaluationServer } from "./support/evaluation-fixture.js";
+import { evaluationServer } from "./support/evaluation-fixture.js";
 import { memoryVault } from "./support/evaluation-vault.js";
 
 const credentialsUrl = "/api/orgs/avyay/credentials";
@@ -26,99 +26,6 @@ test("catalog is populated without keys and only exposes supported provider fami
     expect(body.sandboxes).not.toContain("docker");
     expect((await fixture.request(`${fixture.base}/catalog`, {}, null)).status).toBe(401);
     expect((await fixture.request(credentialsUrl, {}, 2)).status).toBe(404);
-  } finally {
-    await fixture.close();
-  }
-});
-
-test("managed evaluations use the platform model and sandbox credentials", async () => {
-  const records = memoryVault();
-  const env = {
-    ...evaluationEnv,
-    SELFBENCH_MANAGED_OFFERING: "true",
-    SELFBENCH_MANAGED_OPENROUTER_API_KEY: "managed-model-secret",
-    SELFBENCH_MANAGED_E2B_API_KEY: "managed-sandbox-secret",
-    SELFBENCH_MANAGED_MODAL_TOKEN_ID: "managed-modal-id",
-    SELFBENCH_MANAGED_MODAL_TOKEN_SECRET: "managed-modal-secret",
-    SELFBENCH_MANAGED_MODAL_ENVIRONMENT: "selfbench-test",
-  };
-  const fixture = await evaluationServer(records, {}, env);
-  const home = await mkdtemp(join(tmpdir(), "managed-evaluation-"));
-  try {
-    const catalog = await (await fixture.request(`${fixture.base}/catalog`)).json();
-    expect(catalog.managed).toEqual({ models: true, sandbox: true });
-    const draft = {
-      id: crypto.randomUUID(),
-      tasks: [{ runId: "run-one", taskId: "task-one" }],
-      models: [
-        {
-          catalogId: "gpt-6-sol",
-          credentialId: "managed-model",
-          harnesses: ["pi"],
-          thinking: "high",
-        },
-      ],
-      sandbox: "managed",
-      sandboxCredentialId: "managed-sandbox",
-    };
-    expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);
-    const input = fixture.starts[0];
-    if (!input) throw new Error("Missing managed evaluation input");
-    expect(
-      (
-        await fixture.request(
-          `${fixture.base}/comparisons`,
-          post({
-            ...draft,
-            id: crypto.randomUUID(),
-            sandboxCredentialId: crypto.randomUUID(),
-          }),
-        )
-      ).status,
-    ).toBe(400);
-    expect(fixture.starts).toHaveLength(1);
-    expect(input.sandbox).toBe("modal");
-    expect(input.explainFailures).toBe(true);
-    const execution = await credentialExecution(input, home, env, records);
-    expect(execution.child.OPENROUTER_API_KEY).toBe("managed-model-secret");
-    expect(execution.child.MODAL_TOKEN_ID).toBe("managed-modal-id");
-    expect(execution.child.MODAL_TOKEN_SECRET).toBe("managed-modal-secret");
-    expect(execution.child.MODAL_ENVIRONMENT).toBe("selfbench-test");
-    expect(execution.child.E2B_API_KEY).toBeUndefined();
-    expect(execution.secrets).toContain("managed-model-secret");
-    expect(execution.secrets).toContain("managed-modal-secret");
-  } finally {
-    await fixture.close();
-    await rm(home, { recursive: true, force: true });
-  }
-});
-
-test("managed evaluation requires Modal even when managed E2B is configured", async () => {
-  const fixture = await evaluationServer(
-    memoryVault(),
-    {},
-    {
-      ...evaluationEnv,
-      SELFBENCH_MANAGED_OFFERING: "true",
-      SELFBENCH_MANAGED_E2B_API_KEY: "managed-e2b",
-    },
-  );
-  try {
-    const catalog = await (await fixture.request(`${fixture.base}/catalog`)).json();
-    expect(catalog.managed.sandbox).toBe(false);
-    const result = await fixture.request(
-      `${fixture.base}/comparisons`,
-      post({
-        id: crypto.randomUUID(),
-        tasks: [{ runId: "run-one", taskId: "task-one" }],
-        models: [{ catalogId: "gpt-6-sol", credentialId: "managed-model", harnesses: ["pi"] }],
-        sandbox: "managed",
-        sandboxCredentialId: "managed-sandbox",
-      }),
-    );
-    expect(result.status).toBe(400);
-    expect((await result.json()).error).toContain("platform Modal credentials");
-    expect(fixture.starts).toHaveLength(0);
   } finally {
     await fixture.close();
   }
@@ -195,8 +102,12 @@ test("durable comparison, scoped credentials, frozen tasks, partial dispatch and
         home,
         { PATH: "/bin", GITHUB_TOKEN: "host-secret", OPENAI_API_KEY: "unrelated-key" },
         records,
+        "codex",
       );
-      expect(execution.child.OPENAI_API_KEY).toBe("model-secret");
+      // The model key stays in the vault: the trial reaches it through the gateway.
+      expect(execution.route).toBe("gateway");
+      expect(execution.child.OPENAI_API_KEY).toBeUndefined();
+      expect(JSON.stringify(execution)).not.toContain("model-secret");
       expect(execution.child.E2B_API_KEY).toBe("sandbox-secret");
       expect(execution.child.GITHUB_TOKEN).toBeUndefined();
       expect(execution.child.SELFBENCH_BAO_TOKEN).toBeUndefined();
@@ -242,7 +153,7 @@ test("credential validation rejects auth mixing and unsafe custom endpoints", as
   ).toBe("https://api.example/v1");
 });
 
-test("Codex sign-in is explicit, scoped and never falls back to an API key", async () => {
+test("Codex sign-in is explicit, scoped, served through the gateway, never an API key", async () => {
   const records = memoryVault();
   const fixture = await evaluationServer(records);
   const home = await mkdtemp(join(tmpdir(), "codex-auth-fixture-"));
@@ -287,13 +198,37 @@ test("Codex sign-in is explicit, scoped and never falls back to an API key", asy
       home,
       { OPENAI_API_KEY: "do-not-use" },
       records,
+      "codex",
     );
+    // The gateway serves the sign-in's plan: its tokens never leave the vault for the sandbox.
+    expect(execution.route).toBe("gateway");
     expect(execution.child.OPENAI_API_KEY).toBeUndefined();
-    expect(await readFile(execution.child.CODEX_AUTH_JSON_PATH ?? "", "utf8")).toBe(auth);
-    expect(execution.secrets).toContain("fake-refresh");
+    expect(JSON.stringify(execution)).not.toContain("fake-refresh");
     expect(execution.auth).toBe("codex-login");
   } finally {
     await fixture.close();
     await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("the credentials API still takes an OpenRouter management key from older clients, and drops it", async () => {
+  const records = memoryVault();
+  const fixture = await evaluationServer(records);
+  try {
+    const response = await fixture.request(
+      credentialsUrl,
+      post({
+        name: "OpenRouter",
+        kind: "openrouter",
+        value: "inference-secret",
+        managementKey: "management-secret",
+      }),
+    );
+    expect(response.status).toBe(201);
+    const saved = await response.json();
+    expect(JSON.stringify(saved)).not.toContain("management-secret");
+    expect(await records.credentials.secret(1, saved.id)).toEqual({ value: "inference-secret" });
+  } finally {
+    await fixture.close();
   }
 });

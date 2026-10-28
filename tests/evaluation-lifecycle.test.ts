@@ -54,11 +54,12 @@ test("multiple tasks and harnesses run once each; a zero score still completes",
         return { exitCode: 0, stdout: "", stderr: "" };
       },
     });
+    // An OpenAI key's trials reach the model through the gateway.
     expect(calls).toEqual([
-      "harbor_gateway:SelfBenchCodex",
-      "pi",
-      "harbor_gateway:SelfBenchCodex",
-      "pi",
+      "harbor_gateway:GatewayCodex",
+      "harbor_gateway:GatewayPi",
+      "harbor_gateway:GatewayCodex",
+      "harbor_gateway:GatewayPi",
     ]);
     const run = await getEvaluation(store, input, input.id);
     expect(run?.status).toBe("completed");

@@ -3,7 +3,8 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { credentialSchema } from "../../src/db/credentials.js";
-import { credentialExecution, gatewayTrial } from "../../src/evaluation/execution.js";
+import { credentialExecution } from "../../src/evaluation/execution.js";
+import { gatewayTrial } from "../../src/evaluation/gateway-trial.js";
 import { solverArguments } from "../../src/evaluation/solver-arguments.js";
 import { createMuseLogins, museAuthFile } from "../../src/harnesses/muse-code/login.js";
 import { evaluationServer } from "../support/evaluation-fixture.js";
@@ -162,7 +163,13 @@ test("an HTTP Meta sign-in runs only Muse Code, signed in through its own auth.j
       thinking: "high",
       credentials: { provider: "meta", auth: "muse-login" },
     });
-    const execution = await credentialExecution(input, home, { META_API_KEY: "unused" }, vault);
+    const execution = await credentialExecution(
+      input,
+      home,
+      { META_API_KEY: "unused" },
+      vault,
+      "muse-code",
+    );
     // An API key would take priority over the sign-in.
     expect(execution.child.META_API_KEY).toBeUndefined();
     const authPath = execution.child.MUSE_AUTH_JSON_PATH ?? "";
@@ -171,16 +178,7 @@ test("an HTTP Meta sign-in runs only Muse Code, signed in through its own auth.j
     // The sandbox reaches only Meta's API, where Muse also mints its subscription key.
     const trial = gatewayTrial(input, "muse-code", input.modelName, execution.child);
     expect(trial.extraAllowedHosts).toEqual(["api.meta.ai"]);
-    const args = solverArguments(
-      "task",
-      "jobs",
-      "muse-code",
-      input.modelName,
-      "e2b",
-      input.thinking,
-      trial.extraAllowedHosts,
-      "meta",
-    );
+    const args = solverArguments("task", "jobs", trial, "e2b", trial.extraAllowedHosts);
     expect(args.join(" ")).toContain("--agent harbor_muse:SelfBenchMuseCode");
     expect(args.join(" ")).toContain("--agent-kwarg reasoning_effort=high");
   } finally {

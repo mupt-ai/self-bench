@@ -12,25 +12,13 @@ const credentials = [
   { id: "managed-model", name: "Managed", kind: "openrouter", auth: "api-key", createdAt: "" },
 ] as CredentialInfo[];
 
-test("only API keys that give every judge variable can call the judge", () => {
+test("any provider's or gateway's API key can call the judge, through the gateway", () => {
   // A sign-in and the platform's managed key never call a judge.
-  const anthropic = { variables: ["ANTHROPIC_API_KEY"], required: ["ANTHROPIC_API_KEY"] };
-  expect(judgeCredentials(credentials, anthropic).map((entry) => entry.id)).toEqual([
+  expect(judgeCredentials(credentials).map((entry) => entry.id)).toEqual([
+    "openai",
     "anthropic",
     "router",
   ]);
-  expect(
-    judgeCredentials(credentials, {
-      variables: ["OPENAI_API_KEY", "OPENAI_BASE_URL"],
-      required: ["OPENAI_API_KEY", "OPENAI_BASE_URL"],
-    }).map((entry) => entry.id),
-  ).toEqual(["openai", "router"]);
-  // A judge with only optional keys still needs a credential that gives one of them.
-  expect(
-    judgeCredentials(credentials, { variables: ["ANTHROPIC_API_KEY"], required: [] }).map(
-      (entry) => entry.id,
-    ),
-  ).toEqual(["anthropic", "router"]);
 });
 
 test("the judge panel says what the judge reads, and offers the keys that can call it", () => {
@@ -52,7 +40,7 @@ test("the judge panel says what the judge reads, and offers the keys that can ca
   expect(html).toContain("ANTHROPIC_API_KEY");
   expect(html).toContain('<option value="anthropic">Anthropic</option>');
   expect(html).not.toContain("Claude Sign-In");
-  expect(render(credentials.slice(0, 1))).toContain(
+  expect(render(credentials.slice(2, 3))).toContain(
     "None of your credentials can call this judge.",
   );
 });

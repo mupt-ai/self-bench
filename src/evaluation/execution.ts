@@ -1,31 +1,22 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
-import { ApplicationFailure } from "@temporalio/common";
-import type { ThinkingLevel } from "../contracts/models.js";
 import { dariEndpoint, validateEndpoint } from "../db/credentials.js";
 import type { Vault } from "../db/vault.js";
-import { gateways, isGateway, modelApiKeyVariable, piModels } from "../gateways/index.js";
+import type { TrialJudge } from "../gateway/trial-key.js";
+import { MANAGED_MODEL_CREDENTIAL } from "../gateway/trial-key.js";
+import { modelApiKeyVariable } from "../gateways/index.js";
 import {
   managedModalEnvironment,
-  managedModelKey,
   managedSandboxCredentials,
 } from "../generation/billing/managed.js";
 import { providerCredentialEnvironment } from "../sandbox/provider-environment.js";
-import { type CompatibleEndpoint, compatibleEndpoint } from "./compatible-endpoints.js";
-import { judgeEnvironment } from "./judge.js";
-import { signInRefusal, thinkingArguments } from "./models.js";
+import { trialRoute } from "./gateway-trial.js";
+import { judgeCredentialRefusal } from "./judge.js";
+import { signInRefusal } from "./models.js";
+import { refuseTrial } from "./refusal.js";
 import { sameScope } from "./scope.js";
 import type { EvaluationInput, Harness } from "./types.js";
-
-/**
- * A trial setup failure that every attempt would meet again (a missing or oversized bundle, an
- * unusable credential, an unsupported Harbor): the trial fails at once instead of retrying.
- */
-export function refuseTrial(message: string): ApplicationFailure {
-  return ApplicationFailure.nonRetryable(message, "TrialRefused");
-}
-
 /** The organization whose credentials an evaluation uses. */
 export function evaluationCredentialOrg(
   input: Pick<EvaluationInput, "credentialOrgId" | "credentialOwnerId">,
@@ -33,12 +24,19 @@ export function evaluationCredentialOrg(
   return input.credentialOrgId ?? input.credentialOwnerId;
 }
 
-/** Resolves the comparison's saved credentials into a clean Harbor process environment. */
+/**
+ * Resolves the comparison's saved credentials into a clean Harbor process environment for one
+ * harness's trial. A gateway route (an API key or a ChatGPT or Claude sign-in) leaves the secret in
+ * the vault: the gateway reads it itself, so the worker puts a model credential in the environment
+ * only on a direct route, and none without a harness (building task images calls no model). A
+ * judge's key stays in the vault too.
+ */
 export async function credentialExecution(
   input: EvaluationInput,
   home: string,
   env: NodeJS.ProcessEnv,
   { credentials, comparisons }: Pick<Vault, "credentials" | "comparisons">,
+  harness?: Harness,
 ) {
   const orgId = evaluationCredentialOrg(input);
   if (!input.credentials || !orgId || !input.comparisonId)
@@ -55,10 +53,10 @@ export async function credentialExecution(
       : saved;
   if (!reserved || !isDeepStrictEqual(reserved, input))
     throw refuseTrial("Execution does not match the reserved comparison");
-  const managedModel = input.credentials.modelCredentialId === "managed-model";
+  const managedModel = input.credentials.modelCredentialId === MANAGED_MODEL_CREDENTIAL;
   const managedSandbox = input.credentials.sandboxCredentialId === "managed-sandbox";
   const info = managedModel
-    ? { id: "managed-model", kind: "openrouter" as const, auth: "api-key" as const }
+    ? { id: MANAGED_MODEL_CREDENTIAL, kind: "openrouter" as const, auth: "api-key" as const }
     : await credentials.find(orgId, input.credentials.modelCredentialId);
   const sandbox = managedSandbox
     ? { id: "managed-sandbox", kind: input.sandbox }
@@ -70,11 +68,12 @@ export async function credentialExecution(
     info.kind !== input.credentials.provider
   )
     throw refuseTrial("Credential unavailable");
-  const modelCredential = managedModel
-    ? { value: managedModelKey(env) }
-    : await credentials.secret(orgId, info.id);
-  const modelSecret = modelCredential?.value;
-  const billingKey = info.kind === "openrouter" ? modelCredential?.managementKey : undefined;
+  const refusal = signInRefusal(info.auth, input.harnesses);
+  if (refusal) throw refuseTrial(refusal);
+  const route = harness ? trialRoute(input, harness, info.auth) : undefined;
+  // On the gateway route the gateway reads the API key itself (or the platform's, when managed).
+  const modelSecret =
+    route === "direct" ? (await credentials.secret(orgId, info.id))?.value : undefined;
   const managedE2B =
     managedSandbox && input.sandbox === "e2b" ? managedSandboxCredentials(env) : undefined;
   const managedModal =
@@ -84,7 +83,8 @@ export async function credentialExecution(
     : managedModal
       ? { value: managedModal.MODAL_TOKEN_SECRET, tokenId: managedModal.MODAL_TOKEN_ID }
       : await credentials.secret(orgId, sandbox.id);
-  if (!modelSecret || !sandboxSecret) throw refuseTrial("Credential unavailable");
+  if ((route === "direct" && !modelSecret) || !sandboxSecret)
+    throw refuseTrial("Credential unavailable");
   const child: NodeJS.ProcessEnv = {
     PATH: env.PATH,
     HOME: home,
@@ -92,209 +92,47 @@ export async function credentialExecution(
     LANG: "C.UTF-8",
     PYTHONUNBUFFERED: "1",
   };
-  const secrets = [
-    modelSecret,
-    sandboxSecret.value,
-    sandboxSecret.tokenId ?? "",
-    billingKey ?? "",
-  ].filter(Boolean);
-  const refusal = signInRefusal(info.auth, input.harnesses);
-  if (refusal) throw refuseTrial(refusal);
-  if (info.auth === "codex-login") {
-    const authPath = join(home, "codex-auth.json");
-    await writeFile(authPath, modelSecret, { mode: 0o600 });
-    child.CODEX_AUTH_JSON_PATH = authPath;
-    const auth = JSON.parse(modelSecret);
-    secrets.push(
-      ...Object.values(auth.tokens).filter((value): value is string => typeof value === "string"),
-    );
-  } else if (info.auth === "muse-login") {
+  const secrets = [modelSecret ?? "", sandboxSecret.value, sandboxSecret.tokenId ?? ""].filter(
+    Boolean,
+  );
+  if (modelSecret && info.auth === "muse-login") {
     // Muse Code mints its subscription key from the sign-in's token at startup (harbor_muse.py).
     const authPath = join(home, "muse-auth.json");
     await writeFile(authPath, modelSecret, { mode: 0o600 });
     child.MUSE_AUTH_JSON_PATH = authPath;
     secrets.push(JSON.parse(modelSecret).providers.meta.access_token);
-  } else if (info.auth === "claude-login") {
-    // Harbor's Claude Code passes the token through and drops any API key once forced.
-    child.CLAUDE_CODE_OAUTH_TOKEN = modelSecret;
-    child.CLAUDE_FORCE_OAUTH = "1";
-  } else {
+  } else if (modelSecret) {
+    // A direct API key: Dari's router (or a custom endpoint serving it), or Muse Code's Meta key.
     child[modelApiKeyVariable(info.kind)] = modelSecret;
+    const endpoint = "endpoint" in info ? info.endpoint : undefined;
+    if (info.kind === "dari") child.OPENAI_BASE_URL = dariEndpoint(endpoint);
+    if (info.kind === "custom") child.OPENAI_BASE_URL = validateEndpoint(endpoint ?? "", env);
   }
-  const endpoint = "endpoint" in info ? info.endpoint : undefined;
-  if (info.kind === "dari") child.OPENAI_BASE_URL = dariEndpoint(endpoint);
-  if (info.kind === "custom") child.OPENAI_BASE_URL = validateEndpoint(endpoint ?? "", env);
   Object.assign(
     child,
     providerCredentialEnvironment(input.sandbox, { ...sandboxSecret, domain: managedE2B?.domain }),
     managedModal ? { MODAL_ENVIRONMENT: managedModal.MODAL_ENVIRONMENT } : {},
   );
-  const judge = await judgeCredentialEnvironment(input, orgId, credentials, env);
-  if (judge.secret) secrets.push(judge.secret);
   return {
     profile: { model: input.modelName },
     child,
     secrets,
     auth: info.auth,
-    billingKey,
-    judge: judge.env,
+    route,
+    credential: { orgId, id: info.id },
+    judge: await trialJudge(input, orgId, credentials),
   };
 }
 
-/** The judge variables a benchmark's LLM judge calls with, from its judge credential. */
-async function judgeCredentialEnvironment(
+/** The credential a benchmark's LLM judge calls with through the gateway, if it has one. */
+async function trialJudge(
   input: EvaluationInput,
   orgId: number,
   credentials: Vault["credentials"],
-  env: NodeJS.ProcessEnv,
-): Promise<{ env: Record<string, string>; secret?: string }> {
+): Promise<TrialJudge | undefined> {
   const id = input.credentials?.judgeCredentialId;
-  if (!id) return { env: {} };
+  if (!id) return undefined;
   const info = await credentials.find(orgId, id);
-  const secret = info ? (await credentials.secret(orgId, id))?.value : undefined;
-  if (!info || !secret || info.auth !== "api-key")
-    throw refuseTrial("Judge credential unavailable");
-  const endpoint = info.endpoint ? validateEndpoint(info.endpoint, env) : undefined;
-  return { env: judgeEnvironment({ ...info, ...(endpoint ? { endpoint } : {}) }, secret), secret };
-}
-
-function hostsFromEnvironment(env: NodeJS.ProcessEnv): string[] {
-  return ["OPENAI_BASE_URL", "OPENAI_API_BASE", "ANTHROPIC_BASE_URL"]
-    .flatMap((key) => {
-      const value = env[key];
-      if (!value) return [];
-      try {
-        return [new URL(value).hostname];
-      } catch {
-        return [];
-      }
-    })
-    .filter((host, index, hosts) => hosts.indexOf(host) === index);
-}
-
-function providerHosts(provider: string | undefined, env: NodeJS.ProcessEnv): string[] {
-  if (isGateway(provider)) return [...gateways[provider].hosts];
-  // Codex subscription traffic goes to ChatGPT, not the OpenAI API. These hosts used to
-  // be baked into every task, including gateway trials that never use them.
-  if (env.CODEX_AUTH_JSON_PATH) return ["chatgpt.com", "*.chatgpt.com", "auth.openai.com"];
-  const endpointHosts = hostsFromEnvironment(env);
-  if (endpointHosts.length) return endpointHosts;
-  if (provider === "anthropic") return ["api.anthropic.com"];
-  if (provider === "openai") return ["api.openai.com"];
-  if (provider === "meta") return ["api.meta.ai"];
-  return [];
-}
-
-/** The Harbor agent for a harness over the selected connection (`provider`, when there is one). */
-export function solverAgent(harness: Harness, provider?: string, model?: string): string {
-  if (harness === "claude-code") return "harbor_gateway:SelfBenchClaudeCode";
-  if (harness === "muse-code") return "harbor_muse:SelfBenchMuseCode";
-  if (harness === "pi") {
-    if (provider === "dari" || (provider === "custom" && model === "openai/dari/routing"))
-      return "harbor_dari:DariPi";
-    return isGateway(provider) ? gateways[provider].harborPi : harness;
-  }
-  if (harness !== "codex") return harness;
-  // Gateways and custom/compatible endpoints need HTTPS and must preserve the full model ID.
-  return provider === "custom" || isGateway(provider) || compatibleEndpoint(provider, harness)
-    ? "harbor_gateway:GatewayCodex"
-    : "harbor_gateway:SelfBenchCodex";
-}
-
-/** Harbor arguments for thinking, Pi's endpoint API, and a gateway's models.json. */
-export function solverAgentArguments(
-  harness: Harness,
-  provider: string | undefined,
-  model: string,
-  thinking?: ThinkingLevel,
-): string[] {
-  const levels = thinkingArguments(harness, thinking);
-  if (harness !== "pi") return levels;
-  // Harbor needs an explicit API style for custom and Dari Chat Completions endpoints.
-  if (provider === "custom" || provider === "dari")
-    return [...levels, "--agent-kwarg", "model_api=openai-completions"];
-  // Meta recommends Responses: Chat Completions drops reasoning between turns.
-  if (harness === "pi" && compatibleEndpoint(provider, harness))
-    return [...levels, "--agent-kwarg", "model_api=openai-responses"];
-  if (!isGateway(provider)) return levels;
-  const models = piModels(provider, model.slice(provider.length + 1));
-  return models ? [...levels, "--agent-kwarg", `models_json=${JSON.stringify(models)}`] : levels;
-}
-
-/** The model name Harbor receives for a harness over the selected connection. */
-export function gatewayModel(
-  provider: NonNullable<EvaluationInput["credentials"]>["provider"] | undefined,
-  harness: Harness,
-  model: string,
-): string {
-  if (!(isGateway(provider) || compatibleEndpoint(provider, harness))) return model;
-  const modelId = model.slice((provider?.length ?? 0) + 1);
-  if (harness === "claude-code") return modelId;
-  // Pi takes a gateway by its own provider name, and a compatible endpoint as an OpenAI one.
-  return harness === "pi" && isGateway(provider) ? model : `openai/${modelId}`;
-}
-
-/** Adapt the selected connection to each harness without inheriting host credentials. */
-export function gatewayTrial(
-  input: EvaluationInput,
-  harness: Harness,
-  model: string,
-  env: NodeJS.ProcessEnv,
-) {
-  const provider = input.credentials?.provider;
-  const endpoint = compatibleEndpoint(provider, harness);
-  if (endpoint) return endpointTrial(endpoint, provider, harness, model, env);
-  if (!isGateway(provider)) {
-    const child = { ...env };
-    return {
-      model: provider === "dari" ? "openai/dari/routing" : model,
-      child,
-      extraAllowedHosts: providerHosts(provider, child),
-    };
-  }
-  const gateway = gateways[provider];
-  const key = env[gateway.keyVariable];
-  if (!key) throw refuseTrial("Gateway credential is unavailable");
-  const harborModel = gatewayModel(provider, harness, model);
-  const child = { ...env };
-  for (const { keyVariable } of Object.values(gateways)) delete child[keyVariable];
-  const extraAllowedHosts = [...gateway.hosts];
-  if (harness === "claude-code") {
-    child.ANTHROPIC_API_KEY = key;
-    child.ANTHROPIC_BASE_URL = gateway.anthropicBase;
-    return { model: harborModel, child, extraAllowedHosts };
-  }
-  if (harness === "pi") {
-    child[gateway.keyVariable] = key;
-    return { model: harborModel, child, extraAllowedHosts };
-  }
-  child.OPENAI_API_KEY = key;
-  child.OPENAI_BASE_URL = gateway.openAiBase;
-  child.OPENAI_API_BASE = gateway.openAiBase;
-  return { model: harborModel, child, extraAllowedHosts };
-}
-
-/** A direct provider's key, moved to the variables the harness's protocol reads. */
-function endpointTrial(
-  endpoint: CompatibleEndpoint,
-  provider: NonNullable<EvaluationInput["credentials"]>["provider"] | undefined,
-  harness: Harness,
-  model: string,
-  env: NodeJS.ProcessEnv,
-) {
-  const keyVariable = modelApiKeyVariable(provider ?? "");
-  const key = env[keyVariable];
-  if (!key) throw refuseTrial("Model credential is unavailable");
-  const child = { ...env };
-  delete child[keyVariable];
-  const extraAllowedHosts = providerHosts(provider, {});
-  if (harness === "claude-code") {
-    child.ANTHROPIC_AUTH_TOKEN = key;
-    child.ANTHROPIC_BASE_URL = endpoint.anthropicBase;
-  } else {
-    child.OPENAI_API_KEY = key;
-    child.OPENAI_BASE_URL = endpoint.openAiBase;
-    child.OPENAI_API_BASE = endpoint.openAiBase;
-  }
-  return { model: gatewayModel(provider, harness, model), child, extraAllowedHosts };
+  if (!info || judgeCredentialRefusal(info)) throw refuseTrial("Judge credential unavailable");
+  return { credentialId: info.id, provider: info.kind };
 }

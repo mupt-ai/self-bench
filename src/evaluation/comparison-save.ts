@@ -4,7 +4,7 @@ import type { ComparisonRecord } from "../db/comparisons.js";
 import type { CredentialInfo } from "../db/credentials.js";
 import type { Vault } from "../db/vault.js";
 import { type ManagedOffer, managedHarborEnvironment } from "../generation/billing/managed.js";
-import { type CatalogModel, evaluationCatalog, runPricing } from "./catalog.js";
+import { type CatalogModel, evaluationCatalog } from "./catalog.js";
 import type { ComparisonSelection } from "./comparisons.js";
 import { defaultThinking, routeFor, signInRefusal, thinkingOptions } from "./models.js";
 import { type EvaluationScope, sameScope } from "./scope.js";
@@ -42,7 +42,6 @@ export async function saveComparison(
   signature: string,
   freeze: () => Promise<EvaluationInput["tasks"]>,
   environment: NodeJS.ProcessEnv,
-  fetcher: typeof fetch,
   judge?: (
     tasks: EvaluationInput["tasks"],
     saved: ReadonlyMap<string, CredentialInfo>,
@@ -137,7 +136,7 @@ export async function saveComparison(
           ),
         }))
       : [{ harnesses: selected.harnesses, tasks: frozen }];
-    const pricing = await runPricing(model, route, fetcher);
+    const { pricing } = route;
     return groups
       .filter((group) => group.tasks.length > 0)
       .map(

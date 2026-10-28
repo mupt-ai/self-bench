@@ -1,8 +1,7 @@
 import { isGateway } from "../gateways/index.js";
 import { measureClaudeCodeCost } from "./claude-code-cost.js";
 import { measureCodexCost } from "./codex-cost.js";
-import { compatibleEndpoint } from "./compatible-endpoints.js";
-import { gatewayModel } from "./execution.js";
+import { gatewayRequestModel } from "./gateway-trial.js";
 import { measureHarborAgentCost } from "./harbor-agent-cost.js";
 import { measureMuseCodeCost } from "./muse-code-cost.js";
 import { measurePiCost } from "./pi-cost.js";
@@ -21,10 +20,18 @@ export function trialCost(
 > {
   const pricing = run.pricing;
   const model = run.modelName.split("/").slice(1).join("/");
-  // Harbor records the model name the runner passed it: the gateway form on a gateway route.
-  const harborModel = gatewayModel(run.credentials?.provider, harness, run.modelName);
-  const matches = (value: unknown) =>
-    value === model || value === run.modelName || value === harborModel;
+  // Harbor records the model name it was given, which on the gateway names the one model it
+  // serves (gatewayTrial); a trial recorded before the gateway gave a gateway's id as `openai/`.
+  const request = gatewayRequestModel(run);
+  const names = new Set([
+    model,
+    run.modelName,
+    `openai/${model}`,
+    request,
+    `openai/${request}`,
+    `selfbench/${request}`,
+  ]);
+  const matches = (value: unknown) => typeof value === "string" && names.has(value);
   let measurement:
     | {
         modelVerified: boolean;
@@ -40,11 +47,12 @@ export function trialCost(
     | undefined;
 
   if (harness === "pi") {
-    // Pi can report either its configured custom provider or the OpenAI-compatible protocol name.
-    const endpointModels = compatibleEndpoint(run.credentials?.provider, harness)
-      ? [`harbor-endpoint/${model}`, `openai/${model}`]
-      : [];
-    measurement = measurePiCost(run, files, result, endpointModels);
+    // Pi reports its provider: the gateway's, or Harbor's custom endpoint on trials before it.
+    measurement = measurePiCost(run, files, result, [
+      `selfbench/${request}`,
+      `harbor-endpoint/${model}`,
+      `openai/${model}`,
+    ]);
   } else if (harness === "codex") {
     measurement = measureCodexCost(run, files, result, auth, pricing, matches);
   } else if (harness === "claude-code") {
@@ -93,22 +101,15 @@ export function trialCost(
           costSource: cacheWritesInferred ? ("reference-rates" as const) : ("harbor" as const),
         };
   // Harbor prices a gateway route from LiteLLM's table for it, which may carry a discount or
-  // another provider's rates; gateway runs are priced at their vendor's list rates (runPricing),
-  // and Harbor's figure stands in only where those cannot price the trial. A compatible
-  // endpoint's figure would be another vendor's harness pricing the model, so it is the same.
+  // another provider's rates; those runs are priced at the run's own list rates, and Harbor's
+  // figure stands in only where those cannot price the trial. A Meta key's figure
+  // for a harness other than Muse Code is another vendor's harness pricing it, so it is the same.
+  // (A trial through SelfBench's gateway takes the gateway's recorded cost instead; runner.ts.)
   const provider = run.credentials?.provider;
-  if (
-    !pricing ||
-    (reportedCost !== undefined && !isGateway(provider) && !compatibleEndpoint(provider, harness))
-  )
-    return reported;
-  if (!referenceRatesComplete && pricing.cacheWrite > pricing.input) {
-    return reportedCost !== undefined &&
-      !isGateway(provider) &&
-      !compatibleEndpoint(provider, harness)
-      ? reported
-      : measured;
-  }
+  const harborPriced = !isGateway(provider) && provider !== "meta";
+  if (!pricing || (reportedCost !== undefined && harborPriced)) return reported;
+  if (!referenceRatesComplete && pricing.cacheWrite > pricing.input)
+    return reportedCost !== undefined && harborPriced ? reported : measured;
   const apiCostUsd = requests
     ? requestsCost(pricing, requests)
     : wholeCost(pricing, tokenUsage, largestPrompt, hourCacheWrite);

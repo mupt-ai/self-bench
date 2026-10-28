@@ -82,8 +82,8 @@ export function evaluationTaskKey(runId: string, taskId: string): string {
 }
 
 /**
- * API keys drive any harness their route speaks. Claude and Meta sign-ins drive only their
- * vendor's CLI by rule; a ChatGPT sign-in only because Codex alone reads its auth.json.
+ * API keys drive any harness their route speaks. Each sign-in drives only its vendor's CLI, as its
+ * plan allows: Codex, Claude Code (the gateway serves a Claude plan to nothing else) or Muse Code.
  */
 const signInHarnesses: Record<CredentialInfo["auth"], Harness | undefined> = {
   "api-key": undefined,
@@ -110,8 +110,8 @@ export function signInRefusal(
 
 /**
  * Harnesses a direct provider key can drive: those that speak its API. OpenAI serves no
- * Anthropic Messages for Claude Code, and Anthropic no Responses for Codex; Meta serves both
- * (compatibleEndpoints). Muse Code speaks only Meta's API.
+ * Anthropic Messages for Claude Code, and Anthropic no Responses for Codex; Meta serves both, so a
+ * Meta key drives every harness through the gateway. Muse Code speaks only Meta's API.
  */
 const providerHarnesses: Partial<Record<CatalogModel["provider"], Harness[]>> = {
   dari: ["pi"],

@@ -64,7 +64,7 @@ Every task also needs a held-out test patch that shares no files with the refere
 
 The agent gets the base snapshot, the instruction, and the task's environment. It never sees the held-out tests or the reference solution; Harbor mounts `solution/` only for the oracle.
 
-The agent runs as `root` in `/app` after `setup.sh`, with network limited to the model provider's hosts. Its diff is taken against the post-setup snapshot. The verifier refuses the patch unless its recorded base tree matches the verifier's own `HEAD`, then applies it to a clean copy with test paths excluded and restores the held-out and regression test files, so tampering can only produce a tree the agent could have written directly.
+The agent runs as `root` in `/app` after `setup.sh`, with network limited to the host its model is reached at: SelfBench's model gateway, which holds the credential and gives the agent only a key for its one model (Dari's router and Muse Code reach their provider directly). Its diff is taken against the post-setup snapshot. The verifier refuses the patch unless its recorded base tree matches the verifier's own `HEAD`, then applies it to a clean copy with test paths excluded and restores the held-out and regression test files, so tampering can only produce a tree the agent could have written directly.
 
 ## Export
 

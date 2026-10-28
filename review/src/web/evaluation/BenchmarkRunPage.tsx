@@ -94,9 +94,7 @@ function BenchmarkRunContent() {
   const judge = benchmark?.judge;
   const judgeReady =
     !judge?.variables.length ||
-    judgeCredentials(credentials ?? [], judge).some(
-      (entry) => entry.id === draft.judgeCredentialId,
-    );
+    judgeCredentials(credentials ?? []).some((entry) => entry.id === draft.judgeCredentialId);
   const ready =
     !!benchmark &&
     judgeReady &&

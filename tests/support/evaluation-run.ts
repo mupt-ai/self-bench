@@ -8,10 +8,12 @@ import { trialInput } from "../../src/evaluation/trial-input.js";
 import type { EvaluationInput } from "../../src/evaluation/types.js";
 import { runEvaluationTrials } from "../../src/evaluation/workflow.js";
 import { runCommand } from "../../src/lib/process.js";
+import { testGateway } from "./evaluation-gateway.js";
 
 /**
  * The evaluation workflow's own orchestration over the record and runner directly, in place of
  * Temporal activities: one trial at a time, each given only its own task as a trial workflow is.
+ * API keys' trials reach a test gateway unless `options` names one.
  */
 export function runEvaluation(
   store: ArtifactStore,
@@ -27,7 +29,7 @@ export function runEvaluation(
     },
     async (input, index) => {
       const trial = trialInput(input, index);
-      await executeTrial(store, trial, index, options);
+      await executeTrial(store, trial, index, { gateway: testGateway(), ...options });
       // As the trial workflow does, once the trial has ended.
       if (input.explainFailures)
         await explainTrialFailure(

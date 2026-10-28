@@ -1,27 +1,23 @@
 import type { HarborEnvironment } from "../contracts/config/providers.js";
-import type { ThinkingLevel } from "../contracts/models.js";
 import { harborRunArguments } from "../harnesses/harbor/command.js";
-import { solverAgent, solverAgentArguments } from "./execution.js";
-import type { Harness } from "./types.js";
+import type { SolverTrial } from "./gateway-trial.js";
 
+/** The `harbor run` arguments for a trial's solver, as its route resolved it (gatewayTrial). */
 export function solverArguments(
   taskPath: string,
   jobs: string,
-  harness: Harness,
-  model: string,
+  solver: Pick<SolverTrial, "agent" | "model" | "agentArguments">,
   sandbox: HarborEnvironment,
-  thinking?: ThinkingLevel,
   extraAllowedHosts: readonly string[] = [],
-  provider?: string,
   verifierEnv: readonly string[] = [],
 ): string[] {
   return harborRunArguments({
     taskPath,
     jobsPath: jobs,
     jobName: "solver",
-    agent: solverAgent(harness, provider, model),
+    agent: solver.agent,
     environment: sandbox,
-    solver: { model, agentArguments: solverAgentArguments(harness, provider, model, thinking) },
+    solver: { model: solver.model, agentArguments: solver.agentArguments },
     extraAllowedHosts,
     verifierEnv,
   });

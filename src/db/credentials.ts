@@ -41,12 +41,9 @@ export const credentialSchema = z
     auth: z.enum(credentialAuths).default("api-key"),
     value: z.string().min(1).max(24_000),
     tokenId: z.string().max(4096).optional(),
-    managementKey: z
-      .string()
-      .min(1)
-      .max(4096)
-      .regex(/^[^\r\n\0]+$/)
-      .optional(),
+    // Accepted and ignored: clients written before the gateway still send an OpenRouter management
+    // key, and rejecting it would fail them. Nothing reads it, and create() never stores it.
+    managementKey: z.string().max(4096).optional(),
     teamId: providerId.optional(),
     projectId: providerId.optional(),
     endpoint: z.preprocess((value) => (value === "" ? undefined : value), z.url().optional()),
@@ -77,8 +74,6 @@ export const credentialSchema = z
     } else if (/[\r\n\0]/.test(value.value)) issue("API keys must be a single line");
     else if (value.kind === "anthropic" && value.value.startsWith("sk-ant-oat"))
       issue("This is a Claude subscription token; add it as a Claude sign-in instead");
-    if (value.managementKey && (value.kind !== "openrouter" || value.auth !== "api-key"))
-      issue("Only OpenRouter API credentials accept a management key");
     if ((value.kind === "modal") !== !!value.tokenId) issue("Modal requires a token ID and secret");
     if (
       value.kind === "vercel" ? !value.teamId || !value.projectId : value.teamId || value.projectId
@@ -120,8 +115,6 @@ export interface CredentialInfo {
 }
 export interface CredentialSecret {
   value: string;
-  /** Owner-supplied billing access; never passed to a solver. */
-  managementKey?: string;
   tokenId?: string;
   teamId?: string;
   projectId?: string;
@@ -247,10 +240,9 @@ export function createCredentialStore(db: Database, key: string) {
         .from(credentials)
         .where(and(eq(credentials.orgId, orgId), isNull(credentials.deletedAt)));
       if ((total?.value ?? 0) >= CREDENTIAL_LIMIT) throw new Error("Credential limit reached");
-      const { value, tokenId, teamId, projectId, managementKey } = parsed;
+      const { value, tokenId, teamId, projectId } = parsed;
       const secret: CredentialSecret = {
         value,
-        ...(managementKey ? { managementKey } : {}),
         ...(tokenId ? { tokenId } : {}),
         ...(teamId ? { teamId } : {}),
         ...(projectId ? { projectId } : {}),
@@ -282,6 +274,13 @@ export function createCredentialStore(db: Database, key: string) {
         .set({
           maxSandboxes: maxSandboxes === undefined ? null : maxSandboxesSchema.parse(maxSandboxes),
         })
+        .where(live(orgId, id));
+    },
+    /** Replaces a sign-in's saved tokens with refreshed ones (gateway/sign-in.ts). */
+    async renew(orgId: number, id: string, value: string): Promise<void> {
+      await db
+        .update(credentials)
+        .set({ secret: seal(id, { value }) })
         .where(live(orgId, id));
     },
     /** Soft delete: the row stays for history, the secret is erased. */

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { migrateEvaluationRecords } from "../maintenance/records-migration.js";
+import { credentialSchema } from "../src/db/credentials.js";
 import { createEncryptedRecords } from "../src/db/encrypted-records.js";
 import { comparisons, credentials } from "../src/db/schema.js";
 import { createUserStore } from "../src/db/users.js";
@@ -10,6 +11,32 @@ import { evaluationInput } from "./support/evaluation-fixture.js";
 import { testAuthConfig, testDatabase } from "./support/site-fixture.js";
 
 const key = "a".repeat(64);
+
+test("a request still carrying an OpenRouter management key is accepted and the key is not stored", async () => {
+  const database = await testDatabase();
+  try {
+    const { credentials: store } = createVault(database.db, key);
+    // Clients written before the gateway still send it; the schema must not refuse them.
+    const draft = credentialSchema.parse({
+      name: "OpenRouter",
+      kind: "openrouter",
+      auth: "api-key",
+      value: "inference-secret",
+      managementKey: "management-secret",
+    });
+    const saved = await store.create(1, draft, {});
+    expect(JSON.stringify(saved)).not.toContain("management-secret");
+    const [row] = await database.db.select().from(credentials).where(eq(credentials.id, saved.id));
+    expect(JSON.stringify(row)).not.toContain("management-secret");
+    expect(await store.secret(1, saved.id)).toEqual({ value: "inference-secret" });
+    // Other unknown fields are still refused.
+    expect(() =>
+      credentialSchema.parse({ name: "x", kind: "openrouter", value: "v", unknownField: 1 }),
+    ).toThrow();
+  } finally {
+    await database.close();
+  }
+});
 
 test("credentials are sealed per row, org-scoped, idempotent by ID and soft-deleted", async () => {
   const database = await testDatabase();

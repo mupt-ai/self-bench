@@ -1,5 +1,5 @@
 import { loadConfig } from "../contracts/config/index.js";
-import { keepGatewaysFresh } from "../gateways/refresh.js";
+import { keepGatewaysFresh } from "../gateways/catalog.js";
 import { closeAnalytics, initAnalytics } from "../lib/telemetry/posthog.js";
 import { closeSentry, initSentry } from "../lib/telemetry/sentry.js";
 import { loadAuthConfig } from "./auth/config.js";

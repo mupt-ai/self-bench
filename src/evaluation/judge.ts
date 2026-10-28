@@ -1,62 +1,55 @@
 import type { CredentialInfo } from "../db/credentials.js";
-import { gateways, isGateway } from "../gateways/index.js";
-import {
-  type HostVariable,
-  JUDGE_VARIABLES,
-  type JudgeNeeds,
-} from "../harnesses/harbor/host-variables.js";
+import type { GatewayConnection } from "../gateway/connection.js";
+import { gatewayIds } from "../gateways/index.js";
+import { type HostVariable, JUDGE_VARIABLES } from "../harnesses/harbor/host-variables.js";
 
-/** The judge variables a credential provides: its key, and the base URL it is reached at. */
+/** Credential kinds whose keys can judge: the gateway serves any of their provider's models. */
+const JUDGE_PROVIDERS: ReadonlySet<string> = new Set([
+  "openai",
+  "anthropic",
+  "meta",
+  ...gatewayIds,
+]);
+
+/**
+ * The judge variables a gateway connection provides: the trial key at the gateway's OpenAI and
+ * Anthropic addresses, which serve any model of the judge credential's provider in either protocol.
+ */
 export function judgeEnvironment(
-  credential: Pick<CredentialInfo, "kind" | "auth" | "endpoint">,
-  key: string,
+  connection: Pick<GatewayConnection, "key" | "openAiBase" | "anthropicBase">,
 ): Record<string, string> {
-  if (credential.auth !== "api-key") return {};
-  const openAi = (base: string) => ({
-    OPENAI_API_KEY: key,
-    OPENAI_BASE_URL: base,
-    OPENAI_API_BASE: base,
-  });
-  if (credential.kind === "openai") return openAi("https://api.openai.com/v1");
-  if (credential.kind === "custom" && credential.endpoint) return openAi(credential.endpoint);
-  if (credential.kind === "anthropic")
-    return { ANTHROPIC_API_KEY: key, ANTHROPIC_BASE_URL: "https://api.anthropic.com" };
-  if (!isGateway(credential.kind)) return {};
-  const gateway = gateways[credential.kind];
+  const { key, openAiBase } = connection;
   return {
-    ...openAi(gateway.openAiBase),
+    OPENAI_API_KEY: key,
+    OPENAI_BASE_URL: openAiBase,
+    OPENAI_API_BASE: openAiBase,
     ANTHROPIC_API_KEY: key,
-    ANTHROPIC_BASE_URL: gateway.anthropicBase,
-    ...(credential.kind === "openrouter"
-      ? { OPENROUTER_API_KEY: key, OPENROUTER_API_BASE: gateway.openAiBase }
-      : {}),
+    ANTHROPIC_BASE_URL: connection.anthropicBase,
+    OPENROUTER_API_KEY: key,
+    OPENROUTER_API_BASE: openAiBase,
   };
 }
 
 /**
- * Why `credential` can't call a judge with `needs`, if it can't: it must give every required
- * variable, and at least one variable at all (or the judge would run with only its defaults).
+ * Why `credential` can't call a task's LLM judge, if it can't: it must be an API key the gateway
+ * serves its provider's models on, which gives the judge every variable it may read.
  */
 export function judgeCredentialRefusal(
-  credential: Pick<CredentialInfo, "kind" | "auth" | "endpoint">,
-  needs: JudgeNeeds,
+  credential: Pick<CredentialInfo, "kind" | "auth">,
 ): string | undefined {
-  const provided = judgeEnvironment(credential, "key");
-  const missing = needs.required.filter((name) => !(name in provided));
-  if (missing.length)
-    return `The judge credential can't provide ${missing.join(", ")}; select an API key for that provider or a gateway`;
-  if (!needs.variables.some((name) => name in provided))
-    return `The judge credential can't provide any of ${needs.variables.join(", ")}`;
-  return undefined;
+  return credential.auth === "api-key" && JUDGE_PROVIDERS.has(credential.kind)
+    ? undefined
+    : "The judge credential must be an API key for a model provider or a gateway";
 }
 
 /**
  * Gives a published task's `env` tables their host variables for one trial, from `judge` (the
- * judge credential's variables) and nothing else. A judge variable only `verifier.env` reads goes
- * to the verifier directly (--verifier-env, as `${SELFBENCH_JUDGE_…}` so the key stays out of the
- * command line); one the sandbox reads is set in Harbor's environment, which the solver's own
- * credential may already hold under that name, in which case they must agree. Any other variable
- * must be unset, so its default applies. Returns the refusal when the trial can't run.
+ * gateway's variables for the trial key) and nothing else. A judge variable only `verifier.env`
+ * reads goes to the verifier directly (--verifier-env, as `${SELFBENCH_JUDGE_…}` so the key stays
+ * out of the command line); one the sandbox reads is set in Harbor's environment. A gateway solver
+ * holds the same key and address there; only Dari's router, called directly, holds its own, which
+ * a sandbox-read judge variable cannot replace. Any other variable must be unset, so its default
+ * applies. Returns the refusal when the trial can't run.
  */
 export function judgeTrial(
   variables: readonly HostVariable[],
@@ -82,7 +75,7 @@ export function judgeTrial(
       verifierEnv.add(`${name}=\${SELFBENCH_JUDGE_${name}}`);
     } else if (child[name] !== undefined && child[name] !== value)
       return {
-        refusal: `The task's sandbox reads ${name}, which the model being tested also uses: pick the same credential for the judge`,
+        refusal: `The task's sandbox reads ${name}, which the model being tested also uses: a judge in the sandbox cannot share it`,
       };
     else next[name] = value;
   }
