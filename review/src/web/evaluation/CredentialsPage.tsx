@@ -8,9 +8,9 @@ import { Button, buttonStyles, Notice, PageFrame, PageHeader } from "../ui";
 import { evaluationRequest } from "./api";
 import { CredentialEditor } from "./CredentialEditor";
 import { CredentialGroup } from "./CredentialGroup";
+import { EditCredentialDialog } from "./CredentialSettings";
 import { isSandbox } from "./credential-presentation";
 import { DeleteCredentialDialog } from "./DeleteCredentialDialog";
-import { SandboxLimitDialog } from "./SandboxLimit";
 
 type Editor = {
   previous?: CredentialInfo;
@@ -29,7 +29,7 @@ function CredentialsContent({ org }: { org: string }) {
   const [data, setData] = React.useState<Credentials>();
   const [editing, setEditing] = React.useState<Editor>();
   const [deleting, setDeleting] = React.useState<CredentialInfo>();
-  const [limiting, setLimiting] = React.useState<CredentialInfo>();
+  const [changing, setChanging] = React.useState<CredentialInfo>();
   const [error, setError] = React.useState("");
   const [notice, setNotice] = React.useState("");
   const [search] = useSearchParams();
@@ -107,7 +107,7 @@ function CredentialsContent({ org }: { org: string }) {
             {...groupProps}
             title="Model Providers"
             credentials={credentials.filter((entry) => !isSandbox(entry.kind))}
-            onLimit={setLimiting}
+            onEdit={setChanging}
             onAdd={() => setEditing({})}
           />
           <CredentialGroup
@@ -115,7 +115,7 @@ function CredentialsContent({ org }: { org: string }) {
             title="Sandboxes"
             credentials={credentials.filter((entry) => isSandbox(entry.kind))}
             sandbox
-            onLimit={setLimiting}
+            onEdit={setChanging}
             onAdd={() => setEditing({ kind: "modal" })}
           />
         </div>
@@ -129,14 +129,14 @@ function CredentialsContent({ org }: { org: string }) {
           onCancel={() => setEditing(undefined)}
         />
       )}
-      {limiting && (
-        <SandboxLimitDialog
-          credential={limiting}
-          onClose={() => setLimiting(undefined)}
-          onSave={async (maxSandboxes) => {
-            await evaluationRequest(`${url}/${limiting.id}/limit`, { maxSandboxes });
-            setLimiting(undefined);
-            setNotice("Concurrency limit saved.");
+      {changing && (
+        <EditCredentialDialog
+          credential={changing}
+          onClose={() => setChanging(undefined)}
+          onSave={async (settings) => {
+            await evaluationRequest(`${url}/${changing.id}/update`, settings);
+            setChanging(undefined);
+            setNotice("Credential saved.");
             await refresh();
           }}
         />

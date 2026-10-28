@@ -5,10 +5,10 @@ import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
 import { Button, fieldStyles, Input, Select } from "../ui";
 import { ClaudeSignIn } from "./ClaudeSignIn";
 import { CredentialSecret } from "./CredentialSecret";
+import { CredentialLimitFields } from "./CredentialSettings";
 import { isSandbox, providers, sandboxes, signIns } from "./credential-presentation";
 import { DariRouterField } from "./DariRouterField";
 import { DeviceSignIn } from "./DeviceSignIn";
-import { SandboxLimitField } from "./SandboxLimit";
 
 export function CredentialEditor({
   previous,
@@ -36,6 +36,7 @@ export function CredentialEditor({
     value: "",
     endpoint: previous?.endpoint,
     maxSandboxes: previous?.maxSandboxes,
+    maxBuilds: previous?.maxBuilds,
   });
   const [busy, setBusy] = React.useState(false);
   const [signingIn, setSigningIn] = React.useState(false);
@@ -240,10 +241,10 @@ export function CredentialEditor({
                     />
                   </label>
                 ))}
-              <SandboxLimitField
-                sandbox={sandbox}
-                value={draft.maxSandboxes}
-                onChange={(maxSandboxes) => setDraft({ ...draft, maxSandboxes })}
+              <CredentialLimitFields
+                kind={draft.kind}
+                limits={draft}
+                onChange={(limits) => setDraft({ ...draft, ...limits })}
               />
               <CredentialSecret
                 draft={draft}

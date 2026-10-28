@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createSecretBox } from "../api/auth/crypto.js";
 import { gatewayIds } from "../gateways/index.js";
 import type { Database } from "./client.js";
+import { credentialEndpoint, dariEndpoint } from "./credential-endpoints.js";
 import { RecordStoreError } from "./encrypted-records.js";
 import { credentials } from "./schema.js";
 
@@ -48,6 +49,8 @@ export const credentialSchema = z
     projectId: providerId.optional(),
     endpoint: z.preprocess((value) => (value === "" ? undefined : value), z.url().optional()),
     maxSandboxes: maxSandboxesSchema.optional(),
+    // Image builds a sandbox account runs at once; E2B counts them apart from its sandboxes.
+    maxBuilds: maxSandboxesSchema.optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -112,70 +115,13 @@ export interface CredentialInfo {
   createdAt: string;
   endpoint?: string;
   maxSandboxes?: number;
+  maxBuilds?: number;
 }
 export interface CredentialSecret {
   value: string;
   tokenId?: string;
   teamId?: string;
   projectId?: string;
-}
-
-/** Dari's routing host; a credential may name one of its routers instead of the default. */
-const DARI_HOST = "https://routing.dari.dev";
-
-/**
- * The Dari base URL a credential runs against: its default router (`/v1`) when the credential
- * names none, else the router it names, as `/rtr_…`. A URL copied from a request address keeps
- * only its router, since the harness appends the API method itself.
- */
-export function dariEndpoint(endpoint?: string): string {
-  const base = `${DARI_HOST}/v1`;
-  if (!endpoint) return base;
-  const url = new URL(endpoint);
-  const path = url.pathname
-    .replace(/\/(chat\/completions|completions|responses)$/, "")
-    .replace(/\/+$/, "");
-  if (
-    `${url.protocol}//${url.host}` !== DARI_HOST ||
-    url.username ||
-    url.password ||
-    url.search ||
-    url.hash
-  )
-    throw new Error("A Dari router URL must be on routing.dari.dev");
-  if (path === "" || path === "/v1") return base;
-  const router = path.slice(1);
-  if (router.includes("/") || !/^[A-Za-z0-9_-]+$/.test(router))
-    throw new Error("Use routing.dari.dev/<router_id>, without an API method");
-  return `${DARI_HOST}/${router}`;
-}
-
-export function validateEndpoint(endpoint: string, env: NodeJS.ProcessEnv): string {
-  const url = new URL(endpoint);
-  const allowed = (env.SELFBENCH_CUSTOM_MODEL_HOSTS ?? "").split(",").filter(Boolean);
-  if (
-    url.protocol !== "https:" ||
-    url.username ||
-    url.password ||
-    url.search ||
-    url.hash ||
-    !allowed.includes(url.hostname) ||
-    (url.port && url.port !== "443")
-  )
-    throw new Error("Custom endpoint must use HTTPS on an operator-approved hostname");
-  return url.toString().replace(/\/$/, "");
-}
-
-/**
- * The endpoint a credential is saved with, as its kind reads it: a Dari credential's router, or a
- * custom endpoint on an operator-approved host. Other kinds keep none.
- */
-export function credentialEndpoint(
-  parsed: Pick<CredentialDraft, "kind" | "endpoint">,
-  env: NodeJS.ProcessEnv,
-): string | undefined {
-  if (parsed.kind === "dari") return parsed.endpoint ? dariEndpoint(parsed.endpoint) : undefined;
-  return parsed.endpoint ? validateEndpoint(parsed.endpoint, env) : undefined;
 }
 
 const CREDENTIAL_LIMIT = 200;
@@ -192,6 +138,7 @@ export function createCredentialStore(db: Database, key: string) {
     createdAt: row.createdAt.toISOString(),
     ...(row.endpoint ? { endpoint: row.endpoint } : {}),
     ...(row.maxSandboxes ? { maxSandboxes: row.maxSandboxes } : {}),
+    ...(row.maxBuilds ? { maxBuilds: row.maxBuilds } : {}),
   });
   const live = (orgId: number, id: string) =>
     and(eq(credentials.orgId, orgId), eq(credentials.id, id), isNull(credentials.deletedAt));
@@ -257,6 +204,7 @@ export function createCredentialStore(db: Database, key: string) {
           auth: parsed.auth,
           endpoint,
           maxSandboxes: parsed.maxSandboxes,
+          maxBuilds: parsed.maxBuilds,
           secret: seal(id, secret),
         })
         .onConflictDoNothing()
@@ -266,15 +214,31 @@ export function createCredentialStore(db: Database, key: string) {
       if (!saved) throw new RecordStoreError(409, "Credential ID already used");
       return saved;
     },
-    /** Sets or clears admission for new work; sandboxes already started are not stopped. */
-    async limit(orgId: number, id: string, maxSandboxes: number | undefined): Promise<void> {
+    /**
+     * Sets or clears a limit for new work: on sandboxes, or with `column` on image builds. Work
+     * already started is not stopped.
+     */
+    async limit(
+      orgId: number,
+      id: string,
+      value: number | undefined,
+      column: "maxSandboxes" | "maxBuilds" = "maxSandboxes",
+    ): Promise<void> {
       if (!(await find(orgId, id))) throw new Error("Credential not found");
+      const parsed = value === undefined ? null : maxSandboxesSchema.parse(value);
       await db
         .update(credentials)
-        .set({
-          maxSandboxes: maxSandboxes === undefined ? null : maxSandboxesSchema.parse(maxSandboxes),
-        })
+        .set({ [column]: parsed })
         .where(live(orgId, id));
+    },
+    /** Renames a credential; work saved with it keeps its ID, so it shows the new name. */
+    async rename(orgId: number, id: string, name: string): Promise<void> {
+      const [renamed] = await db
+        .update(credentials)
+        .set({ name: credentialSchema.shape.name.parse(name) })
+        .where(live(orgId, id))
+        .returning({ id: credentials.id });
+      if (!renamed) throw new Error("Credential not found");
     },
     /** Replaces a sign-in's saved tokens with refreshed ones (gateway/sign-in.ts). */
     async renew(orgId: number, id: string, value: string): Promise<void> {

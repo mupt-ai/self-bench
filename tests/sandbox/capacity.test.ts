@@ -6,6 +6,7 @@ import {
   capacityLimitedSandbox,
   credentialCapacity,
   credentialsCapacity,
+  holdingBuildSlot,
   holdingCapacity,
 } from "../../src/sandbox/capacity.js";
 import {
@@ -158,4 +159,38 @@ test("a model credential's limit carries into the sandboxes that call it", async
   await agent.stop(first);
   await agent.start(request);
   await expect(compile.start(request)).rejects.toBeInstanceOf(SandboxCapacityError);
+});
+
+// E2B counts template builds apart from sandboxes, so a build slot neither takes nor waits on a
+// sandbox slot. Regressions share one record, or let a refused build start.
+test("image builds hold a slot of the account's build limit, apart from its sandboxes", async () => {
+  const vault = memoryVault();
+  const key = await vault.credentials.create(
+    1,
+    { name: "e2b", kind: "e2b", auth: "api-key", value: "k", maxSandboxes: 1, maxBuilds: 1 },
+    {},
+  );
+  const sandboxes = credentialCapacity(orgRecords(vault.records, 1), key.id, 1);
+  await sandboxes.acquire(60_000);
+  const build = (run: () => Promise<void>) => holdingBuildSlot(vault, 1, key.id, run);
+  let started = 0;
+  await build(async () => {
+    started++;
+    // A second build waits while the first holds the only slot.
+    const waiting = build(async () => {
+      started++;
+    });
+    await expect(waiting).rejects.toMatchObject({
+      type: SandboxCapacityError.type,
+      nonRetryable: true,
+    });
+  });
+  expect(started).toBe(1);
+  await build(async () => {
+    started++;
+  });
+  expect(started).toBe(2);
+  // Without a build limit, builds start at once.
+  await vault.credentials.limit(1, key.id, undefined, "maxBuilds");
+  await Promise.all([build(async () => {}), build(async () => {})]);
 });

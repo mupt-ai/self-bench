@@ -1,4 +1,4 @@
-import { Ellipsis, Gauge, RefreshCw, Trash2 } from "lucide-react";
+import { Ellipsis, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import { useRef } from "react";
 import {
   DropdownMenu,
@@ -11,18 +11,18 @@ import { Button } from "../ui";
 
 export function CredentialActions({
   name,
-  onLimit,
+  onEdit,
   onReplace,
   onDelete,
 }: {
   name: string;
-  /** Opens the credential's limit on sandboxes using it at once. */
-  onLimit?(): void;
+  /** Opens the credential's name and limits for editing. */
+  onEdit?(): void;
   onReplace(): void;
   onDelete(): void;
 }) {
   const trigger = useRef<HTMLButtonElement>(null);
-  const pending = useRef<"limit" | "replace" | "delete" | null>(null);
+  const pending = useRef<"edit" | "replace" | "delete" | null>(null);
   return (
     <DropdownMenu
       onOpenChange={(open) => {
@@ -50,19 +50,19 @@ export function CredentialActions({
           event.preventDefault();
           pending.current = null;
           trigger.current?.focus();
-          if (action === "limit") onLimit?.();
+          if (action === "edit") onEdit?.();
           else if (action === "replace") onReplace();
           else onDelete();
         }}
       >
-        {onLimit && (
+        {onEdit && (
           <DropdownMenuItem
             onSelect={() => {
-              pending.current = "limit";
+              pending.current = "edit";
             }}
           >
-            <Gauge aria-hidden="true" />
-            Set Concurrency Limit
+            <Pencil aria-hidden="true" />
+            Edit
           </DropdownMenuItem>
         )}
         <DropdownMenuItem

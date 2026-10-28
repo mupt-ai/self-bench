@@ -5,7 +5,7 @@ import type { SelfBenchConfig } from "../contracts/config/index.js";
 import { isArtifactRegistry } from "../contracts/config/task-images.js";
 import { apiKeyDenies } from "../db/api-keys.js";
 import { openDatabase } from "../db/client.js";
-import { validateEndpoint } from "../db/credentials.js";
+import { validateEndpoint } from "../db/credential-endpoints.js";
 import { createRegistryGrantStore } from "../db/registry-grants.js";
 import { gatewayRoute } from "../gateway/mount.js";
 import { withManagedModel } from "../gateway/platform.js";

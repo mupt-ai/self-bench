@@ -177,18 +177,19 @@ test("a sandbox credential's limit shows in its group", () => {
           auth: "api-key",
           createdAt: "2026-09-09T00:00:00Z",
           maxSandboxes: 20,
+          maxBuilds: 10,
         },
       ]}
       loading={false}
       canManage
       sandbox
       onAdd={() => {}}
-      onLimit={() => {}}
+      onEdit={() => {}}
       onReplace={() => {}}
       onDelete={() => {}}
     />,
   );
-  expect(html).toContain("E2B · API Key · Up to 20 at once");
+  expect(html).toContain("E2B · API Key · Up to 20 at once · Up to 10 builds at once");
 });
 
 test("a model credential's limit shows in its group", () => {
@@ -208,7 +209,7 @@ test("a model credential's limit shows in its group", () => {
       loading={false}
       canManage
       onAdd={() => {}}
-      onLimit={() => {}}
+      onEdit={() => {}}
       onReplace={() => {}}
       onDelete={() => {}}
     />,
@@ -222,6 +223,8 @@ test("Add Sandbox offers only hosted sandboxes and the fields for its selected s
   expect(html).toContain("Modal Token ID");
   expect(html).toContain("Modal Token Secret");
   expect(html).toContain("Max Concurrent Sandboxes");
+  // Only E2B counts template builds apart from sandboxes.
+  expect(html).not.toContain("Max Concurrent Builds");
   expect(options(html)).toEqual(["e2b", "modal", "daytona", "vercel"]);
   expect(html).not.toContain("ChatGPT Sign-In");
 });
@@ -234,11 +237,13 @@ test("replacement keeps the original credential category regardless of the defau
     auth: "api-key",
     createdAt: "2026-09-09T00:00:00Z",
     maxSandboxes: 20,
+    maxBuilds: 10,
   };
   const sandbox = credentialEditor(undefined, previous);
   expect(sandbox).toContain("Replace Credential");
   // The replacement starts from the original's sandbox limit.
   expect(sandbox).toMatch(/id="credential-max-sandboxes"[^>]*value="20"/);
+  expect(sandbox).toMatch(/id="credential-max-builds"[^>]*value="10"/);
   expect(options(sandbox)).toEqual(["e2b", "modal", "daytona", "vercel"]);
   const provider = credentialEditor("modal", { ...previous, kind: "anthropic" });
   expect(options(provider)).toEqual([
