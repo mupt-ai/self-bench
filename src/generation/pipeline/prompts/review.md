@@ -14,7 +14,7 @@ Read only; you have read, grep, find, and ls.
 - Pinning existing text or behavior is fair only when the instruction implies the solution goes through that existing path. Existing somewhere in the repository is not enough. Grep the base repository to see where anything the tests pin comes from.
 - Hidden tests don't reverse a visible existing test (a throw that now resolves, an error that is now a result) unless the instruction states the new behavior.
 - For each assertion, picture a solution that follows the instruction differently from the gold patch. If it would fail, the test is unfair.
-- The environment is deterministic: pinned image, frozen dependencies, no secrets, only needed services.
+- The environment is deterministic: pinned image, frozen dependencies, no secrets, nothing the tests do not need.
 - The mechanical report is GREEN.
 
 # Unfair Tests Review Has Accepted

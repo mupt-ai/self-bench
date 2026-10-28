@@ -50,7 +50,7 @@ export function auditPatches(
   return { difficulty: reached ?? "easy", blockers };
 }
 
-/** Files a patch leaves changed (the new side of each diff) and its added and removed lines. */
+/** How many files a patch changes, and its added and removed lines. */
 function patchMetrics(patch: string): { files: number; lines: number } {
   let files = 0;
   let lines = 0;

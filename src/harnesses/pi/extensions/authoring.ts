@@ -14,15 +14,15 @@ import {
 const noArguments = Type.Object({}, { additionalProperties: false });
 
 /**
- * Static-checks the deliverable and packs its files as `<directory>/source-task.tar.gz`.
+ * Static-checks the deliverable and packs its files as `<handOff>/source-task.tar.gz`.
  * Returns the tool failure when the static check fails.
  */
-function packDeliverable(directory: string): ToolFailure | undefined {
+function packDeliverable(handOff: string): ToolFailure | undefined {
   const deliverable = process.env.SELFBENCH_DELIVERABLE ?? "/work/task";
   const verdict = runStaticCheck(deliverable);
   if (!verdict.ok) return staticCheckFailure(verdict);
-  mkdirSync(directory, { recursive: true });
-  const archive = join(directory, "source-task.tar.gz");
+  mkdirSync(handOff, { recursive: true });
+  const archive = join(handOff, "source-task.tar.gz");
   const tar = spawnSync("tar", ["-czf", archive, "-C", deliverable, ...SUBMISSION_FILES]);
   if (tar.status !== 0) throw new Error(`could not pack the task: ${tar.stderr}`);
 }

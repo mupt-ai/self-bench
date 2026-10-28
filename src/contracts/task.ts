@@ -39,8 +39,8 @@ const registryImageSchema = z
 
 /**
  * The images a task's checks ran on, by digest in SelfBench's task image repository: the agent's
- * (built from `environment/`) and the separate verifier's (from `tests/`, which a task with
- * services runs as Compose's `main`). Every trial starts from exactly these.
+ * (built from `environment/`) and the separate verifier's (from `tests/`, which an older task
+ * with services runs as Compose's `main`). Every trial starts from exactly these.
  */
 export const taskImagesSchema = z.object({
   agent: registryImageSchema,
