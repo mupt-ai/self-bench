@@ -8,7 +8,6 @@ import {
   pgTable,
   text,
   timestamp,
-  uuid,
 } from "drizzle-orm/pg-core";
 
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
@@ -23,7 +22,8 @@ export const gatewayRequests = pgTable(
   {
     requestId: text("request_id").primaryKey(),
     orgId: bigint("org_id", { mode: "number" }).notNull(),
-    credentialId: uuid("credential_id").notNull(),
+    /** The credential's UUID, or `managed-model` for SelfBench's own OpenRouter key. */
+    credentialId: text("credential_id").notNull(),
     /** The gateway's model id, `provider/model`. */
     model: text("model").notNull(),
     tags: jsonb("tags").$type<Record<string, string>>().notNull(),

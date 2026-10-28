@@ -23,12 +23,24 @@ class SkipsSystemNode:
         await super().ensure_system_dependencies(environment, dependencies)
 
 
+# The gateway's id for a model on an OpenAI key or ChatGPT sign-in (gatewayRequestModel).
+OPENAI_MODELS = "dari/model/openai/"
+
+
 class GatewayCodex(SkipsSystemNode, Codex):
     def _build_effective_config(self, openai_base_url=None):
         # Codex tries the Responses API over a WebSocket first, which the gateway (and a custom
-        # endpoint) need not serve: give it a provider that speaks HTTPS only.
+        # endpoint) need not serve: give it a provider that speaks HTTPS only. Codex also asks
+        # for a reasoning summary on every turn, which the gateway refuses (`reasoning.summary is
+        # not supported`), so no turn would start: ask for none.
         config = super()._build_effective_config(None)
         if openai_base_url:
+            config["model_reasoning_summary"] = "none"
+            # The gateway serves Codex's hosted web search tool only on OpenAI's own models and
+            # refuses every turn that offers it to another (`unsupported_tool`).
+            model = (getattr(self, "model_name", None) or "").removeprefix("openai/")
+            if not model.startswith(OPENAI_MODELS):
+                config["web_search"] = "disabled"
             config["model_provider"] = "gateway"
             config.setdefault("model_providers", {})["gateway"] = {
                 "name": "Gateway",

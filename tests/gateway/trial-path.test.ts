@@ -169,4 +169,23 @@ describe("a real trial's path through the gateway", () => {
       expect(row?.costUsd).toBeCloseTo(testCase.expectedCost, 9);
     });
   }
+
+  // What Codex sends unless GatewayCodex configures it otherwise, which the gateway refuses before
+  // calling the provider, so every turn would fail: a reasoning summary on any model, and its hosted
+  // web search tool on a model that is not OpenAI's own. If the gateway starts serving either, the
+  // adapter's setting can go.
+  test("Codex's default reasoning summary and web search are refused, so its adapter turns them off", async () => {
+    const send = (credential: Credential, extra: Record<string, unknown>) => {
+      const { trial } = api.trialFor("codex", credential, `trial-codex-defaults-${credential}`);
+      return responses(trial.child, trial.model.replace(/^openai\//, ""), extra);
+    };
+    api.upstream.calls.length = 0;
+    const summary = await send("codex-login", { reasoning: { effort: "low", summary: "auto" } });
+    expect(summary.status).toBe(400);
+    expect(await summary.text()).toContain("reasoning.summary is not supported");
+    const search = await send("openrouter", { tools: [{ type: "web_search" }] });
+    expect(search.status).toBe(400);
+    expect(await search.text()).toContain("Hosted web search requires");
+    expect(api.upstream.calls).toEqual([]);
+  });
 });

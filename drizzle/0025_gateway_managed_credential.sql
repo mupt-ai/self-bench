@@ -1,0 +1,1 @@
+ALTER TABLE "gateway_requests" ALTER COLUMN "credential_id" SET DATA TYPE text;

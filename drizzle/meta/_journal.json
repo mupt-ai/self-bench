@@ -176,6 +176,13 @@
       "when": 1793124488625,
       "tag": "0024_gateway_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793148183458,
+      "tag": "0025_gateway_managed_credential",
+      "breakpoints": true
     }
   ]
 }
