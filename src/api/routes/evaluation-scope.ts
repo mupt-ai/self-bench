@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { Benchmark } from "../../db/benchmarks.js";
@@ -26,6 +27,7 @@ import {
 import { listRuns } from "../../evaluation/run-list.js";
 import { sameScope } from "../../evaluation/scope.js";
 import { evaluationPrefix, getEvaluation, live } from "../../evaluation/store.js";
+import { visibleTrials } from "../../evaluation/visible-trials.js";
 import { managedHarborEnvironment, managedOffer } from "../../generation/billing/managed.js";
 import { track } from "../../lib/telemetry/posthog.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
@@ -212,7 +214,15 @@ export async function handleScopedEvaluations(
     // A page polling this list sends back the tag of the one it has, and is told when that list
     // still stands without being sent it again.
     const have = /^(?:W\/)?"([^"]+)"$/.exec(request.headers["if-none-match"] ?? "")?.[1];
-    const { tag, runs } = await listRuns(artifacts, scope, have);
+    const listed = await listRuns(artifacts, scope, scope.repoId === undefined ? have : undefined);
+    const visible =
+      scope.repoId === undefined
+        ? undefined
+        : await visibleTrials(options.tasks, scope.repoId, listed.runs ?? []);
+    const tag = visible?.tag
+      ? createHash("sha256").update(`${listed.tag}.${visible.tag}`).digest("base64url").slice(0, 27)
+      : listed.tag;
+    const runs = tag === have ? undefined : (visible?.runs ?? listed.runs);
     response.setHeader("etag", `"${tag}"`);
     if (runs) sendJson(response, 200, { runs: runs.filter(live) });
     else response.writeHead(304).end();

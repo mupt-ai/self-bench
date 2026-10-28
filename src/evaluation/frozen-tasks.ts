@@ -29,8 +29,18 @@ export async function repositoryTasks(
     selected.length
   )
     throw new Error("Duplicate task selection");
+  // A retry may have been opened before deletion, or come from an older run's trials.
+  const deleted = new Set(
+    (await tasks.listWithDeleted(repoId))
+      .filter((task) => task.deleted)
+      .map((task) => evaluationTaskKey(task.runId, task.taskId)),
+  );
+  const remaining = selected.filter(
+    (task) => !deleted.has(evaluationTaskKey(task.runId, task.taskId)),
+  );
+  if (remaining.length === 0) throw new Error("No selected tasks remain in this repository");
   const bundles = await Promise.all(
-    selected.map((task) => tasks.find(repoId, task.runId, task.taskId)),
+    remaining.map((task) => tasks.find(repoId, task.runId, task.taskId)),
   );
   if (bundles.some((task) => !task || !runnable(task)))
     throw new Error("Every task must be human-approved in this repository");
