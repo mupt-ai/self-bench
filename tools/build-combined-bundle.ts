@@ -2,7 +2,7 @@
 // compiled from its final accepted deliverable with the trusted compiler exactly as run exports are.
 // usage: bun run build:bundle -- unique.json OUT_DIR NAME --bucket BUCKET --prefix PREFIX
 //        --repository-url URL [--mirror PATH]
-// unique.json: {pr: {run, candidateId, difficulty}}
+// unique.json: {pr: {run, candidateId, difficulty, baseCommit}}
 
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -10,11 +10,10 @@ import { cp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { extractRegularArchive } from "../src/lib/archive.js";
 import { GcsArtifactStore } from "../src/artifacts/gcs.js";
-import { authoredTaskSchema, taskDefinitionSchema } from "../src/contracts/index.js";
+import { authoredTaskSchema, type Difficulty } from "../src/contracts/index.js";
 import { authoringRoundResultKey } from "../src/generation/pipeline/authoring.js";
 import { runCommand } from "../src/lib/process.js";
-import type { TaskCompilerServices } from "../src/sandbox/task-compiler.js";
-import { compileSubmittedTask } from "../src/sandbox/task-compiler.js";
+import { compileSubmission, type TaskCompilerServices } from "../src/sandbox/task-compiler.js";
 
 const args = process.argv.slice(2);
 const positional: string[] = [];
@@ -49,10 +48,13 @@ const MIRROR = mirror;
 const LANES = MIRROR ? 8 : 4;
 const token = process.env.GH_TOKEN ?? execSync("gh auth token", { encoding: "utf8" }).trim();
 const store = new GcsArtifactStore(bucket, prefix);
-const unique = JSON.parse(await readFile(listPath, "utf8")) as Record<
-  string,
-  { difficulty: string; run: string; candidateId: string }
->;
+interface Entry {
+  readonly difficulty: Difficulty;
+  readonly run: string;
+  readonly candidateId: string;
+  readonly baseCommit: string;
+}
+const unique = JSON.parse(await readFile(listPath, "utf8")) as Record<string, Entry>;
 
 async function readJson(key: string): Promise<unknown | undefined> {
   const bytes = await store.getByKey(key);
@@ -128,51 +130,52 @@ const services: TaskCompilerServices | undefined = MIRROR
 const manifestTasks: Record<string, unknown>[] = [];
 const byDifficulty: Record<string, number> = {};
 const sources: Record<string, string[]> = {};
-async function packageOne([pr, entry]: [
-  string,
-  { difficulty: string; run: string; candidateId: string },
-]) {
+async function packageOne([pr, entry]: [string, Entry]) {
   const task = await finalTask(entry.run, entry.candidateId);
-  const definitionBytes = await store.get(task.definition);
-  const definition = taskDefinitionSchema.parse(
-    JSON.parse(Buffer.from(definitionBytes).toString("utf8")),
-  );
+  const record = (sha256: string) => {
+    manifestTasks.push({
+      taskId: task.taskId,
+      sha256,
+      sourcePr: Number(pr),
+      difficulty: entry.difficulty,
+      run: entry.run,
+      candidateId: entry.candidateId,
+      baseCommit: entry.baseCommit,
+    });
+    byDifficulty[entry.difficulty] = (byDifficulty[entry.difficulty] ?? 0) + 1;
+    const runTasks = sources[entry.run] ?? [];
+    runTasks.push(task.taskId);
+    sources[entry.run] = runTasks;
+  };
 
   const existing = RESUME
     ? await readFile(join(tasksDir, `${task.taskId}.tar.gz`)).catch(() => undefined)
     : undefined;
   if (existing) {
-    const sha256 = createHash("sha256").update(existing).digest("hex");
-    manifestTasks.push({
-      taskId: task.taskId,
-      sha256,
-      sourcePr: definition.sourcePr,
-      difficulty: definition.difficulty,
-      run: entry.run,
-      candidateId: entry.candidateId,
-      baseCommit: (definition as { baseCommit?: string }).baseCommit,
-    });
-    byDifficulty[definition.difficulty] = (byDifficulty[definition.difficulty] ?? 0) + 1;
-    const runTasks = sources[entry.run] ?? [];
-    runTasks.push(task.taskId);
-    sources[entry.run] = runTasks;
+    record(createHash("sha256").update(existing).digest("hex"));
     console.log(`kept ${task.taskId} (already packaged)`);
     return;
   }
-  const compiled = await compileSubmittedTask(
+  const expanded = join(scratch, task.taskId);
+  const submission = join(expanded, "submission");
+  await mkdir(submission, { recursive: true });
+  const source = join(expanded, "source-task.tar.gz");
+  await writeFile(source, await store.get(task.sourceBundle));
+  await extractRegularArchive(source, submission);
+  const compiled = await compileSubmission(
     {
-      taskId: task.taskId,
       repositoryUrl,
-      definitionBytes,
-      sourceBundle: await store.get(task.sourceBundle),
+      directory: submission,
+      taskId: task.taskId,
+      candidate: { sourcePr: Number(pr), baseCommit: entry.baseCommit, difficulty: entry.difficulty },
       token,
     },
     services,
   );
-  const expanded = join(scratch, task.taskId);
-  await mkdir(expanded, { recursive: true });
+  if (!compiled.bundle)
+    throw new Error(`${task.taskId} does not compile: ${compiled.compileErrors.join("; ")}`);
   const archive = join(expanded, "harbor-task.tar.gz");
-  await writeFile(archive, compiled);
+  await writeFile(archive, compiled.bundle);
   await extractRegularArchive(archive, expanded);
   // The tarball lands at its final name only once it and the tree copy are complete, so a resume
   // that finds tasks/<taskId>.tar.gz can trust it; a kill mid-write leaves only a .partial file.
@@ -182,24 +185,13 @@ async function packageOne([pr, entry]: [
   await rm(join(treeDir, task.taskId), { recursive: true, force: true });
   await cp(join(expanded, "harbor-task"), join(treeDir, task.taskId), { recursive: true });
   await rename(partial, tarPath);
-  const sha256 = createHash("sha256")
-    .update(await readFile(tarPath))
-    .digest("hex");
-  manifestTasks.push({
-    taskId: task.taskId,
-    sha256,
-    sourcePr: definition.sourcePr,
-    difficulty: definition.difficulty,
-    run: entry.run,
-    candidateId: entry.candidateId,
-    baseCommit: (definition as { baseCommit?: string }).baseCommit,
-  });
-  byDifficulty[definition.difficulty] = (byDifficulty[definition.difficulty] ?? 0) + 1;
-  const runTasks = sources[entry.run] ?? [];
-  runTasks.push(task.taskId);
-  sources[entry.run] = runTasks;
+  record(
+    createHash("sha256")
+      .update(await readFile(tarPath))
+      .digest("hex"),
+  );
   await rm(expanded, { recursive: true, force: true });
-  console.log(`packaged ${task.taskId} (${definition.difficulty}, PR ${pr}, ${entry.run})`);
+  console.log(`packaged ${task.taskId} (${entry.difficulty}, PR ${pr}, ${entry.run})`);
 }
 const queue = Object.entries(unique);
 await Promise.all(

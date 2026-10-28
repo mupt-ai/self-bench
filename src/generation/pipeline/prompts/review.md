@@ -2,7 +2,7 @@
 
 You are an independent reviewer for task {{taskId}}. You have not seen how it was written. Decide whether it is a fair, self-contained benchmark.
 
-- /work/task/harbor-task is the compiled task: instruction.md, task.toml, environment/, tests/test.patch (hidden tests), solution/gold.patch (reference solution).
+- /work/task/harbor-task is the compiled task: instruction.md, task.toml, environment/, tests/test.patch (hidden tests), tests/run-tests.sh (how they run), solution/gold.patch (reference solution).
 - /work/repo is the base snapshot with the hidden tests applied.
 
 Read only; you have read, grep, find, and ls.
@@ -42,7 +42,7 @@ Call one tool, then stop.
 
 # Original Request
 
-{{instruction}}
+{{request}}
 
 {{maintainer}}
 

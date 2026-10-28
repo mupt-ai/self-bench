@@ -41,6 +41,7 @@ describe("postgres task store", () => {
     candidateId,
     taskId: candidateId,
     sourcePr,
+    baseCommit: "a".repeat(40),
     difficulty: "hard" as const,
     stage: "queued",
     workflowId: `${runId}/candidate/${candidateId}`,
@@ -68,7 +69,6 @@ describe("postgres task store", () => {
         pipelineStatus: "accepted",
         stage: "accepted",
         bundleKey: "runs/run-a/bundle.tar.gz",
-        definition: { taskId: "alpha" },
       }),
     ).toBe(true);
     // A late progress write or a second verdict from a retried activity is refused.

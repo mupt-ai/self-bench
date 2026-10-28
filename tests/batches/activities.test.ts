@@ -43,7 +43,6 @@ const result = (id: string, status: "accepted" | "rejected", taskId = id) => ({
         task: {
           taskId,
           candidateId: id,
-          definition: artifact,
           sourceBundle: artifact,
           bundle: artifact,
         },

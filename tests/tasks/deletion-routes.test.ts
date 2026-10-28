@@ -85,7 +85,9 @@ describe("task routes", () => {
       counts: { "Mupt-AI/self-bench": { total: 1, needsReview: 0 } },
     });
     expect((await site.request(path, { method: "DELETE", headers })).status).toBe(200);
-    expect(await artifacts.getByKey("runs/run-one/authoring/c1/definition.json")).toBeDefined();
+    expect(
+      await artifacts.getByKey("runs/run-one/authoring/c1/round-1/turn-1/result.json"),
+    ).toBeDefined();
     expect(
       Buffer.from(
         (await artifacts.getByKey(

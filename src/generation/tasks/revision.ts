@@ -3,13 +3,12 @@ import { type AuthoredTaskDraft, authoredTaskDraftSchema } from "../../contracts
 import { authoringRoundResultKey } from "../pipeline/authoring.js";
 
 /**
- * The draft a finished candidate last submitted: its latest round that ended in a submission.
+ * The draft a finished task last submitted: its latest round that ended in a submission.
  * An accepted task's is the one the reviewer accepted; a rejected task's may have none.
  */
 export async function submittedDraft(
   store: ArtifactStore,
-  runId: string,
-  candidateId: string,
+  { runId, candidateId, taskId }: { runId: string; candidateId: string; taskId: string },
 ): Promise<AuthoredTaskDraft | undefined> {
   const rounds = (await store.folders(`runs/${runId}/authoring/${candidateId}`))
     .map((folder) => /^round-(\d+)$/.exec(folder)?.[1])
@@ -27,37 +26,10 @@ export async function submittedDraft(
     const parsed = authoredTaskDraftSchema.safeParse(result.task);
     if (parsed.success) return parsed.data;
   }
-  return stagedDraft(store, runId, candidateId);
-}
-
-/** A failed revision may not have submitted yet; its starting draft is staged separately. */
-async function stagedDraft(
-  store: ArtifactStore,
-  runId: string,
-  candidateId: string,
-): Promise<AuthoredTaskDraft | undefined> {
-  const prefix = `runs/${runId}/authoring/${candidateId}/revision`;
-  const definitionKey = `${prefix}/definition.json`;
-  const sourceKey = `${prefix}/source-task.tar.gz`;
-  const [definition, sourceBundle] = await Promise.all([
-    store.stat(definitionKey),
-    store.stat(sourceKey),
-  ]);
-  if (!definition || !sourceBundle) return undefined;
-  try {
-    const bytes = await store.getByKey(definitionKey);
-    if (!bytes) return undefined;
-    const parsed = JSON.parse(Buffer.from(bytes).toString("utf8")) as { taskId?: unknown };
-    if (typeof parsed.taskId !== "string" || !parsed.taskId) return undefined;
-    return {
-      candidateId,
-      taskId: parsed.taskId,
-      definition: { ...definition, contentType: "application/json" },
-      sourceBundle: { ...sourceBundle, contentType: "application/gzip" },
-    };
-  } catch {
-    return undefined;
-  }
+  // A failed revision may not have submitted yet; its starting draft is staged separately.
+  const staged = await store.stat(`${revisionPrefix(runId, candidateId)}/${SOURCE_BUNDLE}`);
+  if (!staged) return undefined;
+  return { candidateId, taskId, sourceBundle: { ...staged, contentType: "application/gzip" } };
 }
 
 /**
@@ -69,15 +41,16 @@ export async function stageRevisionDraft(
   runId: string,
   draft: AuthoredTaskDraft,
 ): Promise<AuthoredTaskDraft> {
-  const prefix = `runs/${runId}/authoring/${draft.candidateId}/revision`;
-  const [definition, sourceBundle] = await Promise.all(
-    [
-      { from: draft.definition, name: "definition.json" },
-      { from: draft.sourceBundle, name: "source-task.tar.gz" },
-    ].map(async ({ from, name }) =>
-      store.put(`${prefix}/${name}`, await store.get(from), from.contentType),
-    ),
+  const sourceBundle = await store.put(
+    `${revisionPrefix(runId, draft.candidateId)}/${SOURCE_BUNDLE}`,
+    await store.get(draft.sourceBundle),
+    draft.sourceBundle.contentType,
   );
-  if (!definition || !sourceBundle) throw new Error("revision draft was not staged");
-  return { ...draft, definition, sourceBundle };
+  return { ...draft, sourceBundle };
+}
+
+const SOURCE_BUNDLE = "source-task.tar.gz";
+
+function revisionPrefix(runId: string, candidateId: string): string {
+  return `runs/${runId}/authoring/${candidateId}/revision`;
 }

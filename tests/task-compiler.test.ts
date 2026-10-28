@@ -4,140 +4,131 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runCommand } from "../src/lib/process.js";
 import {
-  compileSubmittedTask,
+  compileSubmission,
   TaskCompilerInfrastructureError,
+  type TaskCompilerServices,
 } from "../src/sandbox/task-compiler.js";
+import { submission } from "./support/submission-fixture.js";
 
 const roots: string[] = [];
+const digest = `sha256:${"d".repeat(64)}`;
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-test("trusted task compiler rebuilds the sandbox draft against the pinned repository", async () => {
+/** A registry that serves every tag at `digest`, and nothing named `missing`. */
+const registry = {
+  fetch: (async (input: string | URL | Request) =>
+    String(input).includes("/missing/")
+      ? new Response(null, { status: 404 })
+      : new Response(null, {
+          status: 200,
+          headers: { "docker-content-digest": digest },
+        })) as typeof fetch,
+};
+
+/** The submission's files in a directory, as the compiler program unpacks them. */
+async function submitted(files = submission): Promise<{ root: string; directory: string }> {
   const root = await mkdtemp(join(tmpdir(), "selfbench-task-compiler-"));
   roots.push(root);
+  const directory = join(root, "submission");
+  await mkdir(directory);
+  for (const [name, contents] of Object.entries(files)) {
+    await writeFile(join(directory, name), contents);
+  }
+  return { root, directory };
+}
+
+const candidate = { sourcePr: 1, baseCommit: "a".repeat(40), difficulty: "medium" as const };
+
+test("the trusted compiler pins the base image and compiles against the candidate's commit", async () => {
+  const { root, directory } = await submitted();
   const repository = join(root, "repository");
-  const authored = join(root, "authored");
-  await Promise.all([mkdir(repository), mkdir(authored)]);
+  await mkdir(repository);
   await runCommand("git", ["init", "-q", repository]);
   await runCommand("git", ["-C", repository, "config", "user.email", "test@example.com"]);
   await runCommand("git", ["-C", repository, "config", "user.name", "Test"]);
-  await writeFile(join(repository, "package.json"), '{"scripts":{"test":"true"}}\n');
-  await writeFile(join(repository, "value.txt"), "base\n");
+  await writeFile(join(repository, "package.json"), "{}\n");
   await runCommand("git", ["-C", repository, "add", "."]);
   await runCommand("git", ["-C", repository, "commit", "-qm", "base"]);
   const commit = (await runCommand("git", ["-C", repository, "rev-parse", "HEAD"])).stdout.trim();
-  const definition = {
-    schemaVersion: 2,
-    difficulty: "easy",
-    taskId: "trusted-compile",
-    repo: "example/repo",
-    baseCommit: commit,
-    workdir: ".",
-    testCommand: "test {tests}",
-    failToPass: ["tests/new.test"],
-    passToPass: [],
-    testPaths: ["tests/new.test"],
-    sourcePr: 1,
-    sourceUrl: "https://github.com/example/repo/pull/1",
-    prompt: "Implement the behavior.",
-    timeouts: { setupSeconds: 60, agentSeconds: 60, testsSeconds: 60 },
-    resources: { cpus: 1, memoryMb: 1024, storageMb: 1024 },
-    environment: {
-      schemaVersion: 1,
-      baseImage: `node:22@sha256:${"a".repeat(64)}`,
-      rootSetupCommand: "apt-get update && apt-get install -y bash git passwd procps tar",
-      setupCommand: "true",
-      smokeCommand: "true",
-      environmentVariables: {},
-      services: [],
-      source: "ci-adapted",
-      evidence: [{ path: "package.json", reason: "Defines the test command." }],
+  const services: TaskCompilerServices = {
+    cloneRepository: async (_url, requested, destination) => {
+      expect(requested).toBe(commit);
+      await cp(repository, destination, { recursive: true });
     },
-  } as const;
-  await Promise.all([
-    writeFile(join(authored, "definition.json"), JSON.stringify(definition)),
-    writeFile(
-      join(authored, "test.patch"),
-      "diff --git a/tests/new.test b/tests/new.test\nnew file mode 100644\n--- /dev/null\n+++ b/tests/new.test\n@@ -0,0 +1 @@\n+test\n",
-    ),
-    writeFile(
-      join(authored, "gold.patch"),
-      "diff --git a/value.txt b/value.txt\n--- a/value.txt\n+++ b/value.txt\n@@ -1 +1 @@\n-base\n+fixed\n",
-    ),
-  ]);
-  const sourceArchive = join(root, "source.tar.gz");
-  await runCommand("tar", ["-czf", sourceArchive, "-C", authored, "."]);
+    registry,
+  };
 
-  const bundle = await compileSubmittedTask(
+  const result = await compileSubmission(
     {
-      taskId: definition.taskId,
       repositoryUrl: "https://github.com/example/repo.git",
-      definitionBytes: Buffer.from(JSON.stringify(definition)),
-      sourceBundle: await readFile(sourceArchive),
+      directory,
+      taskId: "trusted-compile",
+      candidate: { ...candidate, baseCommit: commit },
     },
-    {
-      cloneRepository: async (_url, requestedCommit, destination) => {
-        expect(requestedCommit).toBe(commit);
-        await cp(repository, destination, { recursive: true });
-      },
-    },
+    services,
   );
-  const output = join(root, "output.tar.gz");
-  await writeFile(output, bundle);
-  const listing = await runCommand("tar", ["-tzf", output]);
 
-  expect(listing.stdout).toContain("harbor-task/.selfbench-manifest.json");
-  expect(listing.stdout).toContain("harbor-task/environment/repo.tar.gz");
+  expect(result).toMatchObject({ compileErrors: [], auditBlockers: [] });
+  const output = join(root, "output");
+  await mkdir(output);
+  await writeFile(join(output, "bundle.tar.gz"), result.bundle ?? new Uint8Array());
+  await runCommand("tar", ["-xzf", join(output, "bundle.tar.gz"), "-C", output]);
+  const task = join(output, "harbor-task");
+  expect(await readFile(join(task, "environment/Dockerfile"), "utf8")).toStartWith(
+    `FROM oven/bun:1@${digest}\n`,
+  );
+  // The gold reaches easy, the hardest tier it can up to the candidate's medium.
+  expect(await readFile(join(task, "task.toml"), "utf8")).toContain('difficulty = "easy"');
+  expect(await Bun.file(join(task, "environment/repo.tar.gz")).exists()).toBe(true);
 });
 
-test("trusted task compiler classifies repository failures as infrastructure", async () => {
-  const root = await mkdtemp(join(tmpdir(), "selfbench-task-compiler-"));
-  roots.push(root);
-  const source = join(root, "source");
-  await mkdir(source);
-  const archive = join(root, "source.tar.gz");
-  await writeFile(join(source, "definition.json"), "{}");
-  await runCommand("tar", ["-czf", archive, "-C", source, "."]);
-  const definition = {
-    schemaVersion: 2,
-    difficulty: "easy",
-    taskId: "clone-failure",
-    repo: "example/repo",
-    baseCommit: "a".repeat(40),
-    workdir: ".",
-    testCommand: "test {tests}",
-    failToPass: ["tests/new.test"],
-    passToPass: [],
-    testPaths: ["tests/new.test"],
-    sourcePr: 1,
-    sourceUrl: "https://github.com/example/repo/pull/1",
-    prompt: "Implement the behavior.",
-    timeouts: { setupSeconds: 60, agentSeconds: 60, testsSeconds: 60 },
-    resources: { cpus: 1, memoryMb: 1024, storageMb: 1024 },
-    environment: {
-      schemaVersion: 1,
-      baseImage: `node:22@sha256:${"a".repeat(64)}`,
-      rootSetupCommand: "true",
-      setupCommand: "true",
-      smokeCommand: "true",
-      environmentVariables: {},
-      services: [],
-      source: "generated",
-      evidence: [{ path: "package.json", reason: "test" }],
-    },
-  } as const;
-
-  await expect(
-    compileSubmittedTask(
+test("the author's problems come back as errors, before anything is cloned", async () => {
+  const cloneRepository = async () => {
+    throw new Error("nothing should be cloned");
+  };
+  const incomplete = await submitted({ ...submission, "run-tests.sh": "" });
+  expect(
+    await compileSubmission(
       {
-        taskId: definition.taskId,
         repositoryUrl: "https://github.com/example/repo.git",
-        definitionBytes: Buffer.from(JSON.stringify(definition)),
-        sourceBundle: await readFile(archive),
+        directory: incomplete.directory,
+        taskId: "t",
+        candidate,
       },
-      { cloneRepository: async () => Promise.reject(new Error("network down")) },
+      { cloneRepository, registry },
+    ),
+  ).toEqual({ compileErrors: ["run-tests.sh is missing or empty"], auditBlockers: [] });
+
+  const unknownImage = await submitted({
+    ...submission,
+    Dockerfile: "FROM ghcr.io/example/missing:1\nADD repo.tar.gz /app/\n",
+  });
+  const { compileErrors } = await compileSubmission(
+    {
+      repositoryUrl: "https://github.com/example/repo.git",
+      directory: unknownImage.directory,
+      taskId: "t",
+      candidate,
+    },
+    { cloneRepository, registry },
+  );
+  expect(compileErrors).toEqual([expect.stringContaining("ghcr.io/example/missing:1")]);
+});
+
+test("the trusted compiler classifies repository failures as infrastructure", async () => {
+  const { directory } = await submitted();
+  await expect(
+    compileSubmission(
+      {
+        repositoryUrl: "https://github.com/example/repo.git",
+        directory,
+        taskId: "clone-failure",
+        candidate,
+      },
+      { cloneRepository: async () => Promise.reject(new Error("network down")), registry },
     ),
   ).rejects.toBeInstanceOf(TaskCompilerInfrastructureError);
 });

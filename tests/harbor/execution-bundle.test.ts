@@ -82,7 +82,6 @@ async function fixture(extra: Record<string, string> = {}) {
     candidateId: "candidate",
     taskId: "task",
     bundle,
-    definition: bundle,
     sourceBundle: bundle,
     images: {
       agent: `registry.example/tasks/agent@sha256:${"a".repeat(64)}`,

@@ -1,45 +1,30 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
-import { loadTaskDeliverable } from "./shared/deliverable.js";
+import { SUBMISSION_FILES } from "../../../generation/task/submission.js";
 import {
   requiredEnvironment,
   runStaticCheck,
-  stageSubmission,
   staticCheckFailure,
+  type ToolFailure,
 } from "./shared/static-check.js";
 
 const noArguments = Type.Object({}, { additionalProperties: false });
 
 /**
- * Static-checks the deliverable and packs it as `<directory>/{definition.json,source-task.tar.gz}`.
+ * Static-checks the deliverable and packs its files as `<directory>/source-task.tar.gz`.
  * Returns the tool failure when the static check fails.
  */
-function packDeliverable(directory: string) {
-  const loaded = loadTaskDeliverable(process.env.SELFBENCH_DELIVERABLE ?? "/work/task");
-  if ("isError" in loaded) return loaded;
-  const staging = stageSubmission(loaded.definition, loaded.testPatch, loaded.goldPatch);
-  try {
-    const base =
-      typeof loaded.definition.baseCommit === "string" ? loaded.definition.baseCommit : "HEAD";
-    const verdict = runStaticCheck(staging.directory, { base });
-    if (!verdict.ok) return staticCheckFailure(verdict, "task");
-    mkdirSync(directory, { recursive: true });
-    writeFileSync(join(directory, "definition.json"), staging.definitionJson);
-    const tar = spawnSync("tar", [
-      "-czf",
-      join(directory, "source-task.tar.gz"),
-      "-C",
-      staging.directory,
-      ".",
-    ]);
-    if (tar.status !== 0) throw new Error(`could not pack the task: ${tar.stderr}`);
-    return { taskId: String(loaded.definition.taskId ?? "") };
-  } finally {
-    staging.dispose();
-  }
+function packDeliverable(directory: string): ToolFailure | undefined {
+  const deliverable = process.env.SELFBENCH_DELIVERABLE ?? "/work/task";
+  const verdict = runStaticCheck(deliverable);
+  if (!verdict.ok) return staticCheckFailure(verdict);
+  mkdirSync(directory, { recursive: true });
+  const archive = join(directory, "source-task.tar.gz");
+  const tar = spawnSync("tar", ["-czf", archive, "-C", deliverable, ...SUBMISSION_FILES]);
+  if (tar.status !== 0) throw new Error(`could not pack the task: ${tar.stderr}`);
 }
 
 /**
@@ -60,7 +45,7 @@ export default function authoringExtension(pi: ExtensionAPI): void {
     name: "verify",
     label: "Verify SelfBench task",
     description:
-      "Takes no arguments. Static-checks the deliverable in /work/task (definition.json, instruction.md, test.patch, gold.patch), then hands it to the worker, which compiles it and runs the real image build, smoke, nop, and oracle. This ends your turn: the report arrives as your next message, in a fresh sandbox with /work/task restored. Limited calls per round.",
+      "Takes no arguments. Static-checks the deliverable in /work/task (instruction.md, Dockerfile, smoke.sh, run-tests.sh, test.patch, gold.patch), then hands it to the worker, which compiles it and runs the real image build, smoke, nop, and oracle. This ends your turn: the report arrives as your next message, in a fresh sandbox with /work/task restored. Limited calls per round.",
     parameters: noArguments,
     executionMode: "sequential",
     async execute() {
@@ -76,8 +61,8 @@ export default function authoringExtension(pi: ExtensionAPI): void {
           isError: true,
         };
       }
-      const packed = packDeliverable(requiredEnvironment("SELFBENCH_VERIFY_REQUEST"));
-      if ("isError" in packed) return packed;
+      const failed = packDeliverable(requiredEnvironment("SELFBENCH_VERIFY_REQUEST"));
+      if (failed) return failed;
       handedOff = true;
       return {
         content: [
@@ -86,7 +71,7 @@ export default function authoringExtension(pi: ExtensionAPI): void {
             text: "Verification requested. Stop now: the report arrives as your next message.",
           },
         ],
-        details: { taskId: packed.taskId },
+        details: {},
         terminate: true,
       };
     },
@@ -100,12 +85,12 @@ export default function authoringExtension(pi: ExtensionAPI): void {
     parameters: noArguments,
     executionMode: "sequential",
     async execute() {
-      const packed = packDeliverable(requiredEnvironment("SELFBENCH_SUBMISSION"));
-      if ("isError" in packed) return packed;
+      const failed = packDeliverable(requiredEnvironment("SELFBENCH_SUBMISSION"));
+      if (failed) return failed;
       handedOff = true;
       return {
-        content: [{ type: "text", text: `Submitted ${packed.taskId}. Stop here.` }],
-        details: { taskId: packed.taskId },
+        content: [{ type: "text", text: "Submitted the task. Stop here." }],
+        details: {},
         terminate: true,
       };
     },

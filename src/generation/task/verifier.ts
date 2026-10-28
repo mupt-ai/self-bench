@@ -1,7 +1,5 @@
-import type { TaskDefinition } from "../../contracts/index.js";
 import { patchPaths } from "../../lib/patch-paths.js";
 import { shellQuote } from "../../lib/util.js";
-import { passToPassTestPaths, repositoryRelativePath } from "./paths.js";
 
 export function solutionScript(): string {
   return `#!/bin/bash
@@ -10,26 +8,21 @@ git -C /app apply --binary --whitespace=nowarn /solution/gold.patch
 `;
 }
 
-export function testScript(task: TaskDefinition, testPatch: string): string {
-  const repositoryTestPaths = [
-    ...new Set([
-      ...task.testPaths.map((path) => repositoryRelativePath(task, path)),
-      ...patchPaths(testPatch),
-    ]),
-  ].sort();
-  const exclusions = repositoryTestPaths
-    .flatMap((path) => [
-      `--exclude=${shellQuote(path.replace(/\/$/, ""))}`,
-      `--exclude=${shellQuote(`${path.replace(/\/$/, "")}/*`)}`,
-    ])
+/** The author's run-tests.sh, run from /app with one argument: which tests to run. */
+const RUN_TESTS = "bash /opt/selfbench-runtime/run-tests.sh";
+
+/**
+ * Harbor's verifier entry point. It applies the agent's patch without its changes to any file
+ * test.patch touches, applies test.patch over those files' base version, and grades the author's
+ * fail-to-pass tests (twice, for determinism) and pass-to-pass tests.
+ */
+export function testScript(testPatch: string): string {
+  const heldOut = patchPaths(testPatch);
+  const exclusions = heldOut
+    .flatMap((path) => [`--exclude=${shellQuote(path)}`, `--exclude=${shellQuote(`${path}/*`)}`])
     .join(" ");
-  const protectedPaths = repositoryTestPaths.map(shellQuote).join(" ");
-  const protectedAbsolute = repositoryTestPaths.map((path) => shellQuote(`/app/${path}`)).join(" ");
-  // Regression tests are graded at their base version, so a solver edit that renames or removes
-  // the selected tests cannot fail pass-to-pass on its own.
-  const regressionPaths = passToPassTestPaths(task).map(shellQuote).join(" ");
-  const f2p = taskCommand(task, task.failToPass);
-  const p2p = task.passToPass.length > 0 ? taskCommand(task, task.passToPass) : "true";
+  const protectedPaths = heldOut.map(shellQuote).join(" ");
+  const protectedAbsolute = heldOut.map((path) => shellQuote(`/app/${path}`)).join(" ");
   return `#!/bin/bash
 set -uo pipefail
 mkdir -p /logs/verifier
@@ -53,7 +46,6 @@ protect_held_out_path() {
 # This script runs as root over an /app the verifier user owns; git refuses such a repository
 # unless it is marked safe, and every restore below would silently do nothing.
 app_git() { git -c safe.directory=/app -C /app "$@"; }
-is_base_file() { [ "$(app_git cat-file -t "HEAD:$1" 2>/dev/null)" = blob ]; }
 
 # The agent runs as root beside its baseline, so the baseline must be exactly the post-setup commit
 # over this image's HEAD, the snapshot the agent cannot touch.
@@ -80,28 +72,19 @@ if [ "$patch_applied" -eq 1 ] && [ "$setup_completed" -eq 1 ]; then
     app_git restore --source=HEAD --staged --worktree -- "$protected_path" 2>/dev/null || true
     app_git clean -fd -- "$protected_path" >/dev/null 2>&1 || true
   done
-  for regression_path in ${regressionPaths}; do
-    if is_base_file "$regression_path"; then
-      app_git clean -fd -- "$regression_path" >/dev/null 2>&1 || true
-      app_git restore --source=HEAD --staged --worktree -- "$regression_path" 2>/dev/null || true
-    fi
-  done
-  app_git apply --allow-empty --binary --whitespace=nowarn /tests/test.patch || patch_applied=0
+  app_git apply --binary --whitespace=nowarn /tests/test.patch || patch_applied=0
   if [ "$patch_applied" -eq 1 ]; then
     for protected_path in ${protectedAbsolute}; do protect_held_out_path "$protected_path"; done
-    for regression_path in ${regressionPaths}; do
-      if is_base_file "$regression_path"; then protect_held_out_path "/app/$regression_path"; fi
-    done
   fi
   rm -f /tests/test.patch
 fi
 
 if [ "$patch_applied" -eq 1 ] && [ "$setup_completed" -eq 1 ]; then
-  cd ${shellQuote(`/app/${task.workdir}`)}
-  if run_verifier_command ${shellQuote(f2p)}; then
+  cd /app
+  if run_verifier_command "${RUN_TESTS} fail-to-pass"; then
     fail_to_pass_exit_code=0
     fail_to_pass=1
-    if run_verifier_command ${shellQuote(f2p)}; then
+    if run_verifier_command "${RUN_TESTS} fail-to-pass"; then
       fail_to_pass_repeat_exit_code=0
       deterministic=1
     else
@@ -110,10 +93,7 @@ if [ "$patch_applied" -eq 1 ] && [ "$setup_completed" -eq 1 ]; then
   else
     fail_to_pass_exit_code=$?
   fi
-  if [ "${task.passToPass.length}" -eq 0 ]; then
-    pass_to_pass_exit_code=0
-    pass_to_pass=1
-  elif run_verifier_command ${shellQuote(p2p)}; then
+  if run_verifier_command "${RUN_TESTS} pass-to-pass"; then
     pass_to_pass_exit_code=0
     pass_to_pass=1
   else
@@ -128,8 +108,4 @@ cat > /logs/verifier/reward.json <<EOF
 EOF
 exit 0
 `;
-}
-
-function taskCommand(task: TaskDefinition, tests: readonly string[]): string {
-  return task.testCommand.replaceAll("{tests}", tests.map(shellQuote).join(" "));
 }

@@ -23,7 +23,7 @@ test("a compiled bundle is written with the gate task and snapshot image builds 
     "harbor-task/environment/repo.tar.gz": "snapshot",
     "harbor-task/tests/repo.tar.gz": "snapshot",
   });
-  await writeCompiled(root, bundle, "{}\n");
+  await writeCompiled(root, bundle);
   expect(await Bun.file(join(root, GATE_TASK_FILE)).exists()).toBe(true);
   expect(await Bun.file(join(root, SNAPSHOT_FILE)).text()).toBe("snapshot");
 });
@@ -31,5 +31,5 @@ test("a compiled bundle is written with the gate task and snapshot image builds 
 test("a compiled bundle that cannot be split fails the compile instead of verifying without images", async () => {
   const root = await work();
   const bundle = await gzippedTar({ "harbor-task/task.toml": "" });
-  await expect(writeCompiled(root, bundle, "{}\n")).rejects.toThrow();
+  await expect(writeCompiled(root, bundle)).rejects.toThrow();
 });

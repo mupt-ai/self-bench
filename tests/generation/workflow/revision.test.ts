@@ -102,6 +102,6 @@ test("the first prompt of a revision carries the full brief and the feedback", (
   expect(prompt).toContain("# Build One Eval Task");
   expect(prompt).toContain("# Maintainer Feedback");
   expect(prompt).toContain("The tests pin the error wording.");
-  expect(prompt).toContain("keep its taskId");
+  expect(prompt).toContain("rather than starting over");
   expect(authoringPrompt(candidate("prompt", 1), 1)).not.toContain("Maintainer Feedback");
 });

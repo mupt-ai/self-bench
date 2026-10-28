@@ -25,13 +25,13 @@ export interface TaskRecord {
   readonly taskId: string;
   readonly sourcePr?: number;
   readonly sourceUrl?: string;
+  readonly baseCommit?: string;
   readonly difficulty: "easy" | "medium" | "hard";
   readonly pipelineStatus: PipelineStatus;
   readonly stage: string;
   readonly round?: number;
   readonly reason?: string;
   readonly bundleKey?: string;
-  readonly definition?: Record<string, unknown>;
   /** The images the accepted task's trials start from. */
   readonly images?: TaskImages;
   readonly review?: {
@@ -151,6 +151,7 @@ export function createTaskStore(db: Database, options: { now?: () => Date } = {}
           taskId: row.taskId,
           sourcePr: row.sourcePr ?? null,
           sourceUrl: row.sourceUrl ?? null,
+          baseCommit: row.baseCommit,
           difficulty: row.difficulty,
           pipelineStatus: "in_progress",
           stage: row.stage,

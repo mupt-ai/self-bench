@@ -1,35 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Difficulty, TaskDefinition } from "../src/contracts/index.js";
-import { auditTaskDefinition } from "../src/generation/task/audit.js";
-
-const definition: TaskDefinition = {
-  schemaVersion: 2,
-  difficulty: "hard",
-  taskId: "task",
-  repo: "https://github.com/example/repo.git",
-  baseCommit: "a".repeat(40),
-  workdir: ".",
-  testCommand: "bun test {tests}",
-  failToPass: ["tests/new.ts"],
-  passToPass: ["tests/a.ts", "tests/b.ts"],
-  testPaths: ["tests/new.ts"],
-  environment: {
-    schemaVersion: 1,
-    baseImage: `node:22@sha256:${"b".repeat(64)}`,
-    rootSetupCommand: "apt-get update && apt-get install -y bash git passwd procps tar",
-    setupCommand: "bun install",
-    smokeCommand: "bun --version",
-    environmentVariables: {},
-    services: [],
-    source: "ci-adapted",
-    evidence: [{ path: "package.json", reason: "Defines the test command." }],
-  },
-  sourcePr: 1,
-  sourceUrl: "https://github.com/example/repo/pull/1",
-  prompt: "Implement behavior",
-  timeouts: { setupSeconds: 1, agentSeconds: 1, testsSeconds: 1 },
-  resources: { cpus: 1, memoryMb: 1, storageMb: 1 },
-};
+import { auditPatches } from "../src/generation/task/audit.js";
 
 function patch(files: number, lines: number): string {
   return Array.from({ length: files }, (_, index) => {
@@ -44,70 +14,32 @@ const tests =
 
 describe("tiered task audit", () => {
   test.each([
-    ["easy", 1, 20, 0],
-    ["medium", 2, 50, 1],
-    ["hard", 3, 100, 2],
-  ] as const)("accepts %s at its threshold", (difficulty, files, lines, passToPass) => {
-    const result = auditTaskDefinition(
-      {
-        ...definition,
-        difficulty,
-        passToPass: Array.from({ length: passToPass }, (_, index) => `tests/p${index}.ts`),
-      },
-      patch(files, lines),
-      tests,
-    );
-    expect(result.accepted).toBe(true);
+    ["easy", 1, 20],
+    ["medium", 2, 50],
+    ["hard", 3, 100],
+  ] as const)("accepts %s at its threshold", (difficulty, files, lines) => {
+    expect(auditPatches(patch(files, lines), tests, difficulty)).toEqual({
+      difficulty,
+      blockers: [],
+    });
   });
 
-  test.each([
-    ["easy", 19],
-    ["medium", 49],
-    ["hard", 99],
-  ] as const)("rejects %s below its line threshold", (difficulty, lines) => {
-    const files: Record<Difficulty, number> = { easy: 1, medium: 2, hard: 3 };
-    const result = auditTaskDefinition(
-      { ...definition, difficulty },
-      patch(files[difficulty], lines),
-      tests,
-    );
-    expect(result.accepted).toBe(false);
-    expect(result.blockers.join("; ")).toContain(`${difficulty} mode requires at least`);
+  test("takes the hardest tier the gold reaches, never above the assigned one", () => {
+    expect(auditPatches(patch(2, 99), tests, "hard").difficulty).toBe("medium");
+    expect(auditPatches(patch(3, 100), tests, "medium").difficulty).toBe("medium");
   });
 
-  test("rejects a test command that hard-codes selected paths outside the placeholder", () => {
-    const result = auditTaskDefinition(
-      { ...definition, testCommand: "test {tests} && test tests/new.ts" },
-      patch(3, 100),
-      tests,
-    );
-    expect(result.accepted).toBe(false);
-    expect(result.blockers).toContain(
-      'test command must not hard-code fail-to-pass or pass-to-pass paths outside "{tests}"',
-    );
-  });
-
-  test("rejects overlapping patches", () => {
-    const overlapping = patch(3, 100);
-    expect(auditTaskDefinition(definition, overlapping, overlapping).accepted).toBe(false);
-  });
-
-  test("rejects a gold patch that changes a pass-to-pass test file", () => {
-    const result = auditTaskDefinition(
-      { ...definition, passToPass: ["src/0.ts::case", "src"] },
-      patch(3, 100),
-      tests,
-    );
-    expect(result.blockers).toEqual([
-      "gold patch changes pass-to-pass test files, which are graded at their base version: src/0.ts",
+  test("blocks a gold patch below easy", () => {
+    expect(auditPatches(patch(1, 19), tests, "hard").blockers).toEqual([
+      "gold.patch changes 19 lines across 1 files; even easy needs at least 20 across 1",
     ]);
   });
 
-  test("rejects a gold patch that renames a pass-to-pass test file", () => {
+  test("blocks patches that change the same file, including a renamed one", () => {
     const rename =
-      "diff --git a/tests/a.ts b/tests/moved.ts\nsimilarity index 100%\nrename from tests/a.ts\nrename to tests/moved.ts\n";
-    expect(auditTaskDefinition(definition, `${patch(3, 100)}\n${rename}`, tests).blockers).toEqual([
-      "gold patch changes pass-to-pass test files, which are graded at their base version: tests/a.ts",
+      "diff --git a/tests/new.ts b/src/moved.ts\nsimilarity index 100%\nrename from tests/new.ts\nrename to src/moved.ts\n";
+    expect(auditPatches(`${patch(3, 100)}\n${rename}`, tests, "hard").blockers).toEqual([
+      "gold.patch and test.patch both change tests/new.ts",
     ]);
   });
 });

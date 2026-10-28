@@ -3,15 +3,11 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runCommand } from "../src/lib/process.js";
+import { submission } from "./support/submission-fixture.js";
 
 const roots: string[] = [];
 const program = join(import.meta.dir, "../src/sandbox/programs/compiler.ts");
-const candidate = {
-  sourcePr: 1,
-  sourceUrl: "https://github.com/example/repo/pull/1",
-  baseCommit: "a".repeat(40),
-  difficulty: "easy",
-};
+const candidate = { sourcePr: 1, baseCommit: "a".repeat(40), difficulty: "easy" };
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
@@ -22,7 +18,7 @@ async function compile(bundle: (work: string) => Promise<void>) {
   roots.push(work);
   await writeFile(
     join(work, "input.json"),
-    JSON.stringify({ repositoryUrl: "https://github.com/example/repo", candidate }),
+    JSON.stringify({ repositoryUrl: "https://github.com/example/repo", taskId: "t", candidate }),
   );
   await bundle(work);
   await runCommand(process.execPath, [program], {
@@ -37,20 +33,16 @@ test("compiler unpacks the submission and reports its author errors", async () =
   const result = await compile(async (work) => {
     const draft = join(work, "draft");
     await mkdir(draft);
-    await writeFile(join(draft, "definition.json"), "{}\n");
-    await writeFile(join(draft, "test.patch"), "");
-    await writeFile(join(draft, "gold.patch"), "");
+    for (const [name, contents] of Object.entries(submission)) {
+      if (name !== "run-tests.sh") await writeFile(join(draft, name), contents);
+    }
     await runCommand("tar", ["-czf", join(work, "source-task.tar.gz"), "-C", draft, "."]);
     await rm(draft, { recursive: true });
   });
-  expect(result.compileErrors.length).toBeGreaterThan(0);
-  const errors = result.compileErrors.join("\n");
-  expect(errors).not.toContain("could not be unpacked");
-  // The unpacked `{}` parses; a missing definition.json would read as "" and fail JSON parsing.
-  expect(errors).not.toContain("not valid JSON");
+  expect(result.compileErrors).toEqual(["run-tests.sh is missing or empty"]);
 });
 
 test("an unreadable submission bundle is an author error, not a compiler crash", async () => {
   const result = await compile((work) => writeFile(join(work, "source-task.tar.gz"), "not a tar"));
-  expect(result.compileErrors[0]).toContain("submission bundle could not be unpacked");
+  expect(result.compileErrors[0]).toContain("the submission bundle could not be unpacked");
 });

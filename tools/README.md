@@ -4,7 +4,7 @@ These commands build durable evaluation artifacts from completed SelfBench runs.
 
 ## Build a Combined Bundle
 
-`build-combined-bundle.ts` packages one accepted task per source pull request from a GCS artifact store. It recompiles each task through the trusted compiler, writes per-task Harbor archives, and produces a manifest with source provenance and SHA-256 digests.
+`build-combined-bundle.ts` packages one accepted task per source pull request from a GCS artifact store. It recompiles each task through the trusted compiler, writes per-task Harbor archives, and produces a manifest with source provenance and SHA-256 digests. Each entry of `unique.json`, keyed by pull request number, names the task's `run`, `candidateId`, `difficulty`, and `baseCommit`.
 
 Run it with an explicit artifact location and source repository:
 

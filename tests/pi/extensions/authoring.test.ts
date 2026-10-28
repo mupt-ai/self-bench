@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { SUBMISSION_FILES } from "../../../src/generation/task/submission.js";
 import authoringExtension from "../../../src/harnesses/pi/extensions/authoring.js";
+import { runCommand } from "../../../src/lib/process.js";
+import { submission } from "../../support/submission-fixture.js";
 
 interface RegisteredTool {
   name: string;
@@ -19,34 +22,6 @@ interface RegisteredTool {
     terminate?: boolean;
   }>;
 }
-
-const definition = {
-  schemaVersion: 2,
-  difficulty: "easy",
-  taskId: "ext-task",
-  repo: "example/repo",
-  baseCommit: "a".repeat(40),
-  workdir: ".",
-  testCommand: "bun test {tests}",
-  failToPass: ["tests/a.test.ts"],
-  passToPass: [],
-  testPaths: ["tests/a.test.ts"],
-  sourcePr: 1,
-  sourceUrl: "https://github.com/example/repo/pull/1",
-  timeouts: { setupSeconds: 1, agentSeconds: 1, testsSeconds: 1 },
-  resources: { cpus: 1, memoryMb: 1, storageMb: 1 },
-  environment: {
-    schemaVersion: 1,
-    baseImage: `x@sha256:${"b".repeat(64)}`,
-    rootSetupCommand: "true",
-    setupCommand: "true",
-    smokeCommand: "true",
-    environmentVariables: {},
-    services: [],
-    source: "generated",
-    evidence: [{ path: "package.json", reason: "r" }],
-  },
-};
 
 let root = "";
 let deliverable = "";
@@ -72,40 +47,31 @@ function tools(): Map<string, RegisteredTool> {
 
 async function writeDeliverable(overrides: Partial<Record<string, string>> = {}): Promise<void> {
   await mkdir(deliverable, { recursive: true });
-  const files: Record<string, string> = {
-    "definition.json": JSON.stringify(definition),
-    "instruction.md": "Implement the feature.\n",
-    "test.patch": "diff --git a b",
-    "gold.patch": "diff --git c d",
-    ...overrides,
-  };
+  const files = { ...submission, "notes.txt": "scratch", ...overrides };
   await Promise.all(
-    Object.entries(files).map(([name, contents]) =>
-      contents === undefined
-        ? rm(join(deliverable, name), { force: true })
-        : writeFile(join(deliverable, name), contents),
-    ),
+    Object.entries(files).map(([name, contents]) => writeFile(join(deliverable, name), contents)),
   );
 }
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "selfbench-extension-"));
   deliverable = join(root, "task");
+  // Fails a deliverable whose instruction is "bad", and echoes what it was asked to check.
   const check = join(root, "check.js");
   await writeFile(
     check,
     [
-      'const { readFileSync, mkdirSync } = require("node:fs");',
-      "const [definitionPath, , , outputDirectory] = process.argv.slice(2);",
-      'const definition = JSON.parse(readFileSync(definitionPath, "utf8"));',
-      'const ok = definition.taskId !== "bad" && typeof definition.prompt === "string";',
-      'mkdirSync(outputDirectory + "/rendered", { recursive: true });',
-      'process.stdout.write(JSON.stringify({ ok, errors: ok ? [] : [{ gate: "audit", message: "over tier" }], renderedDirectory: outputDirectory + "/rendered" }) + "\\n");',
+      'const { readFileSync } = require("node:fs");',
+      "const [directory, ...rest] = process.argv.slice(2);",
+      'const ok = readFileSync(directory + "/instruction.md", "utf8").trim() !== "bad";',
+      'process.stdout.write(JSON.stringify({ ok, errors: ok ? [] : [rest.join(" ")] }) + "\\n");',
     ].join("\n"),
   );
   Object.assign(process.env, {
     SELFBENCH_CHECK_PROGRAM: check,
-    SELFBENCH_RENDER_OUTPUT: root,
+    SELFBENCH_DIFFICULTY: "medium",
+    SELFBENCH_REPO_DIRECTORY: join(root, "repo"),
+    SELFBENCH_BASE_COMMIT: "a".repeat(40),
     SELFBENCH_VERIFY_REQUEST: join(root, "verify"),
     SELFBENCH_SUBMISSION: join(root, "submission"),
     SELFBENCH_DELIVERABLE: deliverable,
@@ -133,19 +99,17 @@ describe("authoring extension directory deliverable", () => {
     await writeDeliverable();
 
     const submitted = await submit.execute("1", {});
-    expect(submitted.details).toEqual({ taskId: "ext-task" });
+    expect(submitted.isError).toBeUndefined();
     expect(submitted.terminate).toBe(true);
-    const recorded = JSON.parse(await readFile(join(root, "submission/definition.json"), "utf8"));
-    expect(recorded.prompt).toBe("Implement the feature.");
-    expect((await readFile(join(root, "submission/source-task.tar.gz"))).length).toBeGreaterThan(0);
+    // Only the submission's own files are packed, never the author's scratch files.
+    const packed = await runCommand("tar", ["-tzf", join(root, "submission/source-task.tar.gz")]);
+    expect(packed.stdout.trim().split("\n").sort()).toEqual([...SUBMISSION_FILES].sort());
 
     const requested = await tools().get("verify")?.execute("2", {});
     expect(requested?.isError).toBeUndefined();
     expect(requested?.terminate).toBe(true);
     expect(requested?.content[0]?.text).toContain("report arrives as your next message");
-    expect(JSON.parse(await readFile(join(root, "verify/definition.json"), "utf8")).prompt).toBe(
-      "Implement the feature.",
-    );
+    expect(await readdir(join(root, "verify"))).toEqual(["source-task.tar.gz"]);
   });
 
   test("verify ends the turn: every later tool call is blocked", async () => {
@@ -171,30 +135,11 @@ describe("authoring extension directory deliverable", () => {
     expect(await readdir(join(root, "verify")).catch(() => [])).toEqual([]);
   });
 
-  test("reports missing or inconsistent deliverable files as static-check errors naming the file", async () => {
-    const registered = tools();
-    const verify = registered.get("verify") as RegisteredTool;
-    const submit = registered.get("submit_task") as RegisteredTool;
-
-    const nothing = await verify.execute("1", {});
-    expect(nothing.isError).toBe(true);
-    expect(nothing.content[0]?.text).toContain("[files] definition.json is missing");
-    expect(nothing.content[0]?.text).toContain("[files] gold.patch is missing");
-
-    await writeDeliverable({ "instruction.md": "   " });
-    const empty = await submit.execute("2", {});
-    expect(empty.isError).toBe(true);
-    expect(empty.content[0]?.text).toContain("[files] instruction.md is empty");
-
-    await writeDeliverable({
-      "definition.json": JSON.stringify({ ...definition, prompt: "different" }),
-    });
-    const mismatch = await verify.execute("3", {});
-    expect(mismatch.content[0]?.text).toContain("prompt differs from instruction.md");
-
-    await writeDeliverable({ "definition.json": "{not json" });
-    const invalid = await verify.execute("4", {});
-    expect(invalid.content[0]?.text).toContain("[files] definition.json is not valid JSON");
+  test("the check runs at the candidate's tier and base, and a failure records nothing", async () => {
+    await writeDeliverable({ "instruction.md": "bad" });
+    const failed = await tools().get("verify")?.execute("1", {});
+    expect(failed?.isError).toBe(true);
+    expect(failed?.content[0]?.text).toContain(`- medium ${join(root, "repo")} ${"a".repeat(40)}`);
     expect(await readdir(join(root, "verify")).catch(() => [])).toEqual([]);
   });
 });

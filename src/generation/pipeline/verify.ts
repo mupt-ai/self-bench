@@ -41,16 +41,14 @@ export interface VerifyCompiledInput extends CompileAndVerifyInput {
   readonly compiled: SandboxJobOutcome;
 }
 
-const PINNED_DEFINITION = "definition.json";
-
 /** Every artifact of one check lands under this folder. */
 function verifyPrefix(input: CompileAndVerifyInput): string {
   return `runs/${input.run.runId}/verify/${input.candidate.candidateId}/${input.stage}-round-${input.round}${input.turn ? `-turn-${input.turn}` : ""}`;
 }
 
 /**
- * The trusted compile of one submission, in its own sandbox: it validates the definition,
- * patches, environment policy, audit, and candidate identity, then renders the Harbor task.
+ * The trusted compile of one submission, in its own sandbox: it checks the author's files, pins
+ * their base images, and renders the Harbor task for the candidate.
  */
 export async function compileTask(
   store: ArtifactStore,
@@ -82,10 +80,9 @@ export async function compileTask(
             path: "/work/input.json",
             contents: JSON.stringify({
               repositoryUrl: run.repository.url,
-              harborEnvironment: run.version.harborEnvironment,
+              taskId: input.task.taskId,
               candidate: {
                 sourcePr: candidate.sourcePr,
-                sourceUrl: candidate.sourceUrl,
                 baseCommit: candidate.baseCommit,
                 difficulty: candidate.difficulty,
               },
@@ -107,11 +104,6 @@ export async function compileTask(
           contentType: "application/gzip",
         },
         { name: SNAPSHOT_FILE, path: `/work/${SNAPSHOT_FILE}`, contentType: "application/gzip" },
-        {
-          name: PINNED_DEFINITION,
-          path: `/work/${PINNED_DEFINITION}`,
-          contentType: "application/json",
-        },
       ],
       inline: [{ name: "result.json", path: "/work/result.json" }],
       // A compiler that crashed or could not run reports no result, and Temporal reruns it.
@@ -155,12 +147,8 @@ export async function verifyCompiled(
     const result = compileResultSchema.parse(compiled.inline["result.json"]);
 
     const bundle = compiled.files["harbor-task.tar.gz"];
-    // The compiled definition carries the image digests the compiler pinned.
-    const definition = compiled.files[PINNED_DEFINITION] ?? input.task.definition;
     const task: AuthoredTask | undefined =
-      result.compileErrors.length === 0 && bundle
-        ? { ...input.task, definition, bundle }
-        : undefined;
+      result.compileErrors.length === 0 && bundle ? { ...input.task, bundle } : undefined;
     const gate = compiled.files[GATE_TASK_FILE];
     const snapshot = compiled.files[SNAPSHOT_FILE];
     if (builder && task && (!gate || !snapshot))

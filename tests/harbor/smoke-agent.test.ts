@@ -21,9 +21,10 @@ class Result:
         self.return_code, self.stdout = code, out
 class Environment:
     def __init__(self, smoke_code):
-        self.smoke_code, self.commands = smoke_code, []
-    async def exec(self, command, **kwargs):
+        self.smoke_code, self.commands, self.directories = smoke_code, [], []
+    async def exec(self, command, cwd=None, **kwargs):
         self.commands.append(command)
+        self.directories.append(cwd)
         return Result(self.smoke_code if "smoke.sh" in command else 0, "pnpm 9.1.0" if "smoke.sh" in command else "")
 class Context:
     metadata = None
@@ -31,7 +32,8 @@ async def check():
     passing, context = Environment(0), Context()
     await adapter.SmokeAgent().run("", passing, context)
     assert context.metadata == {"smoke_exit_code": 0, "smoke_output": "pnpm 9.1.0"}, context.metadata
-    assert passing.commands[0] == "/opt/selfbench-environment/smoke.sh 2>&1"
+    assert passing.commands[0] == "bash /opt/selfbench-environment/smoke.sh 2>&1"
+    assert passing.directories[0] == "/app"
     assert "reset -q --hard" in passing.commands[1] and "clean -fdq" in passing.commands[1]
     failing, context = Environment(1), Context()
     try:

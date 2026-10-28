@@ -1,5 +1,3 @@
-import type { TaskEnvironment } from "../../contracts/index.js";
-
 /** An OCI image reference split the way a registry addresses it. */
 export interface ImageReference {
   /** The name as written, without tag or digest (`node`, `ghcr.io/org/app`). */
@@ -106,37 +104,6 @@ export async function resolveImage(
     throw new RegistryUnavailableError(`${where} returned no sha256 digest for ${image}`);
   }
   return { ok: true, image: `${parsed.name}:${target}@${digest}` };
-}
-
-/**
- * Pins every image the environment names. Problems name the field so the author can fix it;
- * the returned environment carries a digest on every image when there are none.
- */
-export async function pinEnvironmentImages(
-  environment: TaskEnvironment,
-  options: RegistryOptions = {},
-): Promise<{ environment: TaskEnvironment; problems: string[] }> {
-  const [base, ...services] = await Promise.all([
-    resolveImage(environment.baseImage, options),
-    ...environment.services.map((service) => resolveImage(service.image, options)),
-  ]);
-  const problems: string[] = [];
-  const pinned = (result: ImageResolution | undefined, scope: string, fallback: string) => {
-    if (result?.ok) return result.image;
-    if (result) problems.push(`${scope} ${result.problem}`);
-    return fallback;
-  };
-  return {
-    environment: {
-      ...environment,
-      baseImage: pinned(base, "environment baseImage", environment.baseImage),
-      services: environment.services.map((service, index) => ({
-        ...service,
-        image: pinned(services[index], `service ${service.name} image`, service.image),
-      })),
-    },
-    problems,
-  };
 }
 
 async function manifestRequest(

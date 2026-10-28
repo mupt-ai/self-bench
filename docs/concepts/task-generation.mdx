@@ -32,12 +32,12 @@ Evaluations from the **Run** page are one `selfBenchEvaluationRunWorkflow` per m
 
 ## Authoring and verification
 
-One authoring agent session owns the whole task: the instruction, the test command and test selection, and the environment contract (base image, setup, smoke command, services). It writes `/work/task/` (`definition.json`, `instruction.md`, `test.patch`, `gold.patch`) and calls `verify`.
+One authoring agent session owns the whole task, written as plain files in `/work/task/`: `instruction.md`, `gold.patch`, `test.patch`, a `Dockerfile` that unpacks the base snapshot into `/app` and prepares it, a `smoke.sh` that proves the environment is ready for the agent, and a `run-tests.sh` that runs the `fail-to-pass` or `pass-to-pass` tests. The task's repository, base commit, and pull request are the candidate's, and every task gets the same limits. The agent then calls `verify`.
 
-`verify` runs a static check in the sandbox (schema, environment policy, patch path safety, and a dry render of the Harbor tree) and returns failures immediately. Otherwise it ends the turn, and the worker compiles the task, builds its images, and runs the Harbor gates on them:
+`verify` runs a static check in the sandbox (the files, patch path safety, the audit, and both patches applied to the base commit) and returns failures immediately. Otherwise it ends the turn, and the worker compiles the task, builds its images, and runs the Harbor gates on them:
 
-1. **build**: the agent image (from `environment/`) and the separate verifier image (from `tests/`) build; a failing Dockerfile step, such as the task's setup, is the author's to fix, with the build's log in the report;
-2. **smoke**: the smoke command succeeds as the agent (agent image, user, and network allowlist);
+1. **build**: the agent image (from `environment/`) and the separate verifier image (from `tests/`), both the author's Dockerfile followed by SelfBench's own steps, build; a failing step of the author's is theirs to fix, with the build's log in the report;
+2. **smoke**: `smoke.sh` succeeds as the agent (agent image, user, and network allowlist);
 3. **nop**: the new tests fail on the base snapshot and the regression tests pass;
 4. **oracle**: the reference patch applies and every selected test passes;
 5. **determinism**: the fail-to-pass tests pass a second time with the oracle.
@@ -48,23 +48,23 @@ The authoring prompt, including the anti-coupling rules, is [`src/generation/pip
 
 ## What an accepted task must satisfy
 
-| Difficulty | Reference patch | Fail-to-pass | Pass-to-pass |
-| --- | --- | --- | --- |
-| easy | 20+ changed lines across 1 implementation path | 1+ | — |
-| medium | 50+ changed lines across 2 implementation paths | 1+ | 1+ |
-| hard | 100+ changed lines across 3 implementation paths | 1+ | 2+ |
+| Difficulty | Reference patch |
+| --- | --- |
+| easy | 20+ changed lines across 1 implementation path |
+| medium | 50+ changed lines across 2 implementation paths |
+| hard | 100+ changed lines across 3 implementation paths |
 
-Every task also needs a held-out test patch that shares no files with the reference patch, deterministic repository-native setup and tests, green smoke/nop/oracle gates, and the reviewer's acceptance.
+A task takes the hardest tier its reference patch reaches, up to the candidate's. Every task also needs a held-out test patch that shares no files with the reference patch, deterministic repository-native setup and tests, green smoke/nop/oracle gates, and the reviewer's acceptance.
 
 - **Instruction.** It may restate the PR's request but may not add behavior inferred only from the implementation or tests.
 - **No test-to-gold coupling.** Held-out tests exercise a public API, command, persistence boundary, or extension seam. They may not import the gold's private helpers or pin internal SQL, query counts, private schemas, telemetry layout, incidental error wording, or UI composition unless the request makes that public.
-- **Environment.** The agent derives runtime, dependencies, fixtures, and services from the pinned commit's CI, Dockerfiles, devcontainer, and lockfiles. The agent names images by tag, or by a digest the repository itself pins; the trusted compiler pins each tag to the digest its registry serves and rejects a reference the registry does not serve, so every compiled task builds from digest-pinned images. Secret-named variables take only fixed placeholders. Services render as Docker Compose, so tasks with services cannot verify on E2B (Harbor's E2B environment drops the compose file). When the gold changes a dependency manifest, the hidden verifier image reruns setup with it and resets source files to the base.
+- **Environment.** The agent derives runtime, dependencies, fixtures, and services from the pinned commit's CI, Dockerfiles, devcontainer, and lockfiles, and installs all of them in its Dockerfile, including what the reference patch adds; services the tests need run inside the image, started by `run-tests.sh`. The agent names base images by tag, or by a digest the repository itself pins; the trusted compiler pins each tag to the digest its registry serves and rejects a reference the registry does not serve, so every compiled task builds from digest-pinned images. The compiler rejects files that reference secret material.
 
 ## What the evaluated agent sees
 
 The agent gets the base snapshot, the instruction, and the task's environment. It never sees the held-out tests or the reference solution; Harbor mounts `solution/` only for the oracle.
 
-The agent runs as `root` in `/app` after `setup.sh`, with network limited to the host its model is reached at: SelfBench's model gateway, which holds the credential and gives the agent only a key for its one model (Dari's router and Muse Code reach their provider directly). Its diff is taken against the post-setup snapshot. The verifier refuses the patch unless its recorded base tree matches the verifier's own `HEAD`, then applies it to a clean copy with test paths excluded and restores the held-out and regression test files, so tampering can only produce a tree the agent could have written directly.
+The agent runs as `root` in `/app` as the Dockerfile left it, with network limited to the host its model is reached at: SelfBench's model gateway, which holds the credential and gives the agent only a key for its one model (Dari's router and Muse Code reach their provider directly). Its diff is taken against the post-setup snapshot. The verifier refuses the patch unless its recorded base tree matches the verifier's own `HEAD`, then applies it to a clean copy without the files the held-out tests touch, and restores those files, so tampering can only produce a tree the agent could have written directly.
 
 ## Export
 
@@ -90,13 +90,13 @@ tasks/
 
 `manifest.json` pins the source commit, SelfBench build, generation backend, Harbor environment, task IDs, and archive SHA-256s. The export keeps the first accepted task per source PR and lists the rest under `droppedDuplicates`.
 
-When the deployment builds task images (`SELFBENCH_TASK_IMAGE_REPOSITORY` and `SELFBENCH_TASK_IMAGE_BUILDER`), every check builds the compiled task's two images before its gates, and the gates run on exactly those digests on the run's sandbox provider. Hosted SelfBench builds on Google Cloud Build in its own GCP project, for every run, whichever sandbox account the run uses: the build is SelfBench's, the gates and trials are the run's. A build runs the task's setup, which is code from the repository under test, so it runs as a service account of its own that may only push task images, write its layer cache and logs, and read SelfBench's Docker Hub mirror; it never holds the worker's credentials. The worker uploads only the two small build contexts; the build fetches them and the repository snapshot through short-lived signed links and checks their digests before any task code runs. Each candidate keeps a layer cache, so its later checks rebuild only what changed. A local stack can build with its own Docker instead (`SELFBENCH_TASK_IMAGE_BUILDER=docker`, the `images` Compose profile); without a builder, Harbor builds the task's Dockerfiles itself, as it always has.
+When the deployment builds task images (`SELFBENCH_TASK_IMAGE_REPOSITORY` and `SELFBENCH_TASK_IMAGE_BUILDER`), every check builds the compiled task's two images before its gates, and the gates run on exactly those digests on the run's sandbox provider. Hosted SelfBench builds on Google Cloud Build in its own GCP project, for every run, whichever sandbox account the run uses: the build is SelfBench's, the gates and trials are the run's. A build runs the author's Dockerfile and code from the repository under test, so it runs as a service account of its own that may only push task images, write its layer cache and logs, and read SelfBench's Docker Hub mirror; it never holds the worker's credentials. The worker uploads only the two small build contexts; the build fetches them and the repository snapshot through short-lived signed links and checks their digests before any task code runs. Each candidate keeps a layer cache, so its later checks rebuild only what changed. A local stack can build with its own Docker instead (`SELFBENCH_TASK_IMAGE_BUILDER=docker`, the `images` Compose profile); without a builder, Harbor builds the task's Dockerfiles itself, as it always has.
 
-A task the pipeline accepts settles with its images, no human approval needed, and publishes its execution bundle: the delivered execution tree. Each Dockerfile is a `FROM` of its image's immutable digest. The repository checkout, dependencies, setup, smoke script, and verifier runtime are already in those images; no repository archives, setup scripts, `definition.json`, or compiler manifest are duplicated in the execution bundle. Tasks with services also retain their `docker-compose.yaml` files, whose `main` service starts from the verifier image. Provider service restrictions still apply; E2B does not support service tasks. If the execution bundle cannot be published, the candidate fails as an infrastructure failure rather than run without its images.
+A task the pipeline accepts settles with its images, no human approval needed, and publishes its execution bundle: the delivered execution tree. Each Dockerfile is a `FROM` of its image's immutable digest. The repository checkout, dependencies, setup, smoke script, and verifier runtime are already in those images; no repository archives, `run-tests.sh`, or compiler manifest are duplicated in the execution bundle. Tasks compiled before authors wrote their own Dockerfiles may declare services; they also retain their `docker-compose.yaml` files, whose `main` service starts from the verifier image, and E2B does not run them. If the execution bundle cannot be published, the candidate fails as an infrastructure failure rather than run without its images.
 
 When a candidate finishes, every image it built except its accepted pair is deleted. When a person rejects or deletes a task, its images are deleted and it returns to its full build bundle, unless a saved comparison, a release, or another task still names them. A kept task without images (accepted before images were built, or approved again after a rejection removed them) is rebuilt when a person reviews it, or by the operator's backfill: its compiled task is built and checked again on its own run's provider and account, and only images that pass every gate are recorded.
 
-The authoring definition and full build bundle remain separate, immutable provenance artifacts; reviewers inspect the full source tree. Docker trials pull a task's images directly; Modal, E2B, Daytona, and Vercel trials receive short-lived pull grants for only the task's image pair through the API; Daytona's temporary registry configuration is removed after the sandbox starts. Vercel is not a selectable evaluation sandbox.
+The authored files and full build bundle remain separate, immutable provenance artifacts; reviewers inspect the full source tree. Docker trials pull a task's images directly; Modal, E2B, Daytona, and Vercel trials receive short-lived pull grants for only the task's image pair through the API; Daytona's temporary registry configuration is removed after the sandbox starts. Vercel is not a selectable evaluation sandbox.
 
 Existing tasks, saved comparisons, and releases keep their original bundle references.
 

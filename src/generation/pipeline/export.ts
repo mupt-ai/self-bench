@@ -1,5 +1,4 @@
 import { Context } from "@temporalio/activity";
-import { z } from "zod";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { ArtifactRef, AuthoredTask, RunRequest } from "../../contracts/index.js";
 import type { SandboxFile } from "../../sandbox/contracts.js";
@@ -9,13 +8,11 @@ import { artifactFile } from "./helpers.js";
 
 export interface ExportInput {
   readonly run: RunRequest;
-  readonly tasks: readonly AuthoredTask[];
+  /** Each accepted task, with the pull request its candidate came from. */
+  readonly tasks: readonly { readonly task: AuthoredTask; readonly sourcePr: number }[];
 }
 
 const EXPORT_UPLOAD_TTL_MS = 60 * 60_000;
-// Export reads only the source PR, so accepted tasks authored under older definition schemas
-// (such as the removed JUnit `testResults`) still export.
-const exportedDefinitionSchema = z.object({ sourcePr: z.number().int().positive() });
 
 /** Only metadata and opaque artifacts cross the worker. Archive creation is sandbox-owned. */
 export async function buildExport(
@@ -23,14 +20,9 @@ export async function buildExport(
   input: ExportInput,
   attempt: string | number = Context.current().info.attempt,
 ): Promise<ArtifactRef> {
-  const entries = [];
-  for (const task of input.tasks) {
-    const definition = exportedDefinitionSchema.parse(
-      JSON.parse(Buffer.from(await store.get(task.definition)).toString()),
-    );
-    entries.push({ task, taskId: task.taskId, sourcePr: definition.sourcePr });
-  }
-  const { kept, dropped } = dedupeBySourcePr(entries);
+  const { kept, dropped } = dedupeBySourcePr(
+    input.tasks.map(({ task, sourcePr }) => ({ task, taskId: task.taskId, sourcePr })),
+  );
   const files: SandboxFile[] = [];
   // The sandbox pulls each bundle itself; buffering them all would hold GBs in the worker.
   for (const [index, entry] of kept.entries())
