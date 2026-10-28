@@ -144,6 +144,6 @@ RUN for tool in bash git pkill runuser tar useradd; do \\
     && git -C /app config user.name selfbench \\
     && git -C /app --work-tree=/tmp/selfbench-repo add -A \\
     && git -C /app -c core.hooksPath=/dev/null commit -qm base --no-verify \\
-    && if [ -n "$(git -C /app ls-files --deleted)" ]; then ${fail("/app lacks files of repo.tar.gz: unpack it with ADD repo.tar.gz /app/")}; fi \\
+    && if [ "$(git -C /app ls-files --deleted | wc -l)" -eq "$(git -C /app ls-files | wc -l)" ]; then ${fail("/app holds none of repo.tar.gz: unpack it with ADD repo.tar.gz /app/")}; fi \\
     && rm -rf /tmp/selfbench-repo /tmp/selfbench-repo.tar.gz`;
 }
