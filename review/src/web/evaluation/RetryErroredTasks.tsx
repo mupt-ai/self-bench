@@ -109,8 +109,8 @@ export function RetryErroredTasks({
                 setBusy(true);
                 setError(undefined);
                 try {
-                  const result = await submitComparison(url, retry.selection);
-                  void navigate(`${pages}/comparisons/${result.id}`);
+                  await submitComparison(url, retry.selection);
+                  void navigate(`${pages}/results`);
                 } catch (cause) {
                   setError(cause instanceof Error ? cause.message : "Could not retry the tasks.");
                 } finally {

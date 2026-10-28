@@ -18,16 +18,3 @@ export async function submitComparison(url: string, draft: { id: string }) {
     }
   }
 }
-
-/** Recover only the matching draft; keep its ID to retain server-side deduplication. */
-export function unlockMissingComparison(url: string, id: string) {
-  try {
-    const key = `selfbench-run:${url}`;
-    const saved = sessionStorage.getItem(key);
-    if (!saved) return;
-    // A repository's draft or a benchmark's: either keeps its request under `draft.id`.
-    const state = JSON.parse(saved) as { draft?: { id?: unknown } } | null;
-    if (state?.draft?.id === id)
-      sessionStorage.setItem(key, JSON.stringify({ ...state, submitted: false }));
-  } catch {}
-}

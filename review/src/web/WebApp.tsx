@@ -10,7 +10,6 @@ import { BenchmarksPage } from "./benchmarks/BenchmarksPage";
 import { BenchmarkTaskPage } from "./benchmarks/BenchmarkTaskPage";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { BenchmarkRunPage } from "./evaluation/BenchmarkRunPage";
-import { ComparisonPage } from "./evaluation/ComparisonPage";
 import { CredentialsPage } from "./evaluation/CredentialsPage";
 import { DemoRunPage } from "./evaluation/DemoRunPage";
 import { EvaluationPage } from "./evaluation/EvaluationPage";
@@ -93,7 +92,10 @@ export function WebApp() {
                     <Route index element={<BenchmarkDatasetPage />} />
                     <Route path="run" element={<BenchmarkRunPage />} />
                     <Route path="results" element={<EvaluationPage />} />
-                    <Route path="comparisons/:comparisonId" element={<ComparisonPage />} />
+                    <Route
+                      path="comparisons/:comparisonId"
+                      element={<Navigate to="../results" replace />}
+                    />
                   </Route>
                   <Route path="repos/:owner/:name" element={<RepoLayout />}>
                     <Route index element={<RepoPage />} />
@@ -110,7 +112,10 @@ export function WebApp() {
                       path="settings/credentials"
                       element={<Navigate to="/settings/credentials" replace />}
                     />
-                    <Route path="comparisons/:comparisonId" element={<ComparisonPage />} />
+                    <Route
+                      path="comparisons/:comparisonId"
+                      element={<Navigate to="../results" replace />}
+                    />
                   </Route>
                   <Route path="repos/:owner/:name/tasks/:runId/:taskId" element={<TaskPage />} />
                   <Route path="benchmarks/:owner/:name/tasks/*" element={<BenchmarkTaskPage />} />

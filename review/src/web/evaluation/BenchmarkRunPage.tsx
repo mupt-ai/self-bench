@@ -123,9 +123,9 @@ function BenchmarkRunContent() {
       sessionStorage.setItem(key, JSON.stringify(pending));
     } catch {}
     try {
-      const result = await submitComparison(url, frozen);
+      await submitComparison(url, frozen);
       sessionStorage.removeItem(key);
-      void navigate(`${pages}/comparisons/${result.id}`);
+      void navigate(`${pages}/results`);
     } catch (cause) {
       if (cause instanceof UnsavedComparisonError) setState({ draft: frozen, submitted: false });
       setError(
@@ -150,9 +150,9 @@ function BenchmarkRunContent() {
           <div className="flex flex-wrap items-center gap-3">
             <Link
               className="text-sm font-semibold text-foreground underline underline-offset-4"
-              to={`${pages}/comparisons/${draft.id}`}
+              to={`${pages}/results`}
             >
-              View Status
+              View Results
             </Link>
             <Button
               type="button"

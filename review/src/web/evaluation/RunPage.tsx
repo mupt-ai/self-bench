@@ -139,9 +139,9 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
       sessionStorage.setItem(key, JSON.stringify(pending));
     } catch {}
     try {
-      const result = await submitComparison(url, frozen);
+      await submitComparison(url, frozen);
       sessionStorage.removeItem(key);
-      void navigate(`/repos/${repo}/comparisons/${result.id}`);
+      void navigate(`/repos/${repo}/results`);
     } catch (cause) {
       if (cause instanceof UnsavedComparisonError) setState({ draft: frozen, submitted: false });
       setError(
@@ -166,9 +166,9 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
           <div className="flex flex-wrap items-center gap-3">
             <Link
               className="text-sm font-semibold text-foreground underline underline-offset-4"
-              to={`/repos/${repo}/comparisons/${draft.id}`}
+              to={`/repos/${repo}/results`}
             >
-              View Status
+              View Results
             </Link>
             <Button
               type="button"

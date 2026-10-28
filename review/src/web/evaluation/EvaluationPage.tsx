@@ -3,7 +3,6 @@ import { ListSkeleton } from "../LoadingSkeleton";
 import { useDocumentTitle } from "../session";
 import { buttonStyles, EmptyState, Notice, PageContent, PageHeader } from "../ui";
 import { ChartPreview } from "./ChartPreview";
-import { ComparisonHistory } from "./ComparisonHistory";
 import { GhostChart } from "./GhostChart";
 import { useRepoRuns } from "./RepoRuns";
 import { ResultsTable } from "./ResultsTable";
@@ -66,8 +65,6 @@ export function EvaluationPage() {
           Each one lands on the chart by how many tasks it solved and what each task cost.
         </EmptyState>
       )}
-      {/* Below the table once it has its rows, so it can tell whether it is in view. */}
-      {!loading && <ComparisonHistory key={`history:${url}`} pages={pages} url={url} />}
     </PageContent>
   );
 }
