@@ -1,6 +1,6 @@
 import type { ArtifactStore } from "../artifacts/index.js";
 import { expandBundle } from "../generation/runs/bundle.js";
-import type { SettingResults } from "../public/release-results.js";
+import type { Setting, SettingResults } from "../public/release-results.js";
 import { excerpt, timeLimit, VERIFIER_FILE } from "./failure-material.js";
 import type { SummaryTask } from "./model-summary.js";
 import { evaluationTaskKey, harnessLabels } from "./models.js";
@@ -18,6 +18,12 @@ const READS_AT_ONCE = 8;
 
 /** A configuration's label in the material and the reply: C1, C2, … */
 export const labelOf = (index: number) => `C${index + 1}`;
+
+/** How the material and the report name a configuration: model, reasoning and harness. */
+export const configurationName = (setting: Setting) =>
+  [setting.label, `${setting.reasoningLevel} reasoning`, harnessLabels[setting.harness]].join(
+    " · ",
+  );
 
 /** The start of a text, cut at `limit` characters. */
 function opening(text: string, limit: number): string {
@@ -61,12 +67,7 @@ export async function summaryMaterial(
   const instruction = await instructions(store, scored);
   const configurations = chosen.map(({ setting, results }, index) => {
     const passed = [...results.values()].filter(({ trial }) => trial.rewards.reward === 1).length;
-    const name = [
-      setting.label,
-      `${setting.reasoningLevel} reasoning`,
-      harnessLabels[setting.harness],
-    ].join(" · ");
-    return `<configuration label="${labelOf(index)}" passed="${passed} of ${results.size}">${name}</configuration>`;
+    return `<configuration label="${labelOf(index)}" passed="${passed} of ${results.size}">${configurationName(setting)}</configuration>`;
   });
   const outcomes = scored.map((task) => {
     const key = evaluationTaskKey(task.runId, task.taskId);

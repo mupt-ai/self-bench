@@ -98,7 +98,7 @@ test("one report compares the chosen configurations, and keeps what the model sa
   let reply = {
     exitCode: 0,
     stdout:
-      "### Overall\nBoth skip edge cases.\n### C1\nStrong on parsing.\n### C2\nStrong on caching.",
+      "### Overall\nBoth skip edge cases; C2 less so.\n### C1\nStrong on parsing.\n### C2\nStrong on caching.",
     stderr: "",
   };
   const materials: string[] = [];
@@ -119,7 +119,7 @@ test("one report compares the chosen configurations, and keeps what the model sa
   expect(materials[0]).not.toContain("C3");
   expect(await readModelSummaries(store, { repoId: 1 })).toMatchObject({
     report: {
-      overview: "Both skip edge cases.",
+      overview: "Both skip edge cases; gpt-other · high reasoning · Codex less so.",
       model: "gpt-6-sol",
       summaries: [
         {
@@ -145,7 +145,7 @@ test("one report compares the chosen configurations, and keeps what the model sa
   };
   await expect(summarizeModels(store, request, options)).rejects.toThrow("Authentication failed.");
   const { report, failure } = await readModelSummaries(store, { repoId: 1 });
-  expect(report?.overview).toBe("Both skip edge cases.");
+  expect(report?.overview).toStartWith("Both skip edge cases;");
   expect(failure?.message).toBe("Authentication failed.");
   // A reply without the sections asked for keeps no report.
   reply = { exitCode: 0, stdout: "They are all fine.", stderr: "" };
