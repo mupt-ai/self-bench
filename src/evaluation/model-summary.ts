@@ -34,8 +34,9 @@ Three or four sentences on C1.
 Then one "### C<n>" section for every other configuration, in order. Write for an engineer deciding
 which model to give future work in this codebase, and judge every configuration by the same lens and
 in the same vocabulary so the sections read alike. Each section must stand on its own, shown under
-the configuration's name: call it "it", never by its label, and never mention, name or compare to
-another configuration, though you may say where it does unusually well or badly on work that most
+the configuration's name: start with "It" and refer to it only as "it". Never write its label, its
+model's name, its harness or its reasoning level, and never mention, name or compare to another
+configuration, though you may say where it does unusually well or badly on work that most
 configurations handle. Cover its strengths (the kinds of work it can be trusted
 with) and its weaknesses (the kinds where its output needs closer review, and the habits behind its
 failures, for example stopping before a change is complete across files, inventing APIs or imports,

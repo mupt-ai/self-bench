@@ -31,7 +31,7 @@ export function ModelSummaries({
     <section className="flex min-w-0 flex-col gap-3" data-morph="summaries" {...revealGroup}>
       <h2 className="text-sm font-medium">Model Summaries</h2>
       {summaries.overview && (
-        <p className="max-w-3xl text-sm leading-6 text-muted-foreground">{summaries.overview}</p>
+        <p className="text-sm leading-6 text-muted-foreground">{summaries.overview}</p>
       )}
       <ul className={`divide-y divide-border ${PANEL}`}>
         {covered.map(({ setting, text }) => (
