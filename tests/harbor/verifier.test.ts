@@ -49,6 +49,27 @@ describe("verifier script", () => {
     expect(await runVerifier()).toMatchObject({ reward: 0, fail_to_pass: 1, pass_to_pass: 0 });
   });
 
+  test("starts the services from the task as built, before the solver's patch", async () => {
+    const { root, app, runVerifier } = await verifierFixture('cp value.txt "$SERVICE_STATE"');
+    await writeFile(join(app, "value.txt"), "fixed\n");
+    await collectAgentPatch(root, app);
+
+    expect(await runVerifier()).toMatchObject({ reward: 1, setup_completed: 1 });
+    expect(await readFile(join(root, "service-state"), "utf8")).toBe("base\n");
+  });
+
+  test("runs no tests when the services do not start", async () => {
+    const { root, app, runVerifier } = await verifierFixture("exit 3");
+    await writeFile(join(app, "value.txt"), "fixed\n");
+    await collectAgentPatch(root, app);
+
+    expect(await runVerifier()).toMatchObject({
+      reward: 0,
+      setup_completed: 0,
+      fail_to_pass_exit_code: -1,
+    });
+  });
+
   test("refuses a patch diffed against a baseline the root agent moved", async () => {
     const { root, app, runVerifier } = await verifierFixture();
     await writeFile(join(app, "value.txt"), "fixed\n");
@@ -84,7 +105,7 @@ async function collectAgentPatch(root: string, app: string): Promise<void> {
  * The agent tree (base commit, then the post-setup commit copied to base.git, as the agent
  * Dockerfile builds it) and a separate verifier tree still at the base commit.
  */
-async function verifierFixture() {
+async function verifierFixture(services = "") {
   const root = await mkdtemp(join(tmpdir(), "selfbench-verifier-"));
   roots.push(root);
   const app = join(root, "app");
@@ -105,11 +126,13 @@ async function verifierFixture() {
   await mkdir(join(root, "tests"));
   await writeFile(join(root, "tests/test.patch"), testPatch);
   await writeFile(join(root, "run-tests.sh"), runTests);
+  await writeFile(join(root, "services.sh"), services);
   await writeFile(join(root, "command.sh"), 'run_verifier_command() { bash -c "$1"; }\n');
   const script = testScript(testPatch)
     .replaceAll("/app", verifier)
     .replaceAll("/opt/selfbench-runtime/command.sh", join(root, "command.sh"))
     .replaceAll("/opt/selfbench-runtime/run-tests.sh", join(root, "run-tests.sh"))
+    .replaceAll("/opt/selfbench-runtime/services.sh", join(root, "services.sh"))
     .replaceAll("/opt/selfbench", join(root, "opt"))
     .replaceAll("/tests/test.patch", join(root, "tests/test.patch"))
     .replaceAll("/logs/verifier", join(root, "logs"))
@@ -120,7 +143,11 @@ async function verifierFixture() {
     // another user's repository.
     await runCommand("bash", [join(root, "test.sh")], {
       allowFailure: true,
-      env: { ...process.env, GIT_TEST_ASSUME_DIFFERENT_OWNER: "1" },
+      env: {
+        ...process.env,
+        GIT_TEST_ASSUME_DIFFERENT_OWNER: "1",
+        SERVICE_STATE: join(root, "service-state"),
+      },
     });
     return JSON.parse(await readFile(join(root, "logs/reward.json"), "utf8")) as unknown;
   };

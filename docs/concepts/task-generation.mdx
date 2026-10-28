@@ -32,7 +32,7 @@ Evaluations from the **Run** page are one `selfBenchEvaluationRunWorkflow` per m
 
 ## Authoring and verification
 
-One authoring agent session owns the whole task, written as plain files in `/work/task/`: `instruction.md`, `gold.patch`, `test.patch`, a `Dockerfile` that unpacks the base snapshot into `/app` and prepares it, a `smoke.sh` that proves the environment is ready for the agent, and a `run-tests.sh` that runs the `fail-to-pass` or `pass-to-pass` tests. The task's repository, base commit, and pull request are the candidate's, and every task gets the same limits. The agent then calls `verify`.
+One authoring agent session owns the whole task, written as plain files in `/work/task/`: `instruction.md`, `gold.patch`, `test.patch`, a `Dockerfile` that unpacks the base snapshot into `/app` and prepares it, a `smoke.sh` that proves the environment is ready for the agent, a `run-tests.sh` that runs the `fail-to-pass` or `pass-to-pass` tests, and, when the tests need a service, a `services.sh` that starts it. The task's repository, base commit, and pull request are the candidate's, and every task gets the same limits. The agent then calls `verify`.
 
 `verify` runs a static check in the sandbox (the files, patch path safety, the audit, and both patches applied to the base commit) and returns failures immediately. Otherwise it ends the turn, and the worker compiles the task, builds its images, and runs the Harbor gates on them:
 
@@ -58,7 +58,7 @@ A task takes the hardest tier its reference patch reaches, up to the candidate's
 
 - **Instruction.** It may restate the PR's request but may not add behavior inferred only from the implementation or tests.
 - **No test-to-gold coupling.** Held-out tests exercise a public API, command, persistence boundary, or extension seam. They may not import the gold's private helpers or pin internal SQL, query counts, private schemas, telemetry layout, incidental error wording, or UI composition unless the request makes that public.
-- **Environment.** The agent derives runtime, dependencies, fixtures, and services from the pinned commit's CI, Dockerfiles, devcontainer, and lockfiles, and installs all of them in its Dockerfile, including what the reference patch adds; services the tests need run inside the image, started by `run-tests.sh`. The agent names base images by tag, or by a digest the repository itself pins; the trusted compiler pins each `FROM` tag to the digest its registry serves and rejects a reference the registry does not serve. The compiler rejects files that reference secret material.
+- **Environment.** The agent derives runtime, dependencies, fixtures, and services from the pinned commit's CI, Dockerfiles, devcontainer, and lockfiles, and installs all of them in its Dockerfile, including what the reference patch adds. Services the tests need, such as a database, run inside the image: an optional `services.sh` starts them as root before the agent's patch is applied, and the agent's image carries it too, so the agent can start them while it works. The agent names base images by tag, or by a digest the repository itself pins; the trusted compiler pins each `FROM` tag to the digest its registry serves and rejects a reference the registry does not serve. The compiler rejects files that reference secret material.
 
 ## What the evaluated agent sees
 

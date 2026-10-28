@@ -7,10 +7,10 @@ import { baseImageProblems } from "./dockerfile.js";
 import { assertSafePatchPaths } from "./paths.js";
 
 /**
- * Everything an author writes, in /work/task. The task's identity (repository, base commit,
- * pull request) is the candidate's, and its limits are every task's (render.ts).
+ * What an author must write, in /work/task. The task's identity (repository, base commit, pull
+ * request) is the candidate's, and its limits are every task's (render.ts).
  */
-export const SUBMISSION_FILES = [
+const REQUIRED_FILES = [
   "instruction.md",
   "Dockerfile",
   "smoke.sh",
@@ -18,6 +18,9 @@ export const SUBMISSION_FILES = [
   "test.patch",
   "gold.patch",
 ] as const;
+
+/** Every file an author may write: the required ones, and services.sh when the tests need any. */
+export const SUBMISSION_FILES = [...REQUIRED_FILES, "services.sh"] as const;
 
 export type Submission = Readonly<Record<(typeof SUBMISSION_FILES)[number], string>>;
 
@@ -29,7 +32,7 @@ export interface SubmissionCheck {
   readonly difficulty: Difficulty;
 }
 
-/** Reads a submission; a missing file reads as empty, which the check reports. */
+/** Reads a submission; a missing file reads as empty, which the check reports when required. */
 export async function readSubmission(directory: string): Promise<Submission> {
   const files = await Promise.all(
     SUBMISSION_FILES.map(
@@ -45,7 +48,7 @@ export async function readSubmission(directory: string): Promise<Submission> {
  * sandbox, and the trusted compiler runs it again.
  */
 export function checkSubmission(submission: Submission, assigned: Difficulty): SubmissionCheck {
-  const errors = SUBMISSION_FILES.filter((name) => !submission[name].trim()).map(
+  const errors = REQUIRED_FILES.filter((name) => !submission[name].trim()).map(
     (name) => `${name} is missing or empty`,
   );
   for (const name of ["test.patch", "gold.patch"] as const) {
@@ -67,7 +70,7 @@ export function checkSubmission(submission: Submission, assigned: Difficulty): S
       errors.push("Dockerfile must unpack repo.tar.gz into /app: ADD repo.tar.gz /app/");
     }
   }
-  for (const name of ["Dockerfile", "smoke.sh", "run-tests.sh"] as const) {
+  for (const name of ["Dockerfile", "smoke.sh", "run-tests.sh", "services.sh"] as const) {
     if (SECRET_MATERIAL.test(submission[name])) errors.push(`${name} references secret material`);
   }
   if (errors.length > 0) return { errors, blockers: [], difficulty: assigned };

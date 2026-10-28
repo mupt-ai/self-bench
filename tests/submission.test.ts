@@ -44,6 +44,13 @@ describe("submission check", () => {
     ).toEqual([expect.stringContaining("gold.patch path escapes repository: ../escape.ts")]);
   });
 
+  test("services.sh is optional, and held to the same secret rule", () => {
+    expect(checkSubmission({ ...submission, "services.sh": "" }, "easy").errors).toEqual([]);
+    expect(
+      checkSubmission({ ...submission, "services.sh": "echo $NPM_TOKEN\n" }, "easy").errors,
+    ).toEqual(["services.sh references secret material"]);
+  });
+
   test("requires literal base images, the snapshot, and no secret material", () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: a Dockerfile build argument.
     const Dockerfile = "ARG BASE\nFROM ${BASE}\nRUN echo $GITHUB_TOKEN\n";

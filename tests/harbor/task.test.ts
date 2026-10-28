@@ -40,6 +40,7 @@ describe("Harbor task compiler", () => {
         Dockerfile: authoredDockerfile,
         "smoke.sh": "npm --version\n",
         "run-tests.sh": 'cd project && node --test "tests/$1"\n',
+        "services.sh": "redis-server --daemonize yes\n",
         "test.patch":
           "diff --git a/project/tests/new b/project/tests/new\nnew file mode 100644\n--- /dev/null\n+++ b/project/tests/new\n@@ -0,0 +1 @@\n+test\ndiff --git a/project/fixture.config.js b/project/fixture.config.js\nnew file mode 100644\n--- /dev/null\n+++ b/project/fixture.config.js\n@@ -0,0 +1 @@\n+export default {}\n",
         "gold.patch":
@@ -79,17 +80,24 @@ describe("Harbor task compiler", () => {
     // agent.patch is diffed against the post-setup snapshot, so setup outputs that are not
     // gitignored never land in the agent's patch and never collide with the verifier's own.
     expect(agentDockerfile).toContain(
-      "COPY smoke.sh /opt/selfbench-environment/\nRUN chmod 755 /opt/selfbench-environment/smoke.sh \\\n    && git -C /app add -A \\\n    && git -C /app -c core.hooksPath=/dev/null commit -qm selfbench-setup --allow-empty --no-verify \\\n    && mkdir -p /opt/selfbench \\\n    && cp -a /app/.git /opt/selfbench/base.git",
+      "COPY smoke.sh services.sh /opt/selfbench-environment/\nRUN chmod 755 /opt/selfbench-environment/smoke.sh /opt/selfbench-environment/services.sh \\\n    && git -C /app add -A \\\n    && git -C /app -c core.hooksPath=/dev/null commit -qm selfbench-setup --allow-empty --no-verify \\\n    && mkdir -p /opt/selfbench \\\n    && cp -a /app/.git /opt/selfbench/base.git",
     );
     expect(agentDockerfile).not.toMatch(/useradd --create-home|ENV HOME|test\.patch/);
     expect(verifierDockerfile).toContain("useradd --create-home --shell /bin/bash verifier");
     expect(verifierDockerfile).toContain("chown -R verifier:verifier /app /home/verifier");
-    expect(verifierDockerfile).toContain("COPY runtime/ run-tests.sh /opt/selfbench-runtime/");
+    expect(verifierDockerfile).toContain(
+      "COPY runtime/ run-tests.sh services.sh /opt/selfbench-runtime/",
+    );
     expect(verifierDockerfile).toContain("COPY test.patch test.sh /tests/");
     expect(verifierDockerfile).not.toContain("smoke.sh");
 
     expect(await readFile(join(output, "environment/smoke.sh"), "utf8")).toBe("npm --version\n");
     expect(await readFile(join(output, "tests/run-tests.sh"), "utf8")).toContain("node --test");
+    for (const context of ["environment", "tests"]) {
+      expect(await readFile(join(output, context, "services.sh"), "utf8")).toContain(
+        "redis-server",
+      );
+    }
     for (const context of ["environment", "tests"]) {
       expect(await Bun.file(join(output, context, "repo.tar.gz")).exists()).toBe(true);
       expect(await Bun.file(join(output, context, "docker-compose.yaml")).exists()).toBe(false);
