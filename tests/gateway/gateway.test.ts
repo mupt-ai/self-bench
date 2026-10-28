@@ -4,7 +4,12 @@ import type { AddressInfo } from "node:net";
 import type { CredentialInfo } from "../../src/db/credentials.js";
 import { gatewayRoute } from "../../src/gateway/mount.js";
 import type { GatewayUsage } from "../../src/gateway/platform.js";
-import { readTrialKey, signTrialKey, type TrialKey } from "../../src/gateway/trial-key.js";
+import {
+  MANAGED_MODEL_CREDENTIAL,
+  readTrialKey,
+  signTrialKey,
+  type TrialKey,
+} from "../../src/gateway/trial-key.js";
 
 // SelfBench's gateway end to end: a trial key pins one model on the org's own credential, the
 // real gateway handler serves it through the API's route, and the provider's billed cost lands
@@ -206,7 +211,7 @@ function completion(model: string): Response {
   });
 }
 
-test("usage rows sum to a trial's cost, flagging unpriced calls", async () => {
+test("usage rows sum to a trial's cost, flagging unpriced calls, managed calls included", async () => {
   const { testDatabase } = await import("../support/test-database.js");
   const { createGatewayUsageStore } = await import("../../src/gateway/usage-store.js");
   const database = await testDatabase();
@@ -235,6 +240,9 @@ test("usage rows sum to a trial's cost, flagging unpriced calls", async () => {
     expect(await store.trialCost(7, "t1")).toEqual({ costUsd: 0.75, complete: true });
     expect(await store.trialCost(7, "t2")).toEqual({ costUsd: 0, complete: false });
     expect(await store.trialCost(8, "t1")).toBeUndefined();
+    // Managed model access calls on SelfBench's own key, whose id is not a credential's UUID.
+    await store.record({ ...row("e", "t3", 0.125), credentialId: MANAGED_MODEL_CREDENTIAL });
+    expect(await store.trialCost(7, "t3")).toEqual({ costUsd: 0.125, complete: true });
   } finally {
     await database.close();
   }

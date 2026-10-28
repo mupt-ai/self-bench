@@ -39,8 +39,16 @@ export const CREDENTIALS = {
 } as const;
 export type Credential = keyof typeof CREDENTIALS;
 
-/** Codex's Responses call, to the URL its environment names. */
-export const responses = (env: NodeJS.ProcessEnv, model: string) =>
+/**
+ * Codex's Responses call, to the URL its environment names, with the fields Codex 0.163 sends on a
+ * turn as GatewayCodex configures it: no reasoning summary, and no hosted web search off OpenAI's
+ * own models. `extra` replaces any of them.
+ */
+export const responses = (
+  env: NodeJS.ProcessEnv,
+  model: string,
+  extra: Record<string, unknown> = {},
+) =>
   fetch(`${env.OPENAI_BASE_URL}/responses`, {
     method: "POST",
     headers: { authorization: `Bearer ${env.OPENAI_API_KEY}`, "content-type": "application/json" },
@@ -48,6 +56,14 @@ export const responses = (env: NodeJS.ProcessEnv, model: string) =>
       model,
       stream: true,
       input: [{ role: "user", content: [{ type: "input_text", text: "hello" }] }],
+      tools: [],
+      tool_choice: "auto",
+      parallel_tool_calls: false,
+      reasoning: { effort: "low" },
+      store: false,
+      include: ["reasoning.encrypted_content"],
+      prompt_cache_key: "session-1",
+      ...extra,
     }),
   });
 

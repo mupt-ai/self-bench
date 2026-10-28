@@ -47,7 +47,7 @@ function connect(trialInput: EvaluationInput, harness: Harness) {
   });
 }
 
-test("Codex keeps the gateway's full model id and speaks HTTPS to it", async () => {
+test("Codex keeps the gateway's full model id, speaks HTTPS to it, and sends what it serves", async () => {
   expect(
     solverArguments(
       "task",
@@ -88,6 +88,9 @@ async def check():
     assert "--model dari/routing " in command
     config = gateway._build_effective_config("https://gateway.example/v1")
     assert "openai_base_url" not in config
+    assert config["model_reasoning_summary"] == "none" and config["web_search"] == "disabled"  # the gateway refuses both (web search off OpenAI's own models)
+    for model, search in (("openai/gpt-6-sol", None), ("openrouter/openai/gpt-6-sol", "disabled"), ("meta/muse-spark-1.3", "disabled"), ("custom/acme", "disabled")):
+        gateway.model_name = f"openai/dari/model/{model}"; assert gateway._build_effective_config("https://gateway.example/v1").get("web_search") == search, model
     assert config["model_providers"][config["model_provider"]] == {
         "name": "Gateway", "base_url": "https://gateway.example/v1", "env_key": "OPENAI_API_KEY",
         "wire_api": "responses", "supports_websockets": False}
