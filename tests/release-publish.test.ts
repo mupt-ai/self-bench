@@ -88,6 +88,16 @@ test("publishing model summaries keeps the report's sections on the chosen setti
     model: "gpt-6-luna",
     summarizedAt: "2026-10-20T12:00:00.000Z",
   });
+  // Nor when the reply compared a setting it wrote no section on, which the overview may name.
+  const partial = buildRelease(all, [first.key], {
+    ...context,
+    summaries: {
+      ...report,
+      summaries: report.summaries.slice(0, 1),
+      compared: [first.key, second.key],
+    },
+  });
+  expect(partial.payload.modelSummaries?.overview).toBeUndefined();
   // A report on none of the chosen settings is refused rather than published empty.
   if (rest.length)
     expect(() =>

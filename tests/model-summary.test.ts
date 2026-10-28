@@ -120,6 +120,7 @@ test("one report compares the chosen configurations, and keeps what the model sa
   expect(await readModelSummaries(store, { repoId: 1 })).toMatchObject({
     report: {
       overview: "Both skip edge cases; gpt-other · high reasoning · Codex less so.",
+      compared: [configuration("gpt-own"), configuration("gpt-other")],
       model: "gpt-6-sol",
       summaries: [
         {

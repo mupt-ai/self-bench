@@ -18,7 +18,8 @@ export function summariesFor(
     }),
   );
   if (!Object.keys(settings).length) return undefined;
-  const whole = report.summaries.every((summary) => idOf.has(summary.configuration));
+  const compared = report.compared ?? report.summaries.map((summary) => summary.configuration);
+  const whole = compared.every((configuration) => idOf.has(configuration));
   return {
     ...(whole && report.overview ? { overview: report.overview } : {}),
     settings,
