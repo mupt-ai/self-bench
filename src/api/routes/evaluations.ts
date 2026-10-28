@@ -2,11 +2,12 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { BenchmarkStore } from "../../db/benchmarks.js";
 import type { ConnectedRepo, RepoStore } from "../../db/repos.js";
+import { runnable } from "../../db/task-record.js";
 import type { TaskStore } from "../../db/tasks.js";
 import type { User, UserStore } from "../../db/users.js";
 import type { Vault } from "../../db/vault.js";
 import type { StopEvaluation } from "../../evaluation/cancel.js";
-import type { FailureExplainer, TaskAuditor } from "../../evaluation/start.js";
+import type { FailureExplainer, ModelSummarizer, TaskAuditor } from "../../evaluation/start.js";
 import type { EvaluationInput } from "../../evaluation/types.js";
 import type { ClaudeLogins } from "../../harnesses/claude-code/login.js";
 import type { CodexLogins } from "../../harnesses/codex/login.js";
@@ -20,9 +21,10 @@ import { benchmarkRoutes } from "./benchmarks.js";
 import { credentialRoutes } from "./credentials.js";
 import { handleScopedEvaluations } from "./evaluation-scope.js";
 import { explainTrial } from "./explain-trial.js";
+import { modelSummariesRoute } from "./model-summaries.js";
 
 const repoRoute =
-  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/evaluations(?:\/(options|catalog|comparisons|audit|[a-f0-9-]{36}))?(?:\/(artifacts|[a-f0-9-]{36}))?(?:\/(resume|cancel|delete|explain))?$/;
+  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/evaluations(?:\/(options|catalog|comparisons|audit|summaries|[a-f0-9-]{36}))?(?:\/(artifacts|[a-f0-9-]{36}))?(?:\/(resume|cancel|delete|explain))?$/;
 export interface EvaluationRoutesOptions {
   users: UserStore;
   repos: RepoStore;
@@ -35,6 +37,8 @@ export interface EvaluationRoutesOptions {
   explain?: FailureExplainer;
   /** Audits tasks on request (auditTaskRoute); without it, none can be asked for. */
   audit?: TaskAuditor;
+  /** Summarizes configurations on request (modelSummariesRoute); without it, none can be asked for. */
+  summarize?: ModelSummarizer;
   env?: NodeJS.ProcessEnv;
   /** Reaches GitHub. */
   fetch?: typeof fetch;
@@ -91,7 +95,13 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
         const [section, id, action] = [repoMatch[4], repoMatch[5], repoMatch[6]];
         const env = options.env ?? process.env;
         const methods = ["GET", "POST"].includes(request.method ?? "");
-        if (section && section !== "audit" && !id && action === "explain" && methods) {
+        if (
+          section &&
+          !["audit", "summaries"].includes(section) &&
+          !id &&
+          action === "explain" &&
+          methods
+        ) {
           await explainTrial(options, request, url, response, {
             scope: { repoId: repo.id },
             orgId: repo.orgId,
@@ -104,6 +114,22 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
         }
         if (section === "audit" && !id && !action && methods) {
           await auditTaskRoute(options, request, url, response, { repo, user, env });
+          request.resume();
+          return true;
+        }
+        if (section === "summaries" && !id && !action && methods) {
+          await modelSummariesRoute(options, request, response, {
+            scope: { repoId: repo.id },
+            orgId: repo.orgId,
+            user,
+            env,
+            tasks: async () =>
+              (await options.tasks.listForRepo(repo.id))
+                .filter(runnable)
+                .flatMap(({ runId, taskId, bundleKey }) =>
+                  bundleKey ? [{ runId, taskId, bundleKey }] : [],
+                ),
+          });
           request.resume();
           return true;
         }

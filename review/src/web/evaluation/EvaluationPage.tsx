@@ -4,6 +4,7 @@ import { useDocumentTitle } from "../session";
 import { buttonStyles, EmptyState, Notice, PageContent, PageHeader } from "../ui";
 import { ChartPreview } from "./ChartPreview";
 import { GhostChart } from "./GhostChart";
+import { ModelSummaries } from "./ModelSummaries";
 import { useRepoRuns } from "./RepoRuns";
 import { ResultsTable } from "./ResultsTable";
 import { useEvaluationScope } from "./useEvaluationScope";
@@ -23,6 +24,7 @@ export function EvaluationPage() {
         <span className="md:hidden">
           <ChartPreview pages={pages} variant="button" />
         </span>
+        <ModelSummaries />
       </PageHeader>
       {error && <Notice className="mb-4">{error}</Notice>}
       <ResultsTable

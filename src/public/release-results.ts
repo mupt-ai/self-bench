@@ -33,15 +33,19 @@ export interface Setting {
   custom: boolean;
 }
 
-/** The setting a run's trials on `harness` belong to, or undefined when it cannot resolve. */
+/**
+ * The setting a run's trials on `harness` belong to, or undefined when it cannot resolve. Without
+ * `credentials`, as on the app's Results page, any recorded credential resolves.
+ */
 function settingOf(
   run: EvaluationRun,
   harness: Harness,
-  credentials: ReadonlyMap<string, CredentialFacts>,
+  credentials?: ReadonlyMap<string, CredentialFacts>,
 ): Setting | undefined {
   if (!run.credentials) return undefined;
   const credentialId = run.credentials.modelCredentialId;
-  if (credentialId !== MANAGED_MODEL && !credentials.has(credentialId)) return undefined;
+  if (credentials && credentialId !== MANAGED_MODEL && !credentials.has(credentialId))
+    return undefined;
   const custom = run.credentials.provider === "custom";
   // Curated models use one id on their direct provider and another on the gateways.
   const catalog =
@@ -99,7 +103,7 @@ function later(left: Result, right: Result): boolean {
 /** Every setting's latest eligible result per task, keyed by setting key. */
 export function resultsBySetting(
   runs: readonly EvaluationRun[],
-  credentials: ReadonlyMap<string, CredentialFacts>,
+  credentials?: ReadonlyMap<string, CredentialFacts>,
 ): Map<string, SettingResults> {
   const bySetting = new Map<string, SettingResults>();
   for (const run of runs) {

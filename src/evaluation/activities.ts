@@ -7,6 +7,7 @@ import { holdingBuildSlot, holdingCapacity } from "../sandbox/capacity.js";
 import { explainTrialFailure } from "./failure-summary.js";
 import type { TrialGateway } from "./gateway-trial.js";
 import { failEvaluation, failTrial, finishEvaluation, startEvaluation } from "./lifecycle.js";
+import { type ModelSummaryRequest, summarizeModels } from "./model-summary.js";
 import { environmentSecrets, redactOutput } from "./output.js";
 import { prepareTaskImages } from "./prepare.js";
 import { executeTrial, type RunnerOptions } from "./runner.js";
@@ -20,6 +21,7 @@ export interface EvaluationActivities {
   runSolverTrial(input: EvaluationInput, index: number): Promise<void>;
   explainSolverTrial(trial: FailedTrial): Promise<void>;
   auditSolverTask(request: TaskAuditRequest): Promise<void>;
+  summarizeSolverModels(request: ModelSummaryRequest): Promise<void>;
   failSolverTrial(input: EvaluationInput, index: number): Promise<void>;
   finishSolverEvaluation(input: EvaluationInput): Promise<void>;
   failSolverEvaluation(input: EvaluationInput): Promise<void>;
@@ -96,6 +98,13 @@ export function createEvaluationActivities(
       }),
     auditSolverTask: (request) =>
       auditTask(store, request, {
+        command: runCommand,
+        ...(vault ? { vault } : {}),
+        redact: (text) => redactOutput(text, environmentSecrets(process.env)),
+        signal: Context.current().cancellationSignal,
+      }),
+    summarizeSolverModels: (request) =>
+      summarizeModels(store, request, {
         command: runCommand,
         ...(vault ? { vault } : {}),
         redact: (text) => redactOutput(text, environmentSecrets(process.env)),

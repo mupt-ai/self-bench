@@ -1,3 +1,4 @@
+import { formatAgo } from "../api";
 import { Tick } from "./SettingsPicker";
 
 /** What a release publishes beyond each setting's scores. */
@@ -5,19 +6,28 @@ export interface Publish {
   tasks: boolean;
   /** Each setting's result and transcript on each task; published only with the tasks. */
   trials: boolean;
+  /** The latest Model Summaries report's sections on the released settings. */
+  summaries: boolean;
 }
 
 /**
  * A release publishes its tasks unless the releaser unticks them. Its trials, with every
- * transcript, are published only when the releaser ticks that too.
+ * transcript, and its model summaries are published only when the releaser ticks them too.
  */
-export const PUBLISH_DEFAULTS: Publish = { tasks: true, trials: false };
+export const PUBLISH_DEFAULTS: Publish = { tasks: true, trials: false, summaries: false };
 
 /** What becomes public and what stays private, shown on the info icon beside the summary. */
 export function privacyNote(
   workspace: { login: string; kind: "org" | "user" },
   publish: Publish,
 ): string {
+  const note = scopeNote(workspace, publish);
+  return publish.summaries
+    ? `${note} Also public: a model's summary of each covered setting's strengths and failures.`
+    : note;
+}
+
+function scopeNote(workspace: { login: string; kind: "org" | "user" }, publish: Publish): string {
   const publisher =
     workspace.kind === "user"
       ? `you as publisher, under your GitHub username ${workspace.login}`
@@ -30,17 +40,21 @@ export function privacyNote(
 }
 
 /**
- * The release's Publish Tasks and Publish Results by Task boxes, each tinted while on so what a
- * release makes public is plain to see. The results name the tasks, so the second box needs the
- * first.
+ * The release's Publish Tasks, Publish Results by Task and Publish Model Summaries boxes, each
+ * tinted while on so what a release makes public is plain to see. The results name the tasks, so
+ * the second box needs the first. The third shows only when there is a report, and is off while
+ * it covers none of the ticked settings.
  */
 export function PublishOptions({
   publish,
   disabled,
+  summaries,
   onChange,
 }: {
   publish: Publish;
   disabled: boolean;
+  /** The latest report: how many of the ticked settings it covers, and when it was written. */
+  summaries?: { covered: number; ticked: number; summarizedAt: string };
   onChange(publish: Publish): void;
 }) {
   return (
@@ -65,6 +79,20 @@ export function PublishOptions({
         Anyone can see whether each setting passed each task, how it was graded, and its test output
         and transcript, with secrets redacted. The rest of Harbor's logs and artifacts stay private.
       </Option>
+      {summaries && (
+        <Option
+          id="release-publish-summaries"
+          label="Publish Model Summaries"
+          checked={publish.summaries && summaries.covered > 0}
+          disabled={disabled || summaries.covered === 0}
+          onChange={(next) => onChange({ ...publish, summaries: next })}
+        >
+          Anyone can read the latest Model Summaries, written {formatAgo(summaries.summarizedAt)},
+          on the {summaries.covered} of {summaries.ticked} ticked settings it covers.
+          {summaries.covered < summaries.ticked &&
+            " Summarize again on the Results page to cover the rest."}
+        </Option>
+      )}
     </div>
   );
 }

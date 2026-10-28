@@ -37,8 +37,10 @@ const chosenStore = {
 export function useChosen(
   /** The repository's evaluations URL, which names its org too. */
   url: string,
+  /** What they are chosen for: the chart, or Model Summaries, which keeps a choice of its own. */
+  purpose: "chart" | "summary" = "chart",
 ): [string[] | undefined, (keys: string[] | undefined) => void] {
-  const key = `selfbench-chart-configurations:${url}`;
+  const key = `selfbench-${purpose}-configurations:${url}`;
   const read = () => chosenStore.read(key);
   const raw = useSyncExternalStore(chosenStore.subscribe, read, read);
   const chosen = useMemo(() => {
@@ -65,6 +67,7 @@ export function ChartConfigurations({
   chosen,
   custom,
   summary,
+  legend = "Configurations to Chart",
   choose,
 }: {
   options: readonly ChartOption[];
@@ -75,6 +78,8 @@ export function ChartConfigurations({
   custom: boolean;
   /** What the chosen configurations chart over. */
   summary: string;
+  /** The picker's name. */
+  legend?: string;
   choose(keys: string[] | undefined): void;
 }) {
   const [query, setQuery] = useState("");
@@ -125,7 +130,7 @@ export function ChartConfigurations({
           query={query}
           disabled={false}
           noun="Configurations"
-          legend="Configurations to Chart"
+          legend={legend}
           onQuery={setQuery}
           onChange={(next) =>
             // In the order offered, so the same boxes are the same choice.

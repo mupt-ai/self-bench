@@ -14,6 +14,7 @@ import { MAX_PENDING_TRIAL_WORKFLOWS } from "../contracts/config/execution-limit
 import { harbor, record, task } from "../temporal/activity-options.js";
 import { whenSandboxFree } from "../temporal/sandbox-capacity.js";
 import type { EvaluationActivities } from "./activities.js";
+import type { ModelSummaryRequest } from "./model-summary.js";
 import { scopeOf } from "./scope.js";
 import type { TaskAuditRequest } from "./task-audit.js";
 import { preparesTaskImages, trialInput } from "./trial-input.js";
@@ -47,6 +48,10 @@ const explaining = proxyActivities<EvaluationActivities>(
 );
 // What a person asked for in the app runs once; they can ask again.
 const asked = proxyActivities<EvaluationActivities>(task({ timeout: "10 minutes", attempts: 1 }));
+// One Pi call over every chosen configuration's evidence, which may take up to twelve minutes.
+const summarizing = proxyActivities<EvaluationActivities>(
+  task({ timeout: "15 minutes", attempts: 1 }),
+);
 
 /**
  * Runs each trial as its own child workflow, `<evaluation workflow ID>/trial/<index>`, all started
@@ -153,6 +158,11 @@ export async function selfBenchFailedTrialWorkflow(trial: FailedTrial): Promise<
 /** Audits whether a task is fair from its failed attempts (task-audit.ts), on the app's request. */
 export async function selfBenchTaskAuditWorkflow(request: TaskAuditRequest): Promise<void> {
   await asked.auditSolverTask(request);
+}
+
+/** Summarizes the configurations a person chose in one reply (model-summary.ts). */
+export async function selfBenchModelSummaryWorkflow(request: ModelSummaryRequest): Promise<void> {
+  await summarizing.summarizeSolverModels(request);
 }
 
 /**

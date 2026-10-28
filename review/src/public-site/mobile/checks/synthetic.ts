@@ -15,6 +15,7 @@ const anthropic = (id: string, label: string): Model => ({
   name: `anthropic/${id}`,
   label,
 });
+const LONG = "Review its edge cases: it tends to cover the main path and miss the rest. ".repeat(3);
 /** An OpenRouter model, named "vendor/model" as the catalog names them. */
 const routed = (name: string, label: string): Model => ({
   catalogId: name.split("/")[1] ?? name,
@@ -72,6 +73,13 @@ function syntheticPages(): PublicRepoPage[] {
       releaseId: "synthetic-crowded",
       tasksPublished: true,
       trialsPublished: true,
+      // Some settings only, with text that wraps many times on a phone.
+      modelSummaries: {
+        overview: `Most settings stop before a change is wired through every caller. ${LONG}`,
+        settings: { "alpha-codex": LONG, beta: `It handles focused fixes well. ${LONG}` },
+        model: "gpt-6-luna",
+        summarizedAt: "2026-10-20T12:00:00.000Z",
+      },
       repository: {
         id: 1001,
         fullName: "example-org/widgets",

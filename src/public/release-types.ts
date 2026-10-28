@@ -82,6 +82,25 @@ export interface ReleasePayload {
    * transcript. Only ever set with `tasksPublished`, since the results name the tasks.
    */
   trialsPublished?: true;
+  /** Set when the publisher chose to publish the latest Model Summaries report for its settings. */
+  modelSummaries?: ReleaseModelSummaries;
+}
+
+/**
+ * What one model wrote of a release's settings (Model Summaries in the app), frozen when it was
+ * released. It describes tendencies, never individual tasks.
+ */
+export interface ReleaseModelSummaries {
+  /**
+   * The failure modes the settings share. Only when the report compared no setting left out of
+   * the release, since it names the settings it compared.
+   */
+  overview?: string;
+  /** Each covered setting's own section, by setting id. */
+  settings: Record<string, string>;
+  /** The catalog id, or a custom endpoint's model id, of the model that wrote it. */
+  model: string;
+  summarizedAt: string;
 }
 
 /** One release of one repository by one publisher, as served: the payload plus id and time. */

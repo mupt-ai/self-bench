@@ -17,6 +17,7 @@ import {
   evaluationStarter,
   evaluationStopper,
   failureExplainer,
+  modelSummarizer,
   taskAuditor,
 } from "../evaluation/start.js";
 import { keepRunSummaries } from "../evaluation/store.js";
@@ -156,6 +157,7 @@ export async function openSite(
       stop: evaluationStopper(client),
       explain: failureExplainer(client, config.temporal.taskQueue),
       audit: taskAuditor(client, config.temporal.taskQueue),
+      summarize: modelSummarizer(client, config.temporal.taskQueue),
       githubApiUrl: auth.githubApiUrl,
     }),
     github: createGitHubRepoRoutes({ config: auth, users }),

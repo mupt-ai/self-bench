@@ -86,6 +86,7 @@ try {
     "dist/extension-authoring.bundle.js",
     "dist/extension-reviewer.bundle.js",
     "dist/generation/pipeline/prompts/authoring.md",
+    "dist/evaluation/prompts/model-summaries.md",
     "dist/sandbox-check.bundle.js",
     "dist/sandbox-compiler.bundle.js",
     "dist/sandbox-job.bundle.js",

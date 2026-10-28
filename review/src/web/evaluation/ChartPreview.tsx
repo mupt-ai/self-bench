@@ -11,7 +11,7 @@ import type { BenchmarkPoint } from "./benchmark";
 import { ChartConfigurations, useChosen } from "./ChartConfigurations";
 import { ParetoChart } from "./ParetoChart";
 import { type AcceptedTask, useRepoRuns } from "./RepoRuns";
-import { chartOptions, chosenOptions, configurationPoint } from "./results-chart";
+import { type ChartOption, chartOptions, chosenOptions, configurationPoint } from "./results-chart";
 import { type Configuration, configurationsOf } from "./results-model";
 
 /**
@@ -31,6 +31,24 @@ function tasksRun(configurations: readonly Configuration[]): AcceptedTask[] {
     }
   }
   return [...seen.values()];
+}
+
+/**
+ * The configurations the chart can plot, and the accepted tasks, by key, they are plotted over.
+ * Only the Results page shows the chart; elsewhere there are none.
+ */
+export function useChartOptions(): { url: string; tasks: string[]; options: ChartOption[] } {
+  const { url, runs, credentials, accepted, onResults } = useRepoRuns();
+  const configurations = useMemo(() => configurationsOf(runs, credentials), [runs, credentials]);
+  const tasks = useMemo(
+    () => (accepted ?? tasksRun(configurations)).map((task) => `${task.runId}/${task.taskId}`),
+    [configurations, accepted],
+  );
+  const options = useMemo(
+    () => (onResults ? chartOptions(configurations, tasks) : []),
+    [onResults, configurations, tasks],
+  );
+  return { url, tasks, options };
 }
 
 const WIDTH = 132;
@@ -110,21 +128,11 @@ export function ChartPreview({
   /** The header's card, or on a phone, where the card has no room, a plain Chart button. */
   variant?: "card" | "button";
 }) {
-  const { url, runs, credentials, accepted, onResults } = useRepoRuns();
+  const { url, tasks, options } = useChartOptions();
   const navigate = useNavigate();
   const close = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [saved, choose] = useChosen(url);
-  const configurations = useMemo(() => configurationsOf(runs, credentials), [runs, credentials]);
-  const tasks = useMemo(
-    () => (accepted ?? tasksRun(configurations)).map((task) => `${task.runId}/${task.taskId}`),
-    [configurations, accepted],
-  );
-  // Only the Results page shows the chart; elsewhere, nothing to work out.
-  const options = useMemo(
-    () => (onResults ? chartOptions(configurations, tasks) : []),
-    [onResults, configurations, tasks],
-  );
   const chosen = useMemo(() => chosenOptions(options, saved), [options, saved]);
   const shared = useMemo(() => taskSet(chosen, tasks), [chosen, tasks]);
   const points = useMemo(

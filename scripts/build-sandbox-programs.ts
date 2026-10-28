@@ -67,10 +67,8 @@ await Promise.all(
     }),
   ),
 );
-await cp(
-  join(root, "src/generation/pipeline/prompts"),
-  join(outputDirectory, "generation/pipeline/prompts"),
-  {
-    recursive: true,
-  },
+await Promise.all(
+  ["generation/pipeline/prompts", "evaluation/prompts"].map((path) =>
+    cp(join(root, "src", path), join(outputDirectory, path), { recursive: true }),
+  ),
 );

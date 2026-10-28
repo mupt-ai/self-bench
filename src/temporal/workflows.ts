@@ -3,6 +3,7 @@
 export {
   selfBenchEvaluationRunWorkflow,
   selfBenchFailedTrialWorkflow,
+  selfBenchModelSummaryWorkflow,
   selfBenchSolverTrialWorkflow,
   selfBenchTaskAuditWorkflow,
 } from "../evaluation/workflow.js";

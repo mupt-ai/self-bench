@@ -1,5 +1,7 @@
+import type { ModelSummaryReport } from "../evaluation/model-summary.js";
 import type { EvaluationRun } from "../evaluation/types.js";
 import { canonicalJson, sha256 } from "../lib/hash.js";
+import { detailOf } from "./release-detail.js";
 import { type CredentialFacts, resultsBySetting, type Setting } from "./release-results.js";
 import {
   approvedKeys,
@@ -13,6 +15,7 @@ import {
   taskSet,
   unsolvedCandidates,
 } from "./release-rule.js";
+import { summariesFor } from "./release-summaries.js";
 import {
   RELEASE_SCHEMA_VERSION,
   type ReleasePayload,
@@ -172,6 +175,7 @@ export interface BuiltRelease {
  * Builds the release for the ticked settings. With `publishTasks`, selfbench.dev serves the
  * compiled task each one's evaluations ran (`detail.releasedTasks`); with `publishTrials` too,
  * each setting's trial on each (`detail.results`), which names the task, so never without it.
+ * With `summaries`, the report's sections on the chosen settings (summariesFor).
  */
 export function buildRelease(
   inputs: ReleaseInputs,
@@ -181,6 +185,8 @@ export function buildRelease(
     publisher: ReleasePublisher;
     publishTasks?: boolean;
     publishTrials?: boolean;
+    /** The latest Model Summaries report, to publish its sections on the chosen settings. */
+    summaries?: ModelSummaryReport;
   },
 ): BuiltRelease {
   const { approved, all } = evaluate(inputs);
@@ -198,6 +204,11 @@ export function buildRelease(
     if (tasks.some((key) => !byKey.get(key)?.bundleKey))
       throw new ReleaseRefused("A task has no compiled files to publish; refresh and try again.");
   }
+  const modelSummaries = context.summaries && summariesFor(context.summaries, chosen);
+  if (context.summaries && !modelSummaries)
+    throw new ReleaseRefused(
+      "The latest model summaries cover none of the selected settings. Summarize them on the Results page first.",
+    );
   const payload: ReleasePayload = {
     schemaVersion: RELEASE_SCHEMA_VERSION,
     repository: { id: context.repository.id, fullName: context.repository.fullName },
@@ -207,6 +218,7 @@ export function buildRelease(
     frontier: settings.filter((setting) => setting.onFrontier).map((setting) => setting.id),
     ...(context.publishTasks ? { tasksPublished: true as const } : {}),
     ...(context.publishTasks && context.publishTrials ? { trialsPublished: true as const } : {}),
+    ...(modelSummaries ? { modelSummaries } : {}),
   };
   const results = Object.fromEntries(
     chosen.map((entry) => [
@@ -254,45 +266,5 @@ export function buildRelease(
       ),
       results,
     },
-  };
-}
-
-/** Private per-setting detail: routes, pricing, token sums, and trial dates. */
-function detailOf(
-  entry: Candidate,
-  tasks: readonly string[],
-  credentials: ReadonlyMap<string, CredentialFacts>,
-) {
-  const chosen = tasks.flatMap((task) => {
-    const result = entry.results.get(task);
-    return result ? [result] : [];
-  });
-  const sum = (field: "input" | "output" | "cacheRead" | "cacheWrite") =>
-    chosen.reduce((total, result) => total + (result.trial.tokenUsage?.[field] ?? 0), 0);
-  const times = chosen.flatMap((result) =>
-    result.trial.finishedAt ? [result.trial.finishedAt] : [],
-  );
-  times.sort();
-  const latestRun = chosen
-    .map((result) => result.run)
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-    .at(-1);
-  return {
-    routes: chosen.map(({ run }) => ({
-      evaluationId: run.id,
-      provider: run.credentials?.provider,
-      signIn: credentials.get(run.credentials?.modelCredentialId ?? "")?.auth,
-      endpoint: credentials.get(run.credentials?.modelCredentialId ?? "")?.endpoint,
-    })),
-    sandbox: latestRun?.sandbox,
-    pricing: latestRun?.pricing,
-    tokens: {
-      input: sum("input"),
-      output: sum("output"),
-      cacheRead: sum("cacheRead"),
-      cacheWrite: sum("cacheWrite"),
-    },
-    firstTrialAt: times[0],
-    lastTrialAt: times.at(-1),
   };
 }
