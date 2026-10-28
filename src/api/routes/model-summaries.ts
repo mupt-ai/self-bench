@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { z } from "zod";
+import { MAX_SUMMARY_CONFIGURATIONS } from "../../contracts/model-summary-limit.js";
 import type { User } from "../../db/users.js";
 import {
   explanationModel,
@@ -17,11 +18,9 @@ import type { EvaluationRoutesOptions } from "./evaluations.js";
 
 const UNAVAILABLE = "Model summaries are unavailable on this deployment.";
 const BUSY = "Summaries are already being written here. Try again once they finish.";
-/** The most configurations one reply compares, which keeps their evidence within a model's context. */
-const MAX_CONFIGURATIONS = 12;
 
 const requestSchema = z.strictObject({
-  configurations: z.array(z.string().min(1).max(1_000)).min(1).max(MAX_CONFIGURATIONS),
+  configurations: z.array(z.string().min(1).max(1_000)).min(1).max(MAX_SUMMARY_CONFIGURATIONS),
   summary: explanationSelectionSchema,
 });
 
@@ -71,7 +70,7 @@ export async function modelSummariesRoute(
     asked = requestSchema.parse(JSON.parse((await readBody(request, 64_000)).toString()));
   } catch {
     sendJson(response, 400, {
-      error: `Choose up to ${MAX_CONFIGURATIONS} configurations and a model.`,
+      error: `Choose up to ${MAX_SUMMARY_CONFIGURATIONS} configurations and a model.`,
     });
     return;
   }

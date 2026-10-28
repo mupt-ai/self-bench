@@ -1,5 +1,6 @@
 import { Sparkles } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
+import { MAX_SUMMARY_CONFIGURATIONS } from "../../../../src/contracts/model-summary-limit";
 import { eligibleTrial } from "../../../../src/evaluation/eligible";
 import { Dialog, DialogHeader } from "../Dialog";
 import { useSession } from "../session";
@@ -94,21 +95,28 @@ export function ModelSummaries() {
               legend="Configurations to Summarize"
               choose={choose}
             />
-            {state?.available === false
-              ? state.reason && <p className="text-sm text-muted-foreground">{state.reason}</p>
-              : chosen.length > 0 && (
-                  <FailureExplanationForm
-                    baseUrl={url}
-                    explaining={writing}
-                    onExplain={(selection) =>
-                      summarize(
-                        chosen.map((option) => option.configuration.key),
-                        selection,
-                      )
-                    }
-                    labels={LABELS}
-                  />
-                )}
+            {state?.available === false ? (
+              state.reason && <p className="text-sm text-muted-foreground">{state.reason}</p>
+            ) : chosen.length > MAX_SUMMARY_CONFIGURATIONS ? (
+              <p className="text-sm text-muted-foreground">
+                Choose at most {MAX_SUMMARY_CONFIGURATIONS} configurations to compare;{" "}
+                {chosen.length} are chosen.
+              </p>
+            ) : (
+              chosen.length > 0 && (
+                <FailureExplanationForm
+                  baseUrl={url}
+                  explaining={writing}
+                  onExplain={(selection) =>
+                    summarize(
+                      chosen.map((option) => option.configuration.key),
+                      selection,
+                    )
+                  }
+                  labels={LABELS}
+                />
+              )
+            )}
             {error && <Notice>{error}</Notice>}
             {writing ? (
               <p role="status" className="text-sm text-muted-foreground">
