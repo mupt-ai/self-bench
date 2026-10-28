@@ -8,7 +8,7 @@
         "@earendil-works/pi-ai": "0.84.0",
         "@earendil-works/pi-coding-agent": "0.84.0",
         "@google-cloud/storage": "^7.22.0",
-        "@mupt-ai/dari-gateway": "0.3.0",
+        "@mupt-ai/dari-gateway": "0.3.1",
         "@radix-ui/react-dropdown-menu": "2.1.24",
         "@radix-ui/react-slot": "1.3.3",
         "@radix-ui/react-tooltip": "1.2.16",
@@ -366,7 +366,7 @@
 
     "@mistralai/mistralai": ["@mistralai/mistralai@2.2.6", "", { "dependencies": { "@opentelemetry/semantic-conventions": "^1.40.0", "ws": "^8.18.0", "zod": "^3.25.0 || ^4.0.0", "zod-to-json-schema": "^3.25.0" }, "peerDependencies": { "@opentelemetry/api": "^1.9.0" }, "optionalPeers": ["@opentelemetry/api"] }, "sha512-W8pX7zHxjJvMIpw8JMxeJEleapXX0Q9NPszdNzqkM3MIEoIGPObdodujj+WHteXEvGfaP/AMwlNyRfEzSY6dQQ=="],
 
-    "@mupt-ai/dari-gateway": ["@mupt-ai/dari-gateway@0.3.0", "", { "dependencies": { "@aws-sdk/client-sts": "3.1063.0", "@mupt-ai/dari-router": "0.2.5", "@mupt-ai/pi-ai": "1.4.0-mupt.1" }, "bin": { "dari-gateway": "dist/self_host/main.js" } }, "sha512-Z4Ls1b0kyR1hlG4FXF6iu/uiTUqe5wpZWi+7c/BVZvvI6CR4VbF7mSfzDGp28rpKh6KdfmlK2Bhi6la+OoP5Hg=="],
+    "@mupt-ai/dari-gateway": ["@mupt-ai/dari-gateway@0.3.1", "", { "dependencies": { "@aws-sdk/client-sts": "3.1063.0", "@mupt-ai/dari-router": "0.2.5", "@mupt-ai/pi-ai": "1.4.0-mupt.1" }, "bin": { "dari-gateway": "dist/self_host/main.js" } }, "sha512-qsFB7wi4iRpxCidaj05Fbt8zDAkqne7V6vveXE9DxRzKiTKsBR7LOvfq/cmjXYgiwkvwLkdkhTvxdkZ7eKfG8w=="],
 
     "@mupt-ai/dari-pareto": ["@mupt-ai/dari-pareto@0.7.0", "", { "peerDependencies": { "react": ">=18 <20", "react-dom": ">=18 <20" }, "optionalPeers": ["react-dom"] }, "sha512-5N38vHzXqQjRKWTkWK0EyBQZ7yEf+FHSDilp2A8/6A13nR13m7E77k2uYt5g+U8U18nPnycBTEQQJjg7aoU23A=="],
 
