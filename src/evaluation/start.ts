@@ -125,7 +125,8 @@ export function taskAuditor(
 
 /** Starts summaries of a scope's configurations, and tells which are being summarized now. */
 export interface ModelSummarizer {
-  start(request: ModelSummaryRequest): Promise<void>;
+  /** False when the scope's summaries were already running, so these were not started. */
+  start(request: ModelSummaryRequest): Promise<boolean>;
   /** The configurations the scope's running summaries are of; none when nothing is running. */
   running(scope: EvaluationScope): Promise<string[]>;
 }
@@ -150,8 +151,10 @@ export function modelSummarizer(
           memo: { configurations: request.configurations },
           workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
         });
+        return true;
       } catch (error) {
-        if (!(error instanceof WorkflowExecutionAlreadyStartedError)) throw error;
+        if (error instanceof WorkflowExecutionAlreadyStartedError) return false;
+        throw error;
       }
     },
     async running(scope) {

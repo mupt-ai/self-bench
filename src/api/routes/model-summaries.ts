@@ -16,6 +16,7 @@ import { readBody, sendJson, trustedMutation } from "../http.js";
 import type { EvaluationRoutesOptions } from "./evaluations.js";
 
 const UNAVAILABLE = "Model summaries are unavailable on this deployment.";
+const BUSY = "Summaries are already being written here. Try again once they finish.";
 /** The most configurations one request summarizes: each is a model call on the chosen key. */
 const MAX_CONFIGURATIONS = 20;
 
@@ -79,9 +80,7 @@ export async function modelSummariesRoute(
     return;
   }
   if ((await options.summarize.running(scope)).length) {
-    sendJson(response, 409, {
-      error: "Summaries are already being written here. Try again once they finish.",
-    });
+    sendJson(response, 409, { error: BUSY });
     return;
   }
   const credential = await options.vault?.credentials.find(orgId, asked.summary.credentialId);
@@ -103,11 +102,13 @@ export async function modelSummariesRoute(
     });
     return;
   }
-  await options.summarize.start({
+  const started = await options.summarize.start({
     ...scope,
     configurations,
     tasks: counted,
     summary: { ...asked.summary, orgId },
   });
-  sendJson(response, 202, { configurations });
+  // Another request started first: its configurations, not these, are being summarized.
+  if (!started) sendJson(response, 409, { error: BUSY });
+  else sendJson(response, 202, { configurations });
 }

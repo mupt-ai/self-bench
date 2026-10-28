@@ -132,11 +132,16 @@ test("Model Summaries start for configurations scored on accepted tasks, through
   const started: ModelSummaryRequest[] = [];
   // The configurations Temporal would describe the repository's summaries as running for.
   let running: string[] = [];
+  // Whether another request's summaries start first, between the check and the start.
+  let racing = false;
   const fixture = await evaluationServer(
     vault,
     {
       summarize: {
-        start: async (request) => void started.push(request),
+        start: async (request) => {
+          started.push(request);
+          return !racing;
+        },
         running: async () => running,
       },
     },
@@ -194,6 +199,10 @@ test("Model Summaries start for configurations scored on accepted tasks, through
 
     running = [configuration("gpt-own")];
     expect((await (await fixture.request(url)).json()).running).toEqual([configuration("gpt-own")]);
+    expect((await post({ configurations: [configuration("gpt-own")], summary })).status).toBe(409);
+
+    running = [];
+    racing = true;
     expect((await post({ configurations: [configuration("gpt-own")], summary })).status).toBe(409);
   } finally {
     await fixture.close();
