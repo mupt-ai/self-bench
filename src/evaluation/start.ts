@@ -5,6 +5,7 @@ import {
   WorkflowNotFoundError,
 } from "@temporalio/common";
 import type { StopEvaluation } from "./cancel.js";
+import type { ModelSummaryRequest } from "./model-summary.js";
 import { type EvaluationScope, scopeKey } from "./scope.js";
 import type { TaskAuditRequest } from "./task-audit.js";
 import type { EvaluationInput, FailedTrial } from "./types.js";
@@ -116,6 +117,53 @@ export function taskAuditor(
         return { running: status.name === "RUNNING" };
       } catch (error) {
         if (error instanceof WorkflowNotFoundError) return { running: false };
+        throw error;
+      }
+    },
+  };
+}
+
+/** Starts summaries of a scope's configurations, and tells which are being summarized now. */
+export interface ModelSummarizer {
+  start(request: ModelSummaryRequest): Promise<void>;
+  /** The configurations the scope's running summaries are of; none when nothing is running. */
+  running(scope: EvaluationScope): Promise<string[]>;
+}
+
+/**
+ * Summarizes configurations under one workflow ID per scope, so a scope's summaries are asked for
+ * one request at a time. The workflow's memo names the configurations it summarizes.
+ */
+export function modelSummarizer(
+  client: Client,
+  fallbackQueue: string,
+  env: NodeJS.ProcessEnv = process.env,
+): ModelSummarizer {
+  const workflowId = (scope: EvaluationScope) => `model-summaries/${scopeKey(scope)}`;
+  return {
+    async start(request) {
+      try {
+        await client.workflow.start("selfBenchModelSummaryWorkflow", {
+          workflowId: workflowId(request),
+          taskQueue: env.SELFBENCH_EVAL_TASK_QUEUE ?? fallbackQueue,
+          args: [request],
+          memo: { configurations: request.configurations },
+          workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
+        });
+      } catch (error) {
+        if (!(error instanceof WorkflowExecutionAlreadyStartedError)) throw error;
+      }
+    },
+    async running(scope) {
+      try {
+        const { status, memo } = await client.workflow.getHandle(workflowId(scope)).describe();
+        if (status.name !== "RUNNING") return [];
+        const configurations = memo?.configurations;
+        return Array.isArray(configurations)
+          ? configurations.filter((entry): entry is string => typeof entry === "string")
+          : [];
+      } catch (error) {
+        if (error instanceof WorkflowNotFoundError) return [];
         throw error;
       }
     },

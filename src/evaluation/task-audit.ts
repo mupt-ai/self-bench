@@ -98,7 +98,7 @@ export async function readTaskAudit(
 }
 
 /** A provider's own error message when its reply carries one, as gateways' JSON errors do. */
-function failureMessage(detail: string): string {
+export function failureMessage(detail: string): string {
   const message = /"message"\s*:\s*"((?:[^"\\]|\\.)+)"/.exec(detail)?.[1];
   return (message ?? detail).slice(0, 500);
 }

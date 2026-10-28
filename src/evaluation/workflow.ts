@@ -14,6 +14,7 @@ import { MAX_PENDING_TRIAL_WORKFLOWS } from "../contracts/config/execution-limit
 import { harbor, record, task } from "../temporal/activity-options.js";
 import { whenSandboxFree } from "../temporal/sandbox-capacity.js";
 import type { EvaluationActivities } from "./activities.js";
+import type { ModelSummaryRequest } from "./model-summary.js";
 import { scopeOf } from "./scope.js";
 import type { TaskAuditRequest } from "./task-audit.js";
 import { preparesTaskImages, trialInput } from "./trial-input.js";
@@ -153,6 +154,18 @@ export async function selfBenchFailedTrialWorkflow(trial: FailedTrial): Promise<
 /** Audits whether a task is fair from its failed attempts (task-audit.ts), on the app's request. */
 export async function selfBenchTaskAuditWorkflow(request: TaskAuditRequest): Promise<void> {
   await asked.auditSolverTask(request);
+}
+
+/**
+ * Summarizes each configuration a person chose (model-summary.ts) in its own activity, all at
+ * once, so one that fails leaves the others' summaries; each records its own failure.
+ */
+export async function selfBenchModelSummaryWorkflow(request: ModelSummaryRequest): Promise<void> {
+  await Promise.allSettled(
+    request.configurations.map((configuration) =>
+      asked.summarizeSolverModel(request, configuration),
+    ),
+  );
 }
 
 /**

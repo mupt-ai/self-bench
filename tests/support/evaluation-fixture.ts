@@ -88,7 +88,7 @@ export async function evaluationServer(
   vault?: Vault,
   logins: Pick<
     EvaluationRoutesOptions,
-    "codexLogins" | "claudeLogins" | "museLogins" | "registryCommand"
+    "codexLogins" | "claudeLogins" | "museLogins" | "registryCommand" | "summarize"
   > = {},
   env: NodeJS.ProcessEnv = evaluationEnv,
   github?: { private: boolean },
