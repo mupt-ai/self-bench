@@ -95,21 +95,48 @@ const COLUMNS: readonly [string, (setting: ReleaseSetting) => string][] = [
   ["Frontier", (setting) => (setting.onFrontier ? "Yes" : "No")],
 ];
 
-/** Every setting, most accurate first, then cheapest, as the page's table starts. */
+/** Most accurate first, then cheapest, as the page's table starts. */
+const ranked = (settings: readonly ReleaseSetting[]) =>
+  [...settings].sort(
+    (left, right) =>
+      right.accuracy - left.accuracy ||
+      left.costPerTaskUsd - right.costPerTaskUsd ||
+      left.id.localeCompare(right.id),
+  );
+
+/** Every setting, as the page's table starts. */
 function settingsTable(settings: readonly ReleaseSetting[]): string {
-  const rows = [...settings]
-    .sort(
-      (left, right) =>
-        right.accuracy - left.accuracy ||
-        left.costPerTaskUsd - right.costPerTaskUsd ||
-        left.id.localeCompare(right.id),
-    )
-    .map((setting) => {
-      const [model, ...rest] = COLUMNS.map(([, cell]) => escapeText(cell(setting)));
-      return `<tr><th scope="row">${model}</th>${rest.map((cell) => `<td>${cell}</td>`).join("")}</tr>`;
-    });
+  const rows = ranked(settings).map((setting) => {
+    const [model, ...rest] = COLUMNS.map(([, cell]) => escapeText(cell(setting)));
+    return `<tr><th scope="row">${model}</th>${rest.map((cell) => `<td>${cell}</td>`).join("")}</tr>`;
+  });
   const headings = COLUMNS.map(([heading]) => `<th scope="col">${escapeText(heading)}</th>`);
   return `<div class="page-text-table"><table><thead><tr>${headings.join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
+}
+
+/**
+ * The published Model Summaries, as the page shows them: what the settings share, then each
+ * covered setting's own section in the table's order, named by model, harness and reasoning.
+ */
+function summariesText(release: PublishedLine["release"]): string[] {
+  const summaries = release.modelSummaries;
+  if (!summaries) return [];
+  const sections = ranked(release.settings).flatMap((setting) => {
+    const text = summaries.settings[setting.id];
+    if (!text) return [];
+    const name = [
+      setting.model.label,
+      harnessLabels[setting.harness] ?? setting.harness,
+      reasoning(setting),
+    ].join(" · ");
+    return [`<h3>${escapeText(name)}</h3>`, `<p>${escapeText(text)}</p>`];
+  });
+  return [
+    "<h2>Model Summaries</h2>",
+    summaries.overview ? `<p>${escapeText(summaries.overview)}</p>` : "",
+    ...sections,
+    `<p>${escapeText(`Written by ${summaries.model} from these results on ${day(summaries.summarizedAt)}.`)}</p>`,
+  ];
 }
 
 /**
@@ -160,6 +187,7 @@ export function repositoryBody(
     `<p>${escapeText(repositoryDescription(line, Number.POSITIVE_INFINITY))}</p>`,
     "<h2>All Settings</h2>",
     settingsTable(release.settings),
+    ...summariesText(release),
     // The tasks and trials themselves are kept out of crawls (robots.txt); the page only says
     // they are there.
     ...(release.trialsPublished

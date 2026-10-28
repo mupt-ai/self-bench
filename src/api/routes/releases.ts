@@ -14,6 +14,7 @@ import {
 import type { ConnectedRepo, RepoStore } from "../../db/repos.js";
 import type { Org, User, UserStore } from "../../db/users.js";
 import { catalogVersion } from "../../evaluation/catalog.js";
+import { readModelSummaries } from "../../evaluation/model-summary.js";
 import { track } from "../../lib/telemetry/posthog.js";
 import {
   type BuiltRelease,
@@ -47,6 +48,8 @@ const releaseRequest = z
     publishTasks: z.boolean().optional(),
     /** Publish each setting's result and transcript on each task too; needs `publishTasks`. */
     publishTrials: z.boolean().optional(),
+    /** Publish the latest Model Summaries report's sections on the released settings. */
+    publishSummaries: z.boolean().optional(),
   })
   .strict();
 type ReleaseRequest = z.infer<typeof releaseRequest>;
@@ -89,13 +92,16 @@ export function createReleaseRoutes(options: ReleaseRoutesOptions) {
 
   /** Reads what the rule needs now and builds the preview from it. */
   const gather = async (scope: Scope, rows: readonly ReleaseRow[]) => {
-    const inputs = await releaseInputs(
-      options.db,
-      options.artifacts,
-      { repoId: scope.repo.id, orgId: scope.tenant.id },
-      rows,
-    );
-    return { inputs, view: viewOf(rows, previewRelease(inputs)) };
+    const [inputs, { report }] = await Promise.all([
+      releaseInputs(
+        options.db,
+        options.artifacts,
+        { repoId: scope.repo.id, orgId: scope.tenant.id },
+        rows,
+      ),
+      readModelSummaries(options.artifacts, { repoId: scope.repo.id }),
+    ]);
+    return { inputs, report, view: viewOf(rows, previewRelease(inputs), report) };
   };
 
   /** Writes a release for the settings the request names, or answers why not. */
@@ -105,7 +111,7 @@ export function createReleaseRoutes(options: ReleaseRoutesOptions) {
     body: ReleaseRequest,
     response: ServerResponse,
   ) => {
-    const { inputs, view: fresh } = await gather(scope, rows);
+    const { inputs, report, view: fresh } = await gather(scope, rows);
     const head = headOf(rows);
     // Someone released, or withdrew and released, since this person looked.
     if (body.head !== (head?.id ?? null)) {
@@ -148,6 +154,13 @@ export function createReleaseRoutes(options: ReleaseRoutesOptions) {
       sendJson(response, 400, { error: "Only public repositories can be released." });
       return;
     }
+    if (body.publishSummaries && !report) {
+      sendJson(response, 400, {
+        error:
+          "There are no model summaries to publish. Summarize models on the Results page first.",
+      });
+      return;
+    }
     let built: BuiltRelease;
     try {
       built = buildRelease(inputs, body.settings, {
@@ -155,6 +168,7 @@ export function createReleaseRoutes(options: ReleaseRoutesOptions) {
         publisher: { login: scope.tenant.login, kind: scope.tenant.kind },
         publishTasks: body.publishTasks === true,
         publishTrials: body.publishTrials === true,
+        ...(body.publishSummaries && report ? { summaries: report } : {}),
       });
     } catch (error) {
       if (!(error instanceof ReleaseRefused)) throw error;

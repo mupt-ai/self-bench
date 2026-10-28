@@ -37,10 +37,9 @@ interface FakeRepository {
 }
 
 /**
- * The release routes and the public routes over PGlite, a local artifact store, and a fake
- * GitHub. Two members of workspace `acme` (priya, marco) and one outsider. A `shared`
- * database is emptied and reused: each PGlite instance keeps its memory, so one per test
- * file, not one per test.
+ * The release routes and the public routes over PGlite, a local artifact store, and a fake GitHub.
+ * Two members of workspace `acme` (priya, marco) and one outsider. A `shared` database is emptied
+ * and reused: each PGlite instance keeps its memory, so one per test file, not one per test.
  */
 export async function releaseServer(
   shared?: TestDatabase,
@@ -175,6 +174,7 @@ export async function releaseServer(
     });
   return {
     db: database.db,
+    artifacts,
     changes,
     tasks,
     releases,

@@ -1,6 +1,7 @@
 import type { RefObject } from "react";
 import { Link, useNavigate } from "react-router";
 import { Avatar } from "../components/Avatar";
+import { ModelSummaries } from "../components/ModelSummaries";
 import { ModelTable } from "../components/ModelTable";
 import { ResultsChart } from "../components/ResultsChart";
 import { ResultsGrid } from "../components/ResultsGrid";
@@ -20,8 +21,8 @@ export interface PinnedLines {
 }
 
 /**
- * Everything on a repository page below its title: the chart, the settings table, the results by
- * task and the tasks when they were published, and the repository's other benchmarks. It needs the page's data, and is the heaviest thing the page
+ * Everything on a repository page below its title: the chart, the settings table, the model
+ * summaries, the results by task and the tasks when they were published, and the repository's other benchmarks. It needs the page's data, and is the heaviest thing the page
  * draws, so an opening transition holds it back until the title has landed (RepoPage.tsx).
  */
 export function RepoBody({
@@ -89,6 +90,7 @@ export function RepoBody({
         </section>
       </div>
 
+      <ModelSummaries release={release} activeId={activeId ?? rowId} />
       {release.trialsPublished && <ResultsGrid release={release} activeId={activeId ?? rowId} />}
       {release.tasksPublished && <TaskList release={release} />}
 

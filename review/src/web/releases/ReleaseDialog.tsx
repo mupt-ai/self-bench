@@ -72,8 +72,16 @@ export function ReleaseDialog({
     query === "" &&
     publish.tasks === PUBLISH_DEFAULTS.tasks &&
     publish.trials === PUBLISH_DEFAULTS.trials &&
+    publish.summaries === PUBLISH_DEFAULTS.summaries &&
     ticked.size === defaults.size &&
     [...ticked].every((key) => defaults.has(key));
+  // How many of the ticked settings the latest Model Summaries report covers.
+  const summarized = view?.summaries && {
+    covered: view.summaries.configurations.filter((key) => ticked.has(key)).length,
+    ticked: ticked.size,
+    summarizedAt: view.summaries.summarizedAt,
+  };
+  const publishSummaries = publish.summaries && !!summarized?.covered;
   const blocked = !selection || selection.settings === 0 || selection.tasks.length === 0;
   const release = async () => {
     if (!view) return;
@@ -87,6 +95,7 @@ export function ReleaseDialog({
         fingerprint: view.preview.fingerprint,
         publishTasks: publish.tasks,
         publishTrials: publish.tasks && publish.trials,
+        publishSummaries,
       });
       onReleased(result.release, result.unchanged === true);
     } catch (cause) {
@@ -159,7 +168,12 @@ export function ReleaseDialog({
             />
             {selection && <Notes view={view} selection={selection} />}
             {selection && <Unsolved view={view} selection={selection} repo={repo} />}
-            <PublishOptions publish={publish} disabled={busy} onChange={setPublish} />
+            <PublishOptions
+              publish={publish}
+              disabled={busy}
+              {...(summarized ? { summaries: summarized } : {})}
+              onChange={setPublish}
+            />
           </>
         )}
         {/* One line when the dialog is wide. Narrow: the summary alone on top, then Reset on the
@@ -192,7 +206,7 @@ export function ReleaseDialog({
                 </span>
                 {selection && (
                   <InfoTooltip
-                    label={privacyNote(workspace, publish)}
+                    label={privacyNote(workspace, { ...publish, summaries: publishSummaries })}
                     contentClassName="border border-border bg-card text-foreground"
                   />
                 )}

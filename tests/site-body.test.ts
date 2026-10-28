@@ -115,3 +115,25 @@ test("a release that published its trials says so under the grid's heading, befo
   expect(html.indexOf("Results by Task")).toBeLessThan(html.indexOf("<h2>Tasks</h2>"));
   expect(repositoryBody([{ ...acme, release }]) ?? "").not.toContain("Results by Task");
 });
+
+test("published model summaries follow the settings table, each under its setting's name", () => {
+  const modelSummaries = {
+    overview: "All of them stop <early>.",
+    settings: { luna: "It misses edge cases.", sol: "It finishes migrations." },
+    model: "gpt-6-luna",
+    summarizedAt: "2026-10-20T12:00:00.000Z",
+  };
+  const html = repositoryBody([{ ...acme, release: { ...acme.release, modelSummaries } }]) ?? "";
+  expect(html).toContain("<h2>Model Summaries</h2>");
+  expect(html).toContain("All of them stop &lt;early&gt;.");
+  // In the table's order, most accurate first; a setting without a section has none.
+  expect(html.indexOf("It finishes migrations.")).toBeLessThan(
+    html.indexOf("It misses edge cases."),
+  );
+  expect(html).toContain("<h3>GPT-6 Sol · Codex · High</h3>");
+  expect(html).not.toContain("Weak &lt;Model&gt; · Codex");
+  expect(html).toContain("Written by gpt-6-luna from these results on 2026-10-20.");
+  expect(html.indexOf("<h2>All Settings</h2>")).toBeLessThan(html.indexOf("Model Summaries"));
+  expect(count(html, "h1")).toBe(1);
+  expect(repositoryBody([acme]) ?? "").not.toContain("Model Summaries");
+});

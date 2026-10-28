@@ -55,3 +55,46 @@ test("publishing the trials marks the release, but only alongside its tasks", ()
   const alone = buildRelease(withBundles, chosen, { ...context, publishTrials: true });
   expect(alone.payload.trialsPublished).toBeUndefined();
 });
+
+test("publishing model summaries keeps the report's sections on the chosen settings", () => {
+  const all = inputs({ runs: baseRuns() });
+  const [first, second, ...rest] = previewRelease(all).settings;
+  if (!first || !second) throw new Error("Missing settings");
+  const report = {
+    overview: "They all stop early.",
+    summaries: [
+      { configuration: first.key, text: "It finishes.", tasks: 40, passed: 30 },
+      { configuration: second.key, text: "It stops early.", tasks: 40, passed: 20 },
+    ],
+    model: "gpt-6-luna",
+    summarizedAt: "2026-10-20T12:00:00.000Z",
+  };
+  const everything = [first.key, second.key, ...rest.map((setting) => setting.key)];
+  const published = buildRelease(all, everything, { ...context, summaries: report });
+  expect(published.payload.modelSummaries).toEqual({
+    overview: "They all stop early.",
+    settings: { [first.id]: "It finishes.", [second.id]: "It stops early." },
+    model: "gpt-6-luna",
+    summarizedAt: "2026-10-20T12:00:00.000Z",
+  });
+  expect(published.hash).not.toBe(buildRelease(all, everything, context).hash);
+  // The overview names every setting it compared, so it is left out with one of them.
+  const without = buildRelease(all, [first.key, ...rest.map((setting) => setting.key)], {
+    ...context,
+    summaries: report,
+  });
+  expect(without.payload.modelSummaries).toEqual({
+    settings: { [first.id]: "It finishes." },
+    model: "gpt-6-luna",
+    summarizedAt: "2026-10-20T12:00:00.000Z",
+  });
+  // A report on none of the chosen settings is refused rather than published empty.
+  if (rest.length)
+    expect(() =>
+      buildRelease(
+        all,
+        rest.map((setting) => setting.key),
+        { ...context, summaries: report },
+      ),
+    ).toThrow(ReleaseRefused);
+});

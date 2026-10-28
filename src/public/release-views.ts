@@ -1,4 +1,5 @@
 import { currentOf, headOf, type ReleaseRow } from "../db/releases.js";
+import type { ModelSummaryReport } from "../evaluation/model-summary.js";
 import type { ReleasePreview } from "./release-build.js";
 
 /** A release row as the Releases tab lists it; private detail stays on the server. */
@@ -16,6 +17,8 @@ export interface ReleaseSummary {
   tasksPublished: boolean;
   /** Whether each setting's result and transcript on each task were published with it. */
   trialsPublished: boolean;
+  /** Whether a Model Summaries report was published with it. */
+  summariesPublished: boolean;
   current: boolean;
   head: boolean;
 }
@@ -23,6 +26,8 @@ export interface ReleaseSummary {
 /** What the release dialog shows: the preview plus the line's head and current release. */
 export interface ReleaseView {
   preview: ReleasePreview;
+  /** The latest Model Summaries report a release could publish: the settings it covers, by key. */
+  summaries?: { configurations: string[]; model: string; summarizedAt: string };
   head: ReleaseSummary | null;
   current: ReleaseSummary | null;
 }
@@ -46,17 +51,31 @@ export function summaryOf(row: ReleaseRow, rows: readonly ReleaseRow[]): Release
     settings: row.payload.settings.length,
     tasksPublished: row.payload.tasksPublished === true,
     trialsPublished: row.payload.trialsPublished === true,
+    summariesPublished: row.payload.modelSummaries !== undefined,
     current: currentOf(rows)?.id === row.id,
     head: headOf(rows)?.id === row.id,
   };
 }
 
 /** A preview with the head and current release the dialog shows beside it. */
-export function viewOf(rows: readonly ReleaseRow[], preview: ReleasePreview): ReleaseView {
+export function viewOf(
+  rows: readonly ReleaseRow[],
+  preview: ReleasePreview,
+  report?: ModelSummaryReport,
+): ReleaseView {
   const head = headOf(rows);
   const current = currentOf(rows);
   return {
     preview,
+    ...(report
+      ? {
+          summaries: {
+            configurations: report.summaries.map((summary) => summary.configuration),
+            model: report.model,
+            summarizedAt: report.summarizedAt,
+          },
+        }
+      : {}),
     head: head ? summaryOf(head, rows) : null,
     current: current ? summaryOf(current, rows) : null,
   };
