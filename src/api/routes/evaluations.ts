@@ -126,8 +126,8 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
             tasks: async () =>
               (await options.tasks.listForRepo(repo.id))
                 .filter(runnable)
-                .flatMap(({ runId, taskId, bundleKey }) =>
-                  bundleKey ? [{ runId, taskId, bundleKey }] : [],
+                .flatMap(({ runId, taskId, bundleKey, difficulty }) =>
+                  bundleKey ? [{ runId, taskId, bundleKey, difficulty }] : [],
                 ),
           });
           request.resume();
