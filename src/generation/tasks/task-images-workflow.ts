@@ -50,15 +50,20 @@ export async function selfBenchTaskImagesWorkflow(
   return outcome;
 }
 
-/** Which tasks an image backfill covers, and how many it rebuilds at once. */
-interface TaskImageBackfill {
-  /** Every kept task without images in these repositories, or in all when left out. */
+/** Which tasks a backfill covers, and how many it works on at once. */
+interface TaskBackfill {
+  /** Every task it applies to in these repositories, or in all when left out. */
   readonly repoIds?: readonly number[];
   /** Exactly these task rows instead, for a pilot. */
   readonly rowIds?: readonly number[];
   readonly concurrency?: number;
-  /** Lists the rows without rebuilding anything. */
+  /** Lists the rows without changing anything. */
   readonly dryRun?: boolean;
+}
+
+interface BackfillResult {
+  readonly rows: number[];
+  readonly outcomes: Record<number, string>;
 }
 
 /**
@@ -70,28 +75,58 @@ interface TaskImageBackfill {
  * @public
  */
 export async function selfBenchTaskImagesBackfillWorkflow(
-  input: TaskImageBackfill,
-): Promise<{ readonly rows: number[]; readonly outcomes: Record<number, string> }> {
+  input: TaskBackfill,
+): Promise<BackfillResult> {
   const rows = input.rowIds ? [...input.rowIds] : await images.tasksWithoutImages(input.repoIds);
+  return await backfill(rows, input, async (row) => {
+    try {
+      const outcome = await executeChild(selfBenchTaskImagesWorkflow, {
+        workflowId: taskImagesWorkflowId(row),
+        args: [row],
+        parentClosePolicy: ParentClosePolicy.ABANDON,
+      });
+      return "gate" in outcome ? `${outcome.status} at ${outcome.gate}` : outcome.status;
+    } catch (error) {
+      if (error instanceof WorkflowExecutionAlreadyStartedError) return "already running";
+      throw error;
+    }
+  });
+}
+
+/**
+ * An operator's one-off: converts every kept task still authored as definition.json to native
+ * files (task-conversion.ts), a few at a time. A row takes its converted bundle and images only if
+ * every gate passes; one the conversion cannot write is reported `unconvertible` with why, for an
+ * author to revise. Operators start it by name (maintenance/README.md).
+ *
+ * @public
+ */
+export async function selfBenchTaskConversionBackfillWorkflow(
+  input: TaskBackfill,
+): Promise<BackfillResult> {
+  const rows = input.rowIds ? [...input.rowIds] : await images.legacyTasks(input.repoIds);
+  return await backfill(rows, input, async (row) => {
+    const outcome = await whenSandboxFree(() => rebuilding().convertTask(row));
+    if ("gate" in outcome) return `${outcome.status} at ${outcome.gate}`;
+    return "reason" in outcome ? `${outcome.status}: ${outcome.reason}` : outcome.status;
+  });
+}
+
+/** Runs `step` on each row, `concurrency` at a time; a step that throws reports its error. */
+async function backfill(
+  rows: number[],
+  input: TaskBackfill,
+  step: (row: number) => Promise<string>,
+): Promise<BackfillResult> {
   const outcomes: Record<number, string> = {};
   if (input.dryRun) return { rows, outcomes };
   let next = 0;
   const lane = async () => {
     while (next < rows.length) {
       const row = rows[next++] as number;
-      try {
-        const outcome = await executeChild(selfBenchTaskImagesWorkflow, {
-          workflowId: taskImagesWorkflowId(row),
-          args: [row],
-          parentClosePolicy: ParentClosePolicy.ABANDON,
-        });
-        outcomes[row] = "gate" in outcome ? `${outcome.status} at ${outcome.gate}` : outcome.status;
-      } catch (error) {
-        outcomes[row] =
-          error instanceof WorkflowExecutionAlreadyStartedError
-            ? "already running"
-            : `error: ${error instanceof Error ? error.message : String(error)}`;
-      }
+      outcomes[row] = await step(row).catch(
+        (error) => `error: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   };
   await Promise.all(Array.from({ length: Math.max(1, input.concurrency ?? 4) }, lane));

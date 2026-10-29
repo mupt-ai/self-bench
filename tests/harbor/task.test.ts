@@ -19,7 +19,7 @@ RUN npm ci --ignore-scripts
 `;
 
 describe("Harbor task compiler", () => {
-  test("builds a sealed native Harbor bundle from a pinned commit", async () => {
+  test("builds a sealed native Harbor bundle over a repository snapshot", async () => {
     const root = await mkdtemp(join(tmpdir(), "selfbench-compiler-"));
     roots.push(root);
     const repo = join(root, "repo");
@@ -33,6 +33,15 @@ describe("Harbor task compiler", () => {
     await runCommand("git", ["-C", repo, "add", "."]);
     await runCommand("git", ["-C", repo, "commit", "-qm", "base"]);
     const commit = (await runCommand("git", ["-C", repo, "rev-parse", "HEAD"])).stdout.trim();
+    const snapshot = join(root, "repo.tar.gz");
+    await runCommand("git", [
+      "-C",
+      repo,
+      "archive",
+      "--format=tar.gz",
+      `--output=${snapshot}`,
+      commit,
+    ]);
 
     await compileHarborTask(
       {
@@ -53,7 +62,7 @@ describe("Harbor task compiler", () => {
         baseCommit: commit,
         sourcePr: 1,
       },
-      repo,
+      snapshot,
       output,
     );
 

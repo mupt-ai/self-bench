@@ -1,7 +1,6 @@
 import { chmod, cp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { sha256 } from "../../lib/hash.js";
-import { runCommand } from "../../lib/process.js";
 import { COMPILER_REVISION, HARBOR_SCHEMA_VERSION } from "./constants.js";
 import { agentDockerfile, type TaskIdentity, taskToml, verifierDockerfile } from "./render.js";
 import { verifierRuntimeFiles } from "./runtime-assets.js";
@@ -10,23 +9,17 @@ import { solutionScript, testScript } from "./verifier.js";
 
 /**
  * Renders a checked submission (checkSubmission, its base images pinned) as a Harbor task over
- * the repository's snapshot at the task's base commit. Both image contexts get the snapshot as
- * repo.tar.gz; only the verifier's holds the hidden tests, and neither holds the solution. A task
- * without services gets an empty services.sh, so both images are built the same way.
+ * `snapshot`, the repository at the task's base commit as `git archive` makes it. Both image
+ * contexts get the snapshot as repo.tar.gz; only the verifier's holds the hidden tests, and
+ * neither holds the solution. A task without services gets an empty services.sh, so both images
+ * are built the same way.
  */
 export async function compileHarborTask(
   submission: Submission,
   task: TaskIdentity,
-  repositoryDirectory: string,
+  snapshot: string,
   outputDirectory: string,
 ): Promise<void> {
-  await runCommand("git", [
-    "-C",
-    repositoryDirectory,
-    "cat-file",
-    "-e",
-    `${task.baseCommit}^{commit}`,
-  ]);
   await rm(outputDirectory, { recursive: true, force: true });
   const environment = join(outputDirectory, "environment");
   const solution = join(outputDirectory, "solution");
@@ -37,15 +30,6 @@ export async function compileHarborTask(
     mkdir(join(tests, "runtime"), { recursive: true }),
   ]);
 
-  const snapshot = join(outputDirectory, ".repo.tar.gz");
-  await runCommand("git", [
-    "-C",
-    repositoryDirectory,
-    "archive",
-    "--format=tar.gz",
-    `--output=${snapshot}`,
-    task.baseCommit,
-  ]);
   await Promise.all([
     cp(snapshot, join(environment, "repo.tar.gz")),
     cp(snapshot, join(tests, "repo.tar.gz")),
@@ -65,7 +49,6 @@ export async function compileHarborTask(
     writeFile(join(solution, "gold.patch"), submission["gold.patch"]),
     writeFile(join(solution, "solve.sh"), solutionScript()),
   ]);
-  await rm(snapshot);
   await Promise.all([
     chmod(join(solution, "solve.sh"), 0o755),
     chmod(join(tests, "test.sh"), 0o755),
