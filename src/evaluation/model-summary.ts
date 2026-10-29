@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import type { ArtifactStore } from "../artifacts/index.js";
-import { profileText } from "../public/model-profile.js";
 import { resultsBySetting, type SettingResults } from "../public/release-results.js";
 import { explanationModel } from "./explanation-model.js";
 import { askModel, type FailureSummaryOptions } from "./failure-summary.js";
@@ -203,12 +202,12 @@ async function summarize(
   if (!answer) return false;
   const sections = reportSections(answer.text);
   const summaries = chosen.flatMap(({ configuration, results }, index) => {
-    const section = sections.get(labelOf(index));
-    return section
+    const text = sections.get(labelOf(index));
+    return text
       ? [
           {
             configuration,
-            text: profileText(section),
+            text,
             tasks: results.size,
             passed: [...results.values()].filter(({ trial }) => trial.rewards.reward === 1).length,
           },
