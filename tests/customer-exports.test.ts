@@ -149,12 +149,22 @@ test("missing repositories are created privately and polled before returning", a
         expect(JSON.parse(String(init.body)).format).toBe("DOCKER");
         return Response.json({ name: "projects/project/locations/us-central1/operations/create" });
       }
-      if (url.includes("/operations/")) return Response.json({ done: true });
-      return new Response(null, { status: 404 });
+      if (url.includes("/operations/")) throw new Error("Operation polling is not authorized");
+      return calls.length > 2
+        ? Response.json({ format: "DOCKER" })
+        : new Response(null, { status: 404 });
     },
   });
   await registry.create(destination);
   expect(calls).toHaveLength(3);
+});
+test("patches above the viewer limit are exported in full within the package budget", async () => {
+  const patch = "x".repeat(2 * 1024 * 1024 + 100);
+  const { store, request } = await fixture({ "harbor-task/tests/test.patch": patch });
+  const packed = await customerPackage(store, request, source, destination);
+  expect(
+    strFromU8(unzipSync(packed.zip)["tasks/task-0001/tests/test.patch"] ?? new Uint8Array()),
+  ).toBe(patch);
 });
 test("copy builds preserve digests, use short-lived build credentials and propagate failure", async () => {
   let build: Record<string, unknown> | undefined;

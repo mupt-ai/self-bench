@@ -171,14 +171,14 @@ resource "google_service_account_iam_member" "runtime_acts_as_builder" {
 }
 
 # Customer exports copy verified images to their own private repository. The API has no
-# provisioning/IAM permission. Workers may create repositories; subsequent management and the
-# builder's writes are restricted to the customer-* namespace, never the shared task repository.
+# provisioning/IAM permission. Workers may create repositories and read repository metadata
+# (including nonexistent names); IAM management and builder writes stay in customer-* only.
 resource "google_project_iam_custom_role" "customer_repository_create" {
   count       = var.task_images ? 1 : 0
   project     = var.project_id
   role_id     = "selfbenchCustomerRepositoryCreate"
   title       = "Create Customer Export Repositories"
-  permissions = ["artifactregistry.repositories.create"]
+  permissions = ["artifactregistry.repositories.create", "artifactregistry.repositories.get"]
 }
 resource "google_project_iam_member" "runtime_customer_repository_create" {
   count   = var.task_images ? 1 : 0
@@ -192,7 +192,6 @@ resource "google_project_iam_custom_role" "customer_repository_access" {
   role_id = "selfbenchCustomerRepositoryAccess"
   title   = "Manage Customer Export Access"
   permissions = [
-    "artifactregistry.repositories.get",
     "artifactregistry.repositories.getIamPolicy",
     "artifactregistry.repositories.setIamPolicy",
   ]

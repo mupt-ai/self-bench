@@ -1,7 +1,7 @@
 import { strToU8, type Zippable, zipSync } from "fflate";
 import type { ArtifactStore } from "../artifacts/index.js";
-import { expandBundle } from "../generation/runs/bundle.js";
 import { HARBOR_VERSION } from "../harnesses/harbor/command.js";
+import { readExecutionBundle } from "./bundle.js";
 import type { CustomerExportRequest } from "./types.js";
 
 /** Only execution bundles: build inputs or a mutable task row cannot replace the frozen task. */
@@ -36,8 +36,8 @@ export async function customerPackage(
         throw new Error(`Task ${task.taskId} is not backed by this deployment's verified images`);
       images.set(image, `${destination}/${image.slice(source.length + 1)}`);
     }
-    const bundle = await expandBundle(store, task.bundleKey);
-    if (bundle.files.some((file) => file.path.endsWith("docker-compose.yaml")))
+    const bundle = await readExecutionBundle(store, task.bundleKey);
+    if ([...bundle.keys()].some((path) => path.endsWith("docker-compose.yaml")))
       throw new Error(
         `Task ${task.taskId} uses services; customer exports do not support service tasks yet.`,
       );
@@ -53,9 +53,9 @@ export async function customerPackage(
     ];
     const directory = `tasks/task-${String(index + 1).padStart(4, "0")}`;
     for (const path of required) {
-      const file = bundle.files.find((file) => file.path === path);
-      if (file?.text === undefined) throw new Error(`Task ${task.taskId} is missing ${path}`);
-      let text = file.text;
+      const file = bundle.get(path);
+      if (file === undefined) throw new Error(`Task ${task.taskId} is missing ${path}`);
+      let text = file;
       if (path.endsWith("Dockerfile")) {
         const original = path.startsWith("environment/") ? pair.agent : pair.verifier;
         if (text.trim() !== `FROM ${original}`)

@@ -43,14 +43,16 @@ export function customerRegistry(source: string, access: RegistryAccess) {
         description: "Private customer evaluation export",
         dockerConfig: { immutableTags: true },
       });
-      if (!operation.name) throw new Error("Registry returned no creation operation");
+      if (operation.error) throw new Error("Customer repository creation failed");
+      // Poll the repository itself, not its project-scoped LRO. Metadata reads are
+      // unconditional so a nonexistent repository can return 404 before creation.
       for (let attempt = 0; attempt < 120; attempt++) {
-        const state = await call(
-          `https://artifactregistry.googleapis.com/v1/${operation.name}`,
-          "GET",
-        );
-        if (state.error) throw new Error("Customer repository creation failed");
-        if (state.done) return;
+        const ready = await access.fetch(url, {
+          headers: { authorization: `Bearer ${await access.token()}` },
+        });
+        if (ready.ok) return;
+        if (ready.status !== 404)
+          throw new Error(`Cannot inspect customer repository (HTTP ${ready.status})`);
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
       throw new Error("Customer repository creation timed out");

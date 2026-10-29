@@ -342,7 +342,7 @@ run "task_images" {
   }
   assert {
     condition = (
-      google_project_iam_custom_role.customer_repository_create[0].permissions == toset(["artifactregistry.repositories.create"]) &&
+      google_project_iam_custom_role.customer_repository_create[0].permissions == toset(["artifactregistry.repositories.create", "artifactregistry.repositories.get"]) &&
       google_project_iam_member.runtime_customer_repository_access[0].condition[0].expression == "resource.name.startsWith('projects/selfbench-dev-testing/locations/us-central1/repositories/customer-')" &&
       google_project_iam_member.builder_customer_images[0].role == "roles/artifactregistry.writer" &&
       google_project_iam_member.builder_customer_images[0].condition[0].expression == google_project_iam_member.runtime_customer_repository_access[0].condition[0].expression
