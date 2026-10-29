@@ -1,5 +1,6 @@
 /** The worker's workflow bundle: every workflow type this deployment registers. */
 
+export { selfBenchCustomerExportWorkflow } from "../customer-exports/workflow.js";
 export {
   selfBenchEvaluationRunWorkflow,
   selfBenchFailedTrialWorkflow,
