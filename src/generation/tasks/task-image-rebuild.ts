@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import { withExecutionEnvironment } from "../../contracts/config/execution-environment.js";
-import type { HarborEnvironment } from "../../contracts/config/providers.js";
+import { type HarborEnvironment, isHarborEnvironment } from "../../contracts/config/providers.js";
 import type { ArtifactRef, TaskImages } from "../../contracts/index.js";
 import type { Vault } from "../../db/vault.js";
 import { GATE_TASK_FILE, SNAPSHOT_FILE, splitGateBundle } from "../../sandbox/gate-bundle.js";
@@ -184,16 +184,20 @@ export async function gateSource(
 /**
  * The provider and Harbor environment a run checked its tasks on, from its saved settings and the
  * organization's own credential; never the worker's. Managed rebuilds run fresh gates on the
- * deployment's currently configured managed provider, using only its platform credentials.
+ * deployment's currently configured managed provider, using only its platform credentials, or
+ * on `managed` instead when an operator names an organization's own credential for them.
  */
 export async function verificationEnvironment(
   vault: Pick<Vault, "records" | "credentials">,
   runId: string,
   base: NodeJS.ProcessEnv,
+  managed?: VerifyingCredential,
 ): Promise<Verification> {
   const saved = await vault.records.read<GenerationReference>(generationRecordPath(runId));
   if (!saved) throw new Error("Original generation configuration is missing");
   const { settings } = saved.value;
+  if (settings.sandbox === "managed" && managed)
+    return await credentialVerification(vault, managed, base);
   if (settings.sandbox === "managed") {
     const provider = managedHarborEnvironment(base);
     const env = providerEnvironment(base, "docker");
@@ -213,19 +217,37 @@ export async function verificationEnvironment(
     : settings.sandboxCredentialId;
   if (!id) throw new Error("Original verification credential is missing");
   const orgId = saved.value.orgId ?? saved.value.ownerId;
-  const credential = await vault.credentials.find(orgId, id);
+  return await credentialVerification(vault, { orgId, credentialId: id }, base, provider);
+}
+
+/** An organization's saved sandbox credential, which checks a task on its provider. */
+export interface VerifyingCredential {
+  readonly orgId: number;
+  readonly credentialId: string;
+}
+
+async function credentialVerification(
+  vault: Pick<Vault, "credentials">,
+  { orgId, credentialId }: VerifyingCredential,
+  base: NodeJS.ProcessEnv,
+  provider?: HarborEnvironment,
+): Promise<Verification> {
+  const credential = await vault.credentials.find(orgId, credentialId);
   const secret =
-    credential?.auth === "api-key" ? await vault.credentials.secret(orgId, id) : undefined;
-  if (!credential || credential.kind !== provider || !secret?.value)
-    throw new Error("Original verification credential is unavailable");
+    credential?.auth === "api-key"
+      ? await vault.credentials.secret(orgId, credentialId)
+      : undefined;
+  const kind = credential?.kind;
+  if (!kind || !isHarborEnvironment(kind) || (provider && kind !== provider) || !secret?.value)
+    throw new Error("Verification credential is unavailable");
   // Start from the runtime whitelist, not the worker's own provider credentials.
   return {
-    provider,
+    provider: kind,
     env: {
       ...providerEnvironment(base, "docker"),
-      ...providerCredentialEnvironment(provider, secret),
+      ...providerCredentialEnvironment(kind, secret),
     },
     orgId,
-    credentialId: id,
+    credentialId,
   };
 }

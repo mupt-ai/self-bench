@@ -190,6 +190,22 @@ test("verification uses saved customer credentials or explicit managed platform 
   expect(modal.env.MODAL_TOKEN_SECRET).toBe("platform-secret");
   expect(modal.env.MODAL_ENVIRONMENT).toBe("production");
   expect(modal.env.E2B_API_KEY).toBeUndefined();
+  // An operator may name an organization's own credential for managed runs instead.
+  const named = vault({ sandbox: "managed" });
+  const own = await verificationEnvironment(
+    named,
+    "run-1",
+    { PATH: "/usr/bin" },
+    {
+      orgId: 42,
+      credentialId: "modal-key",
+    },
+  );
+  expect(own).toMatchObject({ provider: "modal", orgId: 42, credentialId: "modal-key" });
+  expect(own.env.MODAL_TOKEN_ID).toBe("modal-id");
+  await expect(
+    verificationEnvironment(named, "run-1", {}, { orgId: 9, credentialId: "modal-key" }),
+  ).rejects.toThrow("Verification credential is unavailable");
   for (const env of [{}, { ...base, SELFBENCH_MANAGED_OFFERING: "false" }])
     await expect(verificationEnvironment(managed, "run-1", env)).rejects.toThrow(
       "Managed sandboxes are not configured",

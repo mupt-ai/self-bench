@@ -9,7 +9,7 @@ import {
 import { harbor, task } from "../../temporal/activity-options.js";
 import { whenSandboxFree } from "../../temporal/sandbox-capacity.js";
 import type { ConversionOutcome } from "./task-conversion.js";
-import type { RebuildOutcome } from "./task-image-rebuild.js";
+import type { RebuildOutcome, VerifyingCredential } from "./task-image-rebuild.js";
 import type { TaskImageOutcome } from "./task-images.js";
 import type { TaskImageActivities, TaskImageRebuildActivities } from "./task-images-activity.js";
 
@@ -67,6 +67,11 @@ interface TaskBackfill {
   readonly dryRun?: boolean;
 }
 
+interface TaskConversionBackfill extends TaskBackfill {
+  /** Checks tasks from managed runs on this credential, when the deployment offers none. */
+  readonly managed?: VerifyingCredential;
+}
+
 interface BackfillResult {
   readonly rows: number[];
   readonly outcomes: Record<number, string>;
@@ -108,14 +113,14 @@ export async function selfBenchTaskImagesBackfillWorkflow(
  * @public
  */
 export async function selfBenchTaskConversionBackfillWorkflow(
-  input: TaskBackfill,
+  input: TaskConversionBackfill,
 ): Promise<BackfillResult> {
   const rows = input.rowIds ? [...input.rowIds] : await images.legacyTasks(input.repoIds);
   return await backfill(rows, input, async (row) => {
     try {
       const outcome = await executeChild(selfBenchTaskConversionWorkflow, {
         workflowId: taskConversionWorkflowId(row),
-        args: [row],
+        args: [row, input.managed],
         parentClosePolicy: ParentClosePolicy.ABANDON,
       });
       if ("gate" in outcome) return `${outcome.status} at ${outcome.gate}`;
@@ -136,8 +141,9 @@ export async function selfBenchTaskConversionBackfillWorkflow(
  */
 export async function selfBenchTaskConversionWorkflow(
   taskRowId: number,
+  managed?: VerifyingCredential,
 ): Promise<ConversionOutcome> {
-  return await whenSandboxFree(() => rebuilding().convertTask(taskRowId));
+  return await whenSandboxFree(() => rebuilding().convertTask(taskRowId, managed));
 }
 
 /** Runs `step` on each row, `concurrency` at a time; a step that throws reports its error. */

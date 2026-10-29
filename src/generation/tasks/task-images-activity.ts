@@ -14,6 +14,7 @@ import {
   type RebuildDependencies,
   type RebuildOutcome,
   rebuildTaskImages,
+  type VerifyingCredential,
   verificationEnvironment,
 } from "./task-image-rebuild.js";
 import {
@@ -35,7 +36,8 @@ export interface TaskImageActivities {
 
 export interface TaskImageRebuildActivities {
   rebuildTaskImages(taskRowId: number): Promise<RebuildOutcome>;
-  convertTask(taskRowId: number): Promise<ConversionOutcome>;
+  /** With `managed`, a task from a managed run is checked on that credential instead. */
+  convertTask(taskRowId: number, managed?: VerifyingCredential): Promise<ConversionOutcome>;
 }
 
 const log = (event: Record<string, unknown>) =>
@@ -115,13 +117,19 @@ function createTaskImageRebuildActivities(options: {
         images: TaskImages,
       ) => Promise<boolean>;
       readonly check: (task: ReviewedTask, deps: RebuildDependencies) => Promise<Outcome>;
+      readonly managed?: VerifyingCredential;
     },
   ): Promise<Outcome | { readonly status: "skipped"; readonly reason: string }> => {
     const task = await rows.find(taskRowId);
     if (!task) return { status: "skipped", reason: "Task row is gone" };
     const reason = step.skip?.(task);
     if (reason) return { status: "skipped", reason };
-    const verification = await verificationEnvironment(options.vault, task.runId, process.env);
+    const verification = await verificationEnvironment(
+      options.vault,
+      task.runId,
+      process.env,
+      step.managed,
+    );
     const outcome = await holdingCapacity(
       options.vault,
       verification.orgId,
@@ -159,9 +167,10 @@ function createTaskImageRebuildActivities(options: {
         save: rows.save,
         check: (task, deps) => rebuildTaskImages(options.store, task, deps),
       }),
-    convertTask: (taskRowId) =>
+    convertTask: (taskRowId, managed) =>
       checking(taskRowId, {
         label: "converting",
+        ...(managed ? { managed } : {}),
         save: rows.saveConverted,
         check: (task, deps) => convertTask(options.store, task, deps),
       }),
