@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { harnessIds } from "../src/evaluation/models.js";
+import { subagentSupport } from "../src/evaluation/subagents.js";
 import { type GatewayUsage, selfBenchPlatform } from "../src/gateway/platform.js";
 import { readTrialKey, signTrialKey } from "../src/gateway/trial-key.js";
 import { evaluationServer } from "./support/evaluation-fixture.js";
@@ -147,8 +149,12 @@ test("comparisons freeze configured subagent models and reject unauthorized sele
     expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(400);
     draft.id = crypto.randomUUID();
     selected.subagent.credentialId = router;
-    selected.harnesses = ["pi"];
-    expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(400);
+    for (const harness of harnessIds) {
+      draft.id = crypto.randomUUID();
+      selected.harnesses = [harness];
+      const response = await fixture.request(`${fixture.base}/comparisons`, post(draft));
+      expect(response.status).toBe(subagentSupport[harness].configurable ? 202 : 400);
+    }
   } finally {
     await fixture.close();
   }

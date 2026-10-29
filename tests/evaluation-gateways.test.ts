@@ -62,11 +62,12 @@ test("Codex keeps the gateway's full model id, speaks HTTPS to it, and sends wha
 ${HARBOR_STUBS}
 module = types.ModuleType("harbor.agents.installed.codex")
 class Codex:
+    options = types.SimpleNamespace(subagent_model=None)
     def _build_effective_config(self, openai_base_url=None):
         return {"openai_base_url": openai_base_url} if openai_base_url else {}
     async def exec_as_agent(self, environment, command, **kwargs):
         return command, kwargs
-module.Codex = Codex
+module.Codex, module.CodexOptions = Codex, object
 sys.modules[module.__name__] = module
 sys.modules["harbor.agents.installed.claude_code"] = types.SimpleNamespace(ClaudeCode=object, ClaudeCodeOptions=object)
 spec = importlib.util.spec_from_file_location("adapter", sys.argv[1])
@@ -78,7 +79,6 @@ async def check():
     assert output == "/root/.nvm"
     assert options == {"timeout_sec": 30}
     gateway = adapter.GatewayCodex()
-    # Harbor's Codex keeps only the last segment; the gateway serves dari/model/<provider>/<model>.
     gateway.model_name = "openai/dari/model/openrouter/anthropic/claude-sonnet-5"
     command, _ = await gateway.exec_as_agent(None, "codex exec --model claude-sonnet-5 --json")
     assert "--model dari/model/openrouter/anthropic/claude-sonnet-5 " in command, command
@@ -133,7 +133,7 @@ class ClaudeCode:
         self.ensured = dependencies
 module.ClaudeCode, module.ClaudeCodeOptions = ClaudeCode, object
 sys.modules[module.__name__] = module
-sys.modules["harbor.agents.installed.codex"] = types.SimpleNamespace(Codex=ClaudeCode)
+sys.modules["harbor.agents.installed.codex"] = types.SimpleNamespace(Codex=ClaudeCode, CodexOptions=object)
 spec = importlib.util.spec_from_file_location("adapter", sys.argv[1])
 adapter = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(adapter)
@@ -181,7 +181,7 @@ class Pi:
     async def run(self, instruction, environment, context):
         self.commands.append("pi " + instruction)
 sys.modules["harbor.agents.installed.pi"].Pi = Pi
-sys.modules["harbor.agents.installed.codex"] = types.SimpleNamespace(Codex=object)
+sys.modules["harbor.agents.installed.codex"] = types.SimpleNamespace(Codex=object, CodexOptions=object)
 sys.modules["harbor.agents.installed.claude_code"] = types.SimpleNamespace(ClaudeCode=object, ClaudeCodeOptions=object)
 spec = importlib.util.spec_from_file_location("adapter", sys.argv[1])
 adapter = importlib.util.module_from_spec(spec)

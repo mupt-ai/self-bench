@@ -174,7 +174,15 @@ function gatewayRouted(
     // GatewayCodex restores the full id, and the others take `openai/` as their provider.
     model: `openai/${requestModel}`,
     agent: harness === "codex" ? "harbor_gateway:GatewayCodex" : harness,
-    agentArguments: harness === "codex" ? thinkingArguments(harness, input.thinking) : [],
+    agentArguments:
+      harness === "codex"
+        ? [
+            ...thinkingArguments(harness, input.thinking),
+            ...(input.subagent
+              ? ["--agent-kwarg", `subagent_model=dari/model/${input.subagent.model}`]
+              : []),
+          ]
+        : [],
     child,
     extraAllowedHosts,
   };

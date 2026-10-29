@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import { catalog } from "../../../../src/evaluation/catalog";
+import { harnessIds } from "../../../../src/evaluation/models";
+import { subagentSupport } from "../../../../src/evaluation/subagents";
 import { resultsBySetting } from "../../../../src/public/release-results";
 import { RunModelRow } from "./RunModelRow";
 import { credentials, NOW, passed, run } from "./results-fixture";
@@ -15,42 +17,64 @@ const subagent = {
   credentialId: "managed-model",
 };
 
-test("Claude Code exposes a separate optional subagent model and credential", () => {
-  const model = catalog.find((entry) => entry.id === "gpt-6-sol");
-  if (!model) throw new Error("Missing model");
-  const credential: CredentialInfo = {
-    id: "managed-model",
-    name: "Managed",
-    kind: "openrouter",
-    auth: "api-key",
-    createdAt: "",
-  };
-  const html = renderToStaticMarkup(
-    <RunModelRow
-      model={model}
-      models={catalog}
-      credentials={[credential]}
-      selection={{
-        catalogId: model.id,
-        credentialId: credential.id,
-        harnesses: ["claude-code"],
-        subagent,
-      }}
-      onChange={() => {}}
-    />,
-  );
-  expect(html).toContain("Override Subagent Model");
-  expect(html).toContain('aria-label="Subagent Credential"');
-  expect(html).toContain("does not force delegation");
-  const plain = renderToStaticMarkup(
-    <RunModelRow
-      model={model}
-      credentials={[credential]}
-      selection={{ catalogId: model.id, credentialId: credential.id, harnesses: ["pi"] }}
-      onChange={() => {}}
-    />,
-  );
-  expect(plain).not.toContain("Override Subagent Model");
+test.each(["claude-code", "codex"] as const)(
+  "%s exposes a separate optional subagent model and credential",
+  (harness) => {
+    const model = catalog.find((entry) => entry.id === "gpt-6-sol");
+    if (!model) throw new Error("Missing model");
+    const credential: CredentialInfo = {
+      id: "managed-model",
+      name: "Managed",
+      kind: "openrouter",
+      auth: "api-key",
+      createdAt: "",
+    };
+    const html = renderToStaticMarkup(
+      <RunModelRow
+        model={model}
+        models={catalog}
+        credentials={[credential]}
+        selection={{
+          catalogId: model.id,
+          credentialId: credential.id,
+          harnesses: [harness],
+          subagent,
+        }}
+        onChange={() => {}}
+      />,
+    );
+    expect(html).toContain("Override Subagent Model");
+    expect(html).toContain('aria-label="Subagent Credential"');
+    expect(html).toContain("does not force delegation");
+    const plain = renderToStaticMarkup(
+      <RunModelRow
+        model={model}
+        credentials={[credential]}
+        selection={{ catalogId: model.id, credentialId: credential.id, harnesses: ["pi"] }}
+        onChange={() => {}}
+      />,
+    );
+    expect(plain).not.toContain("Override Subagent Model");
+    expect(plain).toContain("Subagent Model · Not Supported");
+    expect(plain).toContain("does not install a subagent extension");
+  },
+);
+
+test("every unsupported harness explains why instead of exposing an inert selector", () => {
+  const base = catalog[0];
+  if (!base) throw new Error("Missing model");
+  for (const harness of harnessIds.filter((entry) => !subagentSupport[entry].configurable)) {
+    const html = renderToStaticMarkup(
+      <RunModelRow
+        model={base}
+        credentials={[]}
+        selection={{ catalogId: base.id, credentialId: "", harnesses: [harness] }}
+        onChange={() => {}}
+      />,
+    );
+    expect(html).toContain("Subagent Model · Not Supported");
+    expect(html).not.toContain("Override Subagent Model");
+  }
 });
 
 test("subagent settings survive draft restoration and retry", () => {

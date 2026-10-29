@@ -33,7 +33,7 @@ export interface EvaluationInput extends EvaluationScope {
   model: string;
   modelName: string;
   thinking?: ThinkingLevel;
-  /** Claude Code's subagent override, frozen with the comparison and authorized separately. */
+  /** The harness's subagent override, frozen with the comparison and authorized separately. */
   subagent?: { catalogId: string; model: string; credentialId: string };
 
   harnesses: Harness[];

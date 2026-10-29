@@ -10,6 +10,7 @@ import {
   routeFor,
   thinkingOptions,
 } from "../../../../src/evaluation/models";
+import { subagentSupport } from "../../../../src/evaluation/subagents";
 import { ModelPicker } from "../ModelPicker";
 import { Input, Select } from "../ui";
 import type { Harness } from "./api";
@@ -55,7 +56,8 @@ export function RunModelRow({
       credentialId,
       harnesses: nextHarnesses,
       subagent:
-        nextHarnesses.length === 1 && nextHarnesses[0] === "claude-code"
+        nextHarnesses.length > 0 &&
+        nextHarnesses.every((harness) => subagentSupport[harness].configurable)
           ? selected.subagent
           : undefined,
     });
@@ -176,10 +178,11 @@ export function RunModelRow({
             ))}
         </Select>
       </div>
-      {selected.harnesses.length === 1 && selected.harnesses[0] === "claude-code" && (
+      {selected.harnesses.length > 0 && (
         <RunSubagentControls
           models={models}
           credentials={credentials}
+          harnesses={selected.harnesses}
           value={selected.subagent}
           onChange={(subagent) => onChange({ ...selected, subagent })}
         />

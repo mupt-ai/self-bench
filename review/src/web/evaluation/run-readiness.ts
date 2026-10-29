@@ -2,6 +2,7 @@ import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import type { ComparisonSelection } from "../../../../src/evaluation/comparisons";
 import { routeFor, thinkingOptions } from "../../../../src/evaluation/models";
+import { subagentSupport } from "../../../../src/evaluation/subagents";
 import { credentialRunsAll, customModel, hasDuplicateModelSelections } from "./model-selection";
 
 /**
@@ -45,10 +46,10 @@ export function selectionReady({
           (entry) => entry.id === selection.subagent?.credentialId,
         );
         if (
-          selection.harnesses.some((harness) => harness !== "claude-code") ||
+          selection.harnesses.some((harness) => !subagentSupport[harness].configurable) ||
           !secondary ||
           !secondaryCredential ||
-          !credentialRunsAll(secondary, secondaryCredential, ["claude-code"]) ||
+          !credentialRunsAll(secondary, secondaryCredential, selection.harnesses) ||
           (selection.catalogId === selection.subagent.catalogId &&
             credential.kind === secondaryCredential.kind)
         )

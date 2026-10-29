@@ -5,7 +5,7 @@ import json
 import shlex
 from typing import Any
 from harbor.agents.installed.claude_code import ClaudeCode, ClaudeCodeOptions
-from harbor.agents.installed.codex import Codex
+from harbor.agents.installed.codex import Codex, CodexOptions
 from harbor.agents.installed.pi import Pi, PiOptions
 from harbor.agents.model_connection import ModelConnectionSpec
 
@@ -27,7 +27,14 @@ class SkipsSystemNode:
 OPENAI_MODELS = "dari/model/openai/"
 
 
+class GatewayCodexOptions(CodexOptions):
+    subagent_model: str | None = None
+
+
 class GatewayCodex(SkipsSystemNode, Codex):
+    options_model = GatewayCodexOptions
+    options: GatewayCodexOptions
+
     def _build_effective_config(self, openai_base_url=None):
         # Codex tries the Responses API over a WebSocket first, which the gateway (and a custom
         # endpoint) need not serve: give it a provider that speaks HTTPS only. Codex also asks
@@ -49,6 +56,12 @@ class GatewayCodex(SkipsSystemNode, Codex):
                 "wire_api": "responses",
                 "supports_websockets": False,
             }
+        # Codex children inherit the gateway provider; only their requested model changes.
+        if self.options.subagent_model:
+            config.setdefault("agents", {}).update({
+                "enabled": True,
+                "default_subagent_model": self.options.subagent_model,
+            })
         return config
 
     async def exec_as_agent(self, environment, command, **kwargs):

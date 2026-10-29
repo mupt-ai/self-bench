@@ -9,6 +9,7 @@ import type { ComparisonSelection } from "./comparisons.js";
 import { defaultThinking, routeFor, signInRefusal, thinkingOptions } from "./models.js";
 import { type EvaluationScope, sameScope } from "./scope.js";
 import { listEvaluations } from "./store.js";
+import { subagentSupport } from "./subagents.js";
 import { splitCredentialLimits } from "./trial-input.js";
 import type { EvaluationInput } from "./types.js";
 
@@ -115,8 +116,10 @@ export async function saveComparison(
       throw new Error("Unsupported or repeated harness");
     let subagent: EvaluationInput["subagent"];
     if (selected.subagent) {
-      if (selected.harnesses.some((harness) => harness !== "claude-code"))
-        throw new Error("Subagent model overrides require the Claude Code harness.");
+      const unsupported = selected.harnesses.find(
+        (harness) => !subagentSupport[harness].configurable,
+      );
+      if (unsupported) throw new Error(subagentSupport[unsupported].description);
       const secondary = catalogModels.find((entry) => entry.id === selected.subagent?.catalogId);
       const secondaryManaged = selected.subagent.credentialId === "managed-model";
       const secondaryCredential = secondaryManaged
@@ -128,8 +131,9 @@ export async function saveComparison(
         throw new Error("Managed models are not available on this deployment.");
       if (
         !secondaryCredential ||
-        !secondaryRoute?.harnesses.includes("claude-code") ||
-        signInRefusal(secondaryCredential.auth, ["claude-code"])
+        !secondaryRoute ||
+        selected.harnesses.some((harness) => !secondaryRoute?.harnesses.includes(harness)) ||
+        signInRefusal(secondaryCredential.auth, selected.harnesses)
       )
         throw new Error("Select a supported subagent model and matching credential.");
       const name = `${secondaryRoute.provider}/${secondaryRoute.model}`;
