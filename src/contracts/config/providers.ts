@@ -30,7 +30,7 @@ export type HostedHarborEnvironment = (typeof HOSTED_HARBOR_ENVIRONMENTS)[number
 
 const harborEnvironments: ReadonlySet<string> = new Set(HARBOR_ENVIRONMENTS);
 
-function isHarborEnvironment(value: string): value is HarborEnvironment {
+export function isHarborEnvironment(value: string): value is HarborEnvironment {
   return harborEnvironments.has(value);
 }
 
