@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { ArtifactStore } from "../artifacts/index.js";
+import { profileText } from "../public/model-profile.js";
 import { resultsBySetting, type SettingResults } from "../public/release-results.js";
 import { explanationModel } from "./explanation-model.js";
 import { askModel, type FailureSummaryOptions } from "./failure-summary.js";
@@ -22,6 +23,8 @@ export interface SummaryTask {
   runId: string;
   taskId: string;
   bundleKey: string;
+  /** A repository task's difficulty, as its generation judged it; benchmark tasks have none. */
+  difficulty?: string;
 }
 
 /** Configurations of one scope to summarize together, through one saved key and model. */
@@ -188,7 +191,7 @@ async function summarize(
     { ...options, redact },
     {
       system: evaluationPrompt("model-summaries"),
-      ask: "Compare these configurations: what each can be trusted with, and how each fails.",
+      ask: "Write routing advice for these configurations.",
       limit: REPORT_CHARS,
       timeoutMs: TIMEOUT_MS,
       onFailure(detail) {
@@ -200,12 +203,12 @@ async function summarize(
   if (!answer) return false;
   const sections = reportSections(answer.text);
   const summaries = chosen.flatMap(({ configuration, results }, index) => {
-    const text = sections.get(labelOf(index));
-    return text
+    const section = sections.get(labelOf(index));
+    return section
       ? [
           {
             configuration,
-            text,
+            text: profileText(section),
             tasks: results.size,
             passed: [...results.values()].filter(({ trial }) => trial.rewards.reward === 1).length,
           },
@@ -214,8 +217,8 @@ async function summarize(
   });
   if (!summaries.length) return false;
   const report: ModelSummaryReport = {
-    // Any label the overview kept anyway reads as the configuration's name.
     compared: chosen.map((entry) => entry.configuration),
+    // Any label the overview kept anyway reads as the configuration's name.
     overview: (sections.get("Overall") ?? "").replace(/\bC(\d+)\b/g, (label, number) => {
       const entry = chosen[Number(number) - 1];
       return entry ? configurationName(entry.setting) : label;

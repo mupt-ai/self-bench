@@ -111,7 +111,7 @@ test("one report compares the chosen configurations, and keeps what the model sa
   const options = { vault, command, env: {}, redact: (text: string) => text };
   await summarizeModels(store, request, options);
   expect(materials).toHaveLength(1);
-  expect(materials[0]).toContain('<configuration label="C1" passed="1 of 2">');
+  expect(materials[0]).toContain('<configuration label="C1" passed="1/2" ran_out_of_time="0">');
   expect(materials[0]).toContain('<task id="parser" outcomes="C1 passed, C2 failed">');
   expect(materials[0]).toContain('<failures configuration="C1">');
   expect(materials[0]).toContain("It never invalidated the cache.");
@@ -216,7 +216,14 @@ test("Model Summaries start for configurations scored on accepted tasks, through
       {
         repoId: fixture.repo.id,
         configurations: [configuration("gpt-own")],
-        tasks: [{ runId: "run-one", taskId: "task-one", bundleKey: "tasks/task.tar.gz" }],
+        tasks: [
+          {
+            runId: "run-one",
+            taskId: "task-one",
+            bundleKey: "tasks/task.tar.gz",
+            difficulty: "easy",
+          },
+        ],
         summary: { orgId: fixture.repo.orgId, credentialId: own.id, model: "gpt-6-sol" },
       },
     ]);

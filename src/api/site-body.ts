@@ -2,6 +2,7 @@ import { knownCostLabel } from "../evaluation/cost-total.js";
 import { harnessLabels } from "../evaluation/models.js";
 import { gateways, isGateway } from "../gateways/index.js";
 import { directoryOf } from "../public/directory.js";
+import { profileLines } from "../public/model-profile.js";
 import type { PublishedLine, ReleaseSetting } from "../public/release-types.js";
 import {
   defaultLineOf,
@@ -129,7 +130,8 @@ function summariesText(release: PublishedLine["release"]): string[] {
       harnessLabels[setting.harness] ?? setting.harness,
       reasoning(setting),
     ].join(" · ");
-    return [`<h3>${escapeText(name)}</h3>`, `<p>${escapeText(text)}</p>`];
+    const lines = profileLines(text)?.map((line) => `${line.label}: ${line.text}`) ?? [text];
+    return [`<h3>${escapeText(name)}</h3>`, ...lines.map((line) => `<p>${escapeText(line)}</p>`)];
   });
   return [
     "<h2>Model Summaries</h2>",
