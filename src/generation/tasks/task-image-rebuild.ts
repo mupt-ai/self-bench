@@ -69,10 +69,8 @@ export interface RebuildDependencies {
 
 /**
  * Gives a task that runs on its Dockerfiles (accepted before images were built, or re-approved
- * after a rejection removed them) the images every new task gets: its own compiled task is built
- * and goes through the smoke, nop and oracle gates again on those images, using its saved customer
- * account or the deployment's managed account. Only images that pass every gate are recorded, with the
- * execution bundle that runs them; the task's files never change. Images that fail are deleted.
+ * after a rejection removed them) the images every new task gets, from its own compiled task
+ * (checkCompiledTask); the task's files never change.
  */
 export async function rebuildTaskImages(
   store: ArtifactStore,
@@ -80,7 +78,21 @@ export async function rebuildTaskImages(
   deps: RebuildDependencies,
 ): Promise<RebuildOutcome> {
   if (!needsImages(task)) return { status: "skipped", reason: "Has images, or is not a kept task" };
-  const compiled = compiledBundleKey(task.bundleKey as string);
+  return await checkCompiledTask(store, task, compiledBundleKey(task.bundleKey as string), deps);
+}
+
+/**
+ * Builds the images of the compiled task at `compiled` and runs the smoke, nop and oracle gates
+ * on them, using the task's saved customer account or the deployment's managed account. Only
+ * images that pass every gate are recorded (`deps.save`), with the execution bundle that runs
+ * them; images that fail are deleted.
+ */
+export async function checkCompiledTask(
+  store: ArtifactStore,
+  task: Pick<ReviewedTask, "taskId" | "runId"> & { readonly candidateId: string },
+  compiled: string,
+  deps: RebuildDependencies,
+): Promise<RebuildOutcome> {
   const stat = await store.stat(compiled);
   if (!stat) throw new Error("Original compiled bundle is missing");
   const bundle: ArtifactRef = { ...stat, contentType: "application/gzip" };
@@ -139,7 +151,7 @@ export async function rebuildTaskImages(
  * The gate task and snapshot beside a compiled bundle. Compiles of tasks with services, and older
  * ones, wrote neither: the full bundle is split once and both are stored beside it.
  */
-async function gateSource(
+export async function gateSource(
   store: ArtifactStore,
   compiled: string,
   signal: AbortSignal,

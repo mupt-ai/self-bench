@@ -81,48 +81,82 @@ export function compiledBundleKey(bundleKey: string): string {
   return `${dirname(dirname(bundleKey))}${COMPILED_BUNDLE}`;
 }
 
+/**
+ * Which of a candidate's images a check's cleanup keeps: the check's own pair, the pair the row
+ * records now (another check of the row may have recorded its own meanwhile), and what something
+ * else pins. The row is read once, when the cleanup starts.
+ */
+export async function cleanupKeeps(
+  rows: Pick<ReturnType<typeof taskImageRows>, "find" | "referenced">,
+  task: Pick<ReviewedTask, "id">,
+  keep?: TaskImages,
+): Promise<(digest: string) => Promise<boolean>> {
+  const recorded = (await rows.find(task.id))?.images;
+  const kept = [keep, recorded].flatMap((pair) => (pair ? [pair.agent, pair.verifier] : []));
+  return async (digest) =>
+    kept.some((image) => image.endsWith(`@${digest}`)) ||
+    (await rows.referenced([digest], task.id));
+}
+
 /** The database side of reconciling one task row, guarded against concurrent changes. */
 export function taskImageRows(db: Database) {
+  /** Sets `values` on the row unless the task changed since it was read. */
+  const update = async (
+    task: ReviewedTask,
+    values: Partial<typeof tasks.$inferInsert>,
+  ): Promise<boolean> => {
+    const changed = await db
+      .update(tasks)
+      .set(values)
+      .where(
+        and(
+          eq(tasks.id, task.id),
+          eq(tasks.bundleKey, task.bundleKey ?? ""),
+          task.reviewDecision === null
+            ? isNull(tasks.reviewDecision)
+            : eq(tasks.reviewDecision, task.reviewDecision),
+          task.deletedAt === null ? isNull(tasks.deletedAt) : sql`${tasks.deletedAt} is not null`,
+          task.images === null
+            ? isNull(tasks.images)
+            : sql`${tasks.images} = ${JSON.stringify(task.images)}::jsonb`,
+        ),
+      )
+      .returning({ id: tasks.id });
+    return changed.length === 1;
+  };
+  const kept = (repoIds?: readonly number[]) =>
+    and(
+      eq(tasks.pipelineStatus, "accepted"),
+      isNull(tasks.deletedAt),
+      or(isNull(tasks.reviewDecision), ne(tasks.reviewDecision, "reject")),
+      repoIds?.length ? inArray(tasks.repoId, [...repoIds]) : undefined,
+    );
   return {
     async find(taskRowId: number): Promise<ReviewedTask | undefined> {
       const [row] = await db.select().from(tasks).where(eq(tasks.id, taskRowId));
       return row;
     },
     /** Switches the row's bundle and images unless the task changed since it was read. */
-    async save(task: ReviewedTask, bundleKey: string, images?: TaskImages): Promise<boolean> {
-      const changed = await db
-        .update(tasks)
-        .set({ bundleKey, images: images ?? null })
-        .where(
-          and(
-            eq(tasks.id, task.id),
-            eq(tasks.bundleKey, task.bundleKey ?? ""),
-            task.reviewDecision === null
-              ? isNull(tasks.reviewDecision)
-              : eq(tasks.reviewDecision, task.reviewDecision),
-            task.deletedAt === null ? isNull(tasks.deletedAt) : sql`${tasks.deletedAt} is not null`,
-            task.images === null
-              ? isNull(tasks.images)
-              : sql`${tasks.images} = ${JSON.stringify(task.images)}::jsonb`,
-          ),
-        )
-        .returning({ id: tasks.id });
-      return changed.length === 1;
+    save: (task: ReviewedTask, bundleKey: string, images?: TaskImages) =>
+      update(task, { bundleKey, images: images ?? null }),
+    /** A converted task's native bundle and images; it no longer has a definition. */
+    saveConverted: (task: ReviewedTask, bundleKey: string, images: TaskImages) =>
+      update(task, { bundleKey, images, definition: null }),
+    /** Accepted, kept rows still authored as definition.json (task-conversion.ts). */
+    async legacy(repoIds?: readonly number[]): Promise<number[]> {
+      const rows = await db
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(and(kept(repoIds), sql`${tasks.definition} is not null`))
+        .orderBy(tasks.id);
+      return rows.map((row) => row.id);
     },
     /** Accepted, kept rows that run on their Dockerfiles, optionally within some repositories. */
     async withoutImages(repoIds?: readonly number[]): Promise<number[]> {
       const rows = await db
         .select({ id: tasks.id })
         .from(tasks)
-        .where(
-          and(
-            eq(tasks.pipelineStatus, "accepted"),
-            isNull(tasks.images),
-            isNull(tasks.deletedAt),
-            or(isNull(tasks.reviewDecision), ne(tasks.reviewDecision, "reject")),
-            repoIds?.length ? inArray(tasks.repoId, [...repoIds]) : undefined,
-          ),
-        )
+        .where(and(kept(repoIds), isNull(tasks.images)))
         .orderBy(tasks.id);
       return rows.map((row) => row.id);
     },

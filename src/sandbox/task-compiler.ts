@@ -86,8 +86,15 @@ export async function compileSubmission(
             cause: error,
           });
         });
+      // The snapshot holds no Git history, as the solver gets the repository.
+      const snapshot = join(root, "repo.tar.gz");
+      await runCommand(
+        "git",
+        ["-C", repository, "archive", "--format=tar.gz", `--output=${snapshot}`, task.baseCommit],
+        signal,
+      );
       const compiled = { ...submission, Dockerfile: pinned.dockerfile };
-      await compileHarborTask(compiled, task, repository, join(root, "harbor-task"));
+      await compileHarborTask(compiled, task, snapshot, join(root, "harbor-task"));
       const archive = join(root, "harbor-task.tar.gz");
       await runCommand("tar", ["-czf", archive, "-C", root, "harbor-task"], signal);
       return await readFile(archive);

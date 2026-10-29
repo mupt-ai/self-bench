@@ -35,6 +35,28 @@ temporal workflow start --type selfBenchTaskImagesBackfillWorkflow \
 credential. The result maps each row to its outcome (`rebuilt`, `failed at <gate>`, `skipped`,
 `already running`, or the error).
 
+## Converting Tasks Authored as definition.json
+
+Tasks accepted before authors wrote native files (`definition.json` with an environment schema)
+still run on what that compiler rendered. `selfBenchTaskConversionBackfillWorkflow` rewrites
+each kept one as the native files an author writes today (`src/generation/task/legacy.ts`),
+compiles them over the task's own snapshot into `runs/<run>/conversion/<candidate>/<time>/`, and
+checks that compile as an image rebuild does. A row takes the new bundle and images, and drops its
+definition, only if every gate passes; otherwise it is left as it was. Revisions of a converted
+task start from its native files. A task with services, or one whose files fail the submission
+check (an empty `test.patch`), is reported `unconvertible` with why, for an author to revise.
+Start it like the image backfill, a dry run first:
+
+```sh
+temporal workflow start --type selfBenchTaskConversionBackfillWorkflow \
+  --task-queue <SELFBENCH_TASK_QUEUE> --workflow-id task-conversion-backfill/<date> \
+  --input '{"rowIds":[123],"concurrency":4}'
+```
+
+`dryRun`, `rowIds`, `repoIds` and `concurrency` mean what they do for the image backfill; without
+`rowIds` it covers every kept row that still has a definition. The result maps each row to
+`rebuilt`, `failed at <gate>`, `unconvertible: <why>`, `skipped`, or the error.
+
 ## Task Bundle Compaction
 
 Every compile attempt used to keep its own repository snapshot (`repo.tar.gz`) and a full bundle

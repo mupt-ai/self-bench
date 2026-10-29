@@ -1,15 +1,32 @@
+import { dirname } from "node:path";
 import type { ArtifactStore } from "../../artifacts/index.js";
-import { type AuthoredTaskDraft, authoredTaskDraftSchema } from "../../contracts/index.js";
+import {
+  type ArtifactRef,
+  type AuthoredTaskDraft,
+  authoredTaskDraftSchema,
+} from "../../contracts/index.js";
 import { authoringRoundResultKey } from "../pipeline/authoring.js";
+import { compiledBundleKey } from "./task-images.js";
 
 /**
- * The draft a finished task last submitted: its latest round that ended in a submission.
- * An accepted task's is the one the reviewer accepted; a rejected task's may have none.
+ * The draft a finished task last submitted: the one beside the compiled bundle it runs, when a
+ * conversion wrote it there (task-conversion.ts), else its latest round that ended in a
+ * submission. An accepted task's is the one the reviewer accepted; a rejected task's may have none.
  */
 export async function submittedDraft(
   store: ArtifactStore,
-  { runId, candidateId, taskId }: { runId: string; candidateId: string; taskId: string },
+  task: { runId: string; candidateId: string; taskId: string; bundleKey?: string },
 ): Promise<AuthoredTaskDraft | undefined> {
+  const { runId, candidateId, taskId } = task;
+  const draft = (ref: Omit<ArtifactRef, "contentType">) => ({
+    candidateId,
+    taskId,
+    sourceBundle: { ...ref, contentType: "application/gzip" },
+  });
+  const converted =
+    task.bundleKey &&
+    (await store.stat(`${dirname(compiledBundleKey(task.bundleKey))}/${SOURCE_BUNDLE}`));
+  if (converted) return draft(converted);
   const rounds = (await store.folders(`runs/${runId}/authoring/${candidateId}`))
     .map((folder) => /^round-(\d+)$/.exec(folder)?.[1])
     .filter((round) => round !== undefined)
@@ -28,8 +45,7 @@ export async function submittedDraft(
   }
   // A failed revision may not have submitted yet; its starting draft is staged separately.
   const staged = await store.stat(`${revisionPrefix(runId, candidateId)}/${SOURCE_BUNDLE}`);
-  if (!staged) return undefined;
-  return { candidateId, taskId, sourceBundle: { ...staged, contentType: "application/gzip" } };
+  return staged ? draft(staged) : undefined;
 }
 
 /**
@@ -49,7 +65,8 @@ export async function stageRevisionDraft(
   return { ...draft, sourceBundle };
 }
 
-const SOURCE_BUNDLE = "source-task.tar.gz";
+/** A submission's files as one tarball, as authors hand them off. */
+export const SOURCE_BUNDLE = "source-task.tar.gz";
 
 function revisionPrefix(runId: string, candidateId: string): string {
   return `runs/${runId}/authoring/${candidateId}/revision`;
