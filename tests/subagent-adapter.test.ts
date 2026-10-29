@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { gatewayTrial } from "../src/evaluation/gateway-trial.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";
 import { gatewayConnection } from "../src/gateway/connection.js";
+import { harborPython } from "../src/harnesses/harbor/command.js";
 import { runCommand } from "../src/lib/process.js";
 
 test("Claude Code receives the authorized full subagent ID as an agent kwarg, not a secret", () => {
@@ -28,6 +29,34 @@ test("Claude Code receives the authorized full subagent ID as an agent kwarg, no
   expect(trial.agentArguments.join(" ")).not.toContain(connection.key);
   expect(trial.model).toBe("dari/model/anthropic/claude-parent");
 });
+
+test.skipIf(!Bun.which("harbor"))(
+  "real Harbor accepts subagent overrides in preflight and construction",
+  async () => {
+    const python = await harborPython(process.env);
+    const result = await runCommand(python, [
+      "-c",
+      `
+import importlib.util, tempfile
+from pathlib import Path
+import sys
+spec = importlib.util.spec_from_file_location("adapter", sys.argv[1])
+adapter = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(adapter)
+model = "dari/model/openrouter/deepseek/flash-1017"
+options = adapter.SelfBenchClaudeCode.parse_options({"subagent_model": model, "reasoning_effort": "high"})
+assert options.subagent_model == model and options.reasoning_effort == "high"
+assert "subagent_model" in adapter.SelfBenchClaudeCode.options_schema()["properties"]
+with tempfile.TemporaryDirectory() as directory:
+    agent = adapter.SelfBenchClaudeCode(logs_dir=Path(directory), model_name="parent", subagent_model=model)
+    assert agent.options.subagent_model == model
+`,
+      fileURLToPath(new URL("../src/harnesses/harbor/runtime/harbor_gateway.py", import.meta.url)),
+    ]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+  },
+);
 
 test("the Harbor adapter overrides its subagent pin after env construction and preserves the parent", async () => {
   const result = await runCommand("python3", [
