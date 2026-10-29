@@ -11,6 +11,7 @@ export { selfBenchBatchWorkflow } from "../generation/batches/workflow.js";
 export * from "../generation/pipeline/workflows.js";
 export {
   selfBenchTaskConversionBackfillWorkflow,
+  selfBenchTaskConversionWorkflow,
   selfBenchTaskImagesBackfillWorkflow,
   selfBenchTaskImagesWorkflow,
 } from "../generation/tasks/task-images-workflow.js";

@@ -17,6 +17,7 @@ import {
   verificationEnvironment,
 } from "./task-image-rebuild.js";
 import {
+  cleanupKeeps,
   type ReviewedTask,
   type TaskImageOutcome,
   taskImageReconciler,
@@ -135,14 +136,11 @@ function createTaskImageRebuildActivities(options: {
             // A local registry keeps its images; only Artifact Registry's are deleted.
             discardImages: async (keep) => {
               if (!isArtifactRegistry(options.repository)) return;
-              const kept = keep ? [keep.agent, keep.verifier] : [];
               await discardCandidateImages(
                 options.repository,
                 task.runId,
                 task.candidateId,
-                async (digest) =>
-                  kept.some((image) => image.endsWith(`@${digest}`)) ||
-                  (await rows.referenced([digest], task.id)),
+                await cleanupKeeps(rows, task, keep),
               );
             },
             signal,

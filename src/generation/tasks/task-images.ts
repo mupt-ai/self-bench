@@ -81,6 +81,23 @@ export function compiledBundleKey(bundleKey: string): string {
   return `${dirname(dirname(bundleKey))}${COMPILED_BUNDLE}`;
 }
 
+/**
+ * Which of a candidate's images a check's cleanup keeps: the check's own pair, the pair the row
+ * records now (another check of the row may have recorded its own meanwhile), and what something
+ * else pins. The row is read once, when the cleanup starts.
+ */
+export async function cleanupKeeps(
+  rows: Pick<ReturnType<typeof taskImageRows>, "find" | "referenced">,
+  task: Pick<ReviewedTask, "id">,
+  keep?: TaskImages,
+): Promise<(digest: string) => Promise<boolean>> {
+  const recorded = (await rows.find(task.id))?.images;
+  const kept = [keep, recorded].flatMap((pair) => (pair ? [pair.agent, pair.verifier] : []));
+  return async (digest) =>
+    kept.some((image) => image.endsWith(`@${digest}`)) ||
+    (await rows.referenced([digest], task.id));
+}
+
 /** The database side of reconciling one task row, guarded against concurrent changes. */
 export function taskImageRows(db: Database) {
   /** Sets `values` on the row unless the task changed since it was read. */

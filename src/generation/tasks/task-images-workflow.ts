@@ -8,6 +8,7 @@ import {
 } from "@temporalio/workflow";
 import { harbor, task } from "../../temporal/activity-options.js";
 import { whenSandboxFree } from "../../temporal/sandbox-capacity.js";
+import type { ConversionOutcome } from "./task-conversion.js";
 import type { RebuildOutcome } from "./task-image-rebuild.js";
 import type { TaskImageOutcome } from "./task-images.js";
 import type { TaskImageActivities, TaskImageRebuildActivities } from "./task-images-activity.js";
@@ -18,6 +19,11 @@ export const taskReviewChanged = defineSignal("taskReviewChanged");
 /** The workflow ID that serializes one task row's image changes. */
 export function taskImagesWorkflowId(taskRowId: number): string {
   return `task-images/${taskRowId}`;
+}
+
+/** The workflow ID that serializes one task row's conversion. */
+function taskConversionWorkflowId(taskRowId: number): string {
+  return `task-conversion/${taskRowId}`;
 }
 
 const images = proxyActivities<TaskImageActivities>(task({ timeout: "5 minutes", attempts: 5 }));
@@ -106,10 +112,32 @@ export async function selfBenchTaskConversionBackfillWorkflow(
 ): Promise<BackfillResult> {
   const rows = input.rowIds ? [...input.rowIds] : await images.legacyTasks(input.repoIds);
   return await backfill(rows, input, async (row) => {
-    const outcome = await whenSandboxFree(() => rebuilding().convertTask(row));
-    if ("gate" in outcome) return `${outcome.status} at ${outcome.gate}`;
-    return "reason" in outcome ? `${outcome.status}: ${outcome.reason}` : outcome.status;
+    try {
+      const outcome = await executeChild(selfBenchTaskConversionWorkflow, {
+        workflowId: taskConversionWorkflowId(row),
+        args: [row],
+        parentClosePolicy: ParentClosePolicy.ABANDON,
+      });
+      if ("gate" in outcome) return `${outcome.status} at ${outcome.gate}`;
+      return "reason" in outcome ? `${outcome.status}: ${outcome.reason}` : outcome.status;
+    } catch (error) {
+      if (error instanceof WorkflowExecutionAlreadyStartedError) return "already running";
+      throw error;
+    }
   });
+}
+
+/**
+ * One task's conversion, alone on its own workflow ID so a retry or a second backfill never runs
+ * a second conversion of the same row: the two would build under the same image names, and the
+ * loser's cleanup would be the winner's images to delete.
+ *
+ * @public
+ */
+export async function selfBenchTaskConversionWorkflow(
+  taskRowId: number,
+): Promise<ConversionOutcome> {
+  return await whenSandboxFree(() => rebuilding().convertTask(taskRowId));
 }
 
 /** Runs `step` on each row, `concurrency` at a time; a step that throws reports its error. */
