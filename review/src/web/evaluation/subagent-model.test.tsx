@@ -5,6 +5,7 @@ import { catalog } from "../../../../src/evaluation/catalog";
 import { harnessIds } from "../../../../src/evaluation/models";
 import { subagentSupport } from "../../../../src/evaluation/subagents";
 import { resultsBySetting } from "../../../../src/public/release-results";
+import { hasModelSelection } from "./model-selection";
 import { RunModelRow } from "./RunModelRow";
 import { credentials, NOW, passed, run } from "./results-fixture";
 import { configurationsOf } from "./results-model";
@@ -75,6 +76,38 @@ test("every unsupported harness explains why instead of exposing an inert select
     expect(html).toContain("Subagent Model · Not Supported");
     expect(html).not.toContain("Override Subagent Model");
   }
+});
+
+test("secondary credentials on one provider do not create distinct model configurations", () => {
+  const model = catalog[0];
+  if (!model) throw new Error("Missing model");
+  const keys = [
+    { id: "router-a", kind: "openrouter" as const },
+    { id: "router-b", kind: "openrouter" as const },
+    { id: "vercel", kind: "vercel-ai-gateway" as const },
+  ];
+  const selection = {
+    catalogId: model.id,
+    credentialId: "router-a",
+    harnesses: ["codex" as const],
+    subagent: { catalogId: subagent.catalogId, credentialId: "router-a" },
+  };
+  expect(
+    hasModelSelection(
+      model,
+      [selection],
+      { ...selection, subagent: { ...selection.subagent, credentialId: "router-b" } },
+      keys,
+    ),
+  ).toBe(true);
+  expect(
+    hasModelSelection(
+      model,
+      [selection],
+      { ...selection, subagent: { ...selection.subagent, credentialId: "vercel" } },
+      keys,
+    ),
+  ).toBe(false);
 });
 
 test("subagent settings survive draft restoration and retry", () => {
