@@ -35,9 +35,13 @@ test("the Harbor adapter overrides its subagent pin after env construction and p
     `
 import asyncio, importlib.util, sys, types
 class ClaudeCode:
+    def __init__(self, **kwargs):
+        self.options = type(self).options_model()
+        for key, value in kwargs.items():
+            setattr(self.options, key, value)
     async def exec_as_agent(self, environment, command, **kwargs):
         return kwargs.get("env")
-sys.modules["harbor.agents.installed.claude_code"] = types.SimpleNamespace(ClaudeCode=ClaudeCode)
+sys.modules["harbor.agents.installed.claude_code"] = types.SimpleNamespace(ClaudeCode=ClaudeCode, ClaudeCodeOptions=object)
 sys.modules["harbor.agents.installed.codex"] = types.SimpleNamespace(Codex=object)
 sys.modules["harbor.agents.installed.pi"] = types.SimpleNamespace(Pi=object, PiOptions=object)
 sys.modules["harbor.agents.model_connection"] = types.SimpleNamespace(ModelConnectionSpec=lambda **kw: kw)

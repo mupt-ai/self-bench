@@ -68,7 +68,7 @@ class Codex:
         return command, kwargs
 module.Codex = Codex
 sys.modules[module.__name__] = module
-sys.modules["harbor.agents.installed.claude_code"] = types.SimpleNamespace(ClaudeCode=object)
+sys.modules["harbor.agents.installed.claude_code"] = types.SimpleNamespace(ClaudeCode=object, ClaudeCodeOptions=object)
 spec = importlib.util.spec_from_file_location("adapter", sys.argv[1])
 adapter = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(adapter)
@@ -131,7 +131,7 @@ class ClaudeCode:
         self.installed = True
     async def ensure_system_dependencies(self, environment, dependencies):
         self.ensured = dependencies
-module.ClaudeCode = ClaudeCode
+module.ClaudeCode, module.ClaudeCodeOptions = ClaudeCode, object
 sys.modules[module.__name__] = module
 sys.modules["harbor.agents.installed.codex"] = types.SimpleNamespace(Codex=ClaudeCode)
 spec = importlib.util.spec_from_file_location("adapter", sys.argv[1])
@@ -182,7 +182,7 @@ class Pi:
         self.commands.append("pi " + instruction)
 sys.modules["harbor.agents.installed.pi"].Pi = Pi
 sys.modules["harbor.agents.installed.codex"] = types.SimpleNamespace(Codex=object)
-sys.modules["harbor.agents.installed.claude_code"] = types.SimpleNamespace(ClaudeCode=object)
+sys.modules["harbor.agents.installed.claude_code"] = types.SimpleNamespace(ClaudeCode=object, ClaudeCodeOptions=object)
 spec = importlib.util.spec_from_file_location("adapter", sys.argv[1])
 adapter = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(adapter)

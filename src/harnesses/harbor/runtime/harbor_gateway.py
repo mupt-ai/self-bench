@@ -4,7 +4,7 @@ task image."""
 import json
 import shlex
 from typing import Any
-from harbor.agents.installed.claude_code import ClaudeCode
+from harbor.agents.installed.claude_code import ClaudeCode, ClaudeCodeOptions
 from harbor.agents.installed.codex import Codex
 from harbor.agents.installed.pi import Pi, PiOptions
 from harbor.agents.model_connection import ModelConnectionSpec
@@ -64,16 +64,19 @@ class GatewayCodex(SkipsSystemNode, Codex):
         return await super().exec_as_agent(environment, command=command, **kwargs)
 
 
+class SelfBenchClaudeCodeOptions(ClaudeCodeOptions):
+    subagent_model: str | None = None
+
+
 class SelfBenchClaudeCode(SkipsSystemNode, ClaudeCode):
-    def __init__(self, *args, subagent_model=None, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.subagent_model = subagent_model
+    options_model = SelfBenchClaudeCodeOptions
+    options: SelfBenchClaudeCodeOptions
 
     async def exec_as_agent(self, environment, command, **kwargs):
         # Harbor pins this variable to the parent with custom base URLs. Override at the
         # execution boundary, after Harbor has built its env, without mutating shared state.
-        if self.subagent_model and kwargs.get("env") is not None:
-            kwargs["env"] = {**kwargs["env"], "CLAUDE_CODE_SUBAGENT_MODEL": self.subagent_model}
+        if self.options.subagent_model and kwargs.get("env") is not None:
+            kwargs["env"] = {**kwargs["env"], "CLAUDE_CODE_SUBAGENT_MODEL": self.options.subagent_model}
         return await super().exec_as_agent(environment, command=command, **kwargs)
 
     async def install(self, environment):
