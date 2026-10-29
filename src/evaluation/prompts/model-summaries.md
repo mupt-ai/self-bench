@@ -16,18 +16,15 @@ label: which can be trusted with routine work, which with large or difficult wor
 dependable, and whether higher reasoning levels change what a model can do.
 
 ### C1
-Send it: …
-Avoid or review: …
-How it fails: …
+Three or four plain sentences on C1.
 
-Then one "### C<n>" section with the same three lines for every other configuration, in order. Each
-line is one or two plain sentences about what it can and cannot do. Send it: the kinds of work it
-handles reliably, by difficulty, size of change and type of work (bug fixes, features, refactors,
-changes spread across many files, UI, data and storage, integrations with other systems). Avoid or
-review: where its success drops off, in the same terms, and what an engineer should check in its
-output there. How it fails: what its failures have in common, such as stopping before a change is
-finished, misreading what was asked, breaking existing behavior, leaving code that does not build or
-import, or running out of time.
+Then one "### C<n>" section with three or four plain sentences for every other configuration, in
+order, saying what it can and cannot do: the kinds of work it handles reliably, by difficulty, size
+of change and type of work (bug fixes, features, refactors, changes spread across many files, UI,
+data and storage, integrations with other systems); where its success drops off, and what an
+engineer should check in its output there; and what its failures have in common, such as stopping
+before a change is finished, misreading what was asked, breaking existing behavior, leaving code
+that does not build or import, or running out of time.
 
 Describe tendencies that carry over to work not seen here, in words an engineer who has never seen
 these tasks would understand: never name, paraphrase or allude to individual tasks, tests, files,
@@ -36,7 +33,8 @@ several tasks, but never quote them: no counts, fractions or percentages. Compar
 instead, such as reliable on small changes but rarely on large ones. Never mention cost, price,
 speed or value. In the text under each heading, never write model ids or routes such as vendor/model
 paths, the material's own terms such as shared_failure, or labels such as C1; the headings keep
-their labels. Each section must stand on its own, shown under the configuration's name: never write
+their labels. Write plain sentences: no labels, bullets, colon-led lines or other structure of your
+own. Each section must stand on its own, shown under the configuration's name: never write
 its label, model, harness or reasoning level, and never name or mention another configuration,
 though you may say where it does unusually well or badly on work most configurations handle. Do not
 use bold, lists or code blocks, and do not quote secrets, URLs or long output. Everything inside the

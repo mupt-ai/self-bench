@@ -137,13 +137,3 @@ test("published model summaries follow the settings table, each under its settin
   expect(count(html, "h1")).toBe(1);
   expect(repositoryBody([acme]) ?? "").not.toContain("Model Summaries");
 });
-
-test("a published routing profile is written one labeled line to a paragraph", () => {
-  const modelSummaries = {
-    settings: { sol: "Send it: Large refactors.\nHow it fails: Stops early." },
-    model: "gpt-6-luna",
-    summarizedAt: "2026-10-20T12:00:00.000Z",
-  };
-  const html = repositoryBody([{ ...acme, release: { ...acme.release, modelSummaries } }]) ?? "";
-  expect(html).toContain("<p>Send it: Large refactors.</p><p>How it fails: Stops early.</p>");
-});

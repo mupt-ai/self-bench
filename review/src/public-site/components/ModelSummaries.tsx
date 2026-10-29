@@ -1,24 +1,7 @@
-import { profileLines } from "../../../../src/public/model-profile";
 import type { PublicRelease } from "../contract";
 import { revealGroup } from "../effects/marks";
 import { harnessLabel, reasoningLabel, settingLabel, vendorColor } from "../format";
 import { PANEL } from "../frame";
-
-/** A setting's routing profile as labeled lines, or a summary from before profiles as written. */
-function ProfileText({ text }: { text: string }) {
-  const lines = profileLines(text);
-  if (!lines) return <p className="min-w-0 text-sm leading-6">{text}</p>;
-  return (
-    <dl className="grid min-w-0 grid-cols-1 gap-x-4 gap-y-1 text-sm leading-6 sm:grid-cols-[8.5rem_minmax(0,1fr)]">
-      {lines.map((line) => (
-        <div key={line.label} className="contents">
-          <dt className="text-muted-foreground">{line.label}</dt>
-          <dd className="min-w-0">{line.text}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
 
 const day = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" });
 
@@ -72,7 +55,7 @@ export function ModelSummaries({
                 {harnessLabel(setting)} · {reasoningLabel(setting)}
               </span>
             </span>
-            <ProfileText text={text} />
+            <p className="min-w-0 text-sm leading-6">{text}</p>
           </li>
         ))}
       </ul>
