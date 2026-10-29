@@ -49,7 +49,7 @@ Start it like the image backfill, a dry run first:
 
 ```sh
 temporal workflow start --type selfBenchTaskConversionBackfillWorkflow \
-  --task-queue <SELFBENCH_TASK_QUEUE> --workflow-id task-conversion/<date> \
+  --task-queue <SELFBENCH_TASK_QUEUE> --workflow-id task-conversion-backfill/<date> \
   --input '{"rowIds":[123],"concurrency":4}'
 ```
 
