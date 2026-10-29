@@ -11,6 +11,7 @@ export interface RetrySelection {
     customModel?: string;
     credentialId: string;
     thinking?: EvaluationRun["thinking"];
+    subagent?: { catalogId: string; credentialId: string };
     harnesses: Harness[];
   }[];
   sandbox: string;
@@ -64,6 +65,14 @@ export function retrySelection(
           credentialId: credentials.modelCredentialId,
           ...(run.thinking ? { thinking: run.thinking } : {}),
           harnesses: [harness],
+          ...(run.subagent
+            ? {
+                subagent: {
+                  catalogId: run.subagent.catalogId,
+                  credentialId: run.subagent.credentialId,
+                },
+              }
+            : {}),
         },
       ],
       sandbox: managedSandbox ? "managed" : (kind ?? run.sandbox),

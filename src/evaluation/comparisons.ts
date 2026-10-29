@@ -28,6 +28,13 @@ const selectionFields = {
           customModel: z.string().regex(modelIdPattern).optional(),
           credentialId: z.union([z.uuid(), z.literal("managed-model")]),
           thinking: z.enum(thinkingLevels).optional(),
+          subagent: z
+            .object({
+              catalogId: z.string().min(1).max(200),
+              credentialId: z.union([z.uuid(), z.literal("managed-model")]),
+            })
+            .strict()
+            .optional(),
           harnesses: z.array(z.enum(harnessIds)).min(1).max(harnessIds.length),
         })
         .strict(),
@@ -167,7 +174,8 @@ export async function assertCredentialUnused(
 ) {
   for (const comparison of await comparisons.listForOrg(orgId)) {
     const uses = comparison.inputs.filter(
-      ({ credentials }) =>
+      ({ credentials, subagent }) =>
+        subagent?.credentialId === id ||
         credentials?.modelCredentialId === id ||
         credentials?.sandboxCredentialId === id ||
         credentials?.judgeCredentialId === id,

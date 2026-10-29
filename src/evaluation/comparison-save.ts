@@ -113,13 +113,41 @@ export async function saveComparison(
       new Set(selected.harnesses).size !== selected.harnesses.length
     )
       throw new Error("Unsupported or repeated harness");
+    let subagent: EvaluationInput["subagent"];
+    if (selected.subagent) {
+      if (selected.harnesses.some((harness) => harness !== "claude-code"))
+        throw new Error("Subagent model overrides require the Claude Code harness.");
+      const secondary = catalogModels.find((entry) => entry.id === selected.subagent?.catalogId);
+      const secondaryManaged = selected.subagent.credentialId === "managed-model";
+      const secondaryCredential = secondaryManaged
+        ? { id: "managed-model", kind: "openrouter" as const, auth: "api-key" as const }
+        : saved.get(selected.subagent.credentialId);
+      const secondaryRoute =
+        secondary && secondaryCredential && routeFor(secondary, secondaryCredential.kind);
+      if (secondaryManaged && !managed.models)
+        throw new Error("Managed models are not available on this deployment.");
+      if (
+        !secondaryCredential ||
+        !secondaryRoute?.harnesses.includes("claude-code") ||
+        signInRefusal(secondaryCredential.auth, ["claude-code"])
+      )
+        throw new Error("Select a supported subagent model and matching credential.");
+      const name = `${secondaryRoute.provider}/${secondaryRoute.model}`;
+      if (name === `${route.provider}/${route.model}`)
+        throw new Error("Use the default subagent model to inherit the parent model.");
+      subagent = {
+        catalogId: selected.subagent.catalogId,
+        model: name,
+        credentialId: secondaryCredential.id,
+      };
+    }
     const levels = thinkingOptions(route, selected.harnesses);
     const thinking = selected.thinking ?? defaultThinking(levels);
     if (!levels.includes(thinking))
       throw new Error("Unsupported thinking level for this model and harness");
     const modelIdentity = selected.catalogId === "custom" ? route.model : model.id;
     for (const harness of selected.harnesses) {
-      const pair = configurationIdentity(modelIdentity, thinking, harness);
+      const pair = configurationIdentity(modelIdentity, thinking, harness, subagent);
       if (seen.has(pair))
         throw new Error("Select each model, harness, and thinking configuration once");
       seen.add(pair);
@@ -131,7 +159,14 @@ export async function saveComparison(
           tasks: frozen.filter(
             (task) =>
               !completed.has(
-                configurationTaskKey(modelIdentity, thinking, harness, task.runId, task.taskId),
+                configurationTaskKey(
+                  modelIdentity,
+                  thinking,
+                  harness,
+                  task.runId,
+                  task.taskId,
+                  subagent,
+                ),
               ),
           ),
         }))
@@ -146,6 +181,7 @@ export async function saveComparison(
           model: model.id,
           modelName,
           thinking,
+          ...(subagent ? { subagent } : {}),
           harnesses: group.harnesses,
           sandbox: selection.sandbox === "managed" ? "modal" : selection.sandbox,
           tasks: group.tasks,
@@ -193,8 +229,18 @@ function taskMinutes(tasks: EvaluationInput["tasks"]): { taskMinutes?: number } 
   return minutes.length ? { taskMinutes: Math.max(...minutes) } : {};
 }
 
-function configurationIdentity(model: string, thinking: string | undefined, harness: string) {
-  return JSON.stringify([model, thinking ?? "default", harness]);
+function configurationIdentity(
+  model: string,
+  thinking: string | undefined,
+  harness: string,
+  subagent?: EvaluationInput["subagent"],
+) {
+  return JSON.stringify([
+    model,
+    thinking ?? "default",
+    harness,
+    ...(subagent ? [subagent.model] : []),
+  ]);
 }
 
 function configurationTaskKey(
@@ -203,8 +249,9 @@ function configurationTaskKey(
   harness: string,
   runId: string,
   taskId: string,
+  subagent?: EvaluationInput["subagent"],
 ) {
-  return JSON.stringify([configurationIdentity(model, thinking, harness), runId, taskId]);
+  return JSON.stringify([configurationIdentity(model, thinking, harness, subagent), runId, taskId]);
 }
 
 function completedConfigurationTasks(runs: Awaited<ReturnType<typeof listEvaluations>>) {
@@ -219,6 +266,7 @@ function completedConfigurationTasks(runs: Awaited<ReturnType<typeof listEvaluat
             trial.harness,
             trial.runId,
             trial.taskId,
+            run.subagent,
           ),
         );
     }

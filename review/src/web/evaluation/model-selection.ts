@@ -71,6 +71,8 @@ export function hasModelSelection(
     (selection) =>
       selection.catalogId === candidate.catalogId &&
       (selection.customModel ?? "") === (candidate.customModel ?? "") &&
+      selection.subagent?.catalogId === candidate.subagent?.catalogId &&
+      selection.subagent?.credentialId === candidate.subagent?.credentialId &&
       effectiveThinking(selection) === effectiveThinking(candidate) &&
       selection.harnesses.some((harness) => candidate.harnesses.includes(harness)),
   );

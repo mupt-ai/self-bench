@@ -39,6 +39,21 @@ export function selectionReady({
           : models.find((entry) => entry.id === selection.catalogId);
       const credential = credentials.find((entry) => entry.id === selection.credentialId);
       if (!model || !credential) return false;
+      if (selection.subagent) {
+        const secondary = models.find((entry) => entry.id === selection.subagent?.catalogId);
+        const secondaryCredential = credentials.find(
+          (entry) => entry.id === selection.subagent?.credentialId,
+        );
+        if (
+          selection.harnesses.some((harness) => harness !== "claude-code") ||
+          !secondary ||
+          !secondaryCredential ||
+          !credentialRunsAll(secondary, secondaryCredential, ["claude-code"]) ||
+          (selection.catalogId === selection.subagent.catalogId &&
+            credential.kind === secondaryCredential.kind)
+        )
+          return false;
+      }
       const route = routeFor(model, credential.kind);
       const levels = thinkingOptions(route ?? model, selection.harnesses);
       return (

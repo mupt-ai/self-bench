@@ -11,7 +11,7 @@ icon: "chart-scatter"
 <ParamField header="Authorization" type="string" required>`Bearer` plus a `write` API key.</ParamField>
 <ParamField body="id" type="string" required>Client-generated UUID; reuse it when retrying.</ParamField>
 <ParamField body="tasks" type="array" required>Approved `{runId, taskId}` pairs.</ParamField>
-<ParamField body="models" type="array" required>Model catalog ID, credential ID, and harnesses (up to 12 model choices).</ParamField>
+<ParamField body="models" type="array" required>Model catalog ID, credential ID, and harnesses (up to 12 model choices). Claude Code rows may also set `subagent: {catalogId, credentialId}`.</ParamField>
 <ParamField body="sandbox" type="string" required>Sandbox from the evaluation catalog.</ParamField>
 <ParamField body="sandboxCredentialId" type="string" required>Matching credential ID.</ParamField>
 <ParamField body="skipCompleted" type="boolean">Skip already completed trials.</ParamField>
@@ -27,5 +27,31 @@ curl -X POST https://app.selfbench.dev/api/orgs/mupt-ai/repos/mupt-ai/self-bench
     "sandbox":"e2b","sandboxCredentialId":"<uuid>","skipCompleted":true}'
 ```
 </RequestExample>
+
+## Claude Code Subagent Models
+
+On the Run page, expand **Subagent Model** beneath a Claude Code configuration and enable **Override Subagent Model**. Choose a model and a matching credential independently of the parent model. The same option is available for benchmark runs.
+
+For API requests, add `subagent` to a model row:
+
+```json
+{
+  "catalogId": "<parent-catalog-id>",
+  "credentialId": "<parent-credential-uuid>",
+  "harnesses": ["claude-code"],
+  "subagent": {
+    "catalogId": "<subagent-catalog-id>",
+    "credentialId": "<subagent-credential-uuid>"
+  }
+}
+```
+
+Both models must support the selected credential route on Claude Code. Use the catalog ID returned by the catalog API, not a guessed provider model ID. Managed model access uses `managed-model` as the credential ID where available. Omit `subagent` to preserve the default: Harbor pins subagents to the parent model.
+
+The override sets Claude Code's `CLAUDE_CODE_SUBAGENT_MODEL` after Harbor constructs its environment. Claude Code still decides whether to delegate based on the task, its built-in agents, and available custom agent descriptions. Ask it to delegate explicitly in the task instruction when needed; selecting a model does not force subagent use or inject an agent prompt.
+
+The gateway key authorizes exactly the parent and configured secondary model. It does not grant provider-wide access or expose either provider credential in the sandbox. This is a model allowlist, not a security distinction between parent and subagent processes: either can request either authorized model. Judge access stays on a separate key.
+
+Subagent calls are included in the trial's gateway cost, using each call's actual model. A mixed-model run is left unpriced if a call cannot be priced; it is never estimated using only the parent's rates. Mixed-model runs do not report a separate billed total, because the two credentials may mix API billing and subscription access. Results, completed-task skipping, and retries preserve the subagent configuration.
 
 Returns `202` with comparison status. Fetch tasks from `GET …/evaluations/options`, models and sandboxes from `GET …/evaluations/catalog`, and status from `GET …/evaluations/comparisons/{id}`. If `submissionError` is present, resume the same comparison at `POST …/comparisons/{id}/resume`.

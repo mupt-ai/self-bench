@@ -65,6 +65,17 @@ class GatewayCodex(SkipsSystemNode, Codex):
 
 
 class SelfBenchClaudeCode(SkipsSystemNode, ClaudeCode):
+    def __init__(self, *args, subagent_model=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.subagent_model = subagent_model
+
+    async def exec_as_agent(self, environment, command, **kwargs):
+        # Harbor pins this variable to the parent with custom base URLs. Override at the
+        # execution boundary, after Harbor has built its env, without mutating shared state.
+        if self.subagent_model and kwargs.get("env") is not None:
+            kwargs["env"] = {**kwargs["env"], "CLAUDE_CODE_SUBAGENT_MODEL": self.subagent_model}
+        return await super().exec_as_agent(environment, command=command, **kwargs)
+
     async def install(self, environment):
         # Modal starts Python images with HOME's .cache/uv created as root, so a non-root agent
         # cannot create the .cache/claude the native installer writes to.
