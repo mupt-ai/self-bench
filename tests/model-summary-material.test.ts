@@ -58,7 +58,10 @@ test("the material gives each configuration its rates by difficulty and change s
         `diff --git a/f${file} b/f${file}`,
         `--- a/f${file}`,
         `+++ b/f${file}`,
-        ...Array.from({ length: Math.ceil(lines / files) }, () => "+line"),
+        "@@ -0,0 +1 @@",
+        // An added line that looks like a header still counts.
+        "+-- a comment",
+        ...Array.from({ length: Math.ceil(lines / files) - 1 }, () => "+line"),
       ].join("\n"),
     ).join("\n");
   const shapes = { tiny: [1, 10], wide: [8, 300], everyone: [3, 60] } as const;

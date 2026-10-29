@@ -59,11 +59,19 @@ interface TaskShape {
 
 /** The files and changed lines of a unified diff. */
 function patchSize(patch: string): { files: number; lines: number } {
-  const lines = patch.split("\n");
-  return {
-    files: lines.filter((line) => line.startsWith("diff --git ")).length,
-    lines: lines.filter((line) => /^[+-](?![+-]{2} )/.test(line)).length,
-  };
+  let files = 0;
+  let lines = 0;
+  // Only lines inside a hunk are changes: a file's `---` and `+++` headers come before its first
+  // `@@`, while an added line may itself start with `--` or `++`.
+  let inHunk = false;
+  for (const line of patch.split("\n")) {
+    if (line.startsWith("diff --git ")) {
+      files += 1;
+      inHunk = false;
+    } else if (line.startsWith("@@")) inHunk = true;
+    else if (inHunk && /^[+-]/.test(line)) lines += 1;
+  }
+  return { files, lines };
 }
 
 /** Small, medium or large, by the files and lines the reference change touches. */
