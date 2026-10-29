@@ -2,7 +2,6 @@ import { Sparkles } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { MAX_SUMMARY_CONFIGURATIONS } from "../../../../src/contracts/model-summary-limit";
 import { eligibleTrial } from "../../../../src/evaluation/eligible";
-import { profileLines } from "../../../../src/public/model-profile";
 import { Dialog, DialogHeader } from "../Dialog";
 import { useSession } from "../session";
 import { buttonStyles, Notice } from "../ui";
@@ -13,22 +12,6 @@ import { ConfigurationName } from "./ResultsMarks";
 import { type ChartOption, chosenOptions } from "./results-chart";
 import { momentLabel } from "./results-presentation";
 import { useModelSummaries } from "./useModelSummaries";
-
-/** A summary's routing profile as labeled lines, or a summary from before profiles as written. */
-function ProfileText({ text }: { text: string }) {
-  const lines = profileLines(text);
-  if (!lines) return <p className="text-sm leading-6">{text}</p>;
-  return (
-    <dl className="grid min-w-0 grid-cols-1 gap-x-4 gap-y-1.5 text-sm leading-6 sm:grid-cols-[9rem_minmax(0,1fr)]">
-      {lines.map((line) => (
-        <div key={line.label} className="contents">
-          <dt className="font-medium text-muted-foreground">{line.label}</dt>
-          <dd className="min-w-0">{line.text}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
 
 const LABELS = { action: "Summarize Models", busy: "Summarizing…", model: "Summary Model" };
 
@@ -177,7 +160,7 @@ export function ModelSummaries() {
                             {summary.configuration}
                           </span>
                         )}
-                        <ProfileText text={summary.text} />
+                        <p className="text-sm leading-6">{summary.text}</p>
                         <p className="text-xs text-muted-foreground">
                           From {summary.tasks} scored {summary.tasks === 1 ? "task" : "tasks"},{" "}
                           {summary.passed} passed

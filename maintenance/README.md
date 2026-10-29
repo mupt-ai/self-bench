@@ -53,7 +53,10 @@ temporal workflow start --type selfBenchTaskConversionBackfillWorkflow \
   --input '{"rowIds":[123],"concurrency":4}'
 ```
 
-`dryRun`, `rowIds`, `repoIds` and `concurrency` mean what they do for the image backfill; without
+A task from a managed run is checked on the deployment's managed account; where the deployment
+offers none, `"managed":{"orgId":3,"credentialId":"<id>"}` names an organization's own saved
+Modal or E2B credential to check those tasks on instead. `dryRun`, `rowIds`, `repoIds` and
+`concurrency` mean what they do for the image backfill; without
 `rowIds` it covers every kept row that still has a definition. The result maps each row to
 `rebuilt`, `failed at <gate>`, `unconvertible: <why>`, `skipped`, or the error.
 

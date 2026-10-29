@@ -7,7 +7,6 @@ import { summarizable } from "../src/evaluation/model-summary.js";
 import { summaryMaterial } from "../src/evaluation/model-summary-material.js";
 import { initialEvaluation } from "../src/evaluation/store.js";
 import type { EvaluationInput, EvaluationTrial } from "../src/evaluation/types.js";
-import { profileLines, profileText } from "../src/public/model-profile.js";
 import { evaluationInput } from "./support/evaluation-fixture.js";
 import { gzippedTar } from "./support/tar.js";
 
@@ -109,20 +108,4 @@ test("the material gives each configuration its rates by difficulty and change s
   // How each failure went, from its checks.
   expect(material).toContain('<failed_task id="wide" how="broke existing behavior">');
   expect(material).toContain('<failed_task id="tiny" how="its change did not apply">');
-});
-
-test("a routing profile is read off however the model formatted its labels", () => {
-  const written =
-    "**Send it:** Small bug fixes.\n- Avoid or review: Large migrations;\n  check the callers.\nHow it fails: Stops early.";
-  expect(profileText(written)).toBe(
-    "Send it: Small bug fixes.\nAvoid or review: Large migrations; check the callers.\nHow it fails: Stops early.",
-  );
-  expect(profileLines(profileText(written))?.map((line) => line.label)).toEqual([
-    "Send it",
-    "Avoid or review",
-    "How it fails",
-  ]);
-  // A summary from before profiles stays a paragraph.
-  expect(profileLines("It handles focused fixes well.")).toBeUndefined();
-  expect(profileText(" It handles focused fixes well. ")).toBe("It handles focused fixes well.");
 });
