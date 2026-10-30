@@ -1,6 +1,7 @@
-import type { Client } from "@temporalio/client";
+import { type Client, WorkflowExecutionAlreadyStartedError } from "@temporalio/client";
 import type { ArtifactStore } from "../artifacts/index.js";
 import type { SelfBenchConfig } from "../contracts/config/index.js";
+import { selfBenchCustomerExportWorkflow } from "../customer-exports/workflow.js";
 import { createApiKeyStore } from "../db/api-keys.js";
 import { createBenchmarkStore } from "../db/benchmarks.js";
 import { createBillingStore } from "../db/billing.js";
@@ -148,6 +149,22 @@ export async function openSite(
     evaluations: createEvaluationRoutes({
       users,
       repos,
+      ...(config.taskImages?.builder?.kind === "cloud-build"
+        ? {
+            exportCustomer: async (request) => {
+              try {
+                await client.workflow.start(selfBenchCustomerExportWorkflow, {
+                  workflowId: `customer-export/${request.repoId}/${request.id}`,
+                  taskQueue: config.temporal.taskQueue,
+                  args: [request],
+                  workflowIdReusePolicy: "REJECT_DUPLICATE",
+                });
+              } catch (error) {
+                if (!(error instanceof WorkflowExecutionAlreadyStartedError)) throw error;
+              }
+            },
+          }
+        : {}),
       benchmarks: createBenchmarkStore(database.db),
       tasks,
       artifacts,

@@ -108,7 +108,19 @@ Exports include hidden tests and reference solutions, unencrypted. Keep them pri
 harbor run --path ./harbor-task --agent codex --model gpt-6-sol --env docker
 ```
 
-### Delivering Tasks to Customers
+### Exporting from the Results Page
+
+Choose **Export for Customer** on a repository's Results page, select a completed evaluation, and enter the customer's name and Google account email. **Create Export** starts background preparation; when it finishes, **Download Harbor ZIP** downloads the handoff. Send that ZIP to the customer yourself; the download requires your workspace session and is not a public sharing link.
+
+Each export gets a dedicated private Artifact Registry repository (`customer-<export id>`), containing copies of only that evaluation's frozen agent and verifier images, with their digests preserved. The ZIP holds native Harbor task directories, Dockerfiles pointing directly at those copies, a manifest, and Google authentication/local-run instructions. No SelfBench account, registry proxy, or API is used by the customer's run. Images are pulled on demand and cached locally, not embedded in the ZIP.
+
+The deployment must use the Cloud Build image builder and apply the customer-export IAM resources in Terraform before this works. The API only starts the workflow; the worker provisions the repository and grants that specific Google user read access after every image has been copied. Cloud Build copies images without running task code. Existing task images are not made public or granted to the customer.
+
+Only completed evaluations with frozen image-backed execution bundles are supported initially; historical build bundles and tasks with service Compose files are refused, rather than silently exporting different task versions. Export a new evaluation of image-backed tasks for older datasets. Both tests and reference solutions are included, unencrypted; keep the ZIP and verifier images private.
+
+Customer repositories have no automatic expiry or cleanup. Operators manage reader access and retention directly in Google Cloud; failed exports can leave a private repository to clean up. Revoking access cannot remove images the customer already downloaded. A repository hosted in SelfBench's Google project depends on its retention, though not on SelfBench's application being online; transfer its images to the customer's own registry for independent ownership.
+
+### Delivering Tasks to Customers with the CLI
 
 A customer who runs tasks themselves pulls the images through the API's registry with a grant of their own, never with access to the whole repository. The operator issues one with the API token:
 

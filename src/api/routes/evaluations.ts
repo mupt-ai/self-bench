@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ArtifactStore } from "../../artifacts/index.js";
+import type { CustomerExportRequest } from "../../customer-exports/types.js";
 import type { BenchmarkStore } from "../../db/benchmarks.js";
 import type { ConnectedRepo, RepoStore } from "../../db/repos.js";
 import { runnable } from "../../db/task-record.js";
@@ -19,13 +20,15 @@ import { sendJson } from "../http.js";
 import { auditTaskRoute } from "./audit-task.js";
 import { benchmarkRoutes } from "./benchmarks.js";
 import { credentialRoutes } from "./credentials.js";
+import { customerExportRoute } from "./customer-exports.js";
 import { handleScopedEvaluations } from "./evaluation-scope.js";
 import { explainTrial } from "./explain-trial.js";
 import { modelSummariesRoute } from "./model-summaries.js";
 
 const repoRoute =
-  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/evaluations(?:\/(options|catalog|comparisons|audit|summaries|[a-f0-9-]{36}))?(?:\/(artifacts|[a-f0-9-]{36}))?(?:\/(resume|cancel|delete|explain))?$/;
+  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/evaluations(?:\/(options|catalog|comparisons|audit|summaries|exports|[a-f0-9-]{36}))?(?:\/(artifacts|[a-f0-9-]{36}))?(?:\/(resume|cancel|delete|explain|download))?$/;
 export interface EvaluationRoutesOptions {
+  exportCustomer?(request: CustomerExportRequest): Promise<void>;
   users: UserStore;
   repos: RepoStore;
   tasks: TaskStore;
@@ -93,6 +96,18 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
           return true;
         }
         const [section, id, action] = [repoMatch[4], repoMatch[5], repoMatch[6]];
+        if (section === "exports") {
+          await customerExportRoute(
+            options,
+            request,
+            response,
+            { repoId: repo.id, orgId: tenant.id, user },
+            id,
+            action === "download",
+          );
+          request.resume();
+          return true;
+        }
         const env = options.env ?? process.env;
         const methods = ["GET", "POST"].includes(request.method ?? "");
         if (
