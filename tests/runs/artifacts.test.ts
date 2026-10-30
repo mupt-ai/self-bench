@@ -99,6 +99,33 @@ describe("artifact store listing", () => {
     expect((await listArchivedRuns(store)).map((run) => run.runId)).toEqual(["run-2", "run-1"]);
   });
 
+  test("the viewer opens the bundle the task runs, such as its converted one", async () => {
+    const store = new LocalArtifactStore(await temporaryRoot());
+    const put = (key: string) => store.put(key, Buffer.from("tar"), "application/gzip");
+    const legacy = "runs/run-1/verify/cand/authoring-round-1/compile/attempt-1";
+    const converted = "runs/run-1/conversion/cand/2026-10-29T00-00-00-000Z";
+    await put(`${legacy}/harbor-task.tar.gz`);
+    await put(`${legacy}/execution-1/execution-task.tar.gz`);
+    // A later attempt that failed its gates left a compiled bundle the task does not run.
+    await put(`${converted}/harbor-task.tar.gz`);
+    await put(`${converted}/execution-2/execution-task.tar.gz`);
+    const listed = await candidateArtifacts(store, "run-1", {
+      taskId: "task",
+      candidateId: "cand",
+      bundleKey: `${converted}/execution-2/execution-task.tar.gz`,
+    });
+    expect(listed.bundles[0]).toMatchObject({
+      key: `${converted}/execution-2/execution-task.tar.gz`,
+      stage: "conversion",
+    });
+    const unconverted = await candidateArtifacts(store, "run-1", {
+      taskId: "task",
+      candidateId: "cand",
+      bundleKey: `${legacy}/execution-1/execution-task.tar.gz`,
+    });
+    expect(unconverted.bundles[0]?.key).toBe(`${legacy}/execution-1/execution-task.tar.gz`);
+  });
+
   test("a failed archived-run scan lists nothing and is retried on the next request", async () => {
     const store = new LocalArtifactStore(await temporaryRoot());
     await store.put("runs/run-1/report.json", Buffer.from("{}"), "application/json");
