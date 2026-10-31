@@ -170,6 +170,53 @@ resource "google_service_account_iam_member" "runtime_acts_as_builder" {
   member             = "serviceAccount:${google_service_account.runtime.email}"
 }
 
+# Customer exports copy verified images to their own private repository. The API has no
+# provisioning/IAM permission. Workers may create repositories and read repository metadata
+# (including nonexistent names); IAM management and builder writes stay in customer-* only.
+resource "google_project_iam_custom_role" "customer_repository_create" {
+  count       = var.task_images ? 1 : 0
+  project     = var.project_id
+  role_id     = "selfbenchCustomerRepositoryCreate"
+  title       = "Create Customer Export Repositories"
+  permissions = ["artifactregistry.repositories.create", "artifactregistry.repositories.get"]
+}
+resource "google_project_iam_member" "runtime_customer_repository_create" {
+  count   = var.task_images ? 1 : 0
+  project = var.project_id
+  role    = google_project_iam_custom_role.customer_repository_create[0].name
+  member  = "serviceAccount:${google_service_account.runtime.email}"
+}
+resource "google_project_iam_custom_role" "customer_repository_access" {
+  count   = var.task_images ? 1 : 0
+  project = var.project_id
+  role_id = "selfbenchCustomerRepositoryAccess"
+  title   = "Manage Customer Export Access"
+  permissions = [
+    "artifactregistry.repositories.getIamPolicy",
+    "artifactregistry.repositories.setIamPolicy",
+  ]
+}
+resource "google_project_iam_member" "runtime_customer_repository_access" {
+  count   = var.task_images ? 1 : 0
+  project = var.project_id
+  role    = google_project_iam_custom_role.customer_repository_access[0].name
+  member  = "serviceAccount:${google_service_account.runtime.email}"
+  condition {
+    title      = "customer-export-repositories"
+    expression = "resource.name.startsWith('projects/${var.project_id}/locations/${var.region}/repositories/customer-')"
+  }
+}
+resource "google_project_iam_member" "builder_customer_images" {
+  count   = var.task_images ? 1 : 0
+  project = var.project_id
+  role    = "roles/artifactregistry.writer"
+  member  = "serviceAccount:${google_service_account.task_builder[0].email}"
+  condition {
+    title      = "customer-export-repositories"
+    expression = "resource.name.startsWith('projects/${var.project_id}/locations/${var.region}/repositories/customer-')"
+  }
+}
+
 locals {
   task_image_registry = "${var.region}-docker.pkg.dev/${var.project_id}"
   task_image_env = var.task_images ? {

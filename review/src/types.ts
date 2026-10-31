@@ -29,6 +29,7 @@ export interface ArtifactEntry {
 }
 
 type BundleStage =
+  | "conversion"
   | "review"
   | "verify"
   | "authoring"
@@ -53,7 +54,8 @@ type ArtifactGroup =
   | "validation-repairs"
   | "reviews"
   | "repairs"
-  | "provenance";
+  | "provenance"
+  | "conversion";
 
 /** One agent sandbox run, as recorded in its `agent.json` and `result.json`. */
 export interface AgentRunRecord {

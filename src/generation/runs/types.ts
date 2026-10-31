@@ -16,6 +16,7 @@ export interface ArtifactEntry {
 }
 
 const BUNDLE_STAGES = [
+  "conversion",
   "review",
   "verify",
   "authoring",
@@ -43,6 +44,8 @@ export const ARTIFACT_GROUPS = [
   "reviews",
   "repairs",
   "provenance",
+  /** Tasks converted from definition.json to native files (task-conversion.ts). */
+  "conversion",
 ] as const;
 export type ArtifactGroup = (typeof ARTIFACT_GROUPS)[number];
 

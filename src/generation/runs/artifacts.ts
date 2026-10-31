@@ -15,10 +15,14 @@ import {
 
 const BUNDLE_NAMES = ["execution-task.tar.gz", "harbor-task.tar.gz", "source-task.tar.gz"];
 
+/**
+ * A candidate's artifacts, with its bundles in the order the viewer opens them: the bundle the
+ * task runs (`bundleKey`) first, then compiled Harbor trees, newest first.
+ */
 export async function candidateArtifacts(
   store: ArtifactStore,
   runId: string,
-  task: Pick<TaskProgress, "taskId" | "candidateId">,
+  task: Pick<TaskProgress, "taskId" | "candidateId"> & { readonly bundleKey?: string },
 ): Promise<CandidateArtifacts> {
   const listed = await Promise.all(
     ARTIFACT_GROUPS.map(async (group) => {
@@ -46,6 +50,8 @@ export async function candidateArtifacts(
     }
   }
   bundles.sort(compareBundles);
+  const running = bundles.findIndex((bundle) => bundle.key === task.bundleKey);
+  if (running > 0) bundles.unshift(...bundles.splice(running, 1));
   const agentEntries = [...groups.authoring, ...groups.review];
   const keys = new Set(agentEntries.map((entry) => entry.key));
   const agents = await Promise.all(
@@ -92,7 +98,8 @@ function groupPrefix(
     case "verification":
       return `runs/${runId}/${group}/${task.candidateId}`;
     case "verify":
-      return `runs/${runId}/verify/${task.candidateId}`;
+    case "conversion":
+      return `runs/${runId}/${group}/${task.candidateId}`;
     case "provenance":
       return `runs/${runId}/provenance`;
     default:
@@ -102,6 +109,8 @@ function groupPrefix(
 
 function bundleStage(group: ArtifactGroup): BundleStage | undefined {
   switch (group) {
+    case "conversion":
+      return "conversion";
     case "review":
     case "verification":
       return "review";
@@ -121,12 +130,13 @@ function bundleStage(group: ArtifactGroup): BundleStage | undefined {
 }
 
 const STAGE_ORDER: Record<BundleStage, number> = {
-  review: 0,
-  verify: 1,
-  repair: 2,
-  "validation-repair": 3,
-  environment: 4,
-  authoring: 5,
+  conversion: 0,
+  review: 1,
+  verify: 2,
+  repair: 3,
+  "validation-repair": 4,
+  environment: 5,
+  authoring: 6,
 };
 
 /** Compiled Harbor trees first (they hold the environment, tests, and solution), newest first. */
