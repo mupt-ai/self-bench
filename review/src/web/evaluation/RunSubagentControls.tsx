@@ -1,4 +1,4 @@
-import { CornerDownRight } from "lucide-react";
+import { ChevronDown, CornerDownRight } from "lucide-react";
 import { useId, useState } from "react";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
@@ -60,13 +60,7 @@ export function RunSubagentControls({
         <button
           type="button"
           className="shrink-0 rounded px-1 text-xs leading-4 text-muted-foreground hover:text-foreground"
-          aria-label={
-            editing
-              ? "Done Editing Subagent Model"
-              : value
-                ? "Edit Subagent Model"
-                : "Add Subagent Model"
-          }
+          aria-label={editing ? "Collapse Subagent Model Settings" : "Configure Subagent Model"}
           aria-expanded={editing}
           aria-controls={panelId}
           onClick={() => {
@@ -74,7 +68,10 @@ export function RunSubagentControls({
             setEditing(!editing);
           }}
         >
-          {editing ? "Done" : value ? "Edit" : "Add Override"}
+          <ChevronDown
+            className={`size-4 transition-transform ${editing ? "rotate-180" : ""}`}
+            aria-hidden="true"
+          />
         </button>
       </div>
       {editing && value && (

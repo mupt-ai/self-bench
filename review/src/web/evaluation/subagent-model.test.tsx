@@ -44,7 +44,7 @@ test.each(["claude-code", "codex"] as const)(
         onChange={() => {}}
       />,
     );
-    expect(html).toContain('aria-label="Edit Subagent Model"');
+    expect(html).toContain('aria-label="Configure Subagent Model"');
     expect(html).toContain('aria-expanded="false"');
     expect(html).toContain("Managed");
     expect(html).not.toContain('aria-label="Subagent Credential"');

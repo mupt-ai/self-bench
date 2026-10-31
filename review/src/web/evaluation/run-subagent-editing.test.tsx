@@ -58,10 +58,16 @@ test("subagent summary stays compact while editing, credential changes, and pare
     expect(container.textContent).toContain(model.label);
     expect(container.textContent).toContain("Router A");
     expect(container.querySelector("select")).toBeNull();
-    expect(button("Edit Subagent Model").getAttribute("aria-expanded")).toBe("false");
+    expect(button("Configure Subagent Model").getAttribute("aria-expanded")).toBe("false");
+    expect(
+      button("Configure Subagent Model").querySelector("svg")?.getAttribute("class"),
+    ).not.toContain("rotate-180");
 
-    await act(async () => button("Edit Subagent Model").click());
-    expect(button("Done").getAttribute("aria-expanded")).toBe("true");
+    await act(async () => button("Configure Subagent Model").click());
+    expect(button("Collapse Subagent Model Settings").getAttribute("aria-expanded")).toBe("true");
+    expect(
+      button("Collapse Subagent Model Settings").querySelector("svg")?.getAttribute("class"),
+    ).toContain("rotate-180");
     expect(container.textContent).not.toContain("Subagent calls are included in the run cost.");
     expect(container.textContent).not.toContain("Applies when the harness delegates");
     const credential = browser.document.querySelector('select[aria-label="Subagent Credential"]');
@@ -70,17 +76,17 @@ test("subagent summary stays compact while editing, credential changes, and pare
       credential.value = "router-1";
       credential.dispatchEvent(new browser.Event("change", { bubbles: true }));
     });
-    await act(async () => button("Done").click());
+    await act(async () => button("Collapse Subagent Model Settings").click());
     expect(container.querySelector("select")).toBeNull();
     expect(container.textContent).toContain("Router B");
     expect(container.textContent).not.toContain("Router A");
 
-    await act(async () => button("Edit Subagent Model").click());
+    await act(async () => button("Configure Subagent Model").click());
     await act(async () => button("Use Parent Model").click());
     expect(container.textContent).toContain("Same as Parent");
     expect(container.querySelector("select")).toBeNull();
-    await act(async () => button("Add Subagent Model").click());
-    expect(button("Done").getAttribute("aria-expanded")).toBe("true");
+    await act(async () => button("Configure Subagent Model").click());
+    expect(button("Collapse Subagent Model Settings").getAttribute("aria-expanded")).toBe("true");
     expect(container.querySelector('select[aria-label="Subagent Credential"]')).not.toBeNull();
   } finally {
     await act(async () => root.unmount());
