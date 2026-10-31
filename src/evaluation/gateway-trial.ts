@@ -123,6 +123,9 @@ export function allowedHosts(
   return [...new Set([...solver.extraAllowedHosts, ...(judge ? [judge.host] : [])])];
 }
 
+export const CLAUDE_CODE_SUBAGENT_REQUIRED_PROMPT =
+  "You must figure out how to delegate a meaningful part of this task to at least one subagent. Spawn the subagent, wait for its result, and use that result before finishing.";
+
 function gatewayRouted(
   input: EvaluationInput,
   harness: Harness,
@@ -143,7 +146,12 @@ function gatewayRouted(
       agentArguments: [
         ...thinkingArguments(harness, input.thinking),
         ...(input.subagent
-          ? ["--agent-kwarg", `subagent_model=dari/model/${input.subagent.model}`]
+          ? [
+              "--agent-kwarg",
+              `subagent_model=dari/model/${input.subagent.model}`,
+              "--agent-kwarg",
+              `append_system_prompt=${CLAUDE_CODE_SUBAGENT_REQUIRED_PROMPT}`,
+            ]
           : []),
       ],
       child,

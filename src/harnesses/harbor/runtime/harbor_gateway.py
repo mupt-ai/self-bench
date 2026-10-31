@@ -89,7 +89,11 @@ class SelfBenchClaudeCode(SkipsSystemNode, ClaudeCode):
         # Harbor pins this variable to the parent with custom base URLs. Override at the
         # execution boundary, after Harbor has built its env, without mutating shared state.
         if self.options.subagent_model and kwargs.get("env") is not None:
-            kwargs["env"] = {**kwargs["env"], "CLAUDE_CODE_SUBAGENT_MODEL": self.options.subagent_model}
+            kwargs["env"] = {
+                **kwargs["env"],
+                "CLAUDE_CODE_SUBAGENT_MODEL": self.options.subagent_model,
+                "CLAUDE_CODE_SUBAGENT_MODEL_FORCE": "1",
+            }
         return await super().exec_as_agent(environment, command=command, **kwargs)
 
     async def install(self, environment):

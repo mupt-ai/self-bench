@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
-import { gatewayTrial } from "../src/evaluation/gateway-trial.js";
+import {
+  CLAUDE_CODE_SUBAGENT_REQUIRED_PROMPT,
+  gatewayTrial,
+} from "../src/evaluation/gateway-trial.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";
 import { gatewayConnection } from "../src/gateway/connection.js";
 import { harborPython } from "../src/harnesses/harbor/command.js";
@@ -28,6 +31,11 @@ test.each(["claude-code", "codex"] as const)(
     expect(trial.agentArguments).toContain(
       "subagent_model=dari/model/openrouter/deepseek/flash-1017",
     );
+    if (harness === "claude-code")
+      expect(trial.agentArguments).toContain(
+        `append_system_prompt=${CLAUDE_CODE_SUBAGENT_REQUIRED_PROMPT}`,
+      );
+    else expect(trial.agentArguments.join(" ")).not.toContain("append_system_prompt");
     expect(trial.agentArguments.join(" ")).not.toContain(connection.key);
     expect(trial.model).toBe(
       `${harness === "codex" ? "openai/" : ""}dari/model/anthropic/claude-parent`,
@@ -49,9 +57,11 @@ spec = importlib.util.spec_from_file_location("adapter", sys.argv[1])
 adapter = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(adapter)
 model = "dari/model/openrouter/deepseek/flash-1017"
-options = adapter.SelfBenchClaudeCode.parse_options({"subagent_model": model, "reasoning_effort": "high"})
-assert options.subagent_model == model and options.reasoning_effort == "high"
+prompt = "You must delegate a meaningful part of this task to at least one subagent."
+options = adapter.SelfBenchClaudeCode.parse_options({"subagent_model": model, "reasoning_effort": "high", "append_system_prompt": prompt})
+assert options.subagent_model == model and options.reasoning_effort == "high" and options.append_system_prompt == prompt
 assert "subagent_model" in adapter.SelfBenchClaudeCode.options_schema()["properties"]
+assert "append_system_prompt" in adapter.SelfBenchClaudeCode.options_schema()["properties"]
 with tempfile.TemporaryDirectory() as directory:
     agent = adapter.SelfBenchClaudeCode(logs_dir=Path(directory), model_name="parent", subagent_model=model)
     assert agent.options.subagent_model == model
@@ -96,6 +106,7 @@ async def check():
     agent = adapter.SelfBenchClaudeCode(subagent_model="dari/model/openrouter/deepseek/flash")
     actual = await agent.exec_as_agent(None, "claude", env=env)
     assert actual["CLAUDE_CODE_SUBAGENT_MODEL"] == "dari/model/openrouter/deepseek/flash"
+    assert actual["CLAUDE_CODE_SUBAGENT_MODEL_FORCE"] == "1"
     assert actual["ANTHROPIC_MODEL"] == "parent"
     assert env["CLAUDE_CODE_SUBAGENT_MODEL"] == "parent"
     plain = adapter.SelfBenchClaudeCode()
