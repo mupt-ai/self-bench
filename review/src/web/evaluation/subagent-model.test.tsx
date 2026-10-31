@@ -44,9 +44,11 @@ test.each(["claude-code", "codex"] as const)(
         onChange={() => {}}
       />,
     );
-    expect(html).toContain("Override Subagent Model");
-    expect(html).toContain('aria-label="Subagent Credential"');
-    expect(html).toContain("does not force delegation");
+    expect(html).toContain('aria-label="Edit Subagent Model"');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain("Managed");
+    expect(html).not.toContain('aria-label="Subagent Credential"');
+    expect(html).not.toContain("<details");
     const plain = renderToStaticMarkup(
       <RunModelRow
         model={model}
@@ -55,7 +57,7 @@ test.each(["claude-code", "codex"] as const)(
         onChange={() => {}}
       />,
     );
-    expect(plain).not.toContain("Override Subagent Model");
+    expect(plain).not.toContain('aria-label="Add Subagent Model"');
     expect(plain).toContain("Subagent Model · Not Supported");
     expect(plain).toContain("does not install a subagent extension");
   },
@@ -74,7 +76,7 @@ test("every unsupported harness explains why instead of exposing an inert select
       />,
     );
     expect(html).toContain("Subagent Model · Not Supported");
-    expect(html).not.toContain("Override Subagent Model");
+    expect(html).not.toContain('aria-label="Add Subagent Model"');
   }
 });
 
