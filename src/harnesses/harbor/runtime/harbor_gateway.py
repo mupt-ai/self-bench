@@ -25,6 +25,10 @@ class SkipsSystemNode:
 
 # The gateway's id for a model on an OpenAI key or ChatGPT sign-in (gatewayRequestModel).
 OPENAI_MODELS = "dari/model/openai/"
+SUBAGENT_REQUIRED_PROMPT = (
+    "You must figure out how to delegate a meaningful part of this task to at least one subagent. "
+    "Spawn the subagent, wait for its result, and use that result before finishing."
+)
 
 
 class GatewayCodexOptions(CodexOptions):
@@ -62,6 +66,10 @@ class GatewayCodex(SkipsSystemNode, Codex):
                 "enabled": True,
                 "default_subagent_model": self.options.subagent_model,
             })
+            existing = config.get("developer_instructions")
+            config["developer_instructions"] = (
+                f"{existing}\n\n{SUBAGENT_REQUIRED_PROMPT}" if existing else SUBAGENT_REQUIRED_PROMPT
+            )
         return config
 
     async def exec_as_agent(self, environment, command, **kwargs):

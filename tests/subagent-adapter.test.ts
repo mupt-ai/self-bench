@@ -68,12 +68,20 @@ with tempfile.TemporaryDirectory() as directory:
     codex = adapter.GatewayCodex(logs_dir=Path(directory), model_name="openai/parent", subagent_model=model)
     assert codex.options.subagent_model == model
     config = codex._build_effective_config("https://gateway.example/v1")
+    assert config["developer_instructions"] == ${JSON.stringify(CLAUDE_CODE_SUBAGENT_REQUIRED_PROMPT)}
+    codex._base_config = {"developer_instructions": "Keep existing guidance."}
+    merged = codex._build_effective_config("https://gateway.example/v1")
+    assert merged["developer_instructions"] == "Keep existing guidance.\\n\\n" + adapter.SUBAGENT_REQUIRED_PROMPT
+    assert codex._base_config == {"developer_instructions": "Keep existing guidance."}
     assert config["agents"]["enabled"] is True
     assert config["agents"]["default_subagent_model"] == model
     assert config["model_provider"] == "gateway"
     assert config["model_providers"]["gateway"]["wire_api"] == "responses"
     plain = adapter.GatewayCodex(logs_dir=Path(directory), model_name="openai/parent")
     assert "agents" not in plain._build_effective_config("https://gateway.example/v1")
+    assert "developer_instructions" not in plain._build_effective_config("https://gateway.example/v1")
+    plain._base_config = {"developer_instructions": "Keep existing guidance."}
+    assert plain._build_effective_config("https://gateway.example/v1")["developer_instructions"] == "Keep existing guidance."
 `,
       fileURLToPath(new URL("../src/harnesses/harbor/runtime/harbor_gateway.py", import.meta.url)),
     ]);
