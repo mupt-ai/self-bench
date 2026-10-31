@@ -10,10 +10,12 @@ import {
   routeFor,
   thinkingOptions,
 } from "../../../../src/evaluation/models";
+import { subagentSupport } from "../../../../src/evaluation/subagents";
 import { ModelPicker } from "../ModelPicker";
 import { Input, Select } from "../ui";
 import type { Harness } from "./api";
 import { nextModelSelection } from "./model-selection";
+import { RunSubagentControls } from "./RunSubagentControls";
 
 const mobileLabel = "mb-2 block text-xs font-semibold text-muted-foreground xl:hidden";
 
@@ -48,10 +50,16 @@ export function RunModelRow({
     const available = nextRoute?.harnesses.filter((harness) =>
       credentialRunsHarness(nextCredential?.auth ?? "api-key", harness),
     );
+    const nextHarnesses = harnesses.length ? harnesses : (available?.slice(0, 1) ?? []);
     onChange({
       ...selected,
       credentialId,
-      harnesses: harnesses.length ? harnesses : (available?.slice(0, 1) ?? []),
+      harnesses: nextHarnesses,
+      subagent:
+        nextHarnesses.length > 0 &&
+        nextHarnesses.every((harness) => subagentSupport[harness].configurable)
+          ? selected.subagent
+          : undefined,
     });
   };
   // Until a credential is chosen, every harness some credential runs the model on.
@@ -149,6 +157,7 @@ export function RunModelRow({
               ...selected,
               harnesses: [event.target.value as Harness],
               thinking: undefined,
+              subagent: undefined,
             })
           }
         >
@@ -169,6 +178,15 @@ export function RunModelRow({
             ))}
         </Select>
       </div>
+      {selected.harnesses.length > 0 && (
+        <RunSubagentControls
+          models={models}
+          credentials={credentials}
+          harnesses={selected.harnesses}
+          value={selected.subagent}
+          onChange={(subagent) => onChange({ ...selected, subagent })}
+        />
+      )}
     </div>
   );
 }

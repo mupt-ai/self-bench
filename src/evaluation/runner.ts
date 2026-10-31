@@ -203,6 +203,13 @@ async function runTrial(context: {
       if (!records) throw new Error("Harbor's transcripts were not read");
       Object.assign(trial, trialCost(run, trial.harness, records, parsed, context.modelAuth));
       Object.assign(trial, await dariTrialCost(run, trial, child, records));
+      // A single model's transcript rates cannot price a mixed-model trial. Only the
+      // gateway's per-request totals can; leave cost unknown if any call is unpriced.
+      if (run.subagent) {
+        delete trial.apiCostUsd;
+        delete trial.billedCostUsd;
+        delete trial.costSource;
+      }
       if (context.gatewayOrgId !== undefined && options.gateway)
         Object.assign(
           trial,

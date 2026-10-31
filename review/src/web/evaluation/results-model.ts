@@ -113,10 +113,8 @@ export function outcomeOf(trial: EvaluationTrial): Outcome {
 }
 
 /**
- * The release's setting for a run's trials on one harness (settingOf in
- * src/public/release-results.ts): model, harness and reasoning, whatever route reached the model.
- * A run from before runs recorded their credentials has none, and is left out, as a release
- * leaves it out.
+ * Matches release-results.ts: parent, harness, reasoning and optional subagent model.
+ * Runs without recorded credentials are left out, as they are in releases.
  */
 function identityOf(run: EvaluationRun, harness: Harness) {
   if (!run.credentials) return undefined;
@@ -127,12 +125,17 @@ function identityOf(run: EvaluationRun, harness: Harness) {
     (isGateway(run.credentials.provider)
       ? models.find((model) => model.openRouter === run.model)
       : undefined);
-  // Custom models are recorded as `openai/<typed name>`; the typed name is the identity.
   const typed = custom ? run.modelName.replace(/^openai\//, "") : undefined;
   const model = custom ? `custom/${typed}` : (catalog?.id ?? run.model);
+  const label = typed ?? catalog?.label ?? findListedModel(run.model)?.label ?? run.modelLabel;
   return {
-    key: JSON.stringify([model, harness, run.thinking ?? "default"]),
-    label: typed ?? catalog?.label ?? findListedModel(run.model)?.label ?? run.modelLabel,
+    key: JSON.stringify([
+      model,
+      harness,
+      run.thinking ?? "default",
+      ...(run.subagent ? [run.subagent.model] : []),
+    ]),
+    label: run.subagent ? `${label} (Subagents: ${run.subagent.model})` : label,
     modelName: typed ?? (catalog?.vendor ? `${catalog.vendor}/${catalog.id}` : run.modelName),
     provider: custom ? "custom" : (catalog?.vendor ?? run.credentials.provider),
     harness,

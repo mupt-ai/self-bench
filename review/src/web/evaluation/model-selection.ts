@@ -60,6 +60,8 @@ export function hasModelSelection(
   candidate: ComparisonDraft["models"][number],
   credentials: readonly Pick<CredentialInfo, "id" | "kind">[],
 ): boolean {
+  const subagentProvider = (selection: ComparisonDraft["models"][number]) =>
+    credentials.find((entry) => entry.id === selection.subagent?.credentialId)?.kind;
   const effectiveThinking = (selection: ComparisonDraft["models"][number]) => {
     const kind = credentials.find((entry) => entry.id === selection.credentialId)?.kind;
     const route = kind ? routeFor(model, kind) : undefined;
@@ -71,6 +73,8 @@ export function hasModelSelection(
     (selection) =>
       selection.catalogId === candidate.catalogId &&
       (selection.customModel ?? "") === (candidate.customModel ?? "") &&
+      selection.subagent?.catalogId === candidate.subagent?.catalogId &&
+      subagentProvider(selection) === subagentProvider(candidate) &&
       effectiveThinking(selection) === effectiveThinking(candidate) &&
       selection.harnesses.some((harness) => candidate.harnesses.includes(harness)),
   );

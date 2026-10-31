@@ -1,0 +1,109 @@
+import { expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
+import { gatewayTrial } from "../src/evaluation/gateway-trial.js";
+import type { EvaluationInput } from "../src/evaluation/types.js";
+import { gatewayConnection } from "../src/gateway/connection.js";
+import { harborPython } from "../src/harnesses/harbor/command.js";
+import { runCommand } from "../src/lib/process.js";
+
+test.each(["claude-code", "codex"] as const)(
+  "%s receives the authorized full subagent ID as an agent kwarg, not a secret",
+  (harness) => {
+    const input = {
+      modelName: "anthropic/claude-parent",
+      subagent: {
+        catalogId: "flash",
+        model: "openrouter/deepseek/flash-1017",
+        credentialId: "managed-model",
+      },
+    } as EvaluationInput;
+    const connection = gatewayConnection("https://api.example", "s".repeat(40), {
+      orgId: 7,
+      model: input.modelName,
+      credentialId: "managed-model",
+      ...(input.subagent ? { subagent: input.subagent } : {}),
+      tags: {},
+    });
+    const trial = gatewayTrial(input, harness, input.modelName, {}, connection);
+    expect(trial.agentArguments).toContain(
+      "subagent_model=dari/model/openrouter/deepseek/flash-1017",
+    );
+    expect(trial.agentArguments.join(" ")).not.toContain(connection.key);
+    expect(trial.model).toBe(
+      `${harness === "codex" ? "openai/" : ""}dari/model/anthropic/claude-parent`,
+    );
+  },
+);
+
+test.skipIf(!Bun.which("harbor"))(
+  "real Harbor accepts subagent overrides in preflight and construction",
+  async () => {
+    const python = await harborPython(process.env);
+    const result = await runCommand(python, [
+      "-c",
+      `
+import importlib.util, tempfile
+from pathlib import Path
+import sys
+spec = importlib.util.spec_from_file_location("adapter", sys.argv[1])
+adapter = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(adapter)
+model = "dari/model/openrouter/deepseek/flash-1017"
+options = adapter.SelfBenchClaudeCode.parse_options({"subagent_model": model, "reasoning_effort": "high"})
+assert options.subagent_model == model and options.reasoning_effort == "high"
+assert "subagent_model" in adapter.SelfBenchClaudeCode.options_schema()["properties"]
+with tempfile.TemporaryDirectory() as directory:
+    agent = adapter.SelfBenchClaudeCode(logs_dir=Path(directory), model_name="parent", subagent_model=model)
+    assert agent.options.subagent_model == model
+    codex = adapter.GatewayCodex(logs_dir=Path(directory), model_name="openai/parent", subagent_model=model)
+    assert codex.options.subagent_model == model
+    config = codex._build_effective_config("https://gateway.example/v1")
+    assert config["agents"]["enabled"] is True
+    assert config["agents"]["default_subagent_model"] == model
+    assert config["model_provider"] == "gateway"
+    assert config["model_providers"]["gateway"]["wire_api"] == "responses"
+    plain = adapter.GatewayCodex(logs_dir=Path(directory), model_name="openai/parent")
+    assert "agents" not in plain._build_effective_config("https://gateway.example/v1")
+`,
+      fileURLToPath(new URL("../src/harnesses/harbor/runtime/harbor_gateway.py", import.meta.url)),
+    ]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+  },
+);
+
+test("the Harbor adapter overrides its subagent pin after env construction and preserves the parent", async () => {
+  const result = await runCommand("python3", [
+    "-c",
+    `
+import asyncio, importlib.util, sys, types
+class ClaudeCode:
+    def __init__(self, **kwargs):
+        self.options = type(self).options_model()
+        for key, value in kwargs.items():
+            setattr(self.options, key, value)
+    async def exec_as_agent(self, environment, command, **kwargs):
+        return kwargs.get("env")
+sys.modules["harbor.agents.installed.claude_code"] = types.SimpleNamespace(ClaudeCode=ClaudeCode, ClaudeCodeOptions=object)
+sys.modules["harbor.agents.installed.codex"] = types.SimpleNamespace(Codex=object, CodexOptions=object)
+sys.modules["harbor.agents.installed.pi"] = types.SimpleNamespace(Pi=object, PiOptions=object)
+sys.modules["harbor.agents.model_connection"] = types.SimpleNamespace(ModelConnectionSpec=lambda **kw: kw)
+spec = importlib.util.spec_from_file_location("adapter", sys.argv[1])
+adapter = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(adapter)
+async def check():
+    env = {"ANTHROPIC_MODEL": "parent", "CLAUDE_CODE_SUBAGENT_MODEL": "parent"}
+    agent = adapter.SelfBenchClaudeCode(subagent_model="dari/model/openrouter/deepseek/flash")
+    actual = await agent.exec_as_agent(None, "claude", env=env)
+    assert actual["CLAUDE_CODE_SUBAGENT_MODEL"] == "dari/model/openrouter/deepseek/flash"
+    assert actual["ANTHROPIC_MODEL"] == "parent"
+    assert env["CLAUDE_CODE_SUBAGENT_MODEL"] == "parent"
+    plain = adapter.SelfBenchClaudeCode()
+    assert (await plain.exec_as_agent(None, "claude", env=env)) == env
+asyncio.run(check())
+`,
+    fileURLToPath(new URL("../src/harnesses/harbor/runtime/harbor_gateway.py", import.meta.url)),
+  ]);
+  expect(result.exitCode).toBe(0);
+  expect(result.stderr).toBe("");
+});

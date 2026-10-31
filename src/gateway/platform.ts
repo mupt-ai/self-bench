@@ -8,7 +8,9 @@ import type {
 import { HttpError } from "@mupt-ai/dari-gateway/http/errors";
 import type { CredentialInfo, CredentialSecret } from "../db/credentials.js";
 import { signInCredential } from "./sign-in.js";
-import { MANAGED_MODEL_CREDENTIAL, readTrialKey, type TrialKey } from "./trial-key.js";
+import { readTrialKey, type TrialKey } from "./trial-key.js";
+
+export { withManagedModel } from "./managed-model.js";
 
 /** The gateway's description of one model: its provider, native id, API, limits and prices. */
 export type GatewayModelConfig = NonNullable<ResolvedRouter["model_configs"]>[string];
@@ -84,8 +86,8 @@ const unavailable = (what: string) =>
 
 /**
  * SelfBench's gateway platform. A request authenticates with a trial key (trial-key.ts). Its
- * solver part pins one model on one of the org's credentials: the router is strict, so the gateway
- * serves exactly that model (at the key's thinking level, when it names one) and never falls back
+ * solver part authorizes the parent and optional secondary model on explicit credentials. The
+ * strict router serves only those models (with any parent thinking pin) and never falls back
  * or leases. A sign-in serves it on the plan the platform supplies. Its judge part lets the task's
  * judge call any model of its credential's provider (`strict_providers`). Conversation routing
  * state is not kept, since a strict router never reads it.
@@ -108,6 +110,24 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
       const id = createHash("sha256").update(apiKey).digest("base64url").slice(0, 22);
       const config = model && credential ? modelConfig(deps, key, credential) : undefined;
       const price = model && deps.modelPrice?.(model);
+      const secondary = key.subagent;
+      const secondaryCredential =
+        secondary && (await deps.credentials.find(key.orgId, secondary.credentialId));
+      if (secondary && !secondaryCredential) throw unavailable("The subagent's credential");
+      const secondaryConfig =
+        secondary && secondaryCredential
+          ? modelConfig(
+              deps,
+              {
+                orgId: key.orgId,
+                model: secondary.model,
+                tags: key.tags,
+                expiresAt: key.expiresAt,
+              },
+              secondaryCredential,
+            )
+          : undefined;
+      const secondaryPrice = secondary && deps.modelPrice?.(secondary.model);
       for (const [stale, entry] of resolved)
         if (entry.expiresAt <= Date.now()) resolved.delete(stale);
       resolved.set(id, key);
@@ -116,10 +136,24 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
         organization_id: String(key.orgId),
         api_key_id: id,
         attributed_user_id: null,
-        enabled_models: model ? [model] : [],
+        enabled_models: model ? [model, ...(secondary ? [secondary.model] : [])] : [],
         provider_keys: {},
-        ...(model && config ? { model_configs: { [model]: config } } : {}),
-        ...(model && price ? { model_prices: { [model]: price } } : {}),
+        ...(config || secondaryConfig
+          ? {
+              model_configs: {
+                ...(model && config ? { [model]: config } : {}),
+                ...(secondary && secondaryConfig ? { [secondary.model]: secondaryConfig } : {}),
+              },
+            }
+          : {}),
+        ...(price || secondaryPrice
+          ? {
+              model_prices: {
+                ...(model && price ? { [model]: price } : {}),
+                ...(secondary && secondaryPrice ? { [secondary.model]: secondaryPrice } : {}),
+              },
+            }
+          : {}),
         // A pinned level is the only one served, whatever level a call asks for or omits.
         ...(model && thinking ? { model_thinking_levels: { [model]: [thinking] } } : {}),
         strict: true,
@@ -134,8 +168,8 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
     },
     async resolveProviderCredential({ apiKey, model }: { apiKey: string; model: string }) {
       const key = keyOf(apiKey);
-      // The solver's model on its credential; any other model is the judge's, on the judge's.
-      const id = model === key.model ? key.credentialId : judgeCredential(key, model);
+      // Solver and judge keys are disjoint; each solver model has an exact credential.
+      const id = solverCredential(key, model) ?? judgeCredential(key, model);
       if (!id) throw unavailable(`A credential for ${model}`);
       const [info, secret] = await Promise.all([
         deps.credentials.find(key.orgId, id),
@@ -171,9 +205,12 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
       const key = summary.api_key_id ? resolved.get(summary.api_key_id) : undefined;
       if (!key) return;
       const model = summary.selected_model ?? key.model ?? "";
-      const solver = model === key.model;
-      const credentialId = solver ? key.credentialId : judgeCredential(key, model);
+      const solver = solverCredential(key, model);
+      const credentialId = solver ?? judgeCredential(key, model);
       if (!credentialId) return;
+      const requestTags = { ...tags };
+      delete requestTags.judge;
+      delete requestTags.subagent;
       try {
         deps.recordUsage({
           requestId: summary.request_id,
@@ -181,7 +218,12 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
           credentialId,
           model,
           // The key's tags win: a header can add labels but never reattribute spend.
-          tags: { ...tags, ...key.tags, ...(solver ? {} : { judge: "true" }) },
+          tags: {
+            ...requestTags,
+            ...key.tags,
+            ...(solver ? {} : { judge: "true" }),
+            ...(key.subagent?.model === model ? { subagent: "true" } : {}),
+          },
           status: summary.status,
           inputTokens: summary.input_tokens,
           outputTokens: summary.output_tokens,
@@ -202,6 +244,14 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
       deps.captureError(error);
     },
   };
+}
+
+function solverCredential(key: TrialKey, model: string): string | undefined {
+  return model === key.model
+    ? key.credentialId
+    : model === key.subagent?.model
+      ? key.subagent.credentialId
+      : undefined;
 }
 
 /** The judge's credential, when `model` is one of the judge's provider's. */
@@ -247,30 +297,4 @@ function modelConfig(
         }
       : undefined);
   return config && thinking ? { ...config, default_thinking_level: thinking } : config;
-}
-
-/**
- * The org's credentials, plus SelfBench's own OpenRouter account as the managed model credential
- * when `managedKey` (the platform's OpenRouter key) is set.
- */
-export function withManagedModel(
-  credentials: SelfBenchGatewayDeps["credentials"],
-  managedKey: string | undefined,
-): SelfBenchGatewayDeps["credentials"] {
-  const managed = (id: string) => id === MANAGED_MODEL_CREDENTIAL;
-  return {
-    find: async (orgId, id) =>
-      managed(id)
-        ? managedKey
-          ? { id, kind: "openrouter", auth: "api-key" }
-          : undefined
-        : credentials.find(orgId, id),
-    secret: async (orgId, id) =>
-      managed(id)
-        ? managedKey
-          ? { value: managedKey }
-          : undefined
-        : credentials.secret(orgId, id),
-    renew: (orgId, id, value) => credentials.renew(orgId, id, value),
-  };
 }

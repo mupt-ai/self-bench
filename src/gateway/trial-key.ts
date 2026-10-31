@@ -20,8 +20,8 @@ export type PinnedThinking = (typeof pinnedLevels)[number];
 /**
  * What one trial's agent and judge may call through the gateway, signed by the worker and checked
  * by the API with a secret both share (as callback-grant.ts does), so nothing is stored
- * server-side. The solver's part names one credential and the one model it may serve, which the
- * gateway pins (`strict`); the judge's names a credential whose provider's models it may call.
+ * server-side. Solver keys name the parent and optional secondary model with their credentials;
+ * strict routing serves only those exact models. Judge keys separately authorize a provider.
  */
 export interface TrialKey {
   readonly orgId: number;
@@ -29,6 +29,8 @@ export interface TrialKey {
   readonly credentialId?: string;
   /** The gateway's model id, `provider/model`, such as `openrouter/anthropic/claude-sonnet-5-5`. */
   readonly model?: string;
+  /** An explicitly authorized secondary solver model, not a judge. */
+  readonly subagent?: { readonly model: string; readonly credentialId: string };
   /**
    * The thinking level every call is served at, when the trial's harness does not say it on each
    * request itself (Codex's is dropped by the gateway). Absent, each call's own level is served.
@@ -57,6 +59,13 @@ const keySchema = z
       .string()
       .regex(/^[^/\s]+\/\S+$/)
       .optional(),
+    subagent: z
+      .object({
+        model: z.string().regex(/^[^/\s]+\/\S+$/),
+        credentialId: z.union([z.uuid(), z.literal(MANAGED_MODEL_CREDENTIAL)]),
+      })
+      .strict()
+      .optional(),
     thinking: z.enum(pinnedLevels).optional(),
     api: z.literal("openai-responses").optional(),
     judge: z.object({ credentialId: z.uuid(), provider: z.string().min(1) }).optional(),
@@ -67,8 +76,9 @@ const keySchema = z
   .refine(
     (key) =>
       (key.model && key.credentialId && !key.judge) ||
-      (key.judge && !key.credentialId && !key.model),
-  );
+      (key.judge && !key.credentialId && !key.model && !key.subagent),
+  )
+  .refine((key) => !key.subagent || key.subagent.model !== key.model);
 
 const PREFIX = "sbk_";
 

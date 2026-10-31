@@ -140,7 +140,12 @@ function gatewayRouted(
     return {
       model: requestModel,
       agent: "harbor_gateway:SelfBenchClaudeCode",
-      agentArguments: thinkingArguments(harness, input.thinking),
+      agentArguments: [
+        ...thinkingArguments(harness, input.thinking),
+        ...(input.subagent
+          ? ["--agent-kwarg", `subagent_model=dari/model/${input.subagent.model}`]
+          : []),
+      ],
       child,
       extraAllowedHosts,
     };
@@ -169,7 +174,15 @@ function gatewayRouted(
     // GatewayCodex restores the full id, and the others take `openai/` as their provider.
     model: `openai/${requestModel}`,
     agent: harness === "codex" ? "harbor_gateway:GatewayCodex" : harness,
-    agentArguments: harness === "codex" ? thinkingArguments(harness, input.thinking) : [],
+    agentArguments:
+      harness === "codex"
+        ? [
+            ...thinkingArguments(harness, input.thinking),
+            ...(input.subagent
+              ? ["--agent-kwarg", `subagent_model=dari/model/${input.subagent.model}`]
+              : []),
+          ]
+        : [],
     child,
     extraAllowedHosts,
   };
@@ -240,7 +253,8 @@ export async function gatewayTrialCost(
   if (!cost?.complete) return {};
   return {
     apiCostUsd: cost.costUsd,
-    ...(auth === "api-key" ? { billedCostUsd: cost.costUsd } : {}),
+    // A secondary credential can be a sign-in even when the parent uses an API key.
+    ...(auth === "api-key" && !run.subagent ? { billedCostUsd: cost.costUsd } : {}),
     costSource: "gateway",
   };
 }

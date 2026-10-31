@@ -65,7 +65,14 @@ export function createEvaluationActivities(
     return holdingCapacity(
       vault,
       orgId,
-      [ids.sandboxCredentialId, ...(usesModel ? [ids.modelCredentialId] : [])],
+      [
+        ...new Set([
+          ids.sandboxCredentialId,
+          ...(usesModel
+            ? [ids.modelCredentialId, ...(input.subagent ? [input.subagent.credentialId] : [])]
+            : []),
+        ]),
+      ],
       run,
     );
   };

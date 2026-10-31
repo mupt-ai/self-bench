@@ -56,13 +56,14 @@ function settingOf(
   const typed = custom ? run.modelName.replace(/^openai\//, "") : undefined;
   const model = custom ? `custom/${typed}` : (catalog?.id ?? run.model);
   const reasoningLevel = run.thinking ?? "default";
-  const parts = [model, harness, reasoningLevel];
+  const parts = [model, harness, reasoningLevel, ...(run.subagent ? [run.subagent.model] : [])];
+  const label = typed ?? catalog?.label ?? findListedModel(run.model)?.label ?? run.modelLabel;
   return {
     key: JSON.stringify(parts),
     id: parts.join("|"),
     catalogId: custom ? "custom" : (catalog?.id ?? run.model),
     modelName: typed ?? (catalog?.vendor ? `${catalog.vendor}/${catalog.id}` : run.modelName),
-    label: typed ?? catalog?.label ?? findListedModel(run.model)?.label ?? run.modelLabel,
+    label: run.subagent ? `${label} (Subagents: ${run.subagent.model})` : label,
     harness,
     reasoningLevel,
     // This describes the model's vendor, not the credential route of a selected trial.
