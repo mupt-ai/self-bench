@@ -49,6 +49,8 @@ test.each(["claude-code", "codex"] as const)(
     expect(html).toContain("Managed");
     expect(html).not.toContain('aria-label="Subagent Credential"');
     expect(html).not.toContain("<details");
+    expect(html).not.toContain("Overrides Claude Code's subagent model");
+    expect(html).not.toContain("default subagent model");
     const plain = renderToStaticMarkup(
       <RunModelRow
         model={model}
@@ -59,11 +61,11 @@ test.each(["claude-code", "codex"] as const)(
     );
     expect(plain).not.toContain('aria-label="Add Subagent Model"');
     expect(plain).toContain("Subagent Model · Not Supported");
-    expect(plain).toContain("does not install a subagent extension");
+    expect(plain).not.toContain("does not install a subagent extension");
   },
 );
 
-test("every unsupported harness explains why instead of exposing an inert selector", () => {
+test("unsupported harnesses show a concise status instead of inert selectors", () => {
   const base = catalog[0];
   if (!base) throw new Error("Missing model");
   for (const harness of harnessIds.filter((entry) => !subagentSupport[entry].configurable)) {

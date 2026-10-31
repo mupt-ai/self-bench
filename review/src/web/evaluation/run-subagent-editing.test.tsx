@@ -62,7 +62,8 @@ test("subagent summary stays compact while editing, credential changes, and pare
 
     await act(async () => button("Edit Subagent Model").click());
     expect(button("Done").getAttribute("aria-expanded")).toBe("true");
-    expect(container.textContent).toContain("does not force delegation");
+    expect(container.textContent).not.toContain("Subagent calls are included in the run cost.");
+    expect(container.textContent).not.toContain("Applies when the harness delegates");
     const credential = browser.document.querySelector('select[aria-label="Subagent Credential"]');
     if (!(credential instanceof browser.HTMLSelectElement)) throw new Error("Missing credential");
     await act(async () => {

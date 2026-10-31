@@ -25,10 +25,7 @@ export function RunSubagentControls({
   const unsupported = harnesses.filter((harness) => !subagentSupport[harness].configurable);
   if (unsupported.length)
     return (
-      <p
-        className="flex items-center gap-2 text-xs text-muted-foreground sm:col-span-3 xl:col-span-4"
-        title={unsupported.map((harness) => subagentSupport[harness].description).join(" ")}
-      >
+      <p className="flex items-center gap-2 text-xs text-muted-foreground sm:col-span-3 xl:col-span-4">
         <CornerDownRight className="size-3.5 shrink-0" aria-hidden="true" />
         Subagent Model · Not Supported
       </p>
@@ -115,11 +112,7 @@ export function RunSubagentControls({
             </label>
           </div>
           <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
-            <p className="max-w-xl text-xs leading-5 text-muted-foreground">
-              Applies when the harness delegates; it does not force delegation. Subagent calls are
-              included in the run cost.{" "}
-              {harnesses.map((harness) => subagentSupport[harness].description).join(" ")}
-            </p>
+            <span />
             <button
               type="button"
               className="shrink-0 rounded py-1 text-xs text-muted-foreground hover:text-foreground"

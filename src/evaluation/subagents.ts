@@ -4,30 +4,26 @@ import type { Harness } from "./models.js";
 export const subagentSupport: Record<Harness, { configurable: boolean; description: string }> = {
   "claude-code": {
     configurable: true,
-    description: "Overrides Claude Code's subagent model when it delegates.",
+    description: "Configurable delegation model override.",
   },
   codex: {
     configurable: true,
-    description:
-      "Sets Codex's default subagent model. Explicit spawn options and custom agents may override this default; only authorized models can be called.",
+    description: "Configurable default for delegated agents.",
   },
   pi: {
     configurable: false,
-    description:
-      "This Harbor Pi adapter does not install a subagent extension. A model setting alone cannot enable delegation.",
+    description: "This adapter has no delegation extension.",
   },
   "mini-swe-agent": {
     configurable: false,
-    description: "Mini-SWE-Agent's Harbor adapter has no delegated-agent model setting.",
+    description: "This adapter has no delegation model setting.",
   },
   "terminus-2": {
     configurable: false,
-    description:
-      "Terminus 2's internal context-summarization calls are not configurable task-delegation agents in this integration.",
+    description: "Summarization calls are not configurable delegated agents.",
   },
   "muse-code": {
     configurable: false,
-    description:
-      "Muse Code delegates internally, but this adapter has no verified independent subagent-model override or gateway route.",
+    description: "This adapter has no verified delegation model override.",
   },
 };
