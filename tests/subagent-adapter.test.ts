@@ -50,7 +50,7 @@ test.skipIf(!Bun.which("harbor"))(
     const result = await runCommand(python, [
       "-c",
       `
-import importlib.util, tempfile
+import importlib.util, shlex, tempfile
 from pathlib import Path
 import sys
 spec = importlib.util.spec_from_file_location("adapter", sys.argv[1])
@@ -63,8 +63,11 @@ assert options.subagent_model == model and options.reasoning_effort == "high" an
 assert "subagent_model" in adapter.SelfBenchClaudeCode.options_schema()["properties"]
 assert "append_system_prompt" in adapter.SelfBenchClaudeCode.options_schema()["properties"]
 with tempfile.TemporaryDirectory() as directory:
-    agent = adapter.SelfBenchClaudeCode(logs_dir=Path(directory), model_name="parent", subagent_model=model)
+    agent = adapter.SelfBenchClaudeCode(logs_dir=Path(directory), model_name="parent", subagent_model=model, append_system_prompt=prompt)
     assert agent.options.subagent_model == model
+    flags = shlex.split(agent.build_cli_flags())
+    assert flags[flags.index("--append-system-prompt") + 1] == prompt
+    assert flags.count(prompt) == 1
     codex = adapter.GatewayCodex(logs_dir=Path(directory), model_name="openai/parent", subagent_model=model)
     assert codex.options.subagent_model == model
     config = codex._build_effective_config("https://gateway.example/v1")
