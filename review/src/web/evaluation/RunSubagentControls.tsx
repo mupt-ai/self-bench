@@ -25,7 +25,7 @@ export function RunSubagentControls({
   const unsupported = harnesses.filter((harness) => !subagentSupport[harness].configurable);
   if (unsupported.length)
     return (
-      <p className="flex items-center gap-2 text-xs text-muted-foreground sm:col-span-3 xl:col-span-4">
+      <p className="mt-2 flex items-center gap-2 rounded-md border border-border/50 bg-muted/20 px-3 py-2 text-xs text-muted-foreground sm:col-span-3 xl:col-span-4">
         <CornerDownRight className="size-3.5 shrink-0" aria-hidden="true" />
         Subagent Model · Not Supported
       </p>
@@ -43,11 +43,11 @@ export function RunSubagentControls({
   const credential = credentials.find((entry) => entry.id === value?.credentialId);
   return (
     <div className="min-w-0 sm:col-span-3 xl:col-span-4">
-      <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-        <CornerDownRight className="size-3.5 shrink-0" aria-hidden="true" />
-        <span className="shrink-0">Subagent</span>
+      <div className="mt-2 flex min-w-0 items-center gap-2 rounded-md border border-border/50 bg-muted/20 px-3 py-2 text-sm">
+        <CornerDownRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <span className="shrink-0 text-muted-foreground">Subagent</span>
         <span
-          className="min-w-0 truncate text-foreground/80"
+          className="min-w-0 truncate font-medium text-foreground"
           title={model?.label ?? value?.catalogId}
         >
           {value ? (model?.label ?? (value.catalogId || "Choose Model")) : "Same as Parent"}
@@ -59,7 +59,7 @@ export function RunSubagentControls({
         )}
         <button
           type="button"
-          className="ml-auto shrink-0 rounded px-1 py-1 text-xs text-muted-foreground hover:text-foreground"
+          className="shrink-0 rounded px-1 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
           aria-label={
             editing
               ? "Done Editing Subagent Model"
