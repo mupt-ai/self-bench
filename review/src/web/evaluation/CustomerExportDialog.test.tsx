@@ -9,7 +9,7 @@ setupTrialDialogTests();
 const button = (text: string) =>
   [...document.querySelectorAll("button")].find((entry) => entry.textContent === text);
 
-test("customer export submits Google identity and a completed evaluation, then shows the download", async () => {
+test("customer export submits Google identity, then shows the download and its evaluation", async () => {
   const posts: Record<string, string>[] = [];
   const evaluation = run("12345678-1234-4234-8234-123456789abc", { status: "completed" }, []);
   let ready = false;
@@ -27,6 +27,7 @@ test("customer export submits Google identity and a completed evaluation, then s
               id: "export-id",
               customer: "Acme",
               email: "customer@example.com",
+              evaluationId: evaluation.id,
               status: "ready",
               createdAt: "2026-10-01T00:00:00Z",
               repository: "us-docker.pkg.dev/project/customer-id",
@@ -57,16 +58,17 @@ test("customer export submits Google identity and a completed evaluation, then s
       .querySelector("form")
       ?.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true })),
   );
-  expect(posts[0]).toMatchObject({
-    customer: "Acme",
-    email: "customer@example.com",
-    evaluationId: evaluation.id,
-  });
+  expect(posts[0]).toMatchObject({ customer: "Acme", email: "customer@example.com" });
+  expect(posts[0]).not.toHaveProperty("evaluationId");
+  expect(document.querySelector("select")).toBeNull();
   const link = [...document.querySelectorAll("a")].find(
     (entry) => entry.textContent === "Download Harbor ZIP",
   );
   expect(link?.getAttribute("href")).toBe("/evaluations/exports/export-id/download");
   expect(document.body.textContent).toContain("no automatic expiry");
+  expect(document.body.textContent).toContain(
+    `Tasks from the evaluation of ${new Date(evaluation.createdAt).toLocaleString()}`,
+  );
   await act(async () => root.unmount());
 });
 

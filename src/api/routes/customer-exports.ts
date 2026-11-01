@@ -7,13 +7,13 @@ import {
 } from "../../customer-exports/types.js";
 import type { User } from "../../db/users.js";
 import { sameScope } from "../../evaluation/scope.js";
-import { getEvaluation } from "../../evaluation/store.js";
+import { listEvaluations } from "../../evaluation/store.js";
+import type { EvaluationInput } from "../../evaluation/types.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
 import type { EvaluationRoutesOptions } from "./evaluations.js";
 
 const schema = z.strictObject({
   id: z.uuid(),
-  evaluationId: z.uuid(),
   customer: z.string().trim().min(1).max(100),
   email: z.email().max(254),
 });
@@ -97,44 +97,49 @@ export async function customerExportRoute(
   const parsed = schema.safeParse(body);
   if (!parsed.success)
     return sendJson(response, 400, {
-      error: "Provide a customer name, Google account email, and evaluation",
+      error: "Provide a customer name and Google account email",
     });
   const input = parsed.data;
-  const scope = { repoId: owner.repoId };
-  const run = await getEvaluation(artifacts, scope, input.evaluationId);
-  if (!run || run.deletedAt || run.status !== "completed")
-    return sendJson(response, 400, { error: "Choose a completed evaluation" });
-  const comparison = run.comparisonId
-    ? await options.vault.comparisons.find(run.comparisonId)
-    : undefined;
-  const frozen =
-    comparison?.orgId === owner.orgId && sameScope(comparison.scope, scope)
-      ? comparison.inputs.find((entry) => entry.id === run.id)
-      : undefined;
-  if (frozen && frozen.tasks.length > 500)
-    return sendJson(response, 400, { error: "Export at most 500 tasks at a time" });
-  if (
-    !frozen?.tasks.length ||
-    frozen.tasks.some((task) => !task.images || !task.bundleKey.endsWith("/execution-task.tar.gz"))
-  )
-    return sendJson(response, 400, {
-      error:
-        "This evaluation has no frozen image-backed execution bundles. Run an evaluation of the current image-backed tasks first.",
-    });
   const key = `${exportPrefix(owner.repoId, input.id)}request.json`;
   let saved = await read<CustomerExportRequest>(key);
-  if (
-    saved &&
-    (saved.email !== input.email ||
-      saved.customer !== input.customer ||
-      saved.evaluationId !== input.evaluationId)
-  )
+  if (saved && (saved.email !== input.email || saved.customer !== input.customer))
     return sendJson(response, 409, { error: "This export ID belongs to a different request" });
   if (!saved) {
+    // The newest completed evaluation whose frozen tasks are image-backed; a retry keeps the first pick.
+    const vault = options.vault;
+    const scope = { repoId: owner.repoId };
+    let picked: { id: string; tasks: EvaluationInput["tasks"] } | undefined;
+    for (const run of await listEvaluations(artifacts, scope)) {
+      if (run.status !== "completed") continue;
+      const comparison = run.comparisonId
+        ? await vault.comparisons.find(run.comparisonId)
+        : undefined;
+      const frozen =
+        comparison?.orgId === owner.orgId && sameScope(comparison.scope, scope)
+          ? comparison.inputs.find((entry) => entry.id === run.id)
+          : undefined;
+      if (
+        frozen?.tasks.length &&
+        frozen.tasks.every(
+          (task) => task.images && task.bundleKey.endsWith("/execution-task.tar.gz"),
+        )
+      ) {
+        picked = { id: run.id, tasks: frozen.tasks };
+        break;
+      }
+    }
+    if (!picked)
+      return sendJson(response, 400, {
+        error:
+          "No completed evaluation has image-backed tasks to export. Run an evaluation of the current tasks first.",
+      });
+    if (picked.tasks.length > 500)
+      return sendJson(response, 400, { error: "Export at most 500 tasks at a time" });
     saved = {
       ...input,
+      evaluationId: picked.id,
       repoId: owner.repoId,
-      tasks: frozen.tasks,
+      tasks: picked.tasks,
       createdAt: new Date().toISOString(),
       createdBy: owner.user.login,
     };
