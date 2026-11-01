@@ -13,19 +13,11 @@ export function CustomerExportButton({ url, runs }: { url: string; runs: Evaluat
       <Button disabled={!finished.length} onClick={() => setOpen(true)}>
         Export for Customer
       </Button>
-      {open && <CustomerExportDialog url={url} runs={finished} onClose={() => setOpen(false)} />}
+      {open && <CustomerExportDialog url={url} onClose={() => setOpen(false)} />}
     </>
   );
 }
-function CustomerExportDialog({
-  url,
-  runs,
-  onClose,
-}: {
-  url: string;
-  runs: EvaluationRun[];
-  onClose(): void;
-}) {
+function CustomerExportDialog({ url, onClose }: { url: string; onClose(): void }) {
   const cancel = React.useRef<HTMLButtonElement>(null);
   const customerId = React.useId();
   const emailId = React.useId();
@@ -84,9 +76,9 @@ function CustomerExportDialog({
       <DialogBody>
         <h2 className="mb-3 text-lg font-semibold">Export for Customer</h2>
         <p className="text-sm text-muted-foreground">
-          Copy the verified images and tasks of the latest completed evaluation into a dedicated
-          private Google registry. The customer runs Harbor on their own machine, with direct Google
-          access—not through SelfBench.
+          Copy the verified images and tasks of the newest completed evaluation with image-backed
+          tasks into a dedicated private Google registry. The customer runs Harbor on their own
+          machine, with direct Google access—not through SelfBench.
         </p>
         {error && <Notice className="mt-4">{error}</Notice>}
         {!enabled && (
@@ -142,7 +134,6 @@ function CustomerExportDialog({
             <h3 className="font-semibold">Customer Exports</h3>
             <ul className="mt-3 grid gap-4">
               {exports.map((entry) => {
-                const source = runs.find((run) => run.id === entry.evaluationId);
                 return (
                   <li key={entry.id} className="grid gap-1 text-sm">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -163,9 +154,10 @@ function CustomerExportDialog({
                     <span className="text-muted-foreground">
                       {entry.email} · {new Date(entry.createdAt).toLocaleString()}
                     </span>
-                    {source && (
+                    {entry.evaluationCreatedAt && (
                       <span className="text-muted-foreground">
-                        Tasks from the evaluation of {new Date(source.createdAt).toLocaleString()}
+                        Tasks from the evaluation of{" "}
+                        {new Date(entry.evaluationCreatedAt).toLocaleString()}
                       </span>
                     )}
                     {entry.repository && (

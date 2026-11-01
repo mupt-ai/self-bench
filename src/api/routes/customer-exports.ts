@@ -40,6 +40,7 @@ export async function customerExportRoute(
       customer: saved.customer,
       email: saved.email,
       evaluationId: saved.evaluationId,
+      evaluationCreatedAt: saved.evaluationCreatedAt,
       createdAt: saved.createdAt,
       status: ready ? "ready" : failed ? "failed" : "preparing",
       ...ready,
@@ -105,10 +106,11 @@ export async function customerExportRoute(
   if (saved && (saved.email !== input.email || saved.customer !== input.customer))
     return sendJson(response, 409, { error: "This export ID belongs to a different request" });
   if (!saved) {
-    // The newest completed evaluation whose frozen tasks are image-backed; a retry keeps the first pick.
+    // The newest completed evaluation whose frozen tasks are image-backed and within the export limit.
+    // A retry reads the saved request, so it keeps this first pick.
     const vault = options.vault;
     const scope = { repoId: owner.repoId };
-    let picked: { id: string; tasks: EvaluationInput["tasks"] } | undefined;
+    let picked: { id: string; createdAt: string; tasks: EvaluationInput["tasks"] } | undefined;
     for (const run of await listEvaluations(artifacts, scope)) {
       if (run.status !== "completed") continue;
       const comparison = run.comparisonId
@@ -120,24 +122,24 @@ export async function customerExportRoute(
           : undefined;
       if (
         frozen?.tasks.length &&
+        frozen.tasks.length <= 500 &&
         frozen.tasks.every(
           (task) => task.images && task.bundleKey.endsWith("/execution-task.tar.gz"),
         )
       ) {
-        picked = { id: run.id, tasks: frozen.tasks };
+        picked = { id: run.id, createdAt: run.createdAt, tasks: frozen.tasks };
         break;
       }
     }
     if (!picked)
       return sendJson(response, 400, {
         error:
-          "No completed evaluation has image-backed tasks to export. Run an evaluation of the current tasks first.",
+          "No completed evaluation has image-backed tasks of 500 or fewer to export. Run an evaluation of the current tasks first.",
       });
-    if (picked.tasks.length > 500)
-      return sendJson(response, 400, { error: "Export at most 500 tasks at a time" });
     saved = {
       ...input,
       evaluationId: picked.id,
+      evaluationCreatedAt: picked.createdAt,
       repoId: owner.repoId,
       tasks: picked.tasks,
       createdAt: new Date().toISOString(),

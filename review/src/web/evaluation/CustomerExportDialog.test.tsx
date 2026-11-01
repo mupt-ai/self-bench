@@ -28,6 +28,7 @@ test("customer export submits Google identity, then shows the download and its e
               customer: "Acme",
               email: "customer@example.com",
               evaluationId: evaluation.id,
+              evaluationCreatedAt: evaluation.createdAt,
               status: "ready",
               createdAt: "2026-10-01T00:00:00Z",
               repository: "us-docker.pkg.dev/project/customer-id",

@@ -6,6 +6,8 @@ export interface CustomerExportRequest {
   customer: string;
   email: string;
   evaluationId: string;
+  /** When the chosen evaluation ran; absent on exports made before this was recorded. */
+  evaluationCreatedAt?: string;
   createdAt: string;
   createdBy: string;
   tasks: EvaluationInput["tasks"];
@@ -15,6 +17,7 @@ export interface CustomerExport {
   customer: string;
   email: string;
   evaluationId: string;
+  evaluationCreatedAt?: string | undefined;
   createdAt: string;
   status: "preparing" | "ready" | "failed";
   repository?: string;

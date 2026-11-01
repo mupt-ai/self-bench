@@ -117,7 +117,7 @@ test("registry provisioning grants only one dedicated repository and preserves I
     fetch: async (input, init) => {
       const url = String(input);
       calls.push({ url, init });
-      if (url.endsWith(":getIamPolicy"))
+      if (url.includes(":getIamPolicy"))
         return Response.json({
           etag: "etag",
           bindings: [
@@ -144,7 +144,7 @@ test("the build account gets writer on the dedicated repository itself, keeping 
     token: async () => "secret-access-token",
     fetch: async (input, init) => {
       const url = String(input);
-      if (url.endsWith(":getIamPolicy"))
+      if (url.includes(":getIamPolicy"))
         return Response.json({
           etag: "etag",
           bindings: [

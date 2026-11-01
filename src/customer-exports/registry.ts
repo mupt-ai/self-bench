@@ -73,7 +73,8 @@ export function customerRegistry(source: string, access: RegistryAccess) {
   /** Adds one member to a repository's unconditioned binding, keeping every other binding and the etag. */
   async function bind(repository: string, role: string, member: string) {
     const url = repoUrl(repository);
-    const policy = await call(`${url}:getIamPolicy`, "GET");
+    // Version 3 returns conditional bindings, and writing back a version-1 policy would drop them.
+    const policy = await call(`${url}:getIamPolicy?options.requestedPolicyVersion=3`, "GET");
     const bindings = (policy.bindings ?? []) as {
       role: string;
       members: string[];
@@ -85,7 +86,7 @@ export function customerRegistry(source: string, access: RegistryAccess) {
       bindings.push(binding);
     }
     if (!binding.members.includes(member)) binding.members.push(member);
-    await call(`${url}:setIamPolicy`, "POST", { policy: { ...policy, bindings } });
+    await call(`${url}:setIamPolicy`, "POST", { policy: { ...policy, version: 3, bindings } });
   }
 }
 
