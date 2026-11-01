@@ -113,12 +113,7 @@ export function SiteLayout({
                 onClick={toggleSidebar}
                 className="-ml-2 hidden md:inline-flex"
               />
-              <div className="md:hidden">
-                <Lockup compact />
-              </div>
-              <div className="ml-auto flex items-center gap-2">
-                <UserMenu user={user} onSignOut={signOut} />
-                <ThemeToggle />
+              <div className="flex min-w-0 items-center gap-2">
                 <Button
                   size="icon"
                   variant="ghost"
@@ -139,6 +134,13 @@ export function SiteLayout({
                     <path d="M3 5h14M3 10h14M3 15h14" />
                   </svg>
                 </Button>
+                <div className="md:hidden">
+                  <Lockup compact />
+                </div>
+              </div>
+              <div className="ml-auto flex items-center gap-2">
+                <UserMenu user={user} onSignOut={signOut} />
+                <ThemeToggle />
               </div>
             </div>
           </header>
