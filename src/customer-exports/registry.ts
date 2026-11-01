@@ -57,26 +57,37 @@ export function customerRegistry(source: string, access: RegistryAccess) {
       }
       throw new Error("Customer repository creation timed out");
     },
+    /** The customer's read access, granted once every image is in place. */
     async grant(repository: string, email: string) {
-      const url = repoUrl(repository);
-      // Keep inherited/existing bindings and the etag; no public or project-wide access.
-      const policy = await call(`${url}:getIamPolicy`, "GET");
-      const bindings = (policy.bindings ?? []) as {
-        role: string;
-        members: string[];
-        condition?: unknown;
-      }[];
-      let reader = bindings.find(
-        (binding) => binding.role === "roles/artifactregistry.reader" && !binding.condition,
-      );
-      if (!reader) {
-        reader = { role: "roles/artifactregistry.reader", members: [] };
-        bindings.push(reader);
-      }
-      if (!reader.members.includes(`user:${email}`)) reader.members.push(`user:${email}`);
-      await call(`${url}:setIamPolicy`, "POST", { policy: { ...policy, bindings } });
+      await bind(repository, "roles/artifactregistry.reader", `user:${email}`);
+    },
+    /**
+     * The build account's push access, granted on this repository itself. The shared task
+     * repository grants its builder on the repository; the project-wide condition that covers
+     * customer-* does not reach these repositories, so copies were refused with HTTP 403.
+     */
+    async allowWriter(repository: string, serviceAccount: string) {
+      await bind(repository, "roles/artifactregistry.writer", `serviceAccount:${serviceAccount}`);
     },
   };
+  /** Adds one member to a repository's unconditioned binding, keeping every other binding and the etag. */
+  async function bind(repository: string, role: string, member: string) {
+    const url = repoUrl(repository);
+    // Version 3 returns conditional bindings, and writing back a version-1 policy would drop them.
+    const policy = await call(`${url}:getIamPolicy?options.requestedPolicyVersion=3`, "GET");
+    const bindings = (policy.bindings ?? []) as {
+      role: string;
+      members: string[];
+      condition?: unknown;
+    }[];
+    let binding = bindings.find((entry) => entry.role === role && !entry.condition);
+    if (!binding) {
+      binding = { role, members: [] };
+      bindings.push(binding);
+    }
+    if (!binding.members.includes(member)) binding.members.push(member);
+    await call(`${url}:setIamPolicy`, "POST", { policy: { ...policy, version: 3, bindings } });
+  }
 }
 
 /** Registry-to-registry copy: layers never pass through the API or worker. */

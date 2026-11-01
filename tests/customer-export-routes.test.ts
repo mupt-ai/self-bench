@@ -43,15 +43,15 @@ async function fixture() {
     id: crypto.randomUUID(),
     customer: "Acme",
     email: "customer@example.com",
-    evaluationId: input.id,
   };
   return { server, requests, input, body };
 }
-test("exports freeze the selected evaluation, survive repeated submission, and deliver a tenant-scoped ZIP", async () => {
+test("exports freeze the latest image-backed evaluation, survive repeated submission, and deliver a tenant-scoped ZIP", async () => {
   const { server, requests, input, body } = await fixture();
   const path = `${server.base}/exports`;
   const post = () => server.request(path, { method: "POST", body: JSON.stringify(body) });
   expect((await post()).status).toBe(202);
+  expect(requests[0]?.evaluationId).toBe(input.id);
   expect(requests[0]?.tasks).toEqual(input.tasks);
   expect((await post()).status).toBe(202);
   expect(requests[1]).toEqual(requests[0]);
@@ -76,7 +76,47 @@ test("exports freeze the selected evaluation, survive repeated submission, and d
   const other = path.replace("avyay/repo/", "avyay/other/");
   expect((await server.request(`${other}/${body.id}/download`)).status).toBe(404);
 });
-test("exports refuse untrusted requests, reused identities, unknown evaluations, and malformed bodies", async () => {
+test("exports skip newer evaluations that are not image-backed", async () => {
+  const { server, requests, input, body } = await fixture();
+  const vault = createVault(server.db, evaluationEnv.SELFBENCH_EVAL_CREDENTIAL_KEY);
+  const newer = await credentialedInput(vault, (next) => {
+    next.repoId = server.repo.id;
+    next.createdAt = new Date(Date.now() + 60_000).toISOString();
+    next.tasks = [
+      { runId: "run", taskId: "legacy-task", bundleKey: "runs/run/legacy/execution-task.tar.gz" },
+    ];
+  });
+  const run = initialEvaluation(newer, "Newer Model");
+  run.status = "completed";
+  await saveEvaluation(server.artifacts, run);
+  const response = await server.request(`${server.base}/exports`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  expect(response.status).toBe(202);
+  expect(requests[0]?.evaluationId).toBe(input.id);
+  expect(requests[0]?.tasks).toEqual(input.tasks);
+});
+test("exports refuse when no completed evaluation is image-backed", async () => {
+  const server = await evaluationServer(undefined, {
+    exportCustomer: async () => {},
+  });
+  servers.push(server);
+  const response = await server.request(`${server.base}/exports`, {
+    method: "POST",
+    body: JSON.stringify({
+      id: crypto.randomUUID(),
+      customer: "Acme",
+      email: "customer@example.com",
+    }),
+  });
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({
+    error:
+      "No completed evaluation has image-backed tasks of 500 or fewer to export. Run an evaluation of the current tasks first.",
+  });
+});
+test("exports refuse untrusted requests, reused identities, and malformed bodies", async () => {
   const { server, body } = await fixture();
   const path = `${server.base}/exports`;
   expect(
@@ -89,14 +129,6 @@ test("exports refuse untrusted requests, reused identities, unknown evaluations,
     ).status,
   ).toBe(403);
   expect((await server.request(path, { method: "POST", body: "not-json" })).status).toBe(400);
-  expect(
-    (
-      await server.request(path, {
-        method: "POST",
-        body: JSON.stringify({ ...body, evaluationId: crypto.randomUUID() }),
-      })
-    ).status,
-  ).toBe(400);
   expect((await server.request(path, { method: "POST", body: JSON.stringify(body) })).status).toBe(
     202,
   );
@@ -108,4 +140,31 @@ test("exports refuse untrusted requests, reused identities, unknown evaluations,
       })
     ).status,
   ).toBe(409);
+});
+test("exports skip a newer image-backed evaluation over the task limit", async () => {
+  const { server, requests, input, body } = await fixture();
+  const vault = createVault(server.db, evaluationEnv.SELFBENCH_EVAL_CREDENTIAL_KEY);
+  const oversized = await credentialedInput(vault, (next) => {
+    next.repoId = server.repo.id;
+    next.createdAt = new Date(Date.now() + 60_000).toISOString();
+    next.tasks = Array.from({ length: 501 }, (_, index) => ({
+      runId: "run",
+      taskId: `task-${index}`,
+      bundleKey: "runs/run/verify/task/execution-hash/execution-task.tar.gz",
+      images: {
+        agent: `us-docker.pkg.dev/project/tasks/agent@sha256:${"a".repeat(64)}`,
+        verifier: `us-docker.pkg.dev/project/tasks/verifier@sha256:${"b".repeat(64)}`,
+      },
+    }));
+  });
+  const run = initialEvaluation(oversized, "Oversized Model");
+  run.status = "completed";
+  await saveEvaluation(server.artifacts, run);
+  const response = await server.request(`${server.base}/exports`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  expect(response.status).toBe(202);
+  expect(requests[0]?.evaluationId).toBe(input.id);
+  expect(requests[0]?.evaluationCreatedAt).toBe(input.createdAt);
 });

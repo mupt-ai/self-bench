@@ -32,6 +32,7 @@ export function customerExportActivities(
           fetch: (input, init) => fetch(input, init),
         });
         await registry.create(destination);
+        await registry.allowWriter(destination, config.builder.serviceAccount);
         await copyCustomerImages(
           googleCloudBuild(config.builder),
           packed.images,

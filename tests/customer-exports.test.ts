@@ -117,7 +117,7 @@ test("registry provisioning grants only one dedicated repository and preserves I
     fetch: async (input, init) => {
       const url = String(input);
       calls.push({ url, init });
-      if (url.endsWith(":getIamPolicy"))
+      if (url.includes(":getIamPolicy"))
         return Response.json({
           etag: "etag",
           bindings: [
@@ -137,6 +137,51 @@ test("registry provisioning grants only one dedicated repository and preserves I
   ]);
   expect(calls.every((call) => call.url.includes(`/repositories/customer-1-${id}`))).toBe(true);
   await expect(registry.grant(source, "customer@example.com")).rejects.toThrow("dedicated");
+});
+test("the build account gets writer on the dedicated repository itself, keeping other bindings", async () => {
+  const writes: unknown[] = [];
+  const registry = customerRegistry(source, {
+    token: async () => "secret-access-token",
+    fetch: async (input, init) => {
+      const url = String(input);
+      if (url.includes(":getIamPolicy"))
+        return Response.json({
+          etag: "etag",
+          bindings: [
+            { role: "roles/artifactregistry.reader", members: ["user:existing@example.com"] },
+            {
+              role: "roles/artifactregistry.reader",
+              members: ["user:conditional@example.com"],
+              condition: { title: "other", expression: "true" },
+            },
+          ],
+        });
+      writes.push(JSON.parse(String(init?.body)).policy);
+      return Response.json({});
+    },
+  });
+  await registry.allowWriter(destination, "builder@project.iam.gserviceaccount.com");
+  await registry.allowWriter(destination, "builder@project.iam.gserviceaccount.com");
+  const policy = writes.at(-1) as {
+    etag: string;
+    bindings: { role: string; members: string[]; condition?: unknown }[];
+  };
+  expect(policy.etag).toBe("etag");
+  expect(policy.bindings).toEqual([
+    { role: "roles/artifactregistry.reader", members: ["user:existing@example.com"] },
+    {
+      role: "roles/artifactregistry.reader",
+      members: ["user:conditional@example.com"],
+      condition: { title: "other", expression: "true" },
+    },
+    {
+      role: "roles/artifactregistry.writer",
+      members: ["serviceAccount:builder@project.iam.gserviceaccount.com"],
+    },
+  ]);
+  await expect(
+    registry.allowWriter(source, "builder@project.iam.gserviceaccount.com"),
+  ).rejects.toThrow("dedicated");
 });
 test("missing repositories are created privately and polled before returning", async () => {
   const calls: string[] = [];

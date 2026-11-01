@@ -110,7 +110,7 @@ harbor run --path ./harbor-task --agent codex --model gpt-6-sol --env docker
 
 ### Exporting from the Results Page
 
-Choose **Export for Customer** on a repository's Results page, select a completed evaluation, and enter the customer's name and Google account email. **Create Export** starts background preparation; when it finishes, **Download Harbor ZIP** downloads the handoff. Send that ZIP to the customer yourself; the download requires your workspace session and is not a public sharing link.
+Choose **Export for Customer** on a repository's Results page and enter the customer's name and Google account email. The export uses the newest completed evaluation whose tasks are image-backed and number 500 or fewer, and the export row shows which evaluation that was. **Create Export** starts background preparation; when it finishes, **Download Harbor ZIP** downloads the handoff. Send that ZIP to the customer yourself; the download requires your workspace session and is not a public sharing link.
 
 Each export gets a dedicated private Artifact Registry repository (`customer-<export id>`), containing copies of only that evaluation's frozen agent and verifier images, with their digests preserved. The ZIP holds native Harbor task directories, Dockerfiles pointing directly at those copies, a manifest, and Google authentication/local-run instructions. No SelfBench account, registry proxy, or API is used by the customer's run. Images are pulled on demand and cached locally, not embedded in the ZIP.
 
