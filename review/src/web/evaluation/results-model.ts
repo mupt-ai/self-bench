@@ -1,8 +1,8 @@
-import { findModel, models, type ThinkingLevel } from "../../../../src/contracts/models";
+import type { ThinkingLevel } from "../../../../src/contracts/models";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import { costTotal } from "../../../../src/evaluation/cost-total";
 import { eligibleTrial } from "../../../../src/evaluation/eligible";
-import { findListedModel, isGateway } from "../../../../src/gateways";
+import { settingOf } from "../../../../src/evaluation/setting";
 import type { EvaluationRun, EvaluationTrial, Harness } from "./api";
 import { routeLabel } from "./results-presentation";
 
@@ -113,31 +113,17 @@ export function outcomeOf(trial: EvaluationTrial): Outcome {
 }
 
 /**
- * Matches release-results.ts: parent, harness, reasoning and optional subagent model.
- * Runs without recorded credentials are left out, as they are in releases.
+ * The configuration a run's trials on `harness` belong to, as releases group them (see
+ * src/evaluation/setting.ts). Runs without recorded credentials are left out, as they are in releases.
  */
 function identityOf(run: EvaluationRun, harness: Harness) {
-  if (!run.credentials) return undefined;
-  const custom = run.credentials.provider === "custom";
-  // Curated models use one id on their direct provider and another on the gateways.
-  const catalog =
-    findModel(run.model) ??
-    (isGateway(run.credentials.provider)
-      ? models.find((model) => model.openRouter === run.model)
-      : undefined);
-  const typed = custom ? run.modelName.replace(/^openai\//, "") : undefined;
-  const model = custom ? `custom/${typed}` : (catalog?.id ?? run.model);
-  const label = typed ?? catalog?.label ?? findListedModel(run.model)?.label ?? run.modelLabel;
+  const setting = settingOf(run, harness);
+  if (!setting) return undefined;
   return {
-    key: JSON.stringify([
-      model,
-      harness,
-      run.thinking ?? "default",
-      ...(run.subagent ? [run.subagent.model] : []),
-    ]),
-    label: run.subagent ? `${label} (Subagents: ${run.subagent.model})` : label,
-    modelName: typed ?? (catalog?.vendor ? `${catalog.vendor}/${catalog.id}` : run.modelName),
-    provider: custom ? "custom" : (catalog?.vendor ?? run.credentials.provider),
+    key: setting.key,
+    label: setting.label,
+    modelName: setting.modelName,
+    provider: setting.provider,
     harness,
     ...(run.thinking ? { thinking: run.thinking } : {}),
   };

@@ -66,7 +66,7 @@ export async function fullerSteps(
   return steps && steps.length > trial.steps.length ? steps : trial.steps;
 }
 
-/** A setting key's parts: model, harness, and reasoning level, as `settingOf` writes them. */
+/** A setting key's parts: model, harness, reasoning level, and subagent model, as `settingOf` writes them. */
 function partsOf(settingKey: string): string[] | undefined {
   try {
     const parts: unknown = JSON.parse(settingKey);
@@ -78,7 +78,7 @@ function partsOf(settingKey: string): string[] | undefined {
   }
 }
 
-/** The public id of the setting a key names, joined as `settingOf` (release-results.ts) joins it. */
+/** The public id of the setting a key names, joined as `settingOf` (evaluation/setting.ts) joins it. */
 export const settingIdOf = (settingKey: string): string | undefined =>
   partsOf(settingKey)?.join("|");
 

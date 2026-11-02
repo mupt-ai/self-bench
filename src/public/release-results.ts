@@ -1,9 +1,10 @@
-import { findModel, models, type ThinkingLevel } from "../contracts/models.js";
 import { eligibleTrial } from "../evaluation/eligible.js";
 import { evaluationTaskKey, type Harness } from "../evaluation/models.js";
+import { type Setting, settingOf } from "../evaluation/setting.js";
 import type { EvaluationRun, EvaluationTrial } from "../evaluation/types.js";
-import { findListedModel, isGateway } from "../gateways/index.js";
-import type { ReleaseProvider, ReleaseSignIn } from "./release-types.js";
+import type { ReleaseSignIn } from "./release-types.js";
+
+export type { Setting } from "../evaluation/setting.js";
 
 /**
  * A setting is model, harness, and reasoning level. Its result on each task is the latest
@@ -19,25 +20,11 @@ export interface CredentialFacts {
 /** The managed model credential has no stored entry; it is OpenRouter with an API key. */
 const MANAGED_MODEL = "managed-model";
 
-export interface Setting {
-  /** Stable identity across provider, sign-in, and endpoint changes. */
-  key: string;
-  /** Public identity of this model, harness, and reasoning level. */
-  id: string;
-  catalogId: string;
-  modelName: string;
-  label: string;
-  harness: Harness;
-  reasoningLevel: ThinkingLevel;
-  provider: ReleaseProvider;
-  custom: boolean;
-}
-
 /**
  * The setting a run's trials on `harness` belong to, or undefined when it cannot resolve. Without
  * `credentials`, as on the app's Results page, any recorded credential resolves.
  */
-function settingOf(
+function releaseSettingOf(
   run: EvaluationRun,
   harness: Harness,
   credentials?: ReadonlyMap<string, CredentialFacts>,
@@ -46,30 +33,7 @@ function settingOf(
   const credentialId = run.credentials.modelCredentialId;
   if (credentials && credentialId !== MANAGED_MODEL && !credentials.has(credentialId))
     return undefined;
-  const custom = run.credentials.provider === "custom";
-  // Curated models use one id on their direct provider and another on the gateways.
-  const catalog =
-    findModel(run.model) ??
-    (isGateway(run.credentials.provider)
-      ? models.find((model) => model.openRouter === run.model)
-      : undefined);
-  const typed = custom ? run.modelName.replace(/^openai\//, "") : undefined;
-  const model = custom ? `custom/${typed}` : (catalog?.id ?? run.model);
-  const reasoningLevel = run.thinking ?? "default";
-  const parts = [model, harness, reasoningLevel, ...(run.subagent ? [run.subagent.model] : [])];
-  const label = typed ?? catalog?.label ?? findListedModel(run.model)?.label ?? run.modelLabel;
-  return {
-    key: JSON.stringify(parts),
-    id: parts.join("|"),
-    catalogId: custom ? "custom" : (catalog?.id ?? run.model),
-    modelName: typed ?? (catalog?.vendor ? `${catalog.vendor}/${catalog.id}` : run.modelName),
-    label: run.subagent ? `${label} (Subagents: ${run.subagent.model})` : label,
-    harness,
-    reasoningLevel,
-    // This describes the model's vendor, not the credential route of a selected trial.
-    provider: custom ? "custom" : (catalog?.vendor ?? run.credentials.provider),
-    custom,
-  };
+  return settingOf(run, harness);
 }
 
 /** The trial chosen for one setting on one task, with where it came from. */
@@ -110,7 +74,7 @@ export function resultsBySetting(
   for (const run of runs) {
     for (const [index, trial] of run.trials.entries()) {
       if (!eligibleTrial(trial)) continue;
-      const setting = settingOf(run, trial.harness, credentials);
+      const setting = releaseSettingOf(run, trial.harness, credentials);
       if (!setting) continue;
       const entry = bySetting.get(setting.key) ?? { setting, results: new Map() };
       bySetting.set(setting.key, entry);

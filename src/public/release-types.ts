@@ -14,7 +14,7 @@ import type { EvaluationInput, EvaluationTrial } from "../evaluation/types.js";
 export const RELEASE_SCHEMA_VERSION = 1;
 
 /** The provider a run's model credential routes through. */
-export type ReleaseProvider = NonNullable<EvaluationInput["credentials"]>["provider"];
+type ReleaseProvider = NonNullable<EvaluationInput["credentials"]>["provider"];
 /** API key or ChatGPT sign-in: the model credential's sign-in type. */
 export type ReleaseSignIn = CredentialInfo["auth"];
 
