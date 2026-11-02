@@ -14,3 +14,9 @@ Two choices in the release flow publish more than the aggregates:
 - **Publish Results by Task**, available with Publish Tasks and off by default, also shows whether each setting passed each task, with that trial's grading, test output, and solver transcript, secrets redacted. Harbor logs, artifacts, and endpoint hosts stay private.
 
 Review both before publishing if your benchmark tasks or their transcripts should remain private. Anyone can read the released aggregates through the [Public Results API](/api-reference/overview).
+
+## Repository Groups
+
+To publish one leaderboard across several repositories, open **Repository Groups** under Publish in the sidebar and create a group from repositories your workspace has already released. The group's page, at `selfbench.dev/groups/<workspace>/<address>`, pools each member's current release: every setting released on all of them is scored over all their tasks together, and each member's own score is listed beside it. Settings missing from any member are left out, so release the same settings on each repository you group.
+
+A group holds no results of its own. Releasing or withdrawing a member updates its page within a minute, and a member without a current release is left off until it is released again. Deleting a group removes its page; each repository's own release stays public.

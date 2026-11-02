@@ -1,3 +1,4 @@
+import { groupHref, type PublishedGroup } from "../public/release-groups.js";
 import type { PublishedLine } from "../public/release-types.js";
 import {
   defaultLineOf,
@@ -69,6 +70,10 @@ export function repositoryHead(
   };
 }
 
+/** How SelfBench measures, for the Dataset of a repository or a group. */
+export const MEASUREMENT_TECHNIQUE =
+  "Tasks built from the repository's merged pull requests, each scored by hidden tests";
+
 /**
  * A repository page as schema.org data. Its breadcrumbs name its place in the site, so results
  * can show "SelfBench › owner/name" rather than guess from the address. Its release is a
@@ -121,8 +126,7 @@ function repositoryStructuredData(
           name: fullName,
           codeRepository: `https://github.com/${fullName}`,
         },
-        measurementTechnique:
-          "Tasks built from the repository's merged pull requests, each scored by hidden tests",
+        measurementTechnique: MEASUREMENT_TECHNIQUE,
         variableMeasured: [
           { "@type": "PropertyValue", name: "Accuracy", unitText: "percent" },
           { "@type": "PropertyValue", name: "Cost per task", unitText: "USD" },
@@ -210,15 +214,19 @@ const newest = (dates: readonly string[]) =>
   );
 
 /**
- * Every page the site can show, for search engines: the home page, each repository's page, and
- * each other publisher's line, at their canonical addresses, each dated by its newest release.
+ * Every page the site can show, for search engines: the home page, each repository's page, each
+ * other publisher's line, and each repository group, at their canonical addresses, each dated by its newest release.
  * Built from the released lines, so a new release is listed without any step of its own.
  */
 export function sitemapOf(
   origin: string,
   repositories: readonly (readonly PublishedLine[])[],
+  groups: readonly PublishedGroup[] = [],
 ): string {
-  const pages: { loc: string; lastmod: string | undefined }[] = [];
+  const pages: { loc: string; lastmod: string | undefined }[] = groups.map((group) => ({
+    loc: `${origin}${groupHref(group.publisher.login, group.slug)}`,
+    lastmod: group.updatedAt,
+  }));
   for (const lines of repositories) {
     const fallback = defaultLineOf(lines);
     if (!fallback) continue;
@@ -238,7 +246,10 @@ export function sitemapOf(
   pages.sort((left, right) => left.loc.localeCompare(right.loc));
   const home = {
     loc: `${origin}/`,
-    lastmod: newest(repositories.flat().map((line) => line.release.releasedAt)),
+    lastmod: newest([
+      ...repositories.flat().map((line) => line.release.releasedAt),
+      ...groups.map((group) => group.updatedAt),
+    ]),
   };
   const urls = [home, ...pages].map(
     ({ loc, lastmod }) =>

@@ -222,6 +222,10 @@ export function createReleaseStore(db: Database, options: { now?: () => Date } =
     async currentLines(): Promise<PublishedLine[]> {
       return asLines(currentAmong(await publicRowsWhere()));
     },
+    /** One workspace's current release of each repository it released, newest first. */
+    async currentLinesOf(orgId: number): Promise<PublishedLine[]> {
+      return asLines(currentAmong(await publicRowsWhere(eq(releases.orgId, orgId))));
+    },
     /** The current release of each line whose latest release names `fullName`, newest first. */
     async currentLinesFor(fullName: string): Promise<PublishedLine[]> {
       const wanted = fullName.toLowerCase();

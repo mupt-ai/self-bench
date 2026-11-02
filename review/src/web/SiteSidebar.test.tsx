@@ -29,7 +29,7 @@ function renderSidebar(
 test("sidebar exposes labeled navigation and credentials", () => {
   const html = renderSidebar("/");
   const links = html.match(/<a[^>]*data-slot="sidebar-menu-button"[^>]*>/g) ?? [];
-  expect(links).toHaveLength(5);
+  expect(links).toHaveLength(6);
   expect(html).toContain('aria-label="Organization Navigation"');
   expect(html).toContain('aria-label="Benchmarks"');
   expect(html).toContain(">Benchmarks</span>");
@@ -43,9 +43,21 @@ test("sidebar exposes labeled navigation and credentials", () => {
   expect(html).toContain("by dari.dev</span>");
 });
 
+test("sidebar sorts its pages into named sections, in order", () => {
+  const html = renderSidebar("/");
+  const order = ["Evaluate", "Repositories", "Benchmarks", "Publish", "Repository Groups"]
+    .concat(["Organization", "Credentials", "API Keys", "Billing"])
+    .map((label) => html.indexOf(`>${label}</`));
+  expect(order.every((at) => at >= 0)).toBe(true);
+  expect(order).toEqual([...order].sort((left, right) => left - right));
+  // Each section is a group named by its heading, so a screen reader announces where it is.
+  for (const section of ["Evaluate", "Publish", "Organization"])
+    expect(html).toContain(`aria-labelledby="sidebar-section-${section.toLowerCase()}"`);
+});
+
 test("sidebar leaves out Billing without the managed offering", () => {
   const html = renderSidebar("/", "org", false);
-  expect(html.match(/<a[^>]*data-slot="sidebar-menu-button"[^>]*>/g) ?? []).toHaveLength(4);
+  expect(html.match(/<a[^>]*data-slot="sidebar-menu-button"[^>]*>/g) ?? []).toHaveLength(5);
   expect(html).not.toContain("Billing");
 });
 
@@ -72,6 +84,9 @@ test("sidebar supports the compact icon mode", () => {
   expect(html).not.toContain(">Credentials</span>");
   expect(html).not.toContain(">API Keys</span>");
   expect(html).not.toContain(">Billing</span>");
+  // Section names give way to rules, but each group keeps its name for screen readers.
+  expect(html).not.toContain(">Evaluate</h2>");
+  expect(html).toContain('aria-label="Publish"');
 });
 
 test("sidebar preserves active navigation across repository and settings routes", () => {
@@ -81,6 +96,7 @@ test("sidebar preserves active navigation across repository and settings routes"
     ["/settings/credentials", "/settings/credentials"],
     ["/settings/api-keys", "/settings/api-keys"],
     ["/settings/billing", "/settings/billing"],
+    ["/groups", "/groups"],
   ]) {
     const html = renderSidebar(path);
     const active = html.match(/<a[^>]*data-active="true"[^>]*>/g) ?? [];

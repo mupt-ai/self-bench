@@ -99,3 +99,23 @@ test("a trial is read at its task's address, with the setting id encoded, once a
   await source.getTrial("rel-1", "next-pr-1", "custom/qwen|pi|default");
   expect(calls).toEqual([url]);
 });
+
+test("groups come with the directory, and a group page reads its own address", async () => {
+  const group = { publisher: acme.release.publisher, slug: "web", name: "Web" };
+  const calls = serve({
+    "/api/public/results": { body: { ...directory.body, groups: [group] } },
+    "/api/public/groups/acme-labs/web": { body: { group: { ...group, members: [] } } },
+  });
+  const source = apiSource();
+  expect(await source.listGroups()).toEqual([group] as never);
+  expect((await source.getGroup("acme-labs", "web"))?.name).toBe("Web");
+  expect(await source.getGroup("acme-labs", "missing")).toBeUndefined();
+  expect(calls).toEqual([
+    "/api/public/results",
+    "/api/public/groups/acme-labs/web",
+    "/api/public/groups/acme-labs/missing",
+  ]);
+  // A directory from before groups lists none.
+  serve({ "/api/public/results": directory });
+  expect(await apiSource().listGroups()).toEqual([]);
+});

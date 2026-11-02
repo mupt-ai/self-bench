@@ -1,4 +1,5 @@
 import { frontierSettings } from "./directory.js";
+import type { PublishedGroup } from "./release-groups.js";
 import type { PublishedLine, ReleaseSetting } from "./release-types.js";
 
 /**
@@ -80,6 +81,36 @@ export function repositoryDescription(line: PublishedLine, limit = DESCRIPTION_L
     `${settings} model ${settings === 1 ? "setting" : "settings"} scored on ${release.tasks} ${release.tasks === 1 ? "task" : "tasks"} from its merged pull requests.`,
   ].filter(Boolean);
   // Whole sentences, in order, while they fit; the question always leads.
+  let text = question ?? "";
+  for (const part of rest) {
+    if (text.length + 1 + part.length > limit) break;
+    text = `${text} ${part}`;
+  }
+  return text;
+}
+
+export function groupTitle(name: string): string {
+  return `${name}: Coding Agent Benchmark · ${SITE_NAME}`;
+}
+
+/**
+ * A repository group's description, as a repository's: its picks over the pooled tasks, then
+ * what was measured; whole sentences while they fit, the question always first.
+ */
+export function groupDescription(group: PublishedGroup, limit = DESCRIPTION_LIMIT): string {
+  const [best, next] = frontierSettings(group.settings).sort(
+    (left, right) =>
+      right.accuracy - left.accuracy ||
+      left.costPerTaskUsd - right.costPerTaskUsd ||
+      left.id.localeCompare(right.id),
+  );
+  const repositories = group.members.length;
+  const [question, ...rest] = [
+    `Which coding agent works best on ${group.name}?`,
+    best ? `Most accurate: ${nameBeside(best, next)}, ${scored(best)} per task.` : "",
+    next ? `Best for less: ${nameBeside(next, best)}, ${scored(next)}.` : "",
+    `${group.settings.length} model ${group.settings.length === 1 ? "setting" : "settings"} scored on ${group.tasks} ${group.tasks === 1 ? "task" : "tasks"} from the merged pull requests of ${repositories} ${repositories === 1 ? "repository" : "repositories"}.`,
+  ].filter(Boolean);
   let text = question ?? "";
   for (const part of rest) {
     if (text.length + 1 + part.length > limit) break;

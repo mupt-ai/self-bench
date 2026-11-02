@@ -284,7 +284,7 @@ export const releases = pgTable(
 export * from "./billing-schema.js";
 export * from "./evaluation-schema.js";
 export * from "./gateway-schema.js";
-
+export * from "./release-group-schema.js";
 /** Customers' pull grants for accepted tasks' images, until expired or revoked (registry-grants.ts). */
 export const registryGrants = pgTable("registry_grants", {
   id: uuid("id").primaryKey(),

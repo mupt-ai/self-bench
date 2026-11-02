@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocation, useNavigationType, useSearchParams } from "react-router";
+import { GroupCard } from "../components/GroupCard";
 import { RepoCard } from "../components/RepoCard";
 import { SearchBox } from "../components/SearchBox";
-import type { PublicRepoSummary } from "../contract";
+import type { PublicGroupCard, PublicRepoSummary } from "../contract";
 import { select } from "../effects/marks";
 import { publisherName } from "../format";
 import { homeView, onSaveHome, saveHomeView, startJourney } from "../home-view";
@@ -19,6 +20,7 @@ const HOME_LIMIT = 100;
 interface HomeData {
   repos: PublicRepoSummary[];
   lines: PublicRepoSummary[];
+  groups: PublicGroupCard[];
 }
 
 /**
@@ -33,9 +35,9 @@ function useHomeData(source: PublicSource) {
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let live = true;
-    Promise.all([source.listRepos(), source.listLines()]).then(
-      ([repos, lines]) => {
-        const next = { repos: repos.slice(0, HOME_LIMIT), lines };
+    Promise.all([source.listRepos(), source.listLines(), source.listGroups()]).then(
+      ([repos, lines, groups]) => {
+        const next = { repos: repos.slice(0, HOME_LIMIT), lines, groups };
         if (!live || JSON.stringify(next) === JSON.stringify(kept)) return;
         kept = next;
         setData(next);
@@ -132,7 +134,27 @@ export function HomePage() {
             empty={<NoMatch query={query.trim()} />}
           />
         ) : (
-          <Grid cards={data.repos} onOpen={opened} empty={<NoMatch />} />
+          <>
+            {data.groups.length > 0 && (
+              <section className="flex flex-col gap-3">
+                <h2 className="text-sm font-medium">Repository Groups</h2>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {data.groups.map((card) => (
+                    <GroupCard key={`${card.publisher.login}/${card.slug}`} card={card} />
+                  ))}
+                </div>
+              </section>
+            )}
+            {data.groups.length > 0 && data.repos.length > 0 ? (
+              // Named only beside the groups, which would otherwise read as part of the grid.
+              <section className="flex flex-col gap-3">
+                <h2 className="text-sm font-medium">Repositories</h2>
+                <Grid cards={data.repos} onOpen={opened} empty={<NoMatch />} />
+              </section>
+            ) : (
+              <Grid cards={data.repos} onOpen={opened} empty={<NoMatch />} />
+            )}
+          </>
         ))}
     </div>
   );

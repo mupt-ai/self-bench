@@ -13,6 +13,7 @@ import { CredentialsPage } from "./evaluation/CredentialsPage";
 import { DemoRunPage } from "./evaluation/DemoRunPage";
 import { EvaluationPage } from "./evaluation/EvaluationPage";
 import { RunPage } from "./evaluation/RunPage";
+import { GroupsPage } from "./groups/GroupsPage";
 import { SiteSkeleton } from "./LoadingSkeleton";
 import { AddPrPage } from "./pages/AddPrPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -86,6 +87,7 @@ export function WebApp() {
                   {session.status === "signed-in" && session.managedOffering && (
                     <Route path="settings/billing" element={<BillingPage />} />
                   )}
+                  <Route path="groups" element={<GroupsPage />} />
                   <Route path="benchmarks" element={<BenchmarksPage />} />
                   <Route path="benchmarks/:owner/:name" element={<BenchmarkLayout />}>
                     <Route index element={<BenchmarkDatasetPage />} />

@@ -8,6 +8,7 @@ import { createBillingStore } from "../db/billing.js";
 import { type OpenDatabase, openDatabase } from "../db/client.js";
 import { createRunSummaryStore } from "../db/evaluation-summaries.js";
 import { createRegistryGrantStore } from "../db/registry-grants.js";
+import { createReleaseGroupStore } from "../db/release-groups.js";
 import { createReleaseStore } from "../db/releases.js";
 import { createRepoStore } from "../db/repos.js";
 import { createRunStore } from "../db/runs.js";
@@ -50,6 +51,7 @@ import { createEvaluationRoutes } from "./routes/evaluations.js";
 import { createGitHubRepoRoutes, type GitHubRepoRoutes } from "./routes/github-repos.js";
 import { createPublicReleaseRoutes, type PublicReleaseRoutes } from "./routes/public-releases.js";
 import { createPullRequestRoutes, type PullRequestRoutes } from "./routes/pull-requests.js";
+import { createReleaseGroupRoutes, type ReleaseGroupRoutes } from "./routes/release-groups.js";
 import { createReleaseRoutes, type ReleaseRoutes } from "./routes/releases.js";
 import { type ConnectedRepoRoutes, createConnectedRepoRoutes } from "./routes/repos.js";
 import { createTaskRoutes, type TaskRoutes } from "./routes/tasks.js";
@@ -67,6 +69,7 @@ interface Site {
   /** Present only with the managed offering; a BYOK-only deployment has no billing routes. */
   readonly billing?: BillingRoutes;
   readonly releases: ReleaseRoutes;
+  readonly releaseGroups: ReleaseGroupRoutes;
   /** Routes that need no sign-in; selfbench.dev reads published releases from them. */
   readonly publicReleases: PublicReleaseRoutes;
   /** selfbench.dev itself, answered on its own host by this same server, when configured. */
@@ -100,6 +103,7 @@ export async function openSite(
   const runs = createRunStore(database.db);
   const usage = createUsageStore(database.db);
   const releases = createReleaseStore(database.db);
+  const releaseGroups = createReleaseGroupStore(database.db);
   // Unset means no public results site: no host serves it and nothing links to it.
   const resultsSiteUrl = process.env.SELFBENCH_RESULTS_SITE_URL?.trim().replace(/\/+$/, "") || null;
   // Only prod's site may be indexed; dev's, and any local run, never tells a search engine.
@@ -116,6 +120,7 @@ export async function openSite(
     limiter,
     artifacts,
     trials: releasedTrials(database.db, artifacts),
+    groups: releaseGroups,
   });
   const generationQueue = process.env.SELFBENCH_GENERATION_TASK_QUEUE;
   const vault = process.env.SELFBENCH_EVAL_CREDENTIAL_KEY
@@ -192,6 +197,18 @@ export async function openSite(
         publicReleases.refresh();
         // The repository's page, the publisher's line, and the home page's directory.
         void indexNow?.changed(["/", `/${fullName}`, `/${fullName}/${publisher}`]);
+      },
+    }),
+    releaseGroups: createReleaseGroupRoutes({
+      users,
+      repos,
+      releases,
+      groups: releaseGroups,
+      publicUrl,
+      resultsSiteUrl,
+      onPublicChange: (paths) => {
+        publicReleases.refresh();
+        void indexNow?.changed(paths);
       },
     }),
     publicReleases,

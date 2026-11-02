@@ -1,4 +1,14 @@
-import { CreditCard, FolderGit2, Gauge, KeyRound, LockKeyhole, Rocket, X } from "lucide-react";
+import {
+  CreditCard,
+  FolderGit2,
+  Gauge,
+  KeyRound,
+  Layers,
+  LockKeyhole,
+  type LucideIcon,
+  Rocket,
+  X,
+} from "lucide-react";
 import React from "react";
 import { Link, useLocation } from "react-router";
 import { Lockup } from "./Lockup";
@@ -31,6 +41,75 @@ interface SidebarProps {
   onSetup?: () => void;
 }
 
+/** One page in the sidebar: where it goes, and which paths mark it as the page you are on. */
+interface NavItem {
+  label: string;
+  to: string;
+  icon: LucideIcon;
+  active: (pathname: string) => boolean;
+}
+
+/** The sidebar's sections, in order: running evals, publishing them, and the workspace itself. */
+function sectionsOf(billing: boolean): { label: string; items: NavItem[] }[] {
+  return [
+    {
+      label: "Evaluate",
+      items: [
+        {
+          label: "Repositories",
+          to: "/",
+          icon: FolderGit2,
+          active: (path) => path === "/" || path.startsWith("/repos/"),
+        },
+        {
+          label: "Benchmarks",
+          to: "/benchmarks",
+          icon: Gauge,
+          active: (path) => path.startsWith("/benchmarks"),
+        },
+      ],
+    },
+    {
+      label: "Publish",
+      items: [
+        {
+          label: "Repository Groups",
+          to: "/groups",
+          icon: Layers,
+          active: (path) => path.startsWith("/groups"),
+        },
+      ],
+    },
+    {
+      label: "Organization",
+      items: [
+        {
+          label: "Credentials",
+          to: "/settings/credentials",
+          icon: LockKeyhole,
+          active: (path) => path.startsWith("/settings/credentials"),
+        },
+        {
+          label: "API Keys",
+          to: "/settings/api-keys",
+          icon: KeyRound,
+          active: (path) => path.startsWith("/settings/api-keys"),
+        },
+        ...(billing
+          ? [
+              {
+                label: "Billing",
+                to: "/settings/billing",
+                icon: CreditCard,
+                active: (path: string) => path.startsWith("/settings/billing"),
+              },
+            ]
+          : []),
+      ],
+    },
+  ];
+}
+
 export function SiteSidebar({
   org,
   orgs,
@@ -47,99 +126,74 @@ export function SiteSidebar({
         <Lockup compact showName={!collapsed} />
       </SidebarHeader>
       <SidebarContent>
-        <nav aria-label="Organization Navigation">
-          <SidebarGroup className="pt-4">
-            <SidebarGroupContent>
+        <nav aria-label="Organization Navigation" className="flex flex-col gap-3 pt-4">
+          {onSetup && (
+            <SidebarGroup className="py-0">
               <SidebarMenu>
-                {onSetup && (
-                  <SidebarMenuItem>
-                    <NavTooltip collapsed={collapsed} label="Finish Setup">
-                      <SidebarMenuButton
-                        type="button"
-                        aria-label="Finish Setup"
-                        onClick={() => {
-                          onNavigate?.();
-                          onSetup();
-                        }}
-                      >
-                        <Rocket />
-                        {!collapsed && <span className="flex-1">Finish Setup</span>}
-                        <span
-                          aria-hidden="true"
-                          className="size-2 shrink-0 bg-brand group-data-[collapsible=icon]/sidebar:absolute group-data-[collapsible=icon]/sidebar:top-1.5 group-data-[collapsible=icon]/sidebar:right-1.5"
-                        />
-                      </SidebarMenuButton>
-                    </NavTooltip>
-                  </SidebarMenuItem>
-                )}
                 <SidebarMenuItem>
-                  <NavTooltip collapsed={collapsed} label="Repositories">
+                  <NavTooltip collapsed={collapsed} label="Finish Setup">
                     <SidebarMenuButton
-                      asChild
-                      isActive={pathname === "/" || pathname.startsWith("/repos/")}
+                      type="button"
+                      aria-label="Finish Setup"
+                      onClick={() => {
+                        onNavigate?.();
+                        onSetup();
+                      }}
                     >
-                      <Link to="/" onClick={onNavigate} aria-label="Repositories">
-                        <FolderGit2 />
-                        {!collapsed && <span>Repositories</span>}
-                      </Link>
+                      <Rocket />
+                      {!collapsed && <span className="flex-1">Finish Setup</span>}
+                      <span
+                        aria-hidden="true"
+                        className="size-2 shrink-0 bg-brand group-data-[collapsible=icon]/sidebar:absolute group-data-[collapsible=icon]/sidebar:top-1.5 group-data-[collapsible=icon]/sidebar:right-1.5"
+                      />
                     </SidebarMenuButton>
                   </NavTooltip>
                 </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <NavTooltip collapsed={collapsed} label="Benchmarks">
-                    <SidebarMenuButton asChild isActive={pathname.startsWith("/benchmarks")}>
-                      <Link to="/benchmarks" onClick={onNavigate} aria-label="Benchmarks">
-                        <Gauge />
-                        {!collapsed && <span>Benchmarks</span>}
-                      </Link>
-                    </SidebarMenuButton>
-                  </NavTooltip>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <NavTooltip collapsed={collapsed} label="Credentials">
-                    <SidebarMenuButton
-                      asChild
-                      isActive={pathname.startsWith("/settings/credentials")}
-                    >
-                      <Link
-                        to="/settings/credentials"
-                        onClick={onNavigate}
-                        aria-label="Credentials"
-                      >
-                        <LockKeyhole />
-                        {!collapsed && <span>Credentials</span>}
-                      </Link>
-                    </SidebarMenuButton>
-                  </NavTooltip>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <NavTooltip collapsed={collapsed} label="API Keys">
-                    <SidebarMenuButton asChild isActive={pathname.startsWith("/settings/api-keys")}>
-                      <Link to="/settings/api-keys" onClick={onNavigate} aria-label="API Keys">
-                        <KeyRound />
-                        {!collapsed && <span>API Keys</span>}
-                      </Link>
-                    </SidebarMenuButton>
-                  </NavTooltip>
-                </SidebarMenuItem>
-                {billing && (
-                  <SidebarMenuItem>
-                    <NavTooltip collapsed={collapsed} label="Billing">
-                      <SidebarMenuButton
-                        asChild
-                        isActive={pathname.startsWith("/settings/billing")}
-                      >
-                        <Link to="/settings/billing" onClick={onNavigate} aria-label="Billing">
-                          <CreditCard />
-                          {!collapsed && <span>Billing</span>}
-                        </Link>
-                      </SidebarMenuButton>
-                    </NavTooltip>
-                  </SidebarMenuItem>
-                )}
               </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+            </SidebarGroup>
+          )}
+          {sectionsOf(billing).map((section, index) => {
+            const heading = `sidebar-section-${section.label.toLowerCase()}`;
+            return (
+              <SidebarGroup
+                key={section.label}
+                role="group"
+                aria-labelledby={collapsed ? undefined : heading}
+                aria-label={collapsed ? section.label : undefined}
+                className="py-0"
+              >
+                {collapsed ? (
+                  // Icons alone: a rule between sections stands in for their names.
+                  index > 0 && (
+                    <span aria-hidden="true" className="mx-1 mb-2 block border-t border-border" />
+                  )
+                ) : (
+                  <h2
+                    id={heading}
+                    className="px-2.5 pb-1 text-sm font-normal text-muted-foreground/80"
+                  >
+                    {section.label}
+                  </h2>
+                )}
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {section.items.map((item) => (
+                      <SidebarMenuItem key={item.to}>
+                        <NavTooltip collapsed={collapsed} label={item.label}>
+                          <SidebarMenuButton asChild isActive={item.active(pathname)}>
+                            <Link to={item.to} onClick={onNavigate} aria-label={item.label}>
+                              <item.icon />
+                              {!collapsed && <span>{item.label}</span>}
+                            </Link>
+                          </SidebarMenuButton>
+                        </NavTooltip>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            );
+          })}
         </nav>
       </SidebarContent>
       <div className="border-t border-border p-3 group-data-[collapsible=icon]/sidebar:p-2">
