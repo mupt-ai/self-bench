@@ -1,7 +1,7 @@
 import type { ThinkingLevel } from "../contracts/models.js";
 import type { CredentialInfo } from "../db/credentials.js";
 import type { GatewayConnection } from "../gateway/connection.js";
-import type { PinnedThinking } from "../gateway/trial-key.js";
+import type { CustomEndpointApi, PinnedThinking } from "../gateway/trial-key.js";
 import type { createGatewayUsageStore } from "../gateway/usage-store.js";
 import { catalogEntry } from "../gateways/catalog.js";
 import { gateways } from "../gateways/index.js";
@@ -35,6 +35,33 @@ export function gatewayModelId(input: Pick<EvaluationInput, "credentials" | "mod
   return input.credentials?.provider === "custom"
     ? `custom/${input.modelName.slice(input.modelName.indexOf("/") + 1)}`
     : input.modelName;
+}
+
+/**
+ * The API a custom endpoint is called with for the harness: its own protocol, so the endpoint sees
+ * the calls the harness would make of it directly. Others take Chat Completions, and a trial on
+ * any other credential names none (a key's `api` marks a custom endpoint's, as mount.ts reads it).
+ */
+export function customEndpointApi(
+  input: Pick<EvaluationInput, "credentials">,
+  harness: Harness,
+): { api?: CustomEndpointApi } {
+  if (input.credentials?.provider !== "custom") return {};
+  if (harness === "codex") return { api: "openai-responses" };
+  return harness === "claude-code" ? { api: "anthropic-messages" } : {};
+}
+
+/**
+ * Whether the trial's endpoint picks each call's reasoning effort, so the gateway sends none
+ * (TrialKey.endpointEffort): Dari's router always, and a custom endpoint driven by Codex, which
+ * asks a model it has no metadata for for effort "none". A custom endpoint takes no chosen level.
+ */
+export function endpointPicksEffort(
+  input: Pick<EvaluationInput, "credentials">,
+  harness: Harness,
+): boolean {
+  const provider = input.credentials?.provider;
+  return provider === "dari" || (provider === "custom" && harness === "codex");
 }
 
 /** The model name a gateway trial's requests carry, which the gateway serves exactly. */

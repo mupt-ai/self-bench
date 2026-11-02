@@ -1,6 +1,8 @@
 import { type CatalogModel, type CatalogModelPrice, listModelCatalog } from "@mupt-ai/dari-gateway";
 import { pi } from "@mupt-ai/dari-gateway/providers/pi";
-import { modelIdPattern, type RateTier } from "../contracts/models.js";
+import { modelIdPattern, type RateTier, ratesPricing } from "../contracts/models.js";
+import { requestsCost } from "../evaluation/request-cost.js";
+import type { TokenUsage } from "../evaluation/types.js";
 import type { GatewayModelConfig, GatewayModelPrice } from "../gateway/platform.js";
 import {
   type GatewayId,
@@ -23,12 +25,30 @@ const REFRESH_MS = 60 * 60 * 1000;
 
 /** Every catalog model by the gateway's `provider/model` id. */
 const entries = new Map<string, CatalogModel>();
-for (const model of await listModelCatalog({ providers: ["openai", "anthropic", "meta"] }))
+/** The vendors whose own models the catalog lists, beside the gateways'. */
+const CATALOG_VENDORS = ["openai", "anthropic", "meta"] as const;
+for (const model of await listModelCatalog({ providers: [...CATALOG_VENDORS] }))
   entries.set(model.id, model);
 
 /** The catalog's entry for the gateway's model id `provider/model`. */
 export function catalogEntry(model: string): CatalogModel | undefined {
   return entries.get(model);
+}
+
+/**
+ * What `usage` cost at the list rates of the model a provider's response named: its catalog id, or
+ * a vendor's bare id (`gpt-6-astra`, as Shift names it) under the vendor that lists it. Undefined
+ * when no catalog entry prices it, or a long-context tier it reached is unpriced.
+ */
+export function servedModelCost(model: string, usage: TokenUsage): number | undefined {
+  const ids = model.includes("/") ? [model] : CATALOG_VENDORS.map((vendor) => `${vendor}/${model}`);
+  for (const id of ids) {
+    const price = catalogEntry(id)?.price;
+    if (!price) continue;
+    const listed = listedRates(price, "");
+    return requestsCost(ratesPricing(listed.rates, id, undefined, listed), [usage]);
+  }
+  return undefined;
 }
 
 /** The model's list price, as the gateway takes it; undefined when the catalog has none. */
