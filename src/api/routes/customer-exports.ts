@@ -17,13 +17,10 @@ import type { EvaluationRoutesOptions } from "./evaluations.js";
 
 /** What customer exports need: grants on the task image repository, which `/v2/` serves. */
 export interface CustomerExportRegistry {
-  readonly grants: Pick<RegistryGrantStore, "createForImages" | "find" | "revoke" | "discard">;
+  readonly grants: Pick<RegistryGrantStore, "createForImages" | "find" | "revoke">;
   /** `<region>-docker.pkg.dev/<project>/<repository>`, the task image repository. */
   readonly repository: string;
 }
-
-/** The export's own content was refused: the caller's to fix, not a server fault. */
-class PackageError extends Error {}
 
 const schema = z.strictObject({
   id: z.uuid(),
@@ -186,34 +183,29 @@ export async function customerExportRoute(
     createdBy: owner.user.login,
     tasks: picked.tasks,
   };
-  const root = exportPrefix(owner.repoId, input.id);
+  // A failure below leaves the grant in place on purpose: its password exists only in a ZIP that
+  // was never saved, so nobody holds it, and a retry with this id reuses it. Deleting or revoking it
+  // here would race a concurrent request that finishes the same export.
+  let zip: Buffer;
   try {
-    let zip: Buffer;
-    try {
-      zip = await customerPackage(artifacts, entry, {
-        host: new URL(options.publicUrl).host,
-        repository: exports.repository,
-        password,
-        expiresAt: grant.expiresAt,
-      });
-    } catch (error) {
-      throw new PackageError(
-        error instanceof Error ? error.message : "Could not package the export",
-      );
-    }
-    await artifacts.put(`${root}harbor.zip`, zip, "application/zip");
-    // Written last: an export is listed only once its ZIP exists.
-    await artifacts.put(
-      `${root}request.json`,
-      Buffer.from(JSON.stringify(entry)),
-      "application/json",
-    );
+    zip = await customerPackage(artifacts, entry, {
+      host: new URL(options.publicUrl).host,
+      repository: exports.repository,
+      password,
+      expiresAt: grant.expiresAt,
+    });
   } catch (error) {
-    // Nothing was handed out, so the grant goes; deleting it (not revoking) lets a retry with the
-    // same id issue it again. A concurrent request that did finish the export keeps it.
-    if (!(await saved(key))) await exports.grants.discard(grant.id);
-    if (error instanceof PackageError) return sendJson(response, 400, { error: error.message });
-    throw error;
+    return sendJson(response, 400, {
+      error: error instanceof Error ? error.message : "Could not package the export",
+    });
   }
+  const root = exportPrefix(owner.repoId, input.id);
+  await artifacts.put(`${root}harbor.zip`, zip, "application/zip");
+  // Written last: an export is listed only once its ZIP exists.
+  await artifacts.put(
+    `${root}request.json`,
+    Buffer.from(JSON.stringify(entry)),
+    "application/json",
+  );
   sendJson(response, 201, await describe(entry));
 }

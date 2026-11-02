@@ -36,7 +36,6 @@ async function exportServer() {
         createForImages: (input) => store().createForImages(input),
         find: (id) => store().find(id),
         revoke: (id) => store().revoke(id),
-        discard: (id) => store().discard(id),
       },
     },
   });
@@ -125,7 +124,7 @@ test("concurrent requests for one export share a single key", async () => {
   expect(await store().list()).toHaveLength(1);
   expect((await server.request(`${path}/${body.id}/download`)).status).toBe(200);
 });
-test("a failed write deletes its key, and retrying the same id finishes the export", async () => {
+test("a failed write keeps its one unused key, and retrying the same id finishes the export", async () => {
   const { server, body, path, post, store } = await fixture();
   const put = server.artifacts.put.bind(server.artifacts);
   server.artifacts.put = async (key, ...rest) => {
@@ -133,9 +132,10 @@ test("a failed write deletes its key, and retrying the same id finishes the expo
     return await put(key, ...rest);
   };
   expect((await post()).status).toBeGreaterThanOrEqual(500);
-  expect(await store().list()).toHaveLength(0);
   server.artifacts.put = put;
   expect((await post()).status).toBe(201);
+  // The retry reused the first attempt's key rather than minting a second one.
+  expect(await store().list()).toHaveLength(1);
   expect((await server.request(`${path}/${body.id}/download`)).status).toBe(200);
 });
 test("a request that died after issuing its key is finished by a retry", async () => {

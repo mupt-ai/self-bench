@@ -150,14 +150,6 @@ export function createRegistryGrantStore(db: Database, secret: string, repositor
       const rows = await db.select().from(registryGrants).orderBy(desc(registryGrants.createdAt));
       return rows.map(toGrant);
     },
-    /**
-     * Deletes a grant that was never handed out (a customer export that failed before its ZIP was
-     * saved), so its id can be issued again; a revoked grant would refuse that id for good.
-     */
-    async discard(id: string): Promise<void> {
-      if (!z.uuid().safeParse(id).success) return;
-      await db.delete(registryGrants).where(eq(registryGrants.id, id));
-    },
     /** Resolves false when there was no live grant with that id. */
     async revoke(id: string): Promise<boolean> {
       if (!z.uuid().safeParse(id).success) return false;
