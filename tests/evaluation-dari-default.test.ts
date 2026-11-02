@@ -126,3 +126,9 @@ test("a router picks its own effort, and a custom endpoint is called in its harn
   expect(customEndpointApi(custom, "pi")).toEqual({});
   expect(customEndpointApi(openai, "codex")).toEqual({});
 });
+
+test("a custom model offers Claude Code on its endpoint but not on an OpenAI key", () => {
+  const custom = { ...dariRouter, id: "custom", provider: "custom" as const, harnesses: [] };
+  expect(routeFor(custom, "custom")?.harnesses).toContain("claude-code");
+  expect(routeFor(custom, "openai")?.harnesses).not.toContain("claude-code");
+});

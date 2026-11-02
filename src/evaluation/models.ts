@@ -132,7 +132,14 @@ export function modelRoutes(model: CatalogModel): CatalogModel[] {
       ? [withReferencePricing({ ...model, harnesses: [...native] })]
       : []),
     ...(model.provider === "custom"
-      ? [{ ...gatewayModel, provider: "openai" as const, harnesses: [...native] }]
+      ? [
+          {
+            ...gatewayModel,
+            provider: "openai" as const,
+            // An OpenAI key serves no Messages, so the custom model there keeps OpenAI's harnesses.
+            harnesses: [...(providerHarnesses.openai ?? [])],
+          },
+        ]
       : []),
     ...gatewayIds.flatMap((gateway) => {
       const routed = gatewayRouteModel(model, gateway);
