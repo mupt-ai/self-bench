@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router";
+import { useParams } from "react-router";
 import { mostAccurate } from "../../../../src/public/release-groups";
 import { Avatar } from "../components/Avatar";
 import { ModelTable } from "../components/ModelTable";
@@ -16,9 +16,9 @@ import { useLoad } from "../use-load";
 import { useTitle } from "../use-title";
 
 /**
- * A repository group: one publisher's releases of several repositories, pooled. Its chart and
- * table score each setting released on every member over all their tasks; the Repositories
- * table shows how the setting under the pointer (or each member's own best) did on each one.
+ * A repository group's release: several repositories evaluated together. Its chart and table
+ * score each setting over every member's tasks; the Repositories table shows how the setting
+ * under the pointer (or each member's own best) did on each one.
  * The server writes the same headings for readers that run no scripts (src/api/site-group.ts).
  */
 export function GroupPage() {
@@ -54,7 +54,7 @@ function Group({ group }: { group: PublicGroup }) {
             <Avatar src={group.publisher.avatarUrl} size={16} />
             Run by <strong className="font-medium">{publisherName(group.publisher)}</strong>
           </span>
-          <span className="text-muted-foreground">· Updated {ago(group.updatedAt)}</span>
+          <span className="text-muted-foreground">· Released {ago(group.updatedAt)}</span>
           <span className="text-muted-foreground">·</span>
           <span className="font-mono">
             {repositories} {repositories === 1 ? "repository" : "repositories"}
@@ -82,7 +82,7 @@ function Group({ group }: { group: PublicGroup }) {
           <section {...revealGroup} className="flex min-w-0 flex-col gap-3">
             <h2 className="text-sm font-medium">All Settings</h2>
             <p className="text-sm text-muted-foreground">
-              Each setting released on every repository, scored over all their tasks together.
+              Each setting scored over every repository's tasks together.
             </p>
             <ModelTable
               settings={group.settings}
@@ -93,9 +93,7 @@ function Group({ group }: { group: PublicGroup }) {
           </section>
         </>
       ) : (
-        <p className="text-muted-foreground">
-          No setting was released on every repository in this group.
-        </p>
+        <p className="text-muted-foreground">This release has no settings.</p>
       )}
 
       <section {...revealGroup} className="flex min-w-0 flex-col gap-3">
@@ -112,23 +110,23 @@ function Group({ group }: { group: PublicGroup }) {
  */
 function Members({ group, shownId }: { group: PublicGroup; shownId: string | null }) {
   const shown = group.settings.find((setting) => setting.id === shownId);
-  const href = (member: PublicGroupMember) =>
-    `/${member.repository.fullName}/${group.publisher.login}`;
   const columns: Column<PublicGroupMember>[] = [
     {
       header: "Repository",
       role: "title",
       cell: (member) => (
-        <Link
-          to={href(member)}
+        // A member need not be released on its own, so it links to its repository.
+        <a
+          href={`https://github.com/${member.repository.fullName}`}
+          target="_blank"
+          rel="noreferrer"
           className="hit relative flex min-w-0 items-center gap-2 font-mono font-medium wrap-anywhere hover:underline"
         >
           <Avatar src={member.repository.ownerAvatarUrl} size={16} />
           {member.repository.fullName}
-        </Link>
+        </a>
       ),
     },
-    { header: "Released", role: "detail", cell: (member) => ago(member.releasedAt) },
     {
       header: "Tasks",
       role: "metric",

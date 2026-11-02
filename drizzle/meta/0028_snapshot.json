@@ -1,5 +1,5 @@
 {
-  "id": "3ec8bffa-afeb-4462-b745-8903ceb988dc",
+  "id": "dc143305-e621-442a-b5f9-3de04cb09a05",
   "prevId": "788b0221-4b13-4a68-86a0-20a660253ee4",
   "version": "7",
   "dialect": "postgresql",
@@ -138,6 +138,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "group_id": {
+          "name": "group_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
         "signature": {
           "name": "signature",
           "type": "text",
@@ -188,6 +194,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "comparisons_group": {
+          "name": "comparisons_group",
+          "columns": [
+            {
+              "expression": "group_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -197,7 +218,7 @@
       "checkConstraints": {
         "comparisons_scope": {
           "name": "comparisons_scope",
-          "value": "(\"comparisons\".\"repo_id\" is null) <> (\"comparisons\".\"benchmark_id\" is null)"
+          "value": "num_nonnulls(\"comparisons\".\"repo_id\", \"comparisons\".\"benchmark_id\", \"comparisons\".\"group_id\") = 1"
         }
       },
       "isRLSEnabled": false
@@ -553,68 +574,6 @@
           ]
         }
       },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.registry_grants": {
-      "name": "registry_grants",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "label": {
-          "name": "label",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "task_ids": {
-          "name": "task_ids",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "images": {
-          "name": "images",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "with_verifier": {
-          "name": "with_verifier",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "revoked_at": {
-          "name": "revoked_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -2480,8 +2439,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.release_groups": {
-      "name": "release_groups",
+    "public.group_releases": {
+      "name": "group_releases",
       "schema": "",
       "columns": {
         "id": {
@@ -2490,15 +2449,218 @@
           "primaryKey": true,
           "notNull": true
         },
+        "group_id": {
+          "name": "group_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
         "org_id": {
           "name": "org_id",
           "type": "bigint",
           "primaryKey": false,
           "notNull": true
         },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "publisher_login": {
           "name": "publisher_login",
           "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "predecessor_id": {
+          "name": "predecessor_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "released_by": {
+          "name": "released_by",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "released_by_login": {
+          "name": "released_by_login",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "released_at": {
+          "name": "released_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "withdrawn_at": {
+          "name": "withdrawn_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "withdrawn_by_login": {
+          "name": "withdrawn_by_login",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hash": {
+          "name": "hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "detail": {
+          "name": "detail",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "group_releases_line_time": {
+          "name": "group_releases_line_time",
+          "columns": [
+            {
+              "expression": "group_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "released_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "group_releases_address": {
+          "name": "group_releases_address",
+          "columns": [
+            {
+              "expression": "lower(\"publisher_login\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "slug",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "group_releases_line_predecessor": {
+          "name": "group_releases_line_predecessor",
+          "nullsNotDistinct": true,
+          "columns": [
+            "group_id",
+            "predecessor_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.group_summaries": {
+      "name": "group_summaries",
+      "schema": "",
+      "columns": {
+        "group_id": {
+          "name": "group_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revision": {
+          "name": "revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "group_summaries_group_id_repository_groups_id_fk": {
+          "name": "group_summaries_group_id_repository_groups_id_fk",
+          "tableFrom": "group_summaries",
+          "tableTo": "repository_groups",
+          "columnsFrom": [
+            "group_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "group_summaries_group_id_id_pk": {
+          "name": "group_summaries_group_id_id_pk",
+          "columns": [
+            "group_id",
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.repository_groups": {
+      "name": "repository_groups",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "org_id": {
+          "name": "org_id",
+          "type": "bigint",
           "primaryKey": false,
           "notNull": true
         },
@@ -2549,13 +2711,13 @@
         }
       },
       "indexes": {
-        "release_groups_publisher_slug": {
-          "name": "release_groups_publisher_slug",
+        "repository_groups_org_slug": {
+          "name": "repository_groups_org_slug",
           "columns": [
             {
-              "expression": "lower(\"publisher_login\")",
+              "expression": "org_id",
+              "isExpression": false,
               "asc": true,
-              "isExpression": true,
               "nulls": "last"
             },
             {
@@ -2565,24 +2727,91 @@
               "nulls": "last"
             }
           ],
-          "isUnique": false,
+          "isUnique": true,
           "concurrently": false,
           "method": "btree",
           "with": {}
         }
       },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "release_groups_org_slug": {
-          "name": "release_groups_org_slug",
-          "nullsNotDistinct": false,
-          "columns": [
-            "org_id",
-            "slug"
-          ]
+      "foreignKeys": {
+        "repository_groups_org_id_orgs_id_fk": {
+          "name": "repository_groups_org_id_orgs_id_fk",
+          "tableFrom": "repository_groups",
+          "tableTo": "orgs",
+          "columnsFrom": [
+            "org_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.registry_grants": {
+      "name": "registry_grants",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "task_ids": {
+          "name": "task_ids",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "images": {
+          "name": "images",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "with_verifier": {
+          "name": "with_verifier",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

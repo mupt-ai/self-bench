@@ -193,38 +193,3 @@ export function GhostUsage() {
     </div>
   );
 }
-
-/** A repository group: several released repositories feeding one pooled leaderboard. */
-export function GhostGroup() {
-  return (
-    <div className="flex items-center gap-4">
-      <ul className="flex flex-col gap-2">
-        {["7rem", "5.5rem", "6.5rem"].map((width, index) => (
-          <li
-            key={width}
-            className={cn(
-              "flex items-center gap-2 border border-foreground/[0.12] px-2.5 py-2",
-              index === 2 && "opacity-60",
-            )}
-          >
-            <span className="size-3.5 shrink-0 rounded-full bg-foreground/[0.08]" />
-            <Bar width={width} strong />
-          </li>
-        ))}
-      </ul>
-      <span aria-hidden="true" className="text-lg text-(--faint)">
-        →
-      </span>
-      <div className="flex min-w-0 flex-1 flex-col gap-2.5 border border-foreground/[0.12] p-3">
-        {["85%", "70%", "55%"].map((width) => (
-          <div key={width} className="flex items-center gap-2">
-            <Bar width="3.5rem" />
-            <span className="h-1.5 flex-1 bg-foreground/[0.05]">
-              <span className="block h-full bg-foreground/[0.14]" style={{ width }} />
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}

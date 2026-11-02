@@ -17,6 +17,6 @@ Review both before publishing if your benchmark tasks or their transcripts shoul
 
 ## Repository Groups
 
-To publish one leaderboard across several repositories, open **Repository Groups** under Publish in the sidebar and create a group from repositories your workspace has already released. The group's page, at `selfbench.dev/groups/<workspace>/<address>`, pools each member's current release: every setting released on all of them is scored over all their tasks together, and each member's own score is listed beside it. Settings missing from any member are left out, so release the same settings on each repository you group.
+A repository group evaluates several connected repositories together, as if they were one. Create one under **Repository Groups** in the sidebar, then use its tabs as you would a repository's: **Dataset** lists every member's approved tasks, **Run** starts evaluations on them, and **Results** compares models over all of them.
 
-A group holds no results of its own. Releasing or withdrawing a member updates its page within a minute, and a member without a current release is left off until it is released again. Deleting a group removes its page; each repository's own release stays public.
+A group's runs are its own: they don't appear on each member repository's Results page. Its **Releases** tab publishes the group at `selfbench.dev/groups/<workspace>/<address>`: each setting's accuracy and cost over every member's tasks, and on each member. Every member must be public on GitHub. A group publishes its scores only, never its tasks or transcripts.

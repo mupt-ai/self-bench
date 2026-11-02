@@ -1,74 +1,52 @@
 import { picks, type SettingPick } from "./directory.js";
 import { GROUP_SLUG_MAX } from "./paths.js";
-import { frontierOf } from "./release-rule.js";
-import type {
-  PublishedLine,
-  PublishedRelease,
-  ReleasePublisher,
-  ReleaseRepository,
-  ReleaseSetting,
-} from "./release-types.js";
+import type { ReleasePublisher, ReleaseRepository, ReleaseSetting } from "./release-types.js";
 
 /**
  * Repository groups as selfbench.dev shows them. A group is a workspace's named set of
- * repositories; its page pools each member's current release by that workspace into one
- * leaderboard. Only settings released on every member are pooled, so every pooled score covers
- * the same tasks: each member's whole task set.
+ * repositories, evaluated together like one repository: its release scores each setting over
+ * every member's tasks, and lists how each did on each member.
  */
 
-/** What the public snapshot reads of a stored group. */
-export interface GroupRecord {
-  publisherLogin: string;
-  /**
-   * Every login the group's workspace has released under. A renamed workspace's current
-   * releases keep the login they were written with, so members match on any of them.
-   */
-  releaseLogins?: readonly string[];
-  slug: string;
-  name: string;
-  description: string;
-  repositoryIds: readonly number[];
-  updatedAt: string;
-}
-
-/** One setting's own score on one member, beside its pooled score. */
+/** One setting's score on one member's tasks alone, beside its score over the group. */
 interface MemberScore {
   passed: number;
   tasks: number;
   accuracy: number;
   costPerTaskUsd: number;
-  costedTasks?: number;
+  costedTasks: number;
 }
 
-/** A member repository of a group, as of its current release by the group's publisher. */
+/** A member repository of a released group. */
 export interface GroupMember {
   repository: Pick<
     ReleaseRepository,
     "id" | "fullName" | "description" | "stars" | "ownerAvatarUrl"
   >;
-  releaseId: string;
-  releasedAt: string;
+  /** How many of the release's tasks are this member's. */
   tasks: number;
-  /** How many settings its own release has, pooled or not. */
-  settings: number;
-  /** Each pooled setting's score on this member alone, by setting id. */
+  /** Each released setting's score on this member's tasks, by setting id. */
   scores: Record<string, MemberScore>;
 }
 
-/** A group's page: its members, and the settings they share, scored over all their tasks. */
-export interface PublishedGroup {
+/** What a group release row stores in `payload`: everything public but its id and time. */
+export interface GroupReleasePayload {
   publisher: ReleasePublisher;
   slug: string;
   name: string;
   description?: string;
-  /** When the group itself or any member's release last changed. */
-  updatedAt: string;
   members: GroupMember[];
-  /** Every member's tasks together. */
+  /** Every member's released tasks together. */
   tasks: number;
-  /** Settings released on every member, pooled; empty when the members share none. */
   settings: ReleaseSetting[];
   frontier: string[];
+}
+
+/** A group's current release, as served. */
+export interface PublishedGroup extends GroupReleasePayload {
+  releaseId: string;
+  /** When it was released. */
+  updatedAt: string;
 }
 
 /** A group on the home page: what its card shows. */
@@ -103,117 +81,50 @@ export function slugOf(name: string): string {
   );
 }
 
-/** Where a release without `costedTasks` stands: a legacy release priced every task it ran. */
-const costed = (setting: ReleaseSetting) => setting.costedTasks ?? setting.tasks;
-
-const scoreOf = (setting: ReleaseSetting): MemberScore => ({
-  passed: setting.passed,
-  tasks: setting.tasks,
-  accuracy: setting.accuracy,
-  costPerTaskUsd: setting.costPerTaskUsd,
-  ...(setting.costedTasks !== undefined ? { costedTasks: setting.costedTasks } : {}),
-});
-
-/**
- * Each setting on every release, scored over all their tasks: passed over tasks, and the priced
- * tasks' spend over their count, as a single release scores its own (`scores` in
- * release-rule.ts). The frontier is drawn again over the pooled scores.
- */
-export function pooledSettings(releases: readonly PublishedRelease[]): ReleaseSetting[] {
-  const [first, ...rest] = releases;
-  if (!first) return [];
-  const shared = first.settings.filter((setting) =>
-    rest.every((release) => release.settings.some((other) => other.id === setting.id)),
-  );
-  const pooled = shared.map((setting) => {
-    const each = releases.flatMap(
-      (release) => release.settings.find((other) => other.id === setting.id) ?? [],
-    );
-    const tasks = each.reduce((sum, one) => sum + one.tasks, 0);
-    const passed = each.reduce((sum, one) => sum + one.passed, 0);
-    const totalCostUsd = each.reduce((sum, one) => sum + one.totalCostUsd, 0);
-    const costedTasks = each.reduce((sum, one) => sum + costed(one), 0);
-    // One sign-in type only when every member used it; a mix is left unsaid, as combined
-    // releases leave it.
-    const { signIn, ...described } = setting;
-    const sameSignIn = signIn !== undefined && each.every((one) => one.signIn === signIn);
-    return {
-      ...described,
-      ...(sameSignIn ? { signIn } : {}),
-      tasks,
-      passed,
-      accuracy: tasks > 0 ? (passed / tasks) * 100 : 0,
-      costPerTaskUsd: costedTasks > 0 ? totalCostUsd / costedTasks : 0,
-      totalCostUsd,
-      costedTasks,
-      onFrontier: false,
-    };
-  });
-  const frontier = frontierOf(pooled.filter((setting) => setting.costedTasks > 0));
-  return pooled.map((setting) => ({ ...setting, onFrontier: frontier.has(setting.id) }));
-}
-
-const newest = (dates: readonly string[]) =>
-  dates.reduce((latest, date) => (date > latest ? date : latest));
-
-/**
- * A group's page from the current lines, or undefined when none of its members has a current
- * release by its publisher. A member without one is left out until it is released again.
- */
-export function groupOf(
-  group: GroupRecord,
-  lines: readonly PublishedLine[],
-): PublishedGroup | undefined {
-  const logins = new Set(
-    [group.publisherLogin, ...(group.releaseLogins ?? [])].map((login) => login.toLowerCase()),
-  );
-  const releases = group.repositoryIds.flatMap((id) => {
-    const line = lines.find(
-      (each) =>
-        each.release.repository.id === id && logins.has(each.release.publisher.login.toLowerCase()),
-    );
-    return line ? [line.release] : [];
-  });
-  const [first] = releases;
-  if (!first) return undefined;
-  const settings = pooledSettings(releases);
-  const members = releases.map((release): GroupMember => {
-    const { id, fullName, description, stars, ownerAvatarUrl } = release.repository;
-    return {
-      repository: {
-        id,
-        fullName,
-        ...(description === undefined ? {} : { description }),
-        ...(stars === undefined ? {} : { stars }),
-        ...(ownerAvatarUrl === undefined ? {} : { ownerAvatarUrl }),
-      },
-      releaseId: release.releaseId,
-      releasedAt: release.releasedAt,
-      tasks: release.tasks,
-      settings: release.settings.length,
-      scores: Object.fromEntries(
-        release.settings
-          .filter((setting) => settings.some((pooled) => pooled.id === setting.id))
-          .map((setting) => [setting.id, scoreOf(setting)]),
-      ),
-    };
-  });
-  return {
-    publisher: first.publisher,
-    slug: group.slug,
-    name: group.name,
-    ...(group.description ? { description: group.description } : {}),
-    updatedAt: newest([group.updatedAt, ...releases.map((release) => release.releasedAt)]),
-    members,
-    tasks: releases.reduce((sum, release) => sum + release.tasks, 0),
-    settings,
-    frontier: settings.filter((setting) => setting.onFrontier).map((setting) => setting.id),
-  };
+/** One released setting's trial on one task, as a release's detail records it. */
+interface TaskResult {
+  pass: boolean;
+  costUsd?: number;
 }
 
 /**
- * The pooled setting most accurate on one member alone; the cheaper one there breaks a tie.
+ * Each member's share of a release: its tasks, and each setting's score on them alone, from the
+ * per-task results the release recorded (`detail.results`, by setting key then task key).
+ * `owner` names the member (its GitHub id) each task key belongs to.
  */
+export function membersOf(
+  repositories: readonly GroupMember["repository"][],
+  owner: ReadonlyMap<string, number>,
+  settings: readonly { id: string; key: string }[],
+  results: Readonly<Record<string, Readonly<Record<string, TaskResult>>>>,
+): GroupMember[] {
+  return repositories.map((repository) => {
+    const scores = Object.fromEntries(
+      settings.map(({ id, key }) => {
+        const mine = Object.entries(results[key] ?? {})
+          .filter(([task]) => owner.get(task) === repository.id)
+          .map(([, result]) => result);
+        const passed = mine.filter((result) => result.pass).length;
+        const priced = mine.filter((result) => result.costUsd !== undefined);
+        const spend = priced.reduce((sum, result) => sum + (result.costUsd ?? 0), 0);
+        const score: MemberScore = {
+          passed,
+          tasks: mine.length,
+          accuracy: mine.length > 0 ? (passed / mine.length) * 100 : 0,
+          costPerTaskUsd: priced.length > 0 ? spend / priced.length : 0,
+          costedTasks: priced.length,
+        };
+        return [id, score];
+      }),
+    );
+    // Every released setting covers the same tasks, so any one's list counts them.
+    const first = Object.values(results)[0] ?? {};
+    const tasks = Object.keys(first).filter((task) => owner.get(task) === repository.id).length;
+    return { repository, tasks, scores };
+  });
+}
+
+/** The released setting most accurate on one member alone; the cheaper one there breaks a tie. */
 export function mostAccurate(
   group: Pick<PublishedGroup, "settings">,
   member: Pick<GroupMember, "scores">,
@@ -221,7 +132,7 @@ export function mostAccurate(
   let best: { id: string; label: string; accuracy: number; cost: number } | undefined;
   for (const setting of group.settings) {
     const score = member.scores[setting.id];
-    if (!score) continue;
+    if (!score || score.tasks === 0) continue;
     if (
       !best ||
       score.accuracy > best.accuracy ||
@@ -258,20 +169,4 @@ export function groupCardOf(group: PublishedGroup): GroupCard {
       },
     })),
   };
-}
-
-/** Every group with something to show, most recently changed first. */
-export function groupsOf(
-  groups: readonly GroupRecord[],
-  lines: readonly PublishedLine[],
-): PublishedGroup[] {
-  return groups
-    .flatMap((group) => groupOf(group, lines) ?? [])
-    .sort(
-      (left, right) =>
-        right.updatedAt.localeCompare(left.updatedAt) ||
-        `${left.publisher.login}/${left.slug}`.localeCompare(
-          `${right.publisher.login}/${right.slug}`,
-        ),
-    );
 }

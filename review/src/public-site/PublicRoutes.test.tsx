@@ -49,7 +49,7 @@ test("a repository group's page renders its pooled leaderboard and its members",
   expect(html).not.toContain("Find the best models for your repo");
   expect((await source.listGroups()).map((card) => card.slug)).toEqual([
     "widget-toolkits",
-    "nothing-shared",
+    "solo-setting",
   ]);
 });
 

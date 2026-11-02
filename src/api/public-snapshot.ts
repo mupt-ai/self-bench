@@ -1,10 +1,5 @@
 import { directoryOf } from "../public/directory.js";
-import {
-  type GroupRecord,
-  groupCardOf,
-  groupsOf,
-  type PublishedGroup,
-} from "../public/release-groups.js";
+import { groupCardOf, type PublishedGroup } from "../public/release-groups.js";
 import type { PublishedLine, PublishedRelease } from "../public/release-types.js";
 import { type TaggedBody, tagged } from "./tagged.js";
 
@@ -19,7 +14,7 @@ export interface Snapshot {
   byRepository: Map<string, PublishedLine[]>;
   /** Current releases by id. */
   byRelease: Map<string, PublishedRelease>;
-  /** Every group with a member released, most recently changed first. */
+  /** Every group's current release, newest first. */
   groups: PublishedGroup[];
   releases: () => TaggedBody;
   directory: () => TaggedBody;
@@ -56,13 +51,12 @@ function keptBodies<T>(): (key: string, value: T | undefined) => TaggedBody | un
   };
 }
 
-export function snapshotOf(lines: PublishedLine[], records: readonly GroupRecord[] = []): Snapshot {
+export function snapshotOf(lines: PublishedLine[], groups: PublishedGroup[] = []): Snapshot {
   const byRepository = new Map<string, PublishedLine[]>();
   for (const line of lines) {
     const key = line.release.repository.fullName.toLowerCase();
     byRepository.set(key, [...(byRepository.get(key) ?? []), line]);
   }
-  const groups = groupsOf(records, lines);
   const byGroup = new Map(
     groups.map((group) => [groupKey(group.publisher.login, group.slug), group]),
   );

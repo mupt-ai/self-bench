@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ArtifactStore } from "../../artifacts/index.js";
-import type { ReleaseGroupStore } from "../../db/release-groups.js";
+import type { GroupReleaseStore } from "../../db/group-releases.js";
 import type { ReleaseStore } from "../../db/releases.js";
 import { groupPath, repositoryPath, segmentsOf } from "../../public/paths.js";
 import type { PublishedGroup } from "../../public/release-groups.js";
@@ -31,8 +31,8 @@ export interface PublicReleaseRoutesOptions {
   artifacts?: Pick<ArtifactStore, "stat" | "openReadByKey" | "getByKey">;
   /** Where published trials are read from; without it, no release's trials are served. */
   trials?: PublicTaskRoutesOptions["trials"];
-  /** Where repository groups are read from; without it, no group is served. */
-  groups?: Pick<ReleaseGroupStore, "all">;
+  /** Where repository groups' releases are read from; without it, no group is served. */
+  groups?: Pick<GroupReleaseStore, "currentGroups">;
 }
 
 /**
@@ -74,7 +74,7 @@ export function createPublicReleaseRoutes(
       const read = reads;
       const groups = options.groups;
       const entry = {
-        snapshot: Promise.all([releases.currentLines(), groups ? groups.all() : []]).then(
+        snapshot: Promise.all([releases.currentLines(), groups ? groups.currentGroups() : []]).then(
           ([lines, records]) => snapshotOf(lines, records),
         ),
         at: now(),

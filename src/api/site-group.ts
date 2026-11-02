@@ -18,9 +18,8 @@ const day = (iso: string) => iso.slice(0, 10);
 const groupCanonical = (origin: string, group: PublishedGroup) =>
   `${origin}${groupHref(group.publisher.login, group.slug)}`;
 
-/** Each member's page: its line by the group's publisher. */
-const memberHref = (group: PublishedGroup, fullName: string) =>
-  `/${fullName}/${group.publisher.login}`;
+/** Each member on GitHub: a group's member need not be released on its own. */
+const memberHref = (fullName: string) => `https://github.com/${fullName}`;
 
 export function groupHead(origin: string, group: PublishedGroup): PageHead {
   const canonical = groupCanonical(origin, group);
@@ -80,7 +79,7 @@ export function groupHead(origin: string, group: PublishedGroup): PageHead {
 export function groupBody(group: PublishedGroup): string {
   const facts = [
     `Run by ${group.publisher.login}`,
-    `Updated ${day(group.updatedAt)}`,
+    `Released ${day(group.updatedAt)}`,
     plural(group.members.length, "repository", "repositories"),
     plural(group.tasks, "task"),
     plural(group.settings.length, "setting"),
@@ -88,11 +87,11 @@ export function groupBody(group: PublishedGroup): string {
   const members = group.members.map((member) => {
     const best = mostAccurate(group, member);
     const summary = [
-      `${plural(member.tasks, "task")}, released ${day(member.releasedAt)}.`,
+      `${plural(member.tasks, "task")}.`,
       best ? `Most accurate here: ${best.label}, ${percent(best.accuracy)}.` : "",
     ];
     const { fullName } = member.repository;
-    return `<li>${link(memberHref(group, fullName), fullName)} <span>${escapeText(summary.filter(Boolean).join(" "))}</span></li>`;
+    return `<li>${link(memberHref(fullName), fullName)} <span>${escapeText(summary.filter(Boolean).join(" "))}</span></li>`;
   });
   return main("group", [
     `<h1>${escapeText(group.name)}</h1>`,
@@ -106,7 +105,7 @@ export function groupBody(group: PublishedGroup): string {
           "<h2>All Settings</h2>",
           settingsTable(group.settings),
         ]
-      : ["<p>No setting was released on every repository in this group.</p>"]),
+      : ["<p>This release has no settings.</p>"]),
     "<h2>Repositories</h2>",
     `<ul>${members.join("")}</ul>`,
     HOME_LINK,

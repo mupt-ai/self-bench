@@ -83,9 +83,9 @@ const isUniqueViolation = (error: unknown): boolean => {
  * A line's rows along the predecessor chain, newest first. Each row names the head it was
  * written after, so the chain, not the clock, decides which row is newest.
  */
-function chainOrder(rows: readonly ReleaseRow[]): ReleaseRow[] {
+export function chainOrder<Row extends Chained>(rows: readonly Row[]): Row[] {
   const next = new Map(rows.map((row) => [row.predecessorId ?? "", row]));
-  const chain: ReleaseRow[] = [];
+  const chain: Row[] = [];
   for (let row = next.get(""); row && chain.length < rows.length; row = next.get(row.id))
     chain.push(row);
   // The unique constraint keeps every row on the chain; any stray row is kept rather than lost.
@@ -93,10 +93,17 @@ function chainOrder(rows: readonly ReleaseRow[]): ReleaseRow[] {
   return [...chain.reverse(), ...rows.filter((row) => !onChain.has(row.id))];
 }
 
+/** A row of an append-only line: a repository's releases, or a group's. */
+interface Chained {
+  readonly id: string;
+  readonly predecessorId?: string;
+  readonly withdrawnAt?: string;
+}
+
 /** The line's newest row, withdrawn or not. A release names the head it was built on. */
-export const headOf = (rows: readonly ReleaseRow[]): ReleaseRow | undefined => rows[0];
+export const headOf = <Row extends Chained>(rows: readonly Row[]): Row | undefined => rows[0];
 /** The line's newest row not withdrawn: what the public sees. */
-export const currentOf = (rows: readonly ReleaseRow[]): ReleaseRow | undefined =>
+export const currentOf = <Row extends Chained>(rows: readonly Row[]): Row | undefined =>
   rows.find((row) => !row.withdrawnAt);
 
 /** Each line's current release among `rows`, which must hold whole lines. Newest first. */

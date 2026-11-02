@@ -7,36 +7,24 @@ import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
 import { Tick } from "../releases/SettingsPicker";
 import { Button, controlStyles, fieldStyles, Input, Notice, SearchInput } from "../ui";
 import { matchesQuery } from "../word-search";
-import {
-  type GroupCandidate,
-  type GroupInput,
-  type GroupSummary,
-  groupRequest,
-  groupsUrl,
-  pooledCounts,
-} from "./api";
+import { type GroupInput, type GroupList, type GroupView, groupRequest, groupsUrl } from "./api";
 
 /**
- * Creates or edits a repository group: its name, its address on selfbench.dev, and which of the
- * workspace's released repositories it pools, in the order the page lists them. What the page
- * will score is counted as members are ticked: every member's tasks, and the settings each of
- * them released.
+ * Creates or edits a repository group: its name, its address, and which of the workspace's
+ * connected repositories it evaluates together, in the order its pages list them.
  */
 export function GroupDialog({
   org,
   group,
-  candidates,
-  site,
+  repositories,
   onSaved,
   onClose,
 }: {
   org: string;
   /** The group to edit; a new one without it. */
-  group?: GroupSummary;
-  candidates: readonly GroupCandidate[];
-  /** selfbench.dev's origin, to show the page's address; null without the site. */
-  site: string | null;
-  onSaved(group: GroupSummary): void;
+  group?: GroupView;
+  repositories: GroupList["repositories"];
+  onSaved(group: GroupView): void;
   onClose(): void;
 }) {
   const nameField = React.useRef<HTMLInputElement>(null);
@@ -53,19 +41,18 @@ export function GroupDialog({
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
 
-  // Members with no current release stay listed while the group holds them, so they can be removed.
-  const listed: { id: number; fullName: string; candidate?: GroupCandidate }[] = [
-    ...candidates.map((candidate) => ({
-      id: candidate.id,
-      fullName: candidate.fullName,
-      candidate,
-    })),
+  // A member disconnected since stays listed while the group holds it, so it can be removed.
+  const listed: { id: number; fullName: string; tasks?: number }[] = [
+    ...repositories,
     ...(group?.repositories ?? [])
-      .filter((repository) => !candidates.some((candidate) => candidate.id === repository.id))
-      .map((repository) => ({ id: repository.id, fullName: repository.fullName })),
+      .filter((member) => !member.connected)
+      .map((member) => ({ id: member.id, fullName: member.fullName })),
   ];
   const visible = listed.filter((entry) => matchesQuery(entry.fullName, query));
-  const counts = pooledCounts(candidates, chosen);
+  const tasks = chosen.reduce(
+    (sum, id) => sum + (listed.find((entry) => entry.id === id)?.tasks ?? 0),
+    0,
+  );
   const slugValid = GROUP_SLUG.test(slug) && slug.length <= GROUP_SLUG_MAX;
   const ready = name.trim().length > 0 && slugValid && chosen.length >= 2;
   const toggle = (id: number, on: boolean) =>
@@ -86,8 +73,8 @@ export function GroupDialog({
     setError("");
     const body: GroupInput = { name: name.trim(), slug, description, repositoryIds: chosen };
     try {
-      const saved = await groupRequest<{ group: GroupSummary }>(
-        groupsUrl(org, group?.id),
+      const saved = await groupRequest<{ group: GroupView }>(
+        groupsUrl(org, group?.slug),
         group ? { method: "PUT", body } : { method: "POST", body },
       );
       onSaved(saved.group);
@@ -106,9 +93,9 @@ export function GroupDialog({
       aria-labelledby={`${idBase}-title`}
     >
       <DialogHeader
-        title={group ? "Edit Repository Group" : "New Repository Group"}
+        title={group ? "Edit Group" : "New Repository Group"}
         titleId={`${idBase}-title`}
-        description="Pools this workspace's current releases of its repositories into one leaderboard on selfbench.dev."
+        description="Evaluate several repositories together, as one dataset of all their approved tasks."
         onClose={onClose}
         busy={busy}
       />
@@ -145,7 +132,7 @@ export function GroupDialog({
           <span className="font-normal text-muted-foreground">
             {slug.length > 0 && !slugValid
               ? "Use lowercase letters, digits, and single hyphens."
-              : `${site ?? ""}/groups/${org}/${slug || "…"}`}
+              : `/groups/${slug || "…"}`}
           </span>
         </label>
         <label className={fieldStyles} htmlFor={`${idBase}-description`}>
@@ -165,8 +152,7 @@ export function GroupDialog({
           <legend className="mb-2 text-sm font-semibold">Repositories</legend>
           {listed.length < 2 ? (
             <Notice>
-              A group needs at least two repositories this workspace has released. Release results
-              from a repository's Releases tab first.
+              A group needs at least two connected repositories. Connect another first.
             </Notice>
           ) : (
             <>
@@ -193,9 +179,9 @@ export function GroupDialog({
                       />
                       <span className="min-w-0 flex-1 font-mono break-words">{entry.fullName}</span>
                       <span className="shrink-0 text-muted-foreground">
-                        {entry.candidate
-                          ? `${plural(entry.candidate.tasks, "task")} · ${plural(entry.candidate.settingIds.length, "setting")}`
-                          : "Not released"}
+                        {entry.tasks === undefined
+                          ? "Disconnected"
+                          : `${plural(entry.tasks, "approved task")}`}
                       </span>
                     </label>
                   );
@@ -208,8 +194,8 @@ export function GroupDialog({
           )}
         </fieldset>
         {chosen.length > 0 && (
-          <section aria-label="Order on the Page" className="grid gap-2">
-            <h3 className="text-sm font-semibold">Order on the Page</h3>
+          <section aria-label="Order" className="grid gap-2">
+            <h3 className="text-sm font-semibold">Order</h3>
             <ol className="panel divide-y divide-border">
               {chosen.map((id, index) => (
                 <li key={id} className="flex items-center gap-2 px-4 py-1.5 text-sm">
@@ -241,9 +227,7 @@ export function GroupDialog({
         <p className="text-sm text-muted-foreground" aria-live="polite">
           {chosen.length < 2
             ? "Choose at least two repositories."
-            : counts.settings === 0
-              ? "These repositories share no released setting, so the page will have no leaderboard. Release the same settings on each of them."
-              : `The page will score ${plural(counts.settings, "setting")} over ${plural(counts.tasks, "task")} from ${chosen.length} repositories.`}
+            : `${plural(tasks, "approved task")} from ${chosen.length} repositories.`}
         </p>
         {error && <Notice>{error}</Notice>}
       </DialogBody>
@@ -252,7 +236,7 @@ export function GroupDialog({
           Cancel
         </Button>
         <Button variant="primary" disabled={busy || !ready} onClick={save}>
-          {busy ? (group ? "Saving…" : "Releasing…") : group ? "Save Group" : "Release Group"}
+          {busy ? "Saving…" : group ? "Save Group" : "Create Group"}
         </Button>
       </DialogFooter>
     </Dialog>

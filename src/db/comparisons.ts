@@ -22,6 +22,7 @@ export function createComparisonStore(db: Database) {
     scope: scopeOf({
       ...(row.repoId === null ? {} : { repoId: row.repoId }),
       ...(row.benchmarkId === null ? {} : { benchmarkId: row.benchmarkId }),
+      ...(row.groupId === null ? {} : { groupId: row.groupId }),
     }),
     createdAt: row.createdAt.toISOString(),
     signature: row.signature,
@@ -34,14 +35,16 @@ export function createComparisonStore(db: Database) {
   return {
     find,
     async listForScope(scope: EvaluationScope): Promise<ComparisonRecord[]> {
-      const { repoId, benchmarkId } = scopeOf(scope);
+      const { repoId, benchmarkId, groupId } = scopeOf(scope);
       const rows = await db
         .select()
         .from(comparisons)
         .where(
           repoId !== undefined
             ? eq(comparisons.repoId, repoId)
-            : eq(comparisons.benchmarkId, benchmarkId ?? 0),
+            : benchmarkId !== undefined
+              ? eq(comparisons.benchmarkId, benchmarkId)
+              : eq(comparisons.groupId, groupId ?? 0),
         )
         .orderBy(desc(comparisons.createdAt));
       return rows.map(record);
@@ -59,10 +62,10 @@ export function createComparisonStore(db: Database) {
     /** Inserts once; a concurrent insert of the same ID returns the stored record. */
     async insert(value: ComparisonRecord): Promise<ComparisonRecord> {
       const { scope, ...fields } = value;
-      const { repoId = null, benchmarkId = null } = scopeOf(scope);
+      const { repoId = null, benchmarkId = null, groupId = null } = scopeOf(scope);
       const [row] = await db
         .insert(comparisons)
-        .values({ ...fields, repoId, benchmarkId, createdAt: new Date(value.createdAt) })
+        .values({ ...fields, repoId, benchmarkId, groupId, createdAt: new Date(value.createdAt) })
         .onConflictDoNothing()
         .returning();
       if (row) return record(row);

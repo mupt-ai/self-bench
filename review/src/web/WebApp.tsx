@@ -13,6 +13,10 @@ import { CredentialsPage } from "./evaluation/CredentialsPage";
 import { DemoRunPage } from "./evaluation/DemoRunPage";
 import { EvaluationPage } from "./evaluation/EvaluationPage";
 import { RunPage } from "./evaluation/RunPage";
+import { GroupDatasetPage } from "./groups/GroupDatasetPage";
+import { GroupLayout } from "./groups/GroupLayout";
+import { GroupReleasesPage } from "./groups/GroupReleasesPage";
+import { GroupSettingsPage } from "./groups/GroupSettingsPage";
 import { GroupsPage } from "./groups/GroupsPage";
 import { SiteSkeleton } from "./LoadingSkeleton";
 import { AddPrPage } from "./pages/AddPrPage";
@@ -88,6 +92,17 @@ export function WebApp() {
                     <Route path="settings/billing" element={<BillingPage />} />
                   )}
                   <Route path="groups" element={<GroupsPage />} />
+                  <Route path="groups/:slug" element={<GroupLayout />}>
+                    <Route index element={<GroupDatasetPage />} />
+                    <Route path="run" element={<RunPage />} />
+                    <Route path="results" element={<EvaluationPage />} />
+                    <Route path="releases" element={<GroupReleasesPage />} />
+                    <Route path="settings" element={<GroupSettingsPage />} />
+                    <Route
+                      path="comparisons/:comparisonId"
+                      element={<Navigate to="../results" replace />}
+                    />
+                  </Route>
                   <Route path="benchmarks" element={<BenchmarksPage />} />
                   <Route path="benchmarks/:owner/:name" element={<BenchmarkLayout />}>
                     <Route index element={<BenchmarkDatasetPage />} />

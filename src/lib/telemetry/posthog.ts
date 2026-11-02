@@ -20,9 +20,9 @@ type ServerEvent =
   | "comparison started"
   | "benchmark started"
   | "release published"
-  | "release group created"
-  | "release group updated"
-  | "release group deleted";
+  | "repository group created"
+  | "repository group deleted"
+  | "group release published";
 
 let client: PostHog | undefined;
 let environment = "local";

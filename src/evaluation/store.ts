@@ -3,14 +3,12 @@ import type { ArtifactStore } from "../artifacts/index.js";
 import type { RunSummaryStore } from "../db/evaluation-summaries.js";
 import { reportError } from "../lib/telemetry/sentry.js";
 import { dariRouter } from "./catalog.js";
-import { type EvaluationScope, scopeOf } from "./scope.js";
+import { type EvaluationScope, scopePath } from "./scope.js";
 import type { EvaluationInput, EvaluationRun } from "./types.js";
 
 export function evaluationPrefix(scope: EvaluationScope, id = ""): string {
-  const { repoId, benchmarkId } = scopeOf(scope);
   if (id && !/^[a-f0-9-]{36}$/.test(id)) throw new Error("Invalid evaluation identity");
-  const root =
-    repoId !== undefined ? `evaluations/repos/${repoId}` : `evaluations/benchmarks/${benchmarkId}`;
+  const root = `evaluations/${scopePath(scope)}`;
   return `${root}/${id ? `${id}/` : ""}`;
 }
 export function initialEvaluation(input: EvaluationInput, modelLabel: string): EvaluationRun {

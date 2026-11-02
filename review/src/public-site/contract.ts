@@ -1,10 +1,5 @@
 import type { DirectoryCard } from "../../../src/public/directory";
-import type {
-  GroupCard,
-  GroupMember,
-  GroupRecord,
-  PublishedGroup,
-} from "../../../src/public/release-groups";
+import type { GroupCard, GroupMember, PublishedGroup } from "../../../src/public/release-groups";
 import type {
   PublishedRelease,
   PublishedTask,
@@ -57,11 +52,9 @@ export type { PickRole } from "../../../src/public/directory";
  */
 export type PublicRepoSummary = DirectoryCard;
 
-/** A repository group's page: its members, and the settings they share pooled over their tasks. */
+/** A repository group's current release: each setting over every member's tasks, and on each. */
 export type PublicGroup = PublishedGroup;
 /** One member repository of a group, with each pooled setting's score on it alone. */
 export type PublicGroupMember = GroupMember;
 /** A repository group as the home page lists it. */
 export type PublicGroupCard = GroupCard;
-/** A stored group, as the in-memory source builds pages from it, as the server does. */
-export type PublicGroupRecord = GroupRecord;

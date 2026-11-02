@@ -8,6 +8,7 @@ import { runnable, taskState } from "../db/task-record.js";
 import { createTaskStore } from "../db/tasks.js";
 import { evaluationTaskKey } from "../evaluation/models.js";
 import { listRuns } from "../evaluation/run-list.js";
+import type { EvaluationScope } from "../evaluation/scope.js";
 import { evaluationPrefix, getEvaluation, live } from "../evaluation/store.js";
 import type { EvaluationRun } from "../evaluation/types.js";
 import { apiHeaders, GitHubOAuthError } from "../third_party/github/oauth.js";
@@ -24,7 +25,7 @@ import type { ReleaseRepository } from "./release-types.js";
  */
 
 /** Every task of a connected repository in any state, copying only what a release records. */
-async function releaseTasks(db: Database, repoId: number): Promise<ReleaseTask[]> {
+export async function releaseTasks(db: Database, repoId: number): Promise<ReleaseTask[]> {
   const all = await createTaskStore(db).listWithDeleted(repoId);
   return all.map((task) => ({
     key: evaluationTaskKey(task.runId, task.taskId),
@@ -62,21 +63,42 @@ export async function releaseCredentials(
   );
 }
 
+/** A row of a release line: a repository's (ReleaseRow) or a group's. */
+type LineRow = Pick<ReleaseRow, "id" | "predecessorId" | "withdrawnAt" | "detail">;
+
 /** Everything the release rule reads for one connected repository and its line's rows. */
-export async function releaseInputs(
+export function releaseInputs(
   db: Database,
   artifacts: ArtifactStore,
   scope: { repoId: number; orgId: number },
-  rows: readonly ReleaseRow[],
+  rows: readonly LineRow[],
+): Promise<ReleaseInputs> {
+  return lineInputs(
+    db,
+    artifacts,
+    { scope: { repoId: scope.repoId }, orgId: scope.orgId, tasks: releaseTasks(db, scope.repoId) },
+    rows,
+  );
+}
+
+/**
+ * Everything the release rule reads for a line: `tasks` are what its runs may count (a
+ * repository's, or every member's of a group), and its runs are the scope's.
+ */
+export async function lineInputs(
+  db: Database,
+  artifacts: ArtifactStore,
+  source: { scope: EvaluationScope; orgId: number; tasks: Promise<ReleaseTask[]> },
+  rows: readonly LineRow[],
 ): Promise<ReleaseInputs> {
   const [taskList, runs, credentialFacts] = await Promise.all([
-    releaseTasks(db, scope.repoId),
-    listRuns(artifacts, { repoId: scope.repoId }).then(({ runs = [] }) => runs.filter(live)),
-    releaseCredentials(db, scope.orgId),
+    source.tasks,
+    listRuns(artifacts, source.scope).then(({ runs = [] }) => runs.filter(live)),
+    releaseCredentials(db, source.orgId),
   ]);
   const head = headOf(rows);
   const current = currentOf(rows);
-  const keys = (row: ReleaseRow, field: "tasks" | "settings" | "declined") => {
+  const keys = (row: LineRow, field: "tasks" | "settings" | "declined") => {
     const value = row.detail[field];
     return Array.isArray(value)
       ? value.filter((item): item is string => typeof item === "string")

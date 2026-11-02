@@ -44,7 +44,7 @@ All of it is built from the released lines on every request, so a release or wit
 
   `src/api/site-pages.ts` puts a page together, and the shared strings are in `src/public/seo.ts`.
 - **Keep the server's text in step with the page.** `site-body.ts` repeats what the page shows: its headings ("All Settings", "Tasks", "Other Benchmarks of This Repo") and the settings table's column names (`ModelTable.tsx`). When you rename, add or remove one on the page, make the same change there. The home heading is `HOME_HEADING` in `seo.ts`, which both use. Keep exactly one `<h1>` per page, with the page's own heading.
-- **Repository groups** (`/groups/<publisher>/<slug>`, `GroupPage.tsx`) are pooled from their members' current releases on every read (`src/public/release-groups.ts`); only the group itself is stored (`release_groups`). Their head and text are in `src/api/site-group.ts`, and the home page's Repository Groups section is in `site-body.ts`. `groups` is reserved as a repository owner (`paths.ts`): GitHub has no such account.
+- **Repository groups** (`/groups/<publisher>/<slug>`, `GroupPage.tsx`) show a group's current release (`group_releases`, built in `src/api/routes/group-releases.ts`), not its members' own releases. Their head and text are in `src/api/site-group.ts`, and the home page's Repository Groups section is in `site-body.ts`. `groups` is reserved as a repository owner (`paths.ts`): GitHub has no such account.
 - **Titles live in one place.** The site sets the same titles as the server (`useTitle` with `HOME_TITLE` or `repositoryTitle`), so change them in `seo.ts` only.
 - **A new page needs all of these,** or search engines get a 404, a generic head or an empty page:
   1. its status in `site-pages.ts`

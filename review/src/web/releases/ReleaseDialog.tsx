@@ -24,8 +24,8 @@ export function ReleaseDialog({
   onClose,
 }: {
   url: string;
-  /** The repository's full name, for links to its tasks. */
-  repo: string;
+  /** The repository's full name, for links to its tasks; a group has none and publishes scores only. */
+  repo?: string;
   /** The publishing workspace: a GitHub org, or the person's own account. */
   workspace: { login: string; kind: "org" | "user" };
   onReleased(release: ReleaseSummary, unchanged: boolean): void;
@@ -93,9 +93,14 @@ export function ReleaseDialog({
         settings: [...ticked],
         head: view.head?.id ?? null,
         fingerprint: view.preview.fingerprint,
-        publishTasks: publish.tasks,
-        publishTrials: publish.tasks && publish.trials,
-        publishSummaries,
+        // A group publishes its scores only.
+        ...(repo
+          ? {
+              publishTasks: publish.tasks,
+              publishTrials: publish.tasks && publish.trials,
+              publishSummaries,
+            }
+          : {}),
       });
       onReleased(result.release, result.unchanged === true);
     } catch (cause) {
@@ -124,7 +129,9 @@ export function ReleaseDialog({
             Release Results
           </h2>
           <p id="release-description" className="mt-0.5 text-sm text-muted-foreground">
-            Publish this repository's results on selfbench.dev, where anyone can see them.
+            {repo
+              ? "Publish this repository's results on selfbench.dev, where anyone can see them."
+              : "Publish this group's results on selfbench.dev, where anyone can see them: each setting's accuracy and cost, over the group and on each repository."}
           </p>
         </div>
         <button
@@ -167,13 +174,15 @@ export function ReleaseDialog({
               onChange={setTicked}
             />
             {selection && <Notes view={view} selection={selection} />}
-            {selection && <Unsolved view={view} selection={selection} repo={repo} />}
-            <PublishOptions
-              publish={publish}
-              disabled={busy}
-              {...(summarized ? { summaries: summarized } : {})}
-              onChange={setPublish}
-            />
+            {selection && repo && <Unsolved view={view} selection={selection} repo={repo} />}
+            {repo && (
+              <PublishOptions
+                publish={publish}
+                disabled={busy}
+                {...(summarized ? { summaries: summarized } : {})}
+                onChange={setPublish}
+              />
+            )}
           </>
         )}
         {/* One line when the dialog is wide. Narrow: the summary alone on top, then Reset on the
@@ -206,7 +215,12 @@ export function ReleaseDialog({
                 </span>
                 {selection && (
                   <InfoTooltip
-                    label={privacyNote(workspace, { ...publish, summaries: publishSummaries })}
+                    label={privacyNote(
+                      workspace,
+                      repo
+                        ? { ...publish, summaries: publishSummaries }
+                        : { tasks: false, trials: false, summaries: false },
+                    )}
                     contentClassName="border border-border bg-card text-foreground"
                   />
                 )}

@@ -58,6 +58,7 @@ export const comparisons = pgTable(
     /** The repository whose tasks it runs, or else the benchmark (benchmarks table). */
     repoId: bigint("repo_id", { mode: "number" }),
     benchmarkId: bigint("benchmark_id", { mode: "number" }),
+    groupId: bigint("group_id", { mode: "number" }),
     signature: text("signature").notNull(),
     inputs: jsonb("inputs").notNull(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
@@ -65,7 +66,11 @@ export const comparisons = pgTable(
   (table) => [
     index("comparisons_repo").on(table.repoId),
     index("comparisons_benchmark").on(table.benchmarkId),
-    check("comparisons_scope", sql`(${table.repoId} is null) <> (${table.benchmarkId} is null)`),
+    index("comparisons_group").on(table.groupId),
+    check(
+      "comparisons_scope",
+      sql`num_nonnulls(${table.repoId}, ${table.benchmarkId}, ${table.groupId}) = 1`,
+    ),
   ],
 );
 
@@ -284,17 +289,5 @@ export const releases = pgTable(
 export * from "./billing-schema.js";
 export * from "./evaluation-schema.js";
 export * from "./gateway-schema.js";
-export * from "./release-group-schema.js";
-/** Customers' pull grants for accepted tasks' images, until expired or revoked (registry-grants.ts). */
-export const registryGrants = pgTable("registry_grants", {
-  id: uuid("id").primaryKey(),
-  label: text("label").notNull(),
-  taskIds: jsonb("task_ids").$type<number[]>().notNull(),
-  /** `<name>@sha256:…` in the task image repository. */
-  images: jsonb("images").$type<string[]>().notNull(),
-  /** Whether it also reaches the verifier images, which hold the tasks' tests. */
-  withVerifier: boolean("with_verifier").notNull(),
-  createdAt: timestamptz("created_at").notNull().defaultNow(),
-  expiresAt: timestamptz("expires_at").notNull(),
-  revokedAt: timestamptz("revoked_at"),
-});
+export * from "./group-schema.js";
+export * from "./registry-grant-schema.js";

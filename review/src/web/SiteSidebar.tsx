@@ -49,7 +49,7 @@ interface NavItem {
   active: (pathname: string) => boolean;
 }
 
-/** The sidebar's sections, in order: running evals, publishing them, and the workspace itself. */
+/** The sidebar's sections, in order: what is evaluated, and the workspace itself. */
 function sectionsOf(billing: boolean): { label: string; items: NavItem[] }[] {
   return [
     {
@@ -62,21 +62,16 @@ function sectionsOf(billing: boolean): { label: string; items: NavItem[] }[] {
           active: (path) => path === "/" || path.startsWith("/repos/"),
         },
         {
-          label: "Benchmarks",
-          to: "/benchmarks",
-          icon: Gauge,
-          active: (path) => path.startsWith("/benchmarks"),
-        },
-      ],
-    },
-    {
-      label: "Publish",
-      items: [
-        {
           label: "Repository Groups",
           to: "/groups",
           icon: Layers,
           active: (path) => path.startsWith("/groups"),
+        },
+        {
+          label: "Public Benchmarks",
+          to: "/benchmarks",
+          icon: Gauge,
+          active: (path) => path.startsWith("/benchmarks"),
         },
       ],
     },

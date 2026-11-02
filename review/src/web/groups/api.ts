@@ -1,20 +1,14 @@
+import type { GroupView } from "../../../../src/public/group-views";
+
 export type {
-  GroupCandidate,
+  GroupInput,
   GroupList,
-  GroupSummary,
-} from "../../../../src/public/release-group-views";
+  GroupView,
+} from "../../../../src/public/group-views";
 
-/** A workspace's repository groups, and the address of one of them. */
-export function groupsUrl(org: string, id?: string): string {
-  return `/api/orgs/${encodeURIComponent(org)}/release-groups${id ? `/${id}` : ""}`;
-}
-
-/** What a save sends: the group's name, address, description and members, in order. */
-export interface GroupInput {
-  name: string;
-  slug: string;
-  description: string;
-  repositoryIds: number[];
+/** A workspace's repository groups, or one group (`slug`) and what follows it (`rest`). */
+export function groupsUrl(org: string, slug?: string, rest = ""): string {
+  return `/api/orgs/${encodeURIComponent(org)}/groups${slug ? `/${encodeURIComponent(slug)}${rest}` : ""}`;
 }
 
 export async function groupRequest<Result>(
@@ -44,18 +38,7 @@ export async function groupRequest<Result>(
   return value as Result;
 }
 
-/** How many tasks the chosen members hold, and how many settings every one of them released. */
-export function pooledCounts(
-  candidates: readonly { id: number; tasks: number; settingIds: readonly string[] }[],
-  chosen: readonly number[],
-): { tasks: number; settings: number } {
-  const members = chosen.flatMap((id) => candidates.find((candidate) => candidate.id === id) ?? []);
-  const [first, ...rest] = members;
-  return {
-    tasks: members.reduce((sum, member) => sum + member.tasks, 0),
-    settings: first
-      ? first.settingIds.filter((id) => rest.every((member) => member.settingIds.includes(id)))
-          .length
-      : 0,
-  };
+/** One group, for its pages. */
+export async function fetchGroup(org: string, slug: string): Promise<GroupView> {
+  return (await groupRequest<{ group: GroupView }>(groupsUrl(org, slug))).group;
 }

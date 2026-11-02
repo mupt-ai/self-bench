@@ -1,9 +1,8 @@
 import { directoryOf } from "../../../src/public/directory";
-import { groupCardOf, groupsOf } from "../../../src/public/release-groups";
+import { groupCardOf } from "../../../src/public/release-groups";
 import type {
   PublicGroup,
   PublicGroupCard,
-  PublicGroupRecord,
   PublicRepoPage,
   PublicRepoSummary,
   PublicTask,
@@ -56,13 +55,13 @@ const sameName = (left: string, right: string) => left.toLowerCase() === right.t
 /**
  * A source over pages held in memory. One page per release line. A repository's default
  * line is its endorsed line, else its most recently released one, for the directory and the
- * repository page alike. The directory's cards, and groups' pages from `groups`, are built
- * exactly as the server builds them. Used by tests and the local fixture loader.
+ * repository page alike. The directory's cards are built exactly as the server builds them, and
+ * `groups` are the groups' current releases. Used by tests and the local fixture loader.
  */
 export function memorySource(
   pages: readonly PublicRepoPage[],
   published: MemoryTasks = {},
-  groups: readonly PublicGroupRecord[] = [],
+  groups: readonly PublicGroup[] = [],
 ): PublicSource {
   const newestFirst = (candidates: readonly PublicRepoPage[]) =>
     [...candidates].sort((left, right) =>
@@ -85,9 +84,9 @@ export function memorySource(
       endorsed: line.endorsed,
     })),
   });
-  const lines = () => pages.map((page) => ({ release: page.release, endorsed: page.endorsed }));
-  const cards = () => directoryOf(lines());
-  const groupPages = () => groupsOf(groups, lines());
+  const cards = () =>
+    directoryOf(pages.map((page) => ({ release: page.release, endorsed: page.endorsed })));
+
   return {
     async listRepos() {
       return cards().filter((card) => card.defaultLine);
@@ -117,10 +116,10 @@ export function memorySource(
       return published[releaseId]?.trials?.[taskId]?.[settingId];
     },
     async listGroups() {
-      return groupPages().map(groupCardOf);
+      return groups.map(groupCardOf);
     },
     async getGroup(publisher, slug) {
-      return groupPages().find(
+      return groups.find(
         (group) => sameName(group.publisher.login, publisher) && group.slug === slug,
       );
     },

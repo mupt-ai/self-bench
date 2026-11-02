@@ -14,6 +14,8 @@ type TaskKey = { runId: string; taskId: string };
 /** A task the Run page offers. Only a repository's tasks have a difficulty. */
 export interface DatasetTask extends TaskKey {
   difficulty?: string;
+  /** In a repository group, the member repository the task is from. */
+  repository?: string;
 }
 
 /**
@@ -83,6 +85,73 @@ export function benchmarkDataset(frozen: () => Promise<FrozenTask[]>): Evaluatio
     },
     async summaryTasks() {
       return (await frozen()).map(({ runId, taskId, bundleKey }) => ({ runId, taskId, bundleKey }));
+    },
+  };
+}
+
+/** A member of a repository group, as its dataset reads it. */
+export interface GroupMemberRepo {
+  repoId: number;
+  fullName: string;
+}
+
+/**
+ * A repository group's tasks: every member's approved tasks, each labeled with its repository.
+ * A task runs exactly as it does in its own repository, from that repository's bundle.
+ */
+export function groupDataset(
+  tasks: TaskStore,
+  members: readonly GroupMemberRepo[],
+): EvaluationDataset {
+  const each = members.map((member) => ({
+    member,
+    dataset: repositoryDataset(tasks, member.repoId),
+  }));
+  /** Which member each approved task belongs to, by task key. */
+  const owners = async () => {
+    const byKey = new Map<string, GroupMemberRepo>();
+    for (const { member } of each)
+      for (const task of (await tasks.listForRepo(member.repoId)).filter(runnable))
+        byKey.set(evaluationTaskKey(task.runId, task.taskId), member);
+    return byKey;
+  };
+  return {
+    async options() {
+      const listed = await Promise.all(
+        each.map(async ({ member, dataset }) =>
+          (await dataset.options()).tasks.map((task) => ({ ...task, repository: member.fullName })),
+        ),
+      );
+      return { tasks: listed.flat(), judge: mergeJudgeNeeds([]) };
+    },
+    async select(picked) {
+      if (!picked) return (await Promise.all(each.map(({ dataset }) => dataset.select()))).flat();
+      const byKey = await owners();
+      const wanted = new Map<number, TaskKey[]>();
+      for (const task of picked) {
+        const member = byKey.get(evaluationTaskKey(task.runId, task.taskId));
+        if (!member)
+          throw new Error("Every task must be human-approved in this group's repositories");
+        wanted.set(member.repoId, [...(wanted.get(member.repoId) ?? []), task]);
+      }
+      const chosen = await Promise.all(
+        [...wanted].map(([repoId, keys]) => repositoryTasks(tasks, repoId, keys)),
+      );
+      return chosen.flat();
+    },
+    async summaryTasks() {
+      return (await Promise.all(each.map(({ dataset }) => dataset.summaryTasks()))).flat();
+    },
+    async visible(runs) {
+      // A trial is hidden when its task was deleted from the repository it came from.
+      let kept = runs;
+      const tags: string[] = [];
+      for (const { member } of each) {
+        const view = await visibleTrials(tasks, member.repoId, kept);
+        kept = view.runs;
+        tags.push(view.tag);
+      }
+      return { runs: kept, tag: tags.join(".") };
     },
   };
 }
