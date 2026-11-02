@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { findModel, nativePricing } from "../src/contracts/models.js";
-import { refreshGateway } from "../src/gateways/catalog.js";
+import { gatewayModelPrice, refreshGateway, servedModelCost } from "../src/gateways/catalog.js";
 import {
   catalogModelId,
   type GatewayId,
@@ -224,4 +224,22 @@ test("gateways spell some vendors their own way; the catalog spells them as Open
   expect(catalogModelId("vercel-ai-gateway", "anthropic/claude-sonnet-5")).toBe(
     "anthropic/claude-sonnet-5",
   );
+});
+
+test("a router's call is priced at the list rates of the model its response named", () => {
+  // Within every model's base rates (below Astra's 272k long-context tier).
+  const usage = { input: 100_000, output: 10_000, cacheRead: 100_000, cacheWrite: 0 };
+  // Shift names its models bare; the vendor that lists one prices it.
+  for (const [named, id] of [
+    ["gpt-6-astra", "openai/gpt-6-astra"],
+    ["claude-sonnet-5-5", "anthropic/claude-sonnet-5-5"],
+    ["openai/gpt-6-luna", "openai/gpt-6-luna"],
+  ] as const) {
+    const price = gatewayModelPrice(id);
+    if (!price) throw new Error(`The catalog does not price ${id}`);
+    expect(servedModelCost(named, usage)).toBeCloseTo(
+      (price.input + price.output / 10 + (price.cached_input ?? price.input)) / 10,
+    );
+  }
+  expect(servedModelCost("shift-1", usage)).toBeUndefined();
 });

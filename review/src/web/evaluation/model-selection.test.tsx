@@ -118,7 +118,7 @@ test("selection fails without a compatible provider", () => {
   expect(nextModelSelection(model, [{ ...credential, kind: "openai" }])).toBeUndefined();
 });
 
-test("custom endpoints speak the OpenAI protocol and offer its harnesses", () => {
+test("custom endpoints are called in each harness's protocol, Claude Code's Messages included", () => {
   expect(
     nextModelSelection({ ...model, provider: "custom", harnesses: [] }, [
       { ...credential, kind: "custom" },
@@ -130,7 +130,7 @@ test("custom endpoints speak the OpenAI protocol and offer its harnesses", () =>
       [{ ...credential, kind: "custom" }],
       "claude-code",
     ),
-  ).toBeUndefined();
+  ).toEqual({ catalogId: model.id, credentialId: credential.id, harnesses: ["claude-code"] });
 });
 
 test("requested Codex needs a gateway credential for an Anthropic model", () => {
