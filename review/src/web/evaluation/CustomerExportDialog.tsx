@@ -163,7 +163,7 @@ function CustomerExportDialog({ url, onClose }: { url: string; onClose(): void }
                     {entry.repository && (
                       <code className="break-all text-xs">{entry.repository}</code>
                     )}
-                    {entry.error && <Notice>{entry.error}</Notice>}
+                    {entry.error && <span className="text-muted-foreground">{entry.error}</span>}
                   </li>
                 );
               })}

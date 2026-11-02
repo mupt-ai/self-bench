@@ -9,7 +9,7 @@ import { type CustomerExportRequest, customerRepository, exportPrefix } from "./
 
 export interface CustomerExportActivities {
   prepareCustomerExport(request: CustomerExportRequest): Promise<void>;
-  failCustomerExport(request: CustomerExportRequest): Promise<void>;
+  failCustomerExport(request: CustomerExportRequest, reason?: string): Promise<void>;
 }
 export function customerExportActivities(
   store: ArtifactStore,
@@ -50,16 +50,13 @@ export function customerExportActivities(
         clearInterval(timer);
       }
     },
-    async failCustomerExport(request) {
+    async failCustomerExport(request, reason) {
       const prefix = exportPrefix(request.repoId, request.id);
       if (await store.stat(`${prefix}ready.json`)) return;
       await store.put(
         `${prefix}failed.json`,
         Buffer.from(
-          JSON.stringify({
-            error:
-              "Export preparation failed. Check worker logs, registry permissions, and the customer's Google account, then create a new export.",
-          }),
+          JSON.stringify({ error: (reason || "Export preparation failed").slice(0, 300) }),
         ),
         "application/json",
       );
