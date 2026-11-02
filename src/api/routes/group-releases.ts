@@ -183,7 +183,8 @@ export function createGroupReleaseRoutes(options: GroupReleaseRoutesOptions) {
       canonicalJson({
         scores: built.hash,
         group: [group.slug, group.name, group.description],
-        members: repositories,
+        // Who they are and in what order; stars and avatars drift without changing the release.
+        members: repositories.map(({ id, fullName }) => [id, fullName]),
       }),
     );
     const current = currentOf(rows);
