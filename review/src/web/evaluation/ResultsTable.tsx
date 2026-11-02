@@ -44,6 +44,7 @@ export function ResultsTable({
   baseUrl,
   pages,
   onChanged,
+  onRetryStarted,
 }: {
   runs: readonly EvaluationRun[];
   credentials: readonly CredentialInfo[];
@@ -53,6 +54,7 @@ export function ResultsTable({
   /** Where the scope's pages live: `/repos/<owner>/<name>`, or a benchmark's. */
   pages: string;
   onChanged?(run: EvaluationRun): void;
+  onRetryStarted?(): void;
 }) {
   const [view, setView] = useResultsView(baseUrl);
   const [search, setSearch] = useSearchParams();
@@ -235,6 +237,7 @@ export function ResultsTable({
                   pages={pages}
                   credentials={credentials}
                   {...(onChanged ? { onChanged } : {})}
+                  {...(onRetryStarted ? { onRetryStarted } : {})}
                   onOpenTask={(result) => showTrial(trialParam(result.run, result.trial))}
                 />
               ))}

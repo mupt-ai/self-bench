@@ -12,7 +12,7 @@ import { useEvaluationScope } from "./useEvaluationScope";
 
 export function EvaluationPage() {
   const { repo, pages, label } = useEvaluationScope();
-  const { url, runs, credentials, accepted, loading, error, update } = useRepoRuns();
+  const { url, runs, credentials, accepted, loading, error, update, refresh } = useRepoRuns();
   useDocumentTitle(`Results · ${label}`);
   return (
     <PageContent>
@@ -39,6 +39,7 @@ export function EvaluationPage() {
         baseUrl={url}
         pages={pages}
         onChanged={update}
+        onRetryStarted={refresh}
       />
       {loading && !runs.length && !error && (
         <div className="mt-8">

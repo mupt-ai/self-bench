@@ -33,6 +33,7 @@ export function ConfigurationRows({
   pages,
   credentials,
   onChanged,
+  onRetryStarted,
 }: {
   configuration: Configuration;
   /** Accepted tasks for the configuration's coverage count. */
@@ -46,6 +47,7 @@ export function ConfigurationRows({
   /** The org's saved credentials, for a retry's sandbox. */
   credentials?: readonly CredentialInfo[];
   onChanged?(run: EvaluationRun): void;
+  onRetryStarted?(): void;
 }) {
   const open = view.configurations.includes(configuration.key);
   const missing = missingTasks(configuration, accepted);
@@ -130,6 +132,7 @@ export function ConfigurationRows({
               {...(pages ? { pages } : {})}
               {...(credentials ? { credentials } : {})}
               {...(onChanged ? { onChanged } : {})}
+              {...(onRetryStarted ? { onRetryStarted } : {})}
               {...group(`${configuration.key}\n${batch.id}`)}
             />
           ))}

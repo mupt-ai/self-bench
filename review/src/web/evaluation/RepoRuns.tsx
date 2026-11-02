@@ -23,6 +23,8 @@ interface RepoRuns {
    * deleted run leaves the list.
    */
   update(run: EvaluationRun): void;
+  /** Fetches the list again after a comparison starts while Results is already open. */
+  refresh(): void;
 }
 
 /** A task runs can use, and when it was accepted, when the task list says. */
@@ -148,6 +150,7 @@ export function RepoRunsProvider({
       disposed = true;
     };
   }, [onResults, url, org, repo]);
+  const refresh = React.useCallback(() => refreshNow.current(), []);
   const update = React.useCallback(
     (run: EvaluationRun) =>
       setRuns((history) =>
@@ -169,8 +172,9 @@ export function RepoRunsProvider({
       error,
       onResults,
       update,
+      refresh,
     }),
-    [url, runs, credentials, accepted, loading, error, onResults, update],
+    [url, runs, credentials, accepted, loading, error, onResults, update, refresh],
   );
   return <RepoRunsContext.Provider value={value}>{children}</RepoRunsContext.Provider>;
 }

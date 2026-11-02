@@ -18,6 +18,7 @@ export function RetryErroredTasks({
   url,
   pages,
   credentials,
+  onStarted,
 }: {
   run: EvaluationRun;
   /** The org's saved credentials, to choose the sandbox from. */
@@ -27,6 +28,7 @@ export function RetryErroredTasks({
   url: string;
   /** Where the scope's pages live, for the comparison this starts. */
   pages: string;
+  onStarted?(): void;
 }) {
   const navigate = useNavigate();
   const [open, setOpen] = React.useState(false);
@@ -117,6 +119,8 @@ export function RetryErroredTasks({
                     );
                     return;
                   }
+                  setOpen(false);
+                  onStarted?.();
                   void navigate(`${pages}/results`);
                 } catch (cause) {
                   setError(cause instanceof Error ? cause.message : "Could not retry the tasks.");
