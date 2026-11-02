@@ -57,6 +57,7 @@ export function ResultGroupRows({
   pages,
   credentials = [],
   onChanged,
+  onRetryStarted,
 }: {
   /** What the group is, for its toggle's label: "the Sep 29, 16:19 Run". */
   name: string;
@@ -79,6 +80,7 @@ export function ResultGroupRows({
   /** The org's saved credentials, for a retry's sandbox. */
   credentials?: readonly CredentialInfo[];
   onChanged?(run: EvaluationRun): void;
+  onRetryStarted?(comparisonId: string): void;
 }) {
   const totals = tally(results);
   const live = run?.status === "running" || run?.status === "queued";
@@ -138,6 +140,7 @@ export function ResultGroupRows({
                           url={baseUrl}
                           pages={pages}
                           credentials={credentials}
+                          onStarted={onRetryStarted}
                         />
                       )}
                       {live && (

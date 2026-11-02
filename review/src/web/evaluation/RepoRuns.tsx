@@ -23,6 +23,8 @@ interface RepoRuns {
    * deleted run leaves the list.
    */
   update(run: EvaluationRun): void;
+  /** Refreshes after submission, polling until the comparison's run record appears. */
+  refresh(comparisonId: string): void;
 }
 
 /** A task runs can use, and when it was accepted, when the task list says. */
@@ -57,7 +59,7 @@ export function RepoRunsProvider({
   const onResults = /\/results\/?$/.test(useLocation().pathname);
   const showing = React.useRef(onResults);
   showing.current = onResults;
-  const refreshNow = React.useRef<() => void>(() => {});
+  const refreshNow = React.useRef<(comparisonId?: string) => void>(() => {});
   // Sign-ins and custom endpoints, for configurations and the chart. Pages work without them.
   React.useEffect(() => {
     let disposed = false;
@@ -80,6 +82,8 @@ export function RepoRunsProvider({
     // The list last received and its tag: a poll sends the tag, and an unchanged list is not
     // downloaded again.
     let listed: { runs: EvaluationRun[]; tag?: string } = { runs: [] };
+    // Temporal accepts a submission before its worker writes the first run record.
+    const awaiting = new Set<string>();
     setLoading(true);
     setRuns([]);
     setError("");
@@ -95,18 +99,30 @@ export function RepoRunsProvider({
         }
         setError("");
         setLoading(false);
-        if (listed.runs.some((run) => run.status === "queued" || run.status === "running"))
-          timer = setTimeout(() => {
-            if (showing.current) void refresh();
-          }, 3000);
+        for (const run of listed.runs) {
+          if (run.comparisonId) awaiting.delete(run.comparisonId);
+        }
       } catch (cause) {
         if (!disposed && request === latest) {
           setError(cause instanceof Error ? cause.message : "Could not load results");
           setLoading(false);
         }
+      } finally {
+        if (
+          !disposed &&
+          request === latest &&
+          (awaiting.size > 0 ||
+            listed.runs.some((run) => run.status === "queued" || run.status === "running"))
+        )
+          timer = setTimeout(() => {
+            if (showing.current) void refresh();
+          }, 3000);
       }
     };
-    refreshNow.current = () => void refresh();
+    refreshNow.current = (comparisonId) => {
+      if (comparisonId) awaiting.add(comparisonId);
+      void refresh();
+    };
     return () => {
       disposed = true;
       clearTimeout(timer);
@@ -148,6 +164,7 @@ export function RepoRunsProvider({
       disposed = true;
     };
   }, [onResults, url, org, repo]);
+  const refresh = React.useCallback((comparisonId: string) => refreshNow.current(comparisonId), []);
   const update = React.useCallback(
     (run: EvaluationRun) =>
       setRuns((history) =>
@@ -169,8 +186,9 @@ export function RepoRunsProvider({
       error,
       onResults,
       update,
+      refresh,
     }),
-    [url, runs, credentials, accepted, loading, error, onResults, update],
+    [url, runs, credentials, accepted, loading, error, onResults, update, refresh],
   );
   return <RepoRunsContext.Provider value={value}>{children}</RepoRunsContext.Provider>;
 }
