@@ -54,7 +54,7 @@ export function ResultsTable({
   /** Where the scope's pages live: `/repos/<owner>/<name>`, or a benchmark's. */
   pages: string;
   onChanged?(run: EvaluationRun): void;
-  onRetryStarted?(): void;
+  onRetryStarted?(comparisonId: string): void;
 }) {
   const [view, setView] = useResultsView(baseUrl);
   const [search, setSearch] = useSearchParams();

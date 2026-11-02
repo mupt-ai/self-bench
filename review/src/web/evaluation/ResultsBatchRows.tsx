@@ -80,7 +80,7 @@ export function ResultGroupRows({
   /** The org's saved credentials, for a retry's sandbox. */
   credentials?: readonly CredentialInfo[];
   onChanged?(run: EvaluationRun): void;
-  onRetryStarted?(): void;
+  onRetryStarted?(comparisonId: string): void;
 }) {
   const totals = tally(results);
   const live = run?.status === "running" || run?.status === "queued";

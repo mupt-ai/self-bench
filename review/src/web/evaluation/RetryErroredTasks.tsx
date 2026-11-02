@@ -28,7 +28,7 @@ export function RetryErroredTasks({
   url: string;
   /** Where the scope's pages live, for the comparison this starts. */
   pages: string;
-  onStarted?(): void;
+  onStarted?(comparisonId: string): void;
 }) {
   const navigate = useNavigate();
   const [open, setOpen] = React.useState(false);
@@ -120,7 +120,7 @@ export function RetryErroredTasks({
                     return;
                   }
                   setOpen(false);
-                  onStarted?.();
+                  onStarted?.(result.id);
                   void navigate(`${pages}/results`);
                 } catch (cause) {
                   setError(cause instanceof Error ? cause.message : "Could not retry the tasks.");

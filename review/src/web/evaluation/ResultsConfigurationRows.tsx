@@ -47,7 +47,7 @@ export function ConfigurationRows({
   /** The org's saved credentials, for a retry's sandbox. */
   credentials?: readonly CredentialInfo[];
   onChanged?(run: EvaluationRun): void;
-  onRetryStarted?(): void;
+  onRetryStarted?(comparisonId: string): void;
 }) {
   const open = view.configurations.includes(configuration.key);
   const missing = missingTasks(configuration, accepted);
