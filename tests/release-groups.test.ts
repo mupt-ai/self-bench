@@ -181,3 +181,24 @@ test("a group page's head, text and sitemap entry name it at its one address", (
   const sitemap = sitemapOf("https://selfbench.dev", [lines], [group]);
   expect(sitemap).toContain("<loc>https://selfbench.dev/groups/Acme/web-frameworks</loc>");
 });
+
+test("a renamed workspace's group still finds releases written under its old login", () => {
+  const lines = [line(release(1, "a/one", [setting("sol", 10, 9, 20)]))];
+  const renamed = record([1], { publisherLogin: "acme-renamed" });
+  expect(groupOf(renamed, lines)).toBeUndefined();
+  expect(groupOf({ ...renamed, releaseLogins: ["Acme"] }, lines)?.members).toHaveLength(1);
+});
+
+test("a group whose members share no setting has no leaderboard headings", () => {
+  const lines = [
+    line(release(1, "a/one", [setting("sol", 10, 9, 20)])),
+    line(release(2, "b/two", [setting("luna", 10, 9, 20)])),
+  ];
+  const group = groupOf(record([1, 2]), lines);
+  if (!group) throw new Error("no group");
+  const body = groupBody(group);
+  expect(body).not.toContain("<h2>Model Tradeoffs</h2>");
+  expect(body).not.toContain("<h2>All Settings</h2>");
+  expect(body).toContain("No setting was released on every repository");
+  expect(body).toContain("<h2>Repositories</h2>");
+});

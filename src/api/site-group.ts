@@ -98,12 +98,15 @@ export function groupBody(group: PublishedGroup): string {
     `<h1>${escapeText(group.name)}</h1>`,
     group.description ? `<p>${escapeText(group.description)}</p>` : "",
     `<p>${escapeText(facts.join(" · "))}</p>`,
-    "<h2>Model Tradeoffs</h2>",
-    `<p>${escapeText(groupDescription(group, Number.POSITIVE_INFINITY))}</p>`,
-    "<h2>All Settings</h2>",
-    group.settings.length > 0
-      ? settingsTable(group.settings)
-      : "<p>No setting was released on every repository in this group.</p>",
+    // As on the page, the leaderboard's sections only when the members share a setting.
+    ...(group.settings.length > 0
+      ? [
+          "<h2>Model Tradeoffs</h2>",
+          `<p>${escapeText(groupDescription(group, Number.POSITIVE_INFINITY))}</p>`,
+          "<h2>All Settings</h2>",
+          settingsTable(group.settings),
+        ]
+      : ["<p>No setting was released on every repository in this group.</p>"]),
     "<h2>Repositories</h2>",
     `<ul>${members.join("")}</ul>`,
     HOME_LINK,

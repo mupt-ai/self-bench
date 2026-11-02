@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, asc, eq } from "drizzle-orm";
 import type { GroupRecord } from "../public/release-groups.js";
 import type { Database } from "./client.js";
-import { releaseGroups } from "./schema.js";
+import { releaseGroups, releases } from "./schema.js";
 
 /** A workspace's repository group, as the app edits it. */
 export interface ReleaseGroupRow extends GroupRecord {
@@ -69,7 +69,14 @@ export function createReleaseGroupStore(db: Database, options: { now?: () => Dat
     },
     /** Every workspace's groups, for the public snapshot. */
     async all(): Promise<ReleaseGroupRow[]> {
-      return (await db.select().from(releaseGroups)).map(rowFrom);
+      const [rows, logins] = await Promise.all([
+        db.select().from(releaseGroups),
+        db.selectDistinct({ orgId: releases.orgId, login: releases.publisherLogin }).from(releases),
+      ]);
+      return rows.map((row) => ({
+        ...rowFrom(row),
+        releaseLogins: logins.filter((each) => each.orgId === row.orgId).map((each) => each.login),
+      }));
     },
     async insert(
       orgId: number,

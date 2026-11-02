@@ -19,6 +19,11 @@ import type {
 /** What the public snapshot reads of a stored group. */
 export interface GroupRecord {
   publisherLogin: string;
+  /**
+   * Every login the group's workspace has released under. A renamed workspace's current
+   * releases keep the login they were written with, so members match on any of them.
+   */
+  releaseLogins?: readonly string[];
   slug: string;
   name: string;
   description: string;
@@ -159,12 +164,13 @@ export function groupOf(
   group: GroupRecord,
   lines: readonly PublishedLine[],
 ): PublishedGroup | undefined {
-  const publisher = group.publisherLogin.toLowerCase();
+  const logins = new Set(
+    [group.publisherLogin, ...(group.releaseLogins ?? [])].map((login) => login.toLowerCase()),
+  );
   const releases = group.repositoryIds.flatMap((id) => {
     const line = lines.find(
       (each) =>
-        each.release.repository.id === id &&
-        each.release.publisher.login.toLowerCase() === publisher,
+        each.release.repository.id === id && logins.has(each.release.publisher.login.toLowerCase()),
     );
     return line ? [line.release] : [];
   });

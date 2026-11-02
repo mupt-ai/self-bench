@@ -125,39 +125,61 @@ export function HomePage() {
 
       {!data && !failed && <p className="text-center text-muted-foreground">Loading…</p>}
       {failed && <p className="text-center text-muted-foreground">Results could not be loaded.</p>}
-      {data &&
-        (needle ? (
-          <Grid
-            cards={data.lines.filter((card) => matches(card, needle))}
-            byLine
-            onOpen={opened}
-            empty={<NoMatch query={query.trim()} />}
-          />
-        ) : (
-          <>
-            {data.groups.length > 0 && (
-              <section className="flex flex-col gap-3">
-                <h2 className="text-sm font-medium">Repository Groups</h2>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {data.groups.map((card) => (
-                    <GroupCard key={`${card.publisher.login}/${card.slug}`} card={card} />
-                  ))}
-                </div>
-              </section>
-            )}
-            {data.groups.length > 0 && data.repos.length > 0 ? (
-              // Named only beside the groups, which would otherwise read as part of the grid.
-              <section className="flex flex-col gap-3">
-                <h2 className="text-sm font-medium">Repositories</h2>
-                <Grid cards={data.repos} onOpen={opened} empty={<NoMatch />} />
-              </section>
-            ) : (
-              <Grid cards={data.repos} onOpen={opened} empty={<NoMatch />} />
-            )}
-          </>
-        ))}
+      {data && <Directory data={data} needle={needle} query={query} onOpen={opened} />}
     </div>
   );
+}
+
+/**
+ * The repository groups, then the repositories: each repository's default line, or with a
+ * search, every line and group that matches it.
+ */
+function Directory({
+  data,
+  needle,
+  query,
+  onOpen,
+}: {
+  data: HomeData;
+  needle: string;
+  query: string;
+  onOpen: (card: PublicRepoSummary, element: HTMLElement) => void;
+}) {
+  const groups = needle ? data.groups.filter((card) => groupMatches(card, needle)) : data.groups;
+  const cards = needle ? data.lines.filter((card) => matches(card, needle)) : data.repos;
+  // A search that finds only groups shows them alone, not "no evals" beneath them.
+  const empty = groups.length > 0 ? null : <NoMatch query={needle ? query.trim() : undefined} />;
+  const grid = <Grid cards={cards} byLine={!!needle} onOpen={onOpen} empty={empty} />;
+  return (
+    <>
+      {groups.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-sm font-medium">Repository Groups</h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {groups.map((card) => (
+              <GroupCard key={`${card.publisher.login}/${card.slug}`} card={card} />
+            ))}
+          </div>
+        </section>
+      )}
+      {groups.length > 0 && cards.length > 0 ? (
+        // Named only beside the groups, which would otherwise read as part of the grid.
+        <section className="flex flex-col gap-3">
+          <h2 className="text-sm font-medium">Repositories</h2>
+          {grid}
+        </section>
+      ) : (
+        grid
+      )}
+    </>
+  );
+}
+
+/** A group matches on its name, address, publisher, or any member repository. */
+function groupMatches(card: PublicGroupCard, needle: string): boolean {
+  return [card.name, card.slug, card.publisher.login, publisherName(card.publisher)]
+    .concat(card.repositories)
+    .some((text) => text.toLowerCase().includes(needle));
 }
 
 /** A card matches on its repository, its publisher's login, or the name the card shows. */
