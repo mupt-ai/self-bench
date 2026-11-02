@@ -168,10 +168,7 @@ export function SiteSidebar({
                     <span aria-hidden="true" className="mx-1 mb-2 block border-t border-border" />
                   )
                 ) : (
-                  <h2
-                    id={heading}
-                    className="px-2.5 pb-1 text-sm font-normal text-muted-foreground/80"
-                  >
+                  <h2 id={heading} className="px-2.5 pb-1 text-sm font-normal text-(--faint)">
                     {section.label}
                   </h2>
                 )}
