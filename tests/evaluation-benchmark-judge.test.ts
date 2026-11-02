@@ -32,11 +32,13 @@ test("a benchmark graded by an LLM judge runs with the judge credential the user
     expect((await fixture.request(fixture.benchmarks, post({ reference: "law/lab" }))).status).toBe(
       201,
     );
-    // The Run page learns which judge variables the tasks read.
-    const item = await (await fixture.request(`${fixture.benchmarks}/law/lab`)).json();
-    expect(item.benchmark.judge).toEqual({
-      variables: ["ANTHROPIC_API_KEY"],
-      required: ["ANTHROPIC_API_KEY"],
+    // The Run page learns the tasks to pick from and which judge variables they read.
+    const options = await (
+      await fixture.request(`${fixture.benchmarks}/law/lab/evaluations/options`)
+    ).json();
+    expect(options).toEqual({
+      tasks: [{ runId: `harbor:sha256:${"4".repeat(64)}`, taskId: "law/memo" }],
+      judge: { variables: ["ANTHROPIC_API_KEY"], required: ["ANTHROPIC_API_KEY"] },
     });
 
     const openai = await credential("openai");

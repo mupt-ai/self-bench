@@ -1,9 +1,8 @@
 import React from "react";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel, HostedSandbox } from "../../../../src/evaluation/catalog";
-import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
 import { Notice, PageContent, PageHeader } from "../ui";
-import { RunExecution } from "./RunExecution";
+import { type RunDraft, RunExecution } from "./RunExecution";
 import { RunModelTable } from "./RunModelTable";
 import { RunTaskPicker } from "./RunTaskPicker";
 
@@ -55,7 +54,7 @@ const tasks = [
 ];
 
 export function DemoRunPage() {
-  const [draft, setDraft] = React.useState<ComparisonDraft>({
+  const [draft, setDraft] = React.useState<RunDraft>({
     id: "00000000-0000-4000-8000-000000000001",
     tasks: tasks.map(({ runId, taskId }) => ({ runId, taskId })),
     models: [
@@ -89,9 +88,9 @@ export function DemoRunPage() {
         submitted.
       </Notice>
       <RunTaskPicker
-        repo="demo/sample-repository"
+        scope={{ repo: "demo/sample-repository", pages: "/repos/demo/sample-repository" }}
         availableTasks={tasks}
-        draft={draft}
+        picked={draft.tasks}
         tasksReady
         disabled={false}
         readOnly

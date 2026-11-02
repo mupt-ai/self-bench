@@ -26,6 +26,7 @@ export function EvaluationPage() {
           <ChartPreview pages={pages} variant="button" />
         </span>
         <ModelSummaries />
+        {/* Exports are image-backed tasks, which only a repository's are. */}
         {repo && <CustomerExportButton url={url} runs={runs} />}
       </PageHeader>
       {error && <Notice className="mb-4">{error}</Notice>}
@@ -55,11 +56,9 @@ export function EvaluationPage() {
               <Link className={buttonStyles.primary} to={`${pages}/run`}>
                 Run Models
               </Link>
-              {repo && (
-                <Link className={buttonStyles.secondary} to={pages}>
-                  Review Tasks
-                </Link>
-              )}
+              <Link className={buttonStyles.secondary} to={pages}>
+                Review Tasks
+              </Link>
             </>
           }
         >

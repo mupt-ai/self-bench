@@ -1,5 +1,4 @@
 import type { ArtifactStore } from "../../artifacts/index.js";
-import type { ConnectedRepo } from "../../db/repos.js";
 import type { Vault } from "../../db/vault.js";
 import { type EvaluationScope, sameScope } from "../../evaluation/scope.js";
 import { evaluationPrefix } from "../../evaluation/store.js";
@@ -28,17 +27,12 @@ export async function frozenTrialBundle(
 export async function trialTaskFiles(
   artifacts: ArtifactStore,
   vault: Vault | undefined,
-  repo: ConnectedRepo,
+  owner: { scope: EvaluationScope; orgId: number },
   run: EvaluationRun,
   index: number,
 ): Promise<{ bundleKey: string } | { filesKey: string } | undefined> {
-  const bundleKey = await frozenTrialBundle(
-    vault,
-    { scope: { repoId: repo.id }, orgId: repo.orgId },
-    run,
-    index,
-  );
+  const bundleKey = await frozenTrialBundle(vault, owner, run, index);
   if (bundleKey && (await artifacts.stat(bundleKey))) return { bundleKey };
-  const filesKey = `${evaluationPrefix({ repoId: repo.id }, run.id)}tasks/${index}.json`;
+  const filesKey = `${evaluationPrefix(owner.scope, run.id)}tasks/${index}.json`;
   return (await artifacts.stat(filesKey)) ? { filesKey } : undefined;
 }

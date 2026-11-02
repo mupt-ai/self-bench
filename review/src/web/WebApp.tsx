@@ -9,7 +9,6 @@ import { BenchmarkLayout } from "./benchmarks/BenchmarkLayout";
 import { BenchmarksPage } from "./benchmarks/BenchmarksPage";
 import { BenchmarkTaskPage } from "./benchmarks/BenchmarkTaskPage";
 import { ErrorBoundary } from "./ErrorBoundary";
-import { BenchmarkRunPage } from "./evaluation/BenchmarkRunPage";
 import { CredentialsPage } from "./evaluation/CredentialsPage";
 import { DemoRunPage } from "./evaluation/DemoRunPage";
 import { EvaluationPage } from "./evaluation/EvaluationPage";
@@ -90,7 +89,7 @@ export function WebApp() {
                   <Route path="benchmarks" element={<BenchmarksPage />} />
                   <Route path="benchmarks/:owner/:name" element={<BenchmarkLayout />}>
                     <Route index element={<BenchmarkDatasetPage />} />
-                    <Route path="run" element={<BenchmarkRunPage />} />
+                    <Route path="run" element={<RunPage />} />
                     <Route path="results" element={<EvaluationPage />} />
                     <Route
                       path="comparisons/:comparisonId"

@@ -4,15 +4,15 @@ import type { CredentialInfo } from "../../../../src/db/credentials";
 import { type EvaluationOptions, type EvaluationRun, evaluationRequest, runsRequest } from "./api";
 
 /**
- * A repository's (or the org's benchmarks') evaluation runs and the org's credentials, shared by the Results page's table and
- * the chart preview in the repository header. They load when the Results page opens, refresh each
+ * A repository's or benchmark's evaluation runs and the org's credentials, shared by the Results
+ * page's table and the chart preview in the header. They load when the Results page opens, refresh each
  * time it opens again, and while a run is unfinished every 3 seconds there; elsewhere they rest.
  */
 interface RepoRuns {
   url: string;
   runs: EvaluationRun[];
   credentials: CredentialInfo[];
-  /** The repository's accepted tasks, which runs can use, once loaded. */
+  /** The tasks runs can use (a repository's accepted ones, or a benchmark's), once loaded. */
   accepted?: AcceptedTask[];
   loading: boolean;
   error: string;
@@ -45,7 +45,7 @@ export function RepoRunsProvider({
   org: string;
   /** The API the runs are under (useEvaluationScope). */
   url: string;
-  /** `owner/name`, whose accepted tasks the results' coverage uses; none for benchmarks. */
+  /** `owner/name`, for a repository, whose reviews say when each task was accepted. */
   repo?: string;
   children: React.ReactNode;
 }) {
@@ -118,15 +118,18 @@ export function RepoRunsProvider({
   React.useEffect(() => {
     if (onResults) refreshNow.current();
   }, [onResults, url]);
-  // The accepted tasks, for the coverage view: which tasks a configuration hasn't run, and from the
-  // Dataset page's task list, when each was accepted, which says whether a run left a task out or
-  // it came after. Reloaded each time the Results page opens, since tasks are accepted elsewhere.
+  // The tasks runs can use, for the coverage view: which tasks a configuration hasn't run, and for
+  // a repository, from the Dataset page's task list, when each was accepted, which says whether a
+  // run left a task out or it came after. Reloaded each time the Results page opens, since a
+  // repository's tasks are accepted elsewhere.
   React.useEffect(() => {
-    if (!onResults || !repo) return;
+    if (!onResults) return;
     let disposed = false;
-    const reviews = evaluationRequest<{
-      tasks: { runId: string; taskId: string; review?: { decidedAt: string } }[];
-    }>(`/api/orgs/${encodeURIComponent(org)}/repos/${repo}/tasks`).catch(() => ({ tasks: [] }));
+    const reviews = repo
+      ? evaluationRequest<{
+          tasks: { runId: string; taskId: string; review?: { decidedAt: string } }[];
+        }>(`/api/orgs/${encodeURIComponent(org)}/repos/${repo}/tasks`).catch(() => ({ tasks: [] }))
+      : Promise.resolve({ tasks: [] });
     Promise.all([evaluationRequest<EvaluationOptions>(`${url}/options`), reviews])
       .then(([options, list]) => {
         if (disposed) return;

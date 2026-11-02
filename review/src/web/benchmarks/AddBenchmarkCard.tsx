@@ -1,6 +1,6 @@
-import { Plus } from "lucide-react";
 import React from "react";
 import { REGISTRY_REFERENCE, registryReference } from "../../../../src/contracts/harbor-registry";
+import { AddScopeButton } from "../ScopeCard";
 import { Button, Input } from "../ui";
 
 /** Suggestions only: anything in Harbor's registry can be added. */
@@ -35,18 +35,7 @@ export function AddBenchmarkCard({
   const [value, setValue] = React.useState("");
   const [error, setError] = React.useState("");
   const [busy, setBusy] = React.useState(false);
-  if (!open)
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label="Add a Dataset"
-        className="group flex h-full min-h-40 w-full flex-col items-center justify-center gap-2 border-[1.5px] border-dashed border-foreground/15 text-sm font-semibold text-muted-foreground transition-colors hover:border-foreground/35 hover:bg-foreground/[0.03] hover:text-foreground"
-      >
-        <Plus className="size-5" aria-hidden="true" />
-        Add a Dataset
-      </button>
-    );
+  if (!open) return <AddScopeButton label="Add a Dataset" onClick={() => setOpen(true)} />;
   const add = async () => {
     const reference = value.trim();
     const refusal = benchmarkRefusal(reference, added);

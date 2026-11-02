@@ -6,6 +6,7 @@ import { askModel, type FailureSummaryOptions } from "./failure-summary.js";
 import { harnessLabels } from "./models.js";
 import { redactOutput } from "./output.js";
 import { evaluationPrompt } from "./prompts.js";
+import { type EvaluationScope, scopeOf } from "./scope.js";
 import { evaluationPrefix, listEvaluations } from "./store.js";
 import type { EvaluationRun, EvaluationTrial } from "./types.js";
 
@@ -14,9 +15,11 @@ const AUDIT_CHARS = 3_000;
 /** The most failed attempts read, newest first, so one task's material stays a few hundred KB. */
 const MAX_FAILURES = 12;
 
-/** One task to audit, across every evaluation of its repository that attempted it. */
-export interface TaskAuditRequest {
-  repoId: number;
+/**
+ * One task to audit, across every evaluation of its repository or benchmark that attempted it.
+ * Audits asked for before benchmarks had them carry only `repoId`.
+ */
+export interface TaskAuditRequest extends EvaluationScope {
   runId: string;
   taskId: string;
   /** Where the task's files are (trialTaskFiles): its frozen bundle, or files an evaluation kept. */
@@ -50,11 +53,13 @@ export interface TaskAttempt {
   trial: EvaluationTrial;
 }
 
-type TaskRef = Pick<TaskAuditRequest, "repoId" | "runId" | "taskId">;
+export type TaskRef = EvaluationScope & Pick<TaskAuditRequest, "runId" | "taskId">;
 
 /** Where a task's latest audit is kept, apart from any one evaluation. */
-function taskAuditKey({ repoId, runId, taskId }: TaskRef): string {
-  return `audits/repos/${repoId}/${encodeURIComponent(runId)}/${encodeURIComponent(taskId)}.json`;
+function taskAuditKey({ runId, taskId, ...scope }: TaskRef): string {
+  const { repoId, benchmarkId } = scopeOf(scope);
+  const root = repoId !== undefined ? `repos/${repoId}` : `benchmarks/${benchmarkId}`;
+  return `audits/${root}/${encodeURIComponent(runId)}/${encodeURIComponent(taskId)}.json`;
 }
 
 const failureKey = (task: TaskRef) => taskAuditKey(task).replace(/\.json$/, ".failed.json");
@@ -110,7 +115,7 @@ export function taskAttempts(
 
 /**
  * Audits a task from every failed attempt at it, through the saved key and model it names, and
- * keeps the audit beside the repository's evaluations. A task no attempt failed is left alone.
+ * keeps the audit beside its repository's or benchmark's evaluations. A task no attempt failed is left alone.
  */
 export async function auditTask(
   store: ArtifactStore,
@@ -142,20 +147,21 @@ async function judge(
 ): Promise<boolean> {
   const environment = options.env ?? process.env;
   const { orgId, credentialId, model } = request.audit;
-  if ((await options.vault?.scopeOrg?.({ repoId: request.repoId })) !== orgId)
-    throw new Error("Audit repository is unavailable in this organization.");
+  const scope = scopeOf(request);
+  if ((await options.vault?.scopeOrg?.(scope)) !== orgId)
+    throw new Error("Audit repository or benchmark is unavailable in this organization.");
   const credential = await options.vault?.credentials.find(orgId, credentialId);
   if (!credential) throw new Error("Audit API key is unavailable.");
   const selected = explanationModel(credential, model, environment);
   const key = (await options.vault?.credentials.secret(orgId, credentialId))?.value;
   if (!key) throw new Error("Audit API key is unavailable.");
 
-  const attempts = taskAttempts(await listEvaluations(store, { repoId: request.repoId }), request);
+  const attempts = taskAttempts(await listEvaluations(store, scope), request);
   const failures = attempts.filter(failedAttempt);
   if (!failures.length) return true;
   const redact = (text: string) => options.redact(redactOutput(text, [key]));
   const material = redact(
-    await auditMaterial(store, request, await taskFiles(store, request), attempts),
+    await auditMaterial(store, scope, await taskFiles(store, request), attempts),
   );
   const answer = await askModel(
     material,
@@ -217,7 +223,7 @@ const configurationOf = ({ run, trial }: TaskAttempt) =>
 /** The task once, every attempt's outcome, then the newest failures' evidence, each part capped. */
 async function auditMaterial(
   store: ArtifactStore,
-  { repoId }: Pick<TaskAuditRequest, "repoId">,
+  scope: EvaluationScope,
   files: ReadonlyMap<string, string>,
   attempts: readonly TaskAttempt[],
 ): Promise<string> {
@@ -233,7 +239,7 @@ async function auditMaterial(
       .filter(failedAttempt)
       .slice(-MAX_FAILURES)
       .map(async (attempt) => {
-        const prefix = `${evaluationPrefix({ repoId }, attempt.run.id)}artifacts/`;
+        const prefix = `${evaluationPrefix(scope, attempt.run.id)}artifacts/`;
         const output = await Promise.all(
           attempt.trial.artifacts
             .filter((name) => VERIFIER_FILE.test(name))

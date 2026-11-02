@@ -39,21 +39,15 @@ test("task picker is collapsed with selected tasks in an expandable table", () =
   const html = renderToStaticMarkup(
     <MemoryRouter>
       <RunTaskPicker
-        repo="owner/repo"
+        scope={{ repo: "owner/repo", pages: "/repos/owner/repo" }}
         availableTasks={[
           { runId: "run-a", taskId: "task-a", difficulty: "easy" },
           { runId: "run-b", taskId: "task-b", difficulty: "hard" },
         ]}
-        draft={{
-          id: "draft",
-          tasks: [
-            { runId: "run-a", taskId: "task-a" },
-            { runId: "run-b", taskId: "task-b" },
-          ],
-          models: [],
-          sandbox: "e2b",
-          sandboxCredentialId: "",
-        }}
+        picked={[
+          { runId: "run-a", taskId: "task-a" },
+          { runId: "run-b", taskId: "task-b" },
+        ]}
         tasksReady
         disabled={false}
         onChange={() => {}}

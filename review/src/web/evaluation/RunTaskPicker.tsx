@@ -1,46 +1,58 @@
 import { ChevronDown, Database } from "lucide-react";
 import { Link } from "react-router";
-import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
 import { evaluationTaskKey } from "../../../../src/evaluation/models";
 import { Button } from "../ui";
 import type { EvaluationOptions } from "./api";
+import type { RunDraft } from "./RunExecution";
+import type { EvaluationScope } from "./useEvaluationScope";
 
+/**
+ * The tasks a comparison runs, picked from the scope's dataset: a repository's accepted tasks, or a
+ * benchmark's frozen registry tasks. Every task starts picked.
+ */
 export function RunTaskPicker({
-  repo,
+  scope,
   availableTasks,
-  draft,
+  picked,
   onChange,
   tasksReady,
   disabled,
   readOnly = false,
 }: {
-  repo: string;
+  scope: Pick<EvaluationScope, "pages" | "repo">;
   availableTasks: EvaluationOptions["tasks"];
-  draft: ComparisonDraft;
-  onChange: (tasks: ComparisonDraft["tasks"]) => void;
+  /** The tasks picked so far. */
+  picked: RunDraft["tasks"];
+  onChange: (tasks: RunDraft["tasks"]) => void;
   tasksReady: boolean;
   disabled: boolean;
   readOnly?: boolean;
 }) {
-  const selected = new Set(draft.tasks.map((task) => evaluationTaskKey(task.runId, task.taskId)));
+  // A repository's tasks are the ones its review accepted; a benchmark's are its whole dataset.
+  const accepted = scope.repo !== undefined;
+  const noun = (count: number) => `${accepted ? "Accepted " : ""}${count === 1 ? "Task" : "Tasks"}`;
+  const none = accepted ? "No approved tasks are available." : "No tasks are available.";
+  const loading = accepted ? "Loading approved tasks…" : "Loading tasks…";
+  const difficulty = availableTasks.some((task) => task.difficulty);
+  const selected = new Set(picked.map((task) => evaluationTaskKey(task.runId, task.taskId)));
   return (
     <details className="group panel mb-5">
       <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 marker:hidden [&::-webkit-details-marker]:hidden">
         <Database className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-semibold">
-            {draft.tasks.length} {draft.tasks.length === 1 ? "Accepted Task" : "Accepted Tasks"}
+            {picked.length} {noun(picked.length)}
           </span>
           <span className="mt-1 block text-xs text-muted-foreground">
             {availableTasks.length
               ? "Choose which tasks every configuration runs against."
               : tasksReady
-                ? "No approved tasks are available."
-                : "Loading approved tasks…"}
+                ? none
+                : loading}
           </span>
         </span>
         <span className="hidden text-xs text-muted-foreground sm:inline">
-          {draft.tasks.length} of {availableTasks.length} Selected
+          {picked.length} of {availableTasks.length} Selected
         </span>
         <ChevronDown
           className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
@@ -72,7 +84,7 @@ export function RunTaskPicker({
           {!readOnly && (
             <Link
               className="text-sm font-medium text-muted-foreground hover:text-foreground"
-              to={`/repos/${repo}`}
+              to={scope.pages}
             >
               Review Dataset →
             </Link>
@@ -89,9 +101,11 @@ export function RunTaskPicker({
                   <th scope="col" className="px-4 py-2.5 font-semibold">
                     Task
                   </th>
-                  <th scope="col" className="hidden px-4 py-2.5 font-semibold sm:table-cell">
-                    Difficulty
-                  </th>
+                  {difficulty && (
+                    <th scope="col" className="hidden px-4 py-2.5 font-semibold sm:table-cell">
+                      Difficulty
+                    </th>
+                  )}
                   <th scope="col" className="hidden px-4 py-2.5 font-semibold lg:table-cell">
                     Source Run
                   </th>
@@ -112,21 +126,23 @@ export function RunTaskPicker({
                           onChange={() =>
                             onChange(
                               checked
-                                ? draft.tasks.filter(
+                                ? picked.filter(
                                     (candidate) =>
                                       evaluationTaskKey(candidate.runId, candidate.taskId) !== key,
                                   )
-                                : [...draft.tasks, { runId: task.runId, taskId: task.taskId }],
+                                : [...picked, { runId: task.runId, taskId: task.taskId }],
                             )
                           }
                           className="size-4 accent-brand"
                         />
                       </td>
                       <td className="px-4 py-3 font-mono text-xs wrap-anywhere">{task.taskId}</td>
-                      <td className="hidden px-4 py-3 text-xs text-muted-foreground sm:table-cell">
-                        {task.difficulty[0]?.toUpperCase()}
-                        {task.difficulty.slice(1)}
-                      </td>
+                      {difficulty && (
+                        <td className="hidden px-4 py-3 text-xs text-muted-foreground sm:table-cell">
+                          {task.difficulty?.[0]?.toUpperCase()}
+                          {task.difficulty?.slice(1)}
+                        </td>
+                      )}
                       <td className="hidden px-4 py-3 font-mono text-xs text-muted-foreground lg:table-cell">
                         {task.runId}
                       </td>
@@ -137,9 +153,7 @@ export function RunTaskPicker({
             </table>
           </div>
         ) : (
-          <p className="px-4 py-6 text-sm text-muted-foreground">
-            {tasksReady ? "No approved tasks available." : "Loading approved tasks…"}
-          </p>
+          <p className="px-4 py-6 text-sm text-muted-foreground">{tasksReady ? none : loading}</p>
         )}
       </div>
     </details>

@@ -1,11 +1,11 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { z } from "zod";
-import type { ConnectedRepo } from "../../db/repos.js";
 import type { User } from "../../db/users.js";
 import {
   explanationModel,
   explanationSelectionSchema,
 } from "../../evaluation/explanation-model.js";
+import type { EvaluationScope } from "../../evaluation/scope.js";
 import { listEvaluations } from "../../evaluation/store.js";
 import { failedAttempt, readTaskAudit, taskAttempts } from "../../evaluation/task-audit.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
@@ -17,7 +17,9 @@ const taskSchema = z.object({ runId: z.string().min(1), taskId: z.string().min(1
 
 type Options = Pick<EvaluationRoutesOptions, "artifacts" | "vault" | "publicUrl" | "audit">;
 interface Context {
-  repo: ConnectedRepo;
+  /** The repository's or benchmark's evaluations, and the org that owns them. */
+  scope: EvaluationScope;
+  orgId: number;
   user: User;
   env: NodeJS.ProcessEnv;
 }
@@ -32,7 +34,7 @@ export async function auditTaskRoute(
   request: IncomingMessage,
   url: URL,
   response: ServerResponse,
-  { repo, user, env }: Context,
+  { scope, orgId, user, env }: Context,
 ): Promise<void> {
   if (request.method === "POST" && !trustedMutation(request, options.publicUrl, user)) {
     sendJson(response, 403, { error: "Same-origin JSON request required" });
@@ -54,10 +56,10 @@ export async function auditTaskRoute(
     });
     return;
   }
-  const ref = { repoId: repo.id, ...task };
+  const ref = { ...scope, ...task };
   if (request.method === "GET") {
     // Only the audit's own record and workflow: the page counts the task's failed attempts from
-    // the results it already shows, so opening a task never reads every evaluation of the repo.
+    // the results it already shows, so opening a task never reads every evaluation of the scope.
     const [{ audit, failure }, running] = await Promise.all([
       readTaskAudit(options.artifacts, ref),
       options.audit ? options.audit.state(ref).then((state) => state.running) : false,
@@ -76,7 +78,7 @@ export async function auditTaskRoute(
     return;
   }
   const [runs, { running }] = await Promise.all([
-    listEvaluations(options.artifacts, { repoId: repo.id }),
+    listEvaluations(options.artifacts, scope),
     options.audit.state(ref),
   ]);
   const attempts = taskAttempts(runs, task);
@@ -92,7 +94,7 @@ export async function auditTaskRoute(
   }
   let files: Awaited<ReturnType<typeof trialTaskFiles>>;
   for (const { run, index } of attempts) {
-    files = await trialTaskFiles(options.artifacts, options.vault, repo, run, index);
+    files = await trialTaskFiles(options.artifacts, options.vault, { scope, orgId }, run, index);
     if (files) break;
   }
   if (!files) {
@@ -101,7 +103,7 @@ export async function auditTaskRoute(
     });
     return;
   }
-  const credential = await options.vault?.credentials.find(repo.orgId, selection.credentialId);
+  const credential = await options.vault?.credentials.find(orgId, selection.credentialId);
   try {
     if (!credential) throw new Error("The selected model API key is unavailable.");
     explanationModel(credential, selection.model, env);
@@ -111,6 +113,6 @@ export async function auditTaskRoute(
     });
     return;
   }
-  await options.audit.start({ ...ref, ...files, audit: { ...selection, orgId: repo.orgId } });
+  await options.audit.start({ ...ref, ...files, audit: { ...selection, orgId } });
   sendJson(response, 202, {});
 }

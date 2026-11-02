@@ -10,11 +10,11 @@ import type { Coverage } from "../setup/readiness";
 import { SetupCallout } from "../setup/SetupCallout";
 import { Button, buttonStyles, fieldStyles, Notice, Select } from "../ui";
 
-/**
- * What the Run pages edit: a repository's comparison picks accepted `tasks`; a benchmark's runs
- * its dataset, so it has none to pick.
- */
-export type RunDraft = ComparisonSelection & { tasks?: { runId: string; taskId: string }[] };
+/** What the Run page edits: the tasks, models, and sandbox, and the LLM judge's credential. */
+export type RunDraft = ComparisonSelection & {
+  tasks: { runId: string; taskId: string }[];
+  judgeCredentialId?: string;
+};
 
 /** Why the comparison can't run yet, for the notice above the task picker. Nothing while
  * the accepted tasks are still loading or once the request is submitted. */
@@ -32,7 +32,7 @@ export function runBlocker({
   pairs: number;
 }): string | undefined {
   if (ready || submitted || !tasksReady) return undefined;
-  if (draft.tasks && !draft.tasks.length) return "Select at least one accepted task to continue.";
+  if (!draft.tasks.length) return "Select at least one task to continue.";
   if (!pairs) return "Add a model to continue.";
   if (!draft.sandboxCredentialId) return "Select a sandbox credential to continue.";
   return "Check the credentials and harness for each model.";
@@ -59,7 +59,7 @@ export function RunSetupCallout({ coverage }: { coverage: Coverage }) {
   );
 }
 
-export function RunExecution<D extends RunDraft>({
+export function RunExecution({
   pages,
   draft,
   credentials,
@@ -68,23 +68,20 @@ export function RunExecution<D extends RunDraft>({
   busy,
   ready,
   pairs,
-  taskCount = draft.tasks?.length ?? 0,
   onChange,
   onSubmit,
   onRunMissing,
   readOnly = false,
 }: {
   pages: string;
-  draft: D;
+  draft: RunDraft;
   credentials: CredentialInfo[];
   sandboxes: (HostedSandbox | "managed")[];
   submitted: boolean;
   busy: boolean;
   ready: boolean;
   pairs: number;
-  /** How many tasks each pair runs, when the draft does not pick them (a benchmark's dataset). */
-  taskCount?: number;
-  onChange(value: NoInfer<D>): void;
+  onChange(value: RunDraft): void;
   onSubmit(): void;
   onRunMissing(): void;
   readOnly?: boolean;
@@ -170,7 +167,7 @@ export function RunExecution<D extends RunDraft>({
         <dl className="space-y-2 text-sm">
           <div className="flex justify-between gap-3">
             <dt className="text-muted-foreground">Tasks</dt>
-            <dd className="font-mono tabular-nums">{taskCount}</dd>
+            <dd className="font-mono tabular-nums">{draft.tasks.length}</dd>
           </div>
           <div className="flex justify-between gap-3">
             <dt className="text-muted-foreground">Model / Harness Pairs</dt>
@@ -178,7 +175,7 @@ export function RunExecution<D extends RunDraft>({
           </div>
           <div className="mt-3 flex justify-between gap-3 border-t border-border pt-3">
             <dt className="text-muted-foreground">Total Trials</dt>
-            <dd className="font-mono tabular-nums">{pairs * taskCount}</dd>
+            <dd className="font-mono tabular-nums">{pairs * draft.tasks.length}</dd>
           </div>
         </dl>
       </div>

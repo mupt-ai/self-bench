@@ -51,9 +51,7 @@ test("the run page explains why a run is unavailable, once tasks load", () => {
   const blocker = (overrides: Partial<Parameters<typeof runBlocker>[0]>) =>
     runBlocker({ draft, ready: false, submitted: false, tasksReady: true, pairs: 0, ...overrides });
   expect(blocker({ tasksReady: false })).toBeUndefined();
-  expect(blocker({ draft: { ...draft, tasks: [] } })).toBe(
-    "Select at least one accepted task to continue.",
-  );
+  expect(blocker({ draft: { ...draft, tasks: [] } })).toBe("Select at least one task to continue.");
   expect(blocker({})).toBe("Add a model to continue.");
   expect(blocker({ pairs: 2 })).toBe("Select a sandbox credential to continue.");
   expect(blocker({ pairs: 2, ready: true })).toBeUndefined();
