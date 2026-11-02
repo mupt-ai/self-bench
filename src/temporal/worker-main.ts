@@ -3,7 +3,6 @@ import { Worker } from "@temporalio/worker";
 import { createArtifactStore } from "../artifacts/index.js";
 import { loadWorkerConfig } from "../contracts/config/index.js";
 import { workerProcessSettings } from "../contracts/config/worker.js";
-import { customerExportActivities } from "../customer-exports/activities.js";
 import { createBatchStore } from "../db/batches.js";
 import { openDatabase } from "../db/client.js";
 import { createRunSummaryStore } from "../db/evaluation-summaries.js";
@@ -125,7 +124,6 @@ const workers = await Promise.all([
             ...evaluation,
             ...batches,
             ...taskImages,
-            ...customerExportActivities(artifacts, config.taskImages),
           },
           maxConcurrentActivityTaskExecutions: config.activityConcurrency,
           interceptors: {

@@ -170,46 +170,6 @@ resource "google_service_account_iam_member" "runtime_acts_as_builder" {
   member             = "serviceAccount:${google_service_account.runtime.email}"
 }
 
-# Customer exports copy verified images to their own private repository. The API has no
-# provisioning/IAM permission. Workers may create repositories, read repository metadata (including
-# nonexistent names) and read and set repository IAM policies, which is how each export grants the
-# builder writer and the customer reader on its own repository only.
-#
-# Artifact Registry does not honor resource.name conditions on project-level bindings: a conditional
-# grant scoped to customer-* repositories was refused with HTTP 403 in prod and dev, whatever the
-# expression, while the same role granted on the repository itself worked. So the worker's policy
-# access is project-wide, and the builder, which runs code from repositories under test, gets no
-# project-level write at all.
-resource "google_project_iam_custom_role" "customer_repository_create" {
-  count       = var.task_images ? 1 : 0
-  project     = var.project_id
-  role_id     = "selfbenchCustomerRepositoryCreate"
-  title       = "Create Customer Export Repositories"
-  permissions = ["artifactregistry.repositories.create", "artifactregistry.repositories.get"]
-}
-resource "google_project_iam_member" "runtime_customer_repository_create" {
-  count   = var.task_images ? 1 : 0
-  project = var.project_id
-  role    = google_project_iam_custom_role.customer_repository_create[0].name
-  member  = "serviceAccount:${google_service_account.runtime.email}"
-}
-resource "google_project_iam_custom_role" "customer_repository_access" {
-  count   = var.task_images ? 1 : 0
-  project = var.project_id
-  role_id = "selfbenchCustomerRepositoryAccess"
-  title   = "Manage Customer Export Access"
-  permissions = [
-    "artifactregistry.repositories.getIamPolicy",
-    "artifactregistry.repositories.setIamPolicy",
-  ]
-}
-resource "google_project_iam_member" "runtime_customer_repository_access" {
-  count   = var.task_images ? 1 : 0
-  project = var.project_id
-  role    = google_project_iam_custom_role.customer_repository_access[0].name
-  member  = "serviceAccount:${google_service_account.runtime.email}"
-}
-
 locals {
   task_image_registry = "${var.region}-docker.pkg.dev/${var.project_id}"
   task_image_env = var.task_images ? {

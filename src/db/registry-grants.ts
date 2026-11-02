@@ -41,6 +41,20 @@ export function createRegistryGrantStore(db: Database, secret: string, repositor
     expiresAt: row.expiresAt,
     revokedAt: row.revokedAt,
   });
+  const issue = async (values: {
+    label: string;
+    taskIds: number[];
+    images: string[];
+    withVerifier: boolean;
+    expiresAt: Date;
+  }): Promise<{ grant: CustomerGrant; password: string }> => {
+    const [row] = await db
+      .insert(registryGrants)
+      .values({ id: randomUUID(), ...values })
+      .returning();
+    if (!row) throw new Error("Registry grant was not saved");
+    return { grant: toGrant(row), password: `${PREFIX}${row.id}.${signature(row.id, secret)}` };
+  };
   return {
     /** Issues a grant for `taskIds`' verified images; the password is shown only now. */
     async create(input: {
@@ -76,19 +90,61 @@ export function createRegistryGrantStore(db: Database, secret: string, repositor
         images.push(withinRepository(repository, built.agent));
         if (input.withVerifier) images.push(withinRepository(repository, built.verifier));
       }
-      const [row] = await db
+      return await issue({
+        label: input.label,
+        taskIds: ids,
+        images,
+        withVerifier: input.withVerifier,
+        expiresAt: input.expiresAt,
+      });
+    },
+    /**
+     * Issues the grant `id` for images an evaluation froze (a customer export), which name their
+     * task by digest rather than by a task row; each must be in the task image repository. The id
+     * is the caller's, so a retried or concurrent request reuses one grant instead of minting
+     * another: `issued` says whether this call created it. A grant already revoked, expired, or
+     * covering other images is refused.
+     */
+    async createForImages(input: {
+      id: string;
+      label: string;
+      images: readonly string[];
+      expiresAt: Date;
+    }): Promise<{ grant: CustomerGrant; password: string; issued: boolean }> {
+      if (!z.uuid().safeParse(input.id).success)
+        throw new GrantRefusal("A grant id must be a UUID");
+      const images = [...new Set(input.images.map((image) => withinRepository(repository, image)))];
+      if (!images.length) throw new GrantRefusal("A grant needs at least one image");
+      const [inserted] = await db
         .insert(registryGrants)
         .values({
-          id: randomUUID(),
+          id: input.id,
           label: input.label,
-          taskIds: ids,
+          taskIds: [],
           images,
-          withVerifier: input.withVerifier,
+          withVerifier: true,
           expiresAt: input.expiresAt,
         })
+        .onConflictDoNothing({ target: registryGrants.id })
         .returning();
+      const [row] = inserted
+        ? [inserted]
+        : await db.select().from(registryGrants).where(eq(registryGrants.id, input.id));
       if (!row) throw new Error("Registry grant was not saved");
-      return { grant: toGrant(row), password: `${PREFIX}${row.id}.${signature(row.id, secret)}` };
+      const same =
+        row.images.length === images.length && images.every((image) => row.images.includes(image));
+      if (!inserted && (row.revokedAt || row.expiresAt <= new Date() || !same))
+        throw new GrantRefusal("This grant id is already used");
+      return {
+        grant: toGrant(row),
+        password: `${PREFIX}${row.id}.${signature(row.id, secret)}`,
+        issued: !!inserted,
+      };
+    },
+    async find(id: string): Promise<CustomerGrant | undefined> {
+      if (!z.uuid().safeParse(id).success) return undefined;
+      const [row] = await db.select().from(registryGrants).where(eq(registryGrants.id, id));
+      return row ? toGrant(row) : undefined;
     },
     async list(): Promise<CustomerGrant[]> {
       const rows = await db.select().from(registryGrants).orderBy(desc(registryGrants.createdAt));

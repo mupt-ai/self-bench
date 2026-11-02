@@ -41,7 +41,7 @@ const SECTIONS = new Set(["options", "catalog", "comparisons", "audit", "summari
  * their artifacts and actions.
  */
 export const EVALUATIONS_PATH =
-  /^\/evaluations(?:\/(options|catalog|comparisons|audit|summaries|exports|[a-f0-9-]{36}))?(?:\/(artifacts|[a-f0-9-]{36}))?(?:\/(resume|cancel|delete|explain|download))?$/;
+  /^\/evaluations(?:\/(options|catalog|comparisons|audit|summaries|exports|[a-f0-9-]{36}))?(?:\/(artifacts|[a-f0-9-]{36}))?(?:\/(resume|cancel|delete|explain|download|revoke))?$/;
 
 /** A request under a repository's evaluations or a benchmark's. */
 export interface ScopedRequest {
