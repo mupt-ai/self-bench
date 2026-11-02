@@ -36,6 +36,7 @@ async function exportServer() {
         createForImages: (input) => store().createForImages(input),
         find: (id) => store().find(id),
         revoke: (id) => store().revoke(id),
+        discard: (id) => store().discard(id),
       },
     },
   });
@@ -119,26 +120,38 @@ test("an export issues a grant for the evaluation's images and a ZIP that pulls 
 test("concurrent requests for one export share a single key", async () => {
   const { server, body, path, post, store } = await fixture();
   const statuses = (await Promise.all([post(), post(), post()])).map((r) => r.status);
-  // One request writes the export; the others see it finished or still being created.
-  expect(statuses.filter((status) => status === 201)).toHaveLength(1);
-  expect(statuses.every((status) => [200, 201, 409].includes(status))).toBe(true);
+  // Every request lands on the one export; none fails or mints a second key.
+  expect(statuses.every((status) => status === 200 || status === 201)).toBe(true);
   expect(await store().list()).toHaveLength(1);
   expect((await server.request(`${path}/${body.id}/download`)).status).toBe(200);
 });
-test("a failed write revokes the key the request issued", async () => {
-  const { server, body, post, store } = await fixture();
+test("a failed write deletes its key, and retrying the same id finishes the export", async () => {
+  const { server, body, path, post, store } = await fixture();
   const put = server.artifacts.put.bind(server.artifacts);
   server.artifacts.put = async (key, ...rest) => {
     if (key.endsWith("/harbor.zip")) throw new Error("storage unavailable");
     return await put(key, ...rest);
   };
   expect((await post()).status).toBeGreaterThanOrEqual(500);
+  expect(await store().list()).toHaveLength(0);
   server.artifacts.put = put;
-  const [grant] = await store().list();
-  expect(grant?.id).toBe(body.id);
-  expect(grant?.revokedAt).not.toBeNull();
-  // The revoked key cannot be reused, so the same id is refused rather than silently reissued.
-  expect((await post()).status).toBe(409);
+  expect((await post()).status).toBe(201);
+  expect((await server.request(`${path}/${body.id}/download`)).status).toBe(200);
+});
+test("a request that died after issuing its key is finished by a retry", async () => {
+  const { server, body, path, post, store, input } = await fixture();
+  // As if an earlier request issued the key, then its process died before writing anything.
+  await store().createForImages({
+    id: body.id,
+    label: "Acme",
+    images: [agent, verifier],
+    expiresAt: new Date(Date.now() + 86_400_000),
+  });
+  const retried = await post();
+  expect(retried.status).toBe(201);
+  expect((await retried.json()).evaluationId).toBe(input.id);
+  expect(await store().list()).toHaveLength(1);
+  expect((await server.request(`${path}/${body.id}/download`)).status).toBe(200);
 });
 test("revoking an export stops its key at once", async () => {
   const { server, body, path, post, store } = await fixture();

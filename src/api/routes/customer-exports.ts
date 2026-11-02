@@ -17,7 +17,7 @@ import type { EvaluationRoutesOptions } from "./evaluations.js";
 
 /** What customer exports need: grants on the task image repository, which `/v2/` serves. */
 export interface CustomerExportRegistry {
-  readonly grants: Pick<RegistryGrantStore, "createForImages" | "find" | "revoke">;
+  readonly grants: Pick<RegistryGrantStore, "createForImages" | "find" | "revoke" | "discard">;
   /** `<region>-docker.pkg.dev/<project>/<repository>`, the task image repository. */
   readonly repository: string;
 }
@@ -171,12 +171,9 @@ export async function customerExportRoute(
       return sendJson(response, 409, { error: "This export ID belongs to a different request" });
     throw error;
   }
-  if (!issued.issued) {
-    // Another request with this id issued the grant and owns writing the export.
-    const finished = await saved(key);
-    if (finished) return sendJson(response, 200, await describe(finished));
-    return sendJson(response, 409, { error: "This export is still being created" });
-  }
+  // Any request with this id may write the export, so a retry finishes one whose request died.
+  // Every field comes from the shared grant or the request, so concurrent writers write the same
+  // bytes, which the artifact store accepts.
   const { grant, password } = issued;
   const entry: CustomerExportRequest = {
     id: input.id,
@@ -185,7 +182,7 @@ export async function customerExportRoute(
     evaluationId: picked.id,
     evaluationCreatedAt: picked.createdAt,
     grantId: grant.id,
-    createdAt: new Date().toISOString(),
+    createdAt: grant.createdAt.toISOString(),
     createdBy: owner.user.login,
     tasks: picked.tasks,
   };
@@ -212,8 +209,9 @@ export async function customerExportRoute(
       "application/json",
     );
   } catch (error) {
-    // Nothing was handed out, so the grant this request issued must not outlive the failed export.
-    await exports.grants.revoke(grant.id);
+    // Nothing was handed out, so the grant goes; deleting it (not revoking) lets a retry with the
+    // same id issue it again. A concurrent request that did finish the export keeps it.
+    if (!(await saved(key))) await exports.grants.discard(grant.id);
     if (error instanceof PackageError) return sendJson(response, 400, { error: error.message });
     throw error;
   }
