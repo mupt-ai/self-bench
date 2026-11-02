@@ -7,6 +7,7 @@ import type { GroupStore, RepositoryGroup } from "../../db/groups.js";
 import { currentOf, headOf, ReleaseConflict } from "../../db/releases.js";
 import type { RepoStore } from "../../db/repos.js";
 import type { User, UserStore } from "../../db/users.js";
+import { canonicalJson, sha256 } from "../../lib/hash.js";
 import { track } from "../../lib/telemetry/posthog.js";
 import { buildRelease, previewRelease, ReleaseRefused } from "../../public/release-build.js";
 import { type GroupMember, groupHref, membersOf } from "../../public/release-groups.js";
@@ -177,7 +178,14 @@ export function createGroupReleaseRoutes(options: GroupReleaseRoutesOptions) {
       key: built.detail.settings[index] ?? "",
     }));
     const results = (built.detail.results ?? {}) as Parameters<typeof membersOf>[3];
-    const hash = `${built.hash}:${group.slug}:${group.name}:${group.description}`;
+    // What the page shows besides the scores: the group's own fields and its members, in order.
+    const hash = sha256(
+      canonicalJson({
+        scores: built.hash,
+        group: [group.slug, group.name, group.description],
+        members: repositories,
+      }),
+    );
     const current = currentOf(rows);
     if (current && current.hash === hash && headOf(rows)?.id === head?.id) {
       sendJson(response, 200, { unchanged: true, release: summaryOf(current, rows) });

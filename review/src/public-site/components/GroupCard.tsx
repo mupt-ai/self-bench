@@ -45,8 +45,8 @@ export function GroupCard({ card }: { card: PublicGroupCard }) {
         {card.picks.length === 0 && (
           <li className="text-xs text-muted-foreground">
             {card.settings === 0
-              ? "No setting shared by every repository."
-              : `${card.settings} shared settings, none with a known cost.`}
+              ? "No settings released."
+              : `${card.settings} settings, none with a known cost.`}
           </li>
         )}
       </ul>
