@@ -173,6 +173,12 @@ resource "google_service_account_iam_member" "runtime_acts_as_builder" {
 # Customer exports copy verified images to their own private repository. The API has no
 # provisioning/IAM permission. Workers may create repositories and read repository metadata
 # (including nonexistent names); IAM management and builder writes stay in customer-* only.
+# Matches by the repository segment, so it holds whichever form Artifact Registry gives resource.name
+# (project ID or number, with or without the service prefix). A prefix on the project-ID form never
+# matched in prod: both bindings were refused with HTTP 403 on customer-* repositories.
+locals {
+  customer_repository_condition = "resource.name.extract('/locations/{location}/repositories/') == '${var.region}' && resource.name.extract('/repositories/{repository}').startsWith('customer-')"
+}
 resource "google_project_iam_custom_role" "customer_repository_create" {
   count       = var.task_images ? 1 : 0
   project     = var.project_id
@@ -203,7 +209,7 @@ resource "google_project_iam_member" "runtime_customer_repository_access" {
   member  = "serviceAccount:${google_service_account.runtime.email}"
   condition {
     title      = "customer-export-repositories"
-    expression = "resource.name.startsWith('projects/${var.project_id}/locations/${var.region}/repositories/customer-')"
+    expression = local.customer_repository_condition
   }
 }
 resource "google_project_iam_member" "builder_customer_images" {
@@ -213,7 +219,7 @@ resource "google_project_iam_member" "builder_customer_images" {
   member  = "serviceAccount:${google_service_account.task_builder[0].email}"
   condition {
     title      = "customer-export-repositories"
-    expression = "resource.name.startsWith('projects/${var.project_id}/locations/${var.region}/repositories/customer-')"
+    expression = local.customer_repository_condition
   }
 }
 
