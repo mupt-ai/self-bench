@@ -66,7 +66,7 @@ test("customer export submits Google identity, then shows the download and its e
     (entry) => entry.textContent === "Download Harbor ZIP",
   );
   expect(link?.getAttribute("href")).toBe("/evaluations/exports/export-id/download");
-  expect(document.body.textContent).toContain("no automatic expiry");
+  expect(document.body.textContent).toContain("Access does not expire.");
   expect(document.body.textContent).toContain(
     `Tasks from the evaluation of ${new Date(evaluation.createdAt).toLocaleString()}`,
   );

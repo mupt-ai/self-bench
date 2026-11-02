@@ -76,9 +76,7 @@ function CustomerExportDialog({ url, onClose }: { url: string; onClose(): void }
       <DialogBody>
         <h2 className="mb-3 text-lg font-semibold">Export for Customer</h2>
         <p className="text-sm text-muted-foreground">
-          Copy the verified images and tasks of the newest completed evaluation with image-backed
-          tasks into a dedicated private Google registry. The customer runs Harbor on their own
-          machine, with direct Google access—not through SelfBench.
+          Shares the newest evaluation’s tasks with a Google account.
         </p>
         {error && <Notice className="mt-4">{error}</Notice>}
         {!enabled && (
@@ -116,9 +114,7 @@ function CustomerExportDialog({ url, onClose }: { url: string; onClose(): void }
             />
           </label>
           <p className="text-sm text-muted-foreground">
-            The ZIP and verifier images include hidden tests and reference solutions. Keep them
-            private. Google access has no automatic expiry; manage access and retention in the
-            dedicated repository.
+            Includes hidden tests and solutions. Access does not expire.
           </p>
           <div className="flex justify-end gap-2">
             <Button ref={cancel} type="button" onClick={onClose}>
