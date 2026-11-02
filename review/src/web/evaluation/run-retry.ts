@@ -16,16 +16,17 @@ export interface RetrySelection {
   sandbox: string;
   sandboxCredentialId: string;
   tasks: { runId: string; taskId: string }[];
+  /** The LLM judge's credential, as the run recorded it, for tasks graded by one. */
+  judgeCredentialId?: string;
   /** Leaves out tasks that completed for this setting since, in this run or another. */
   skipCompleted: true;
 }
 
 /**
  * The tasks a run's harness errored on, and the comparison that runs them again with the run's
- * model, reasoning, credentials and sandbox. Only a repository's runs: a benchmark's comparison
- * runs its whole dataset (Run Missing Tasks on its Run page). None while the run is live, when it
- * is deleted, when it recorded no credentials (runs from before they did), or when nothing
- * errored.
+ * model, reasoning, credentials and sandbox, in its repository or benchmark alike. None while the
+ * run is live, when it is deleted, when it recorded no credentials (runs from before they did), or
+ * when nothing errored.
  */
 export function retrySelection(
   run: EvaluationRun,
@@ -36,13 +37,7 @@ export function retrySelection(
   saved: readonly Pick<CredentialInfo, "id" | "kind">[] = [],
 ): { errored: number; selection: RetrySelection } | undefined {
   const { credentials } = run;
-  if (
-    !credentials ||
-    run.repoId === undefined ||
-    run.deletedAt ||
-    run.status === "queued" ||
-    run.status === "running"
-  )
+  if (!credentials || run.deletedAt || run.status === "queued" || run.status === "running")
     return undefined;
   const errored = run.trials.filter(
     (trial) => trial.harness === harness && outcomeOf(trial) === "error",
@@ -69,6 +64,9 @@ export function retrySelection(
       sandbox: managedSandbox ? "managed" : (kind ?? run.sandbox),
       sandboxCredentialId: sandboxId,
       tasks: errored.map(({ runId, taskId }) => ({ runId, taskId })),
+      ...(credentials.judgeCredentialId
+        ? { judgeCredentialId: credentials.judgeCredentialId }
+        : {}),
       skipCompleted: true,
     },
   };

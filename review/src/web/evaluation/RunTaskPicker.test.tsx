@@ -3,7 +3,7 @@ import { Window } from "happy-dom";
 import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router";
-import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
+import type { RunDraft } from "./RunExecution";
 import { RunTaskPicker } from "./RunTaskPicker";
 
 test("individual task deselection removes slash-containing task IDs", async () => {
@@ -27,19 +27,13 @@ test("individual task deselection removes slash-containing task IDs", async () =
     { runId: "run/two", taskId: "task/two", difficulty: "hard" as const },
   ];
   function Picker() {
-    const [tasks, setTasks] = useState<ComparisonDraft["tasks"]>(availableTasks);
+    const [tasks, setTasks] = useState<RunDraft["tasks"]>(availableTasks);
     return (
       <MemoryRouter>
         <RunTaskPicker
-          repo="owner/repo"
+          scope={{ repo: "owner/repo", pages: "/repos/owner/repo" }}
           availableTasks={availableTasks}
-          draft={{
-            id: "draft",
-            tasks,
-            models: [],
-            sandbox: "e2b",
-            sandboxCredentialId: "",
-          }}
+          picked={tasks}
           tasksReady
           disabled={false}
           onChange={setTasks}

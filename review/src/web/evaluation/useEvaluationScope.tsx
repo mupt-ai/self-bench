@@ -5,17 +5,21 @@ import { benchmarkUrl, evaluationUrl } from "./api";
 
 /**
  * Whose evaluations a page shows: a connected repository's, or a benchmark's (a Harbor registry
- * dataset the org added, run apart from any repository).
+ * dataset the org added). Both have the same Dataset, Run, and Results pages; a repository also
+ * edits its tasks, which is all `repo` is for.
  */
 export interface EvaluationScope {
-  /** `owner/name`, for a repository's evaluations. */
+  kind: "repository" | "benchmark";
+  /** `owner/name`, for a repository's evaluations: what only a repository has reads it. */
   repo?: string;
   /** The API the evaluations are under. */
   url: string;
   /** Where their pages live: `/repos/<owner>/<name>`, or `/benchmarks/<org>/<name>`. */
   pages: string;
-  /** What page titles name them by. */
+  /** What page titles and breadcrumbs name them by. */
   label: string;
+  /** The list the scope belongs to, for breadcrumbs. */
+  parent: { label: string; to: string };
 }
 
 const BenchmarkContext = React.createContext(false);
@@ -31,6 +35,19 @@ export function useEvaluationScope(): EvaluationScope {
   const benchmark = React.useContext(BenchmarkContext);
   const full = `${owner}/${name}`;
   return benchmark
-    ? { url: benchmarkUrl(org.login, full), pages: `/benchmarks/${full}`, label: full }
-    : { repo: full, url: evaluationUrl(org.login, full), pages: `/repos/${full}`, label: full };
+    ? {
+        kind: "benchmark",
+        url: benchmarkUrl(org.login, full),
+        pages: `/benchmarks/${full}`,
+        label: full,
+        parent: { label: "Benchmarks", to: "/benchmarks" },
+      }
+    : {
+        kind: "repository",
+        repo: full,
+        url: evaluationUrl(org.login, full),
+        pages: `/repos/${full}`,
+        label: full,
+        parent: { label: "Repositories", to: "/" },
+      };
 }

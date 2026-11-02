@@ -4,22 +4,17 @@ import { REGISTRY_REFERENCE } from "../../contracts/harbor-registry.js";
 import type { Benchmark, BenchmarkStore } from "../../db/benchmarks.js";
 import type { User } from "../../db/users.js";
 import { unfinished } from "../../evaluation/comparisons.js";
+import { benchmarkDataset } from "../../evaluation/dataset.js";
 import { freezeRegistryTasks } from "../../evaluation/frozen-tasks.js";
 import { expandBundle } from "../../generation/runs/bundle.js";
-import { mergeJudgeNeeds } from "../../harnesses/harbor/host-variables.js";
 import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
-import { handleScopedEvaluations } from "./evaluation-scope.js";
+import { EVALUATIONS_PATH, handleScopedEvaluations } from "./evaluation-scope.js";
 import type { EvaluationRoutesOptions } from "./evaluations.js";
-import { explainTrial } from "./explain-trial.js";
-import { modelSummariesRoute } from "./model-summaries.js";
 
 const NAME = "[A-Za-z0-9][A-Za-z0-9._-]{0,98}";
 /** `/api/orgs/<org>/benchmarks`, or one benchmark (`<org>/<name>`) and what follows it. */
 const route = new RegExp(`^/api/orgs/([A-Za-z0-9_.-]+)/benchmarks(?:/(${NAME}/${NAME})(/.*)?)?$`);
-/** What follows a benchmark for its evaluations, as a repository's evaluations take it. */
-const evaluationsRoute =
-  /^\/evaluations(?:\/(catalog|comparisons|summaries|[a-f0-9-]{36}))?(?:\/(artifacts|[a-f0-9-]{36}))?(?:\/(resume|cancel|delete|explain))?$/;
 
 const addSchema = z.strictObject({ reference: z.string() });
 
@@ -37,7 +32,7 @@ interface Context {
 
 /**
  * An org's benchmarks: the Harbor registry datasets it added (list, add, remove), each one's
- * tasks and their files, and its evaluations, served like a repository's. True when the response
+ * tasks and their files, and its evaluations, served exactly as a repository's are. True when the response
  * has been sent.
  */
 export async function benchmarkRoutes(
@@ -66,37 +61,9 @@ export async function benchmarkRoutes(
 
   const benchmark = await store.find(tenant.id, name);
   if (!benchmark) return send([404, { error: "Benchmark not found" }]);
-  const evaluations = evaluationsRoute.exec(rest);
+  const evaluations = EVALUATIONS_PATH.exec(rest);
   if (!evaluations) return send(await member(context, benchmark, rest));
   const [, section, id, action] = evaluations;
-  const methods = ["GET", "POST"].includes(request.method ?? "");
-  if (section === "summaries" && !id && !action && methods) {
-    await modelSummariesRoute(options, request, response, {
-      scope: { benchmarkId: benchmark.id },
-      orgId: tenant.id,
-      user,
-      env: options.env ?? process.env,
-      tasks: async () =>
-        (await store.tasks(benchmark.id)).map(({ runId, taskId, bundleKey }) => ({
-          runId,
-          taskId,
-          bundleKey,
-        })),
-    });
-    request.resume();
-    return true;
-  }
-  if (section && section !== "summaries" && !id && action === "explain" && methods) {
-    await explainTrial(options, request, url, response, {
-      scope: { benchmarkId: benchmark.id },
-      orgId: tenant.id,
-      evaluationId: section,
-      user,
-      env: options.env ?? process.env,
-    });
-    request.resume();
-    return true;
-  }
   await handleScopedEvaluations(options, {
     request,
     url,
@@ -109,11 +76,12 @@ export async function benchmarkRoutes(
       tenant: tenant.login,
       login: user.login,
     },
-    benchmark,
     tenant,
+    dataset: benchmarkDataset(() => store.tasks(benchmark.id)),
     section,
     id,
     action,
+    properties: { benchmark: benchmark.name },
   });
   return true;
 }
@@ -156,14 +124,11 @@ async function add({ options, store, tenant, user, request }: Context): Promise<
   }
 }
 
-/** One benchmark (with what its LLM judge reads), its removal, its tasks, and a task's files. */
+/** One benchmark, its removal, its tasks, and a task's files. */
 async function member(context: Context, benchmark: Benchmark, rest: string): Promise<Reply> {
   const { options, store, url } = context;
   const method = context.request.method;
-  if (rest === "" && method === "GET") {
-    const judge = mergeJudgeNeeds((await store.tasks(benchmark.id)).map((task) => task.judge));
-    return [200, { benchmark: { ...benchmark, judge } }];
-  }
+  if (rest === "" && method === "GET") return [200, { benchmark }];
   if (rest === "" && method === "DELETE") return remove(context, benchmark);
   if (rest === "/tasks" && method === "GET") {
     const tasks = (await store.tasks(benchmark.id)).map(({ runId, taskId, registry }) => ({

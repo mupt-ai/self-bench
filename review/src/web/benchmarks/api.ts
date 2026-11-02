@@ -1,4 +1,3 @@
-import type { JudgeNeeds } from "../../../../src/harnesses/harbor/host-variables";
 import type { TaskFiles } from "../../types";
 import { requestJson } from "../api";
 
@@ -11,8 +10,6 @@ export interface Benchmark {
   tasks: number;
   runs: number;
   addedAt: string;
-  /** The judge variables its tasks' LLM judge reads (the Run page's judge credential). */
-  judge?: JudgeNeeds;
 }
 
 function benchmarksPath(org: string): string {
