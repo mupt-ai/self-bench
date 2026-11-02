@@ -1,6 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ArtifactStore } from "../../artifacts/index.js";
-import type { CustomerExportRequest } from "../../customer-exports/types.js";
 import type { BenchmarkStore } from "../../db/benchmarks.js";
 import type { ConnectedRepo, RepoStore } from "../../db/repos.js";
 import type { TaskStore } from "../../db/tasks.js";
@@ -19,14 +18,15 @@ import { tenantFor } from "../auth/tenant.js";
 import { sendJson } from "../http.js";
 import { benchmarkRoutes } from "./benchmarks.js";
 import { credentialRoutes } from "./credentials.js";
-import { customerExportRoute } from "./customer-exports.js";
+import { type CustomerExportRegistry, customerExportRoute } from "./customer-exports.js";
 import { EVALUATIONS_PATH, handleScopedEvaluations } from "./evaluation-scope.js";
 
 /** A repository's evaluations: what follows it is EVALUATIONS_PATH. */
 const repoRoute =
   /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)(\/evaluations(?:\/.*)?)$/;
 export interface EvaluationRoutesOptions {
-  exportCustomer?(request: CustomerExportRequest): Promise<void>;
+  /** Customer exports' registry grants; without it, exports are off. */
+  customerExports?: CustomerExportRegistry;
   users: UserStore;
   repos: RepoStore;
   tasks: TaskStore;
@@ -102,7 +102,7 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
             response,
             { repoId: repo.id, orgId: tenant.id, user },
             id,
-            action === "download",
+            action,
           );
           request.resume();
           return true;

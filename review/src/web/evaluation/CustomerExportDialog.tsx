@@ -20,9 +20,7 @@ export function CustomerExportButton({ url, runs }: { url: string; runs: Evaluat
 function CustomerExportDialog({ url, onClose }: { url: string; onClose(): void }) {
   const cancel = React.useRef<HTMLButtonElement>(null);
   const customerId = React.useId();
-  const emailId = React.useId();
   const [customer, setCustomer] = React.useState("");
-  const [email, setEmail] = React.useState("");
   const [exports, setExports] = React.useState<CustomerExport[]>([]);
   const [enabled, setEnabled] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
@@ -36,35 +34,29 @@ function CustomerExportDialog({ url, onClose }: { url: string; onClose(): void }
     setEnabled(found.enabled);
   }, [url]);
   React.useEffect(() => {
-    let disposed = false;
-    let timer: ReturnType<typeof setTimeout>;
-    const poll = async () => {
-      try {
-        if (!disposed) await refresh();
-      } catch (cause) {
-        if (!disposed) setError(cause instanceof Error ? cause.message : "Could not load exports");
-      }
-      if (!disposed) timer = setTimeout(() => void poll(), 5000);
-    };
-    void poll();
-    return () => {
-      disposed = true;
-      clearTimeout(timer);
-    };
+    refresh().catch((cause) =>
+      setError(cause instanceof Error ? cause.message : "Could not load exports"),
+    );
   }, [refresh]);
-  const create = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const act = async (work: () => Promise<unknown>, failure: string) => {
     setBusy(true);
     setError("");
     try {
-      await evaluationRequest(`${url}/exports`, { id, customer, email });
-      setId(evaluationRequestId());
+      await work();
       await refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not create export");
+      setError(cause instanceof Error ? cause.message : failure);
     } finally {
       setBusy(false);
     }
+  };
+  const create = (event: React.FormEvent) => {
+    event.preventDefault();
+    void act(async () => {
+      await evaluationRequest(`${url}/exports`, { id, customer });
+      setId(evaluationRequestId());
+      setCustomer("");
+    }, "Could not create export");
   };
   return (
     <Dialog
@@ -76,17 +68,15 @@ function CustomerExportDialog({ url, onClose }: { url: string; onClose(): void }
       <DialogBody>
         <h2 className="mb-3 text-lg font-semibold">Export for Customer</h2>
         <p className="text-sm text-muted-foreground">
-          Copy the verified images and tasks of the newest completed evaluation with image-backed
-          tasks into a dedicated private Google registry. The customer runs Harbor on their own
-          machine, with direct Google access—not through SelfBench.
+          Shares the newest evaluation’s tasks as a Harbor ZIP.
         </p>
         {error && <Notice className="mt-4">{error}</Notice>}
         {!enabled && (
           <Notice className="mt-4">
-            Customer exports require the deployment’s Cloud Build image builder.
+            Customer exports need an Artifact Registry task repository.
           </Notice>
         )}
-        <form className="mt-5 grid gap-4" onSubmit={(event) => void create(event)}>
+        <form className="mt-5 grid gap-4" onSubmit={create}>
           <label className={fieldStyles} htmlFor={customerId}>
             Customer Name
             <Input
@@ -101,24 +91,8 @@ function CustomerExportDialog({ url, onClose }: { url: string; onClose(): void }
               }}
             />
           </label>
-          <label className={fieldStyles} htmlFor={emailId}>
-            Google Account Email
-            <Input
-              id={emailId}
-              required
-              type="email"
-              value={email}
-              disabled={busy}
-              onChange={(event) => {
-                setEmail(event.target.value);
-                setId(evaluationRequestId());
-              }}
-            />
-          </label>
           <p className="text-sm text-muted-foreground">
-            The ZIP and verifier images include hidden tests and reference solutions. Keep them
-            private. Google access has no automatic expiry; manage access and retention in the
-            dedicated repository.
+            Includes hidden tests, solutions, and a pull key that works for 30 days.
           </p>
           <div className="flex justify-end gap-2">
             <Button ref={cancel} type="button" onClick={onClose}>
@@ -133,40 +107,46 @@ function CustomerExportDialog({ url, onClose }: { url: string; onClose(): void }
           <section className="mt-6 border-t border-border pt-4">
             <h3 className="font-semibold">Customer Exports</h3>
             <ul className="mt-3 grid gap-4">
-              {exports.map((entry) => {
-                return (
-                  <li key={entry.id} className="grid gap-1 text-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <strong>{entry.customer}</strong>
-                      {entry.status === "ready" ? (
+              {exports.map((entry) => (
+                <li key={entry.id} className="grid gap-1 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <strong>{entry.customer}</strong>
+                    {entry.status === "ready" ? (
+                      <span className="flex gap-3">
                         <a
                           className="underline underline-offset-4"
                           href={`${url}/exports/${entry.id}/download`}
                         >
                           Download Harbor ZIP
                         </a>
-                      ) : (
-                        <span>
-                          {entry.status === "preparing" ? "Preparing Images…" : "Export Failed"}
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-muted-foreground">
-                      {entry.email} · {new Date(entry.createdAt).toLocaleString()}
-                    </span>
-                    {entry.evaluationCreatedAt && (
+                        <button
+                          type="button"
+                          className="underline underline-offset-4"
+                          disabled={busy}
+                          onClick={() =>
+                            void act(
+                              () => evaluationRequest(`${url}/exports/${entry.id}/revoke`, {}),
+                              "Could not revoke export",
+                            )
+                          }
+                        >
+                          Revoke
+                        </button>
+                      </span>
+                    ) : (
                       <span className="text-muted-foreground">
-                        Tasks from the evaluation of{" "}
-                        {new Date(entry.evaluationCreatedAt).toLocaleString()}
+                        {entry.status === "revoked" ? "Revoked" : "Expired"}
                       </span>
                     )}
-                    {entry.repository && (
-                      <code className="break-all text-xs">{entry.repository}</code>
-                    )}
-                    {entry.error && <span className="text-muted-foreground">{entry.error}</span>}
-                  </li>
-                );
-              })}
+                  </div>
+                  <span className="text-muted-foreground">
+                    Tasks from the evaluation of{" "}
+                    {new Date(entry.evaluationCreatedAt).toLocaleString()}
+                    {entry.status === "ready" &&
+                      ` · Key works until ${new Date(entry.expiresAt).toLocaleDateString()}`}
+                  </span>
+                </li>
+              ))}
             </ul>
           </section>
         )}

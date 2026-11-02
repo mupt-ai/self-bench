@@ -1,124 +1,161 @@
 import { afterEach, expect, test } from "bun:test";
-import type { CustomerExportRequest } from "../src/customer-exports/types.js";
-import { exportPrefix } from "../src/customer-exports/types.js";
+import { strFromU8, unzipSync } from "fflate";
+import { createRegistryGrantStore } from "../src/db/registry-grants.js";
 import { createVault } from "../src/db/vault.js";
 import { initialEvaluation, saveEvaluation } from "../src/evaluation/store.js";
+import type { EvaluationInput } from "../src/evaluation/types.js";
 import {
   credentialedInput,
   evaluationEnv,
   evaluationServer,
 } from "./support/evaluation-fixture.js";
+import { gzippedTar } from "./support/tar.js";
+
+const repository = "us-docker.pkg.dev/project/tasks";
+const agent = `${repository}/agent@sha256:${"a".repeat(64)}`;
+const verifier = `${repository}/verifier@sha256:${"b".repeat(64)}`;
+const bundleKey = "runs/run/verify/task/execution-hash/execution-task.tar.gz";
+const imageTask = (taskId: string): EvaluationInput["tasks"][number] => ({
+  runId: "run",
+  taskId,
+  bundleKey,
+  images: { agent, verifier },
+});
 
 const servers: Awaited<ReturnType<typeof evaluationServer>>[] = [];
 afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => server.close()));
 });
-async function fixture() {
-  const requests: CustomerExportRequest[] = [];
+/** A server whose exports use a real grant store on its own database. */
+async function exportServer() {
+  let grants: ReturnType<typeof createRegistryGrantStore> | undefined;
   const server = await evaluationServer(undefined, {
-    exportCustomer: async (request) => {
-      requests.push(request);
+    customerExports: {
+      repository,
+      grants: {
+        createForImages: (input) => store().createForImages(input),
+        find: (id) => store().find(id),
+        revoke: (id) => store().revoke(id),
+      },
     },
   });
   servers.push(server);
-  const vault = createVault(server.db, evaluationEnv.SELFBENCH_EVAL_CREDENTIAL_KEY);
-  const input = await credentialedInput(vault, (input) => {
-    input.repoId = server.repo.id;
-    input.tasks = [
-      {
-        runId: "run",
-        taskId: "frozen-task",
-        bundleKey: "runs/run/verify/task/execution-hash/execution-task.tar.gz",
-        images: {
-          agent: `us-docker.pkg.dev/project/tasks/agent@sha256:${"a".repeat(64)}`,
-          verifier: `us-docker.pkg.dev/project/tasks/verifier@sha256:${"b".repeat(64)}`,
-        },
-      },
-    ];
-  });
-  const run = initialEvaluation(input, "Test Model");
-  run.status = "completed";
-  await saveEvaluation(server.artifacts, run);
-  const body = {
-    id: crypto.randomUUID(),
-    customer: "Acme",
-    email: "customer@example.com",
+  const store = () => {
+    grants ??= createRegistryGrantStore(server.db, "registry-secret", repository);
+    return grants;
   };
-  return { server, requests, input, body };
+  return { server, store };
 }
-test("exports freeze the latest image-backed evaluation, survive repeated submission, and deliver a tenant-scoped ZIP", async () => {
-  const { server, requests, input, body } = await fixture();
+async function fixture() {
+  const { server, store } = await exportServer();
+  await server.artifacts.put(
+    bundleKey,
+    await gzippedTar({
+      "harbor-task/instruction.md": "Fix the task.",
+      "harbor-task/task.toml": '[verifier]\nenvironment_mode = "separate"\n',
+      "harbor-task/environment/Dockerfile": `FROM ${agent}\n`,
+      "harbor-task/tests/Dockerfile": `FROM ${verifier}\n`,
+      "harbor-task/tests/test.sh": "#!/bin/bash\ntrue\n",
+      "harbor-task/tests/test.patch": "hidden tests",
+      "harbor-task/solution/solve.sh": "#!/bin/bash\ntrue\n",
+      "harbor-task/solution/gold.patch": "reference patch",
+    }),
+    "application/gzip",
+  );
+  const vault = createVault(server.db, evaluationEnv.SELFBENCH_EVAL_CREDENTIAL_KEY);
+  const evaluate = async (
+    tasks: EvaluationInput["tasks"],
+    createdAt = new Date().toISOString(),
+  ) => {
+    const input = await credentialedInput(vault, (next) => {
+      next.repoId = server.repo.id;
+      next.createdAt = createdAt;
+      next.tasks = tasks;
+    });
+    const run = initialEvaluation(input, "Test Model");
+    run.status = "completed";
+    await saveEvaluation(server.artifacts, run);
+    return input;
+  };
+  const input = await evaluate([imageTask("frozen-task")]);
+  const body = { id: crypto.randomUUID(), customer: "Acme" };
   const path = `${server.base}/exports`;
-  const post = () => server.request(path, { method: "POST", body: JSON.stringify(body) });
-  expect((await post()).status).toBe(202);
-  expect(requests[0]?.evaluationId).toBe(input.id);
-  expect(requests[0]?.tasks).toEqual(input.tasks);
-  expect((await post()).status).toBe(202);
-  expect(requests[1]).toEqual(requests[0]);
+  const post = (payload: unknown = body) =>
+    server.request(path, { method: "POST", body: JSON.stringify(payload) });
+  return { server, input, body, path, post, evaluate, store };
+}
+
+test("an export issues a grant for the evaluation's images and a ZIP that pulls through SelfBench", async () => {
+  const { server, input, body, path, post, store } = await fixture();
+  const created = await post();
+  expect(created.status).toBe(201);
+  const state = await created.json();
+  expect(state).toMatchObject({ id: body.id, evaluationId: input.id, status: "ready" });
+  const zip = await server.request(`${path}/${body.id}/download`);
+  expect(zip.status).toBe(200);
+  const files = unzipSync(new Uint8Array(await zip.arrayBuffer()));
+  const readme = strFromU8(files["README.md"] ?? new Uint8Array());
+  const password = /echo '([^']+)' \| docker login/.exec(readme)?.[1] ?? "";
+  // The ZIP's key reaches exactly the export's two images, and nothing else.
+  const grant = await store().resolve(password);
+  expect([...(grant?.images ?? [])].sort()).toEqual([
+    `agent@sha256:${"a".repeat(64)}`,
+    `verifier@sha256:${"b".repeat(64)}`,
+  ]);
+  // Images are pulled from the same SelfBench host the README signs Docker in to.
+  const host = /docker login (\S+) /.exec(readme)?.[1];
+  expect(host).toMatch(/^127\.0\.0\.1:\d+$/);
+  expect(strFromU8(files["tasks/task-0001/environment/Dockerfile"] ?? new Uint8Array())).toBe(
+    `FROM ${host}/agent@sha256:${"a".repeat(64)}\n`,
+  );
+  // Repeating the request returns the same export instead of issuing a second key.
+  expect((await post()).status).toBe(200);
   const list = await (await server.request(path)).json();
   expect(list.enabled).toBe(true);
-  expect(list.exports[0].status).toBe("preparing");
+  expect(list.exports).toHaveLength(1);
   expect(JSON.stringify(list)).not.toContain("bundleKey");
-  expect((await server.request(`${path}/${body.id}/download`)).status).toBe(409);
-  const root = exportPrefix(server.repo.id, body.id);
-  await server.artifacts.put(`${root}harbor.zip`, Buffer.from("zip-bytes"), "application/zip");
-  await server.artifacts.put(
-    `${root}ready.json`,
-    Buffer.from(JSON.stringify({ repository: "registry/project/customer" })),
-    "application/json",
-  );
-  const download = await server.request(`${path}/${body.id}/download`);
-  expect(download.status).toBe(200);
-  expect(download.headers.get("content-type")).toBe("application/zip");
-  expect(await download.text()).toBe("zip-bytes");
-  expect((await server.request(`${path}/${body.id}/download`, {}, 2)).status).toBe(404);
-  expect((await server.request(`${path}/${body.id}/download`, {}, null)).status).toBe(401);
-  const other = path.replace("avyay/repo/", "avyay/other/");
-  expect((await server.request(`${other}/${body.id}/download`)).status).toBe(404);
+  expect(JSON.stringify(list)).not.toContain(password);
 });
-test("exports skip newer evaluations that are not image-backed", async () => {
-  const { server, requests, input, body } = await fixture();
-  const vault = createVault(server.db, evaluationEnv.SELFBENCH_EVAL_CREDENTIAL_KEY);
-  const newer = await credentialedInput(vault, (next) => {
-    next.repoId = server.repo.id;
-    next.createdAt = new Date(Date.now() + 60_000).toISOString();
-    next.tasks = [
-      { runId: "run", taskId: "legacy-task", bundleKey: "runs/run/legacy/execution-task.tar.gz" },
-    ];
-  });
-  const run = initialEvaluation(newer, "Newer Model");
-  run.status = "completed";
-  await saveEvaluation(server.artifacts, run);
-  const response = await server.request(`${server.base}/exports`, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-  expect(response.status).toBe(202);
-  expect(requests[0]?.evaluationId).toBe(input.id);
-  expect(requests[0]?.tasks).toEqual(input.tasks);
+test("revoking an export stops its key at once", async () => {
+  const { server, body, path, post, store } = await fixture();
+  await post();
+  const files = unzipSync(
+    new Uint8Array(await (await server.request(`${path}/${body.id}/download`)).arrayBuffer()),
+  );
+  const password =
+    /echo '([^']+)' \| docker login/.exec(strFromU8(files["README.md"] ?? new Uint8Array()))?.[1] ??
+    "";
+  const revoked = await server.request(`${path}/${body.id}/revoke`, { method: "POST" });
+  expect(revoked.status).toBe(200);
+  expect((await revoked.json()).status).toBe("revoked");
+  expect(await store().resolve(password)).toBeUndefined();
+});
+test("exports skip newer evaluations that are not image-backed or are over the task limit", async () => {
+  const { input, post, evaluate } = await fixture();
+  const later = (minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString();
+  await evaluate(
+    [{ runId: "run", taskId: "legacy", bundleKey: "runs/run/legacy/task.tar.gz" }],
+    later(1),
+  );
+  await evaluate(
+    Array.from({ length: 501 }, (_, index) => imageTask(`task-${index}`)),
+    later(2),
+  );
+  const created = await post();
+  expect(created.status).toBe(201);
+  expect((await created.json()).evaluationId).toBe(input.id);
 });
 test("exports refuse when no completed evaluation is image-backed", async () => {
-  const server = await evaluationServer(undefined, {
-    exportCustomer: async () => {},
-  });
-  servers.push(server);
+  const { server } = await exportServer();
   const response = await server.request(`${server.base}/exports`, {
     method: "POST",
-    body: JSON.stringify({
-      id: crypto.randomUUID(),
-      customer: "Acme",
-      email: "customer@example.com",
-    }),
+    body: JSON.stringify({ id: crypto.randomUUID(), customer: "Acme" }),
   });
   expect(response.status).toBe(400);
-  expect(await response.json()).toEqual({
-    error:
-      "No completed evaluation has image-backed tasks of 500 or fewer to export. Run an evaluation of the current tasks first.",
-  });
+  expect((await response.json()).error).toContain("No completed evaluation");
 });
 test("exports refuse untrusted requests, reused identities, and malformed bodies", async () => {
-  const { server, body } = await fixture();
-  const path = `${server.base}/exports`;
+  const { server, body, path, post } = await fixture();
   expect(
     (
       await server.request(path, {
@@ -129,42 +166,9 @@ test("exports refuse untrusted requests, reused identities, and malformed bodies
     ).status,
   ).toBe(403);
   expect((await server.request(path, { method: "POST", body: "not-json" })).status).toBe(400);
-  expect((await server.request(path, { method: "POST", body: JSON.stringify(body) })).status).toBe(
-    202,
-  );
-  expect(
-    (
-      await server.request(path, {
-        method: "POST",
-        body: JSON.stringify({ ...body, email: "different@example.com" }),
-      })
-    ).status,
-  ).toBe(409);
-});
-test("exports skip a newer image-backed evaluation over the task limit", async () => {
-  const { server, requests, input, body } = await fixture();
-  const vault = createVault(server.db, evaluationEnv.SELFBENCH_EVAL_CREDENTIAL_KEY);
-  const oversized = await credentialedInput(vault, (next) => {
-    next.repoId = server.repo.id;
-    next.createdAt = new Date(Date.now() + 60_000).toISOString();
-    next.tasks = Array.from({ length: 501 }, (_, index) => ({
-      runId: "run",
-      taskId: `task-${index}`,
-      bundleKey: "runs/run/verify/task/execution-hash/execution-task.tar.gz",
-      images: {
-        agent: `us-docker.pkg.dev/project/tasks/agent@sha256:${"a".repeat(64)}`,
-        verifier: `us-docker.pkg.dev/project/tasks/verifier@sha256:${"b".repeat(64)}`,
-      },
-    }));
-  });
-  const run = initialEvaluation(oversized, "Oversized Model");
-  run.status = "completed";
-  await saveEvaluation(server.artifacts, run);
-  const response = await server.request(`${server.base}/exports`, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-  expect(response.status).toBe(202);
-  expect(requests[0]?.evaluationId).toBe(input.id);
-  expect(requests[0]?.evaluationCreatedAt).toBe(input.createdAt);
+  expect((await post({ ...body, email: "customer@example.com" })).status).toBe(400);
+  expect((await post()).status).toBe(201);
+  expect((await post({ ...body, customer: "Other" })).status).toBe(409);
+  expect((await server.request(`${path}/${body.id}/download`, {}, 2)).status).toBe(404);
+  expect((await server.request(`${path}/${body.id}/download`, {}, null)).status).toBe(401);
 });

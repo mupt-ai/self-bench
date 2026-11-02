@@ -341,14 +341,6 @@ run "task_images" {
     error_message = "The worker starts builds as the builder's account."
   }
   assert {
-    condition = (
-      google_project_iam_custom_role.customer_repository_create[0].permissions == toset(["artifactregistry.repositories.create", "artifactregistry.repositories.get"]) &&
-      google_project_iam_custom_role.customer_repository_access[0].permissions == toset(["artifactregistry.repositories.getIamPolicy", "artifactregistry.repositories.setIamPolicy"]) &&
-      length(google_project_iam_member.runtime_customer_repository_access[0].condition) == 0
-    )
-    error_message = "Customer exports may only create repositories and manage their access; the builder gets no project-level write."
-  }
-  assert {
     condition     = google_artifact_registry_repository.dockerhub[0].mode == "REMOTE_REPOSITORY" && !google_artifact_registry_repository.task_cache[0].cleanup_policy_dry_run
     error_message = "Docker Hub is mirrored, and the build cache expires."
   }

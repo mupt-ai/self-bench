@@ -4,17 +4,25 @@ import { HARBOR_VERSION } from "../harnesses/harbor/command.js";
 import { readExecutionBundle } from "./bundle.js";
 import type { CustomerExportRequest } from "./types.js";
 
+/** Where the customer pulls from: SelfBench's own registry endpoint, with the export's grant. */
+export interface ExportRegistry {
+  /** SelfBench's public host, which serves `/v2/` (api/routes/registry.ts). */
+  readonly host: string;
+  /** The task image repository the grant's images live in. */
+  readonly repository: string;
+  readonly password: string;
+  readonly expiresAt: Date;
+}
+
 /** Only execution bundles: build inputs or a mutable task row cannot replace the frozen task. */
 export async function customerPackage(
   store: ArtifactStore,
   request: CustomerExportRequest,
-  source: string,
-  destination: string,
-) {
+  registry: ExportRegistry,
+): Promise<Buffer> {
   if (!request.tasks.length || request.tasks.length > 500)
     throw new Error("Export between 1 and 500 tasks at a time");
   const files: Zippable = {};
-  const images = new Map<string, string>();
   const manifest = [];
   let bytes = 0;
   const add = (name: string, text: string) => {
@@ -25,17 +33,22 @@ export async function customerPackage(
       { os: 3, attrs: (name.endsWith(".sh") ? 0o100755 : 0o100644) << 16 },
     ];
   };
+  // The image as the customer pulls it: the same name and digest, on SelfBench's host.
+  const served = (image: string) => {
+    if (
+      !image.startsWith(`${registry.repository}/`) ||
+      !/^[-a-z0-9./]+@sha256:[a-f0-9]{64}$/.test(image)
+    )
+      throw new Error("An export image is not in the task image repository");
+    return `${registry.host}/${image.slice(registry.repository.length + 1)}`;
+  };
   for (const [index, task] of request.tasks.entries()) {
     if (!task.images || !task.bundleKey.endsWith("/execution-task.tar.gz"))
       throw new Error(
         `Task ${task.taskId} has no frozen execution bundle; evaluate its image-backed version first.`,
       );
     const pair = task.images;
-    for (const image of [pair.agent, pair.verifier]) {
-      if (!image.startsWith(`${source}/`) || !/^[-a-z0-9./]+@sha256:[a-f0-9]{64}$/.test(image))
-        throw new Error(`Task ${task.taskId} is not backed by this deployment's verified images`);
-      images.set(image, `${destination}/${image.slice(source.length + 1)}`);
-    }
+    const images = { agent: served(pair.agent), verifier: served(pair.verifier) };
     const bundle = await readExecutionBundle(store, task.bundleKey);
     if ([...bundle.keys()].some((path) => path.endsWith("docker-compose.yaml")))
       throw new Error(
@@ -60,7 +73,7 @@ export async function customerPackage(
         const original = path.startsWith("environment/") ? pair.agent : pair.verifier;
         if (text.trim() !== `FROM ${original}`)
           throw new Error(`Task ${task.taskId} has an unexpected image context`);
-        text = `FROM ${images.get(original)}\n`;
+        text = `FROM ${path.startsWith("environment/") ? images.agent : images.verifier}\n`;
       }
       add(`${directory}/${path}`, text);
     }
@@ -68,22 +81,42 @@ export async function customerPackage(
       directory,
       taskId: task.taskId,
       runId: task.runId,
-      bundleKey: task.bundleKey,
-      agent: images.get(pair.agent),
-      verifier: images.get(pair.verifier),
+      ...images,
     });
   }
-  const host = destination.split("/")[0];
   add(
     "manifest.json",
     `${JSON.stringify({ evaluationId: request.evaluationId, harborVersion: HARBOR_VERSION, tasks: manifest }, null, 2)}\n`,
   );
+  const expires = registry.expiresAt.toISOString().slice(0, 10);
   add(
     "README.md",
-    `# ${request.customer}: Harbor Evaluation\n\nThese tasks run on your own machine with Docker and Harbor ${HARBOR_VERSION}. No SelfBench API, proxy, or account is needed. Images are pulled directly from Google Artifact Registry and cached by Docker. They are Linux images; Apple Silicon may require amd64 emulation.\n\n## Setup\n\nInstall Docker, Google Cloud CLI, and Harbor ${HARBOR_VERSION}. Sign in as the Google account granted access (${request.email}):\n\n\`\`\`sh\ngcloud auth login\ngcloud auth configure-docker ${host} --quiet\n\`\`\`\n\nSupply your own model credentials, then run from this directory (replace the agent, model, and allowed model API host as appropriate):\n\n\`\`\`sh\nharbor run --path ./tasks --agent codex --model MODEL --env docker --allow-agent-host api.openai.com\n\`\`\`\n\nThe manifest pins the exact evaluation task versions and image digests. Both agent and separate verifier images are included in your registry access. Hidden tests and reference solutions are included, unencrypted: keep this package private. Never expose the verifier image or solution directory to the agent under evaluation.\n\nImage access and retention are managed by the sender in Google Cloud; already downloaded copies cannot be revoked.\n`,
+    `# ${request.customer}: Harbor Evaluation
+
+These tasks run on your own machine with Docker and Harbor ${HARBOR_VERSION}. Their images are pulled from SelfBench with the key below, which works until ${expires}. They are Linux images; Apple Silicon may need amd64 emulation.
+
+## Setup
+
+Install Docker and Harbor ${HARBOR_VERSION}, then sign Docker in to SelfBench:
+
+\`\`\`sh
+echo '${registry.password}' | docker login ${registry.host} --username export --password-stdin
+\`\`\`
+
+## Run
+
+Supply your own model credentials, then run from this directory. Replace the agent, model, and allowed model API host with yours:
+
+\`\`\`sh
+harbor run --path ./tasks --agent codex --model MODEL --env docker --allow-agent-host api.openai.com
+\`\`\`
+
+\`manifest.json\` pins each task's exact version and image digests.
+
+## Keep It Private
+
+The key, hidden tests, and reference solutions are in this package, unencrypted. Don't share it, and never expose the verifier image or the \`solution\` directory to the agent being evaluated.
+`,
   );
-  return {
-    zip: Buffer.from(zipSync(files, { level: 6, mtime: new Date(1980, 0, 1) })),
-    images: [...images].map(([source, destination]) => ({ source, destination })),
-  };
+  return Buffer.from(zipSync(files, { level: 6, mtime: new Date(1980, 0, 1) }));
 }
