@@ -43,7 +43,7 @@ export function ResultsChart({
   const narrow = width < 560;
   const lowest = Math.min(...settings.map((setting) => setting.accuracy));
   return (
-    <div ref={frame}>
+    <div ref={frame} className="relative [&_svg>text[text-anchor=end]]:hidden">
       <ResultsPlot
         title="Accuracy versus cost per task for every model setting"
         showTitle={false}
@@ -100,6 +100,9 @@ export function ResultsChart({
           format: accuracyTick,
         }}
       />
+      <span className="pointer-events-none absolute right-1 bottom-0 text-[11px] tracking-normal text-muted-foreground">
+        Cost / Task <span className="opacity-60">(Log Scale)</span>
+      </span>
     </div>
   );
 }

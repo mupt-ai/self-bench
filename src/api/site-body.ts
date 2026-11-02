@@ -183,6 +183,7 @@ export function repositoryBody(
     // The page's own lines under its name, then the head's summary of the results.
     about ? `<p>${escapeText(about)}</p>` : "",
     `<p>${escapeText(facts.join(" · "))}</p>`,
+    "<h2>Model Tradeoffs</h2>",
     // The whole summary: only the head's copy is kept short for search results.
     `<p>${escapeText(repositoryDescription(line, Number.POSITIVE_INFINITY))}</p>`,
     "<h2>All Settings</h2>",

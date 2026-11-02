@@ -67,7 +67,7 @@ export function RepoBody({
           // min-w-0: side by side, each column keeps to its grid track, whatever its content.
           className={`flex min-w-0 flex-col gap-3 ${side ? "min-[90rem]:sticky min-[90rem]:top-[calc(var(--bar-top)_+_1rem)]" : ""}`}
         >
-          <h2 className="text-sm font-medium">Accuracy vs Cost per Task</h2>
+          <h2 className="text-base font-medium">Model Tradeoffs</h2>
           <div className={`p-2 ${PANEL}`}>
             <ResultsChart
               key={release.releaseId}
