@@ -8,7 +8,7 @@ export function customerRegistry(source: string, access: RegistryAccess) {
   if (!host || !project || region === host)
     throw new Error("Customer exports need Artifact Registry");
   const base = `https://artifactregistry.googleapis.com/v1/projects/${project}/locations/${region}/repositories`;
-  const call = async (url: string, method: string, body?: unknown) => {
+  const call = async (url: string, method: string, action: string, body?: unknown) => {
     const response = await access.fetch(url, {
       method,
       headers: {
@@ -17,8 +17,7 @@ export function customerRegistry(source: string, access: RegistryAccess) {
       },
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
-    if (!response.ok)
-      throw new Error(`Customer registry ${method} failed (HTTP ${response.status})`);
+    if (!response.ok) throw new Error(`${action} (HTTP ${response.status})`);
     return response.json() as Promise<Record<string, unknown>>;
   };
   const repoUrl = (repository: string) => {
@@ -37,13 +36,18 @@ export function customerRegistry(source: string, access: RegistryAccess) {
       });
       if (found.ok) return;
       if (found.status !== 404)
-        throw new Error(`Cannot inspect customer repository (HTTP ${found.status})`);
-      const operation = await call(`${base}?repositoryId=${repository.split("/")[2]}`, "POST", {
-        format: "DOCKER",
-        description: "Private customer evaluation export",
-        dockerConfig: { immutableTags: true },
-      });
-      if (operation.error) throw new Error("Customer repository creation failed");
+        throw new Error(`Could not check the export repository (HTTP ${found.status})`);
+      const operation = await call(
+        `${base}?repositoryId=${repository.split("/")[2]}`,
+        "POST",
+        "Could not create the export repository",
+        {
+          format: "DOCKER",
+          description: "Private customer evaluation export",
+          dockerConfig: { immutableTags: true },
+        },
+      );
+      if (operation.error) throw new Error("Could not create the export repository");
       // Poll the repository itself, not its project-scoped LRO. Metadata reads are
       // unconditional so a nonexistent repository can return 404 before creation.
       for (let attempt = 0; attempt < 120; attempt++) {
@@ -52,10 +56,10 @@ export function customerRegistry(source: string, access: RegistryAccess) {
         });
         if (ready.ok) return;
         if (ready.status !== 404)
-          throw new Error(`Cannot inspect customer repository (HTTP ${ready.status})`);
+          throw new Error(`Could not check the export repository (HTTP ${ready.status})`);
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
-      throw new Error("Customer repository creation timed out");
+      throw new Error("Creating the export repository timed out");
     },
     /** The customer's read access, granted once every image is in place. */
     async grant(repository: string, email: string) {
@@ -74,7 +78,11 @@ export function customerRegistry(source: string, access: RegistryAccess) {
   async function bind(repository: string, role: string, member: string) {
     const url = repoUrl(repository);
     // Version 3 returns conditional bindings, and writing back a version-1 policy would drop them.
-    const policy = await call(`${url}:getIamPolicy?options.requestedPolicyVersion=3`, "GET");
+    const policy = await call(
+      `${url}:getIamPolicy?options.requestedPolicyVersion=3`,
+      "GET",
+      "Could not read the export repository's access policy",
+    );
     const bindings = (policy.bindings ?? []) as {
       role: string;
       members: string[];
@@ -86,7 +94,14 @@ export function customerRegistry(source: string, access: RegistryAccess) {
       bindings.push(binding);
     }
     if (!binding.members.includes(member)) binding.members.push(member);
-    await call(`${url}:setIamPolicy`, "POST", { policy: { ...policy, version: 3, bindings } });
+    await call(
+      `${url}:setIamPolicy`,
+      "POST",
+      "Could not update the export repository's access policy",
+      {
+        policy: { ...policy, version: 3, bindings },
+      },
+    );
   }
 }
 
@@ -124,5 +139,5 @@ export async function copyCustomerImages(
   }
   const result = await cloud.run({ timeout: "7200s", steps }, signal);
   if (result.status !== "SUCCESS")
-    throw new Error(`Image copy failed (${result.status}); build ${result.id}`);
+    throw new Error(`Could not copy the images (Cloud Build ${result.status}, build ${result.id})`);
 }

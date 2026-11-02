@@ -1,4 +1,4 @@
-import { CancellationScope, proxyActivities } from "@temporalio/workflow";
+import { ActivityFailure, CancellationScope, proxyActivities } from "@temporalio/workflow";
 import type { CustomerExportActivities } from "./activities.js";
 import type { CustomerExportRequest } from "./types.js";
 
@@ -16,7 +16,10 @@ export async function selfBenchCustomerExportWorkflow(
 ): Promise<void> {
   try {
     await activities.prepareCustomerExport(request);
-  } catch {
-    await CancellationScope.nonCancellable(() => failures.failCustomerExport(request));
+  } catch (error) {
+    // The last attempt's own message names the step that failed, such as an HTTP 403 on the registry.
+    const reason =
+      error instanceof ActivityFailure && error.cause ? error.cause.message : undefined;
+    await CancellationScope.nonCancellable(() => failures.failCustomerExport(request, reason));
   }
 }

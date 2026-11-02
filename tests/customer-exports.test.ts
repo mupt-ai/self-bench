@@ -4,9 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { strFromU8, unzipSync } from "fflate";
 import { LocalArtifactStore } from "../src/artifacts/local.js";
+import { customerExportActivities } from "../src/customer-exports/activities.js";
 import { customerPackage } from "../src/customer-exports/package.js";
 import { copyCustomerImages, customerRegistry } from "../src/customer-exports/registry.js";
-import { type CustomerExportRequest, customerRepository } from "../src/customer-exports/types.js";
+import {
+  type CustomerExportRequest,
+  customerRepository,
+  exportPrefix,
+} from "../src/customer-exports/types.js";
 import { gzippedTar } from "./support/tar.js";
 
 const roots: string[] = [];
@@ -234,5 +239,26 @@ test("copy builds preserve digests, use short-lived build credentials and propag
       [],
       new AbortController().signal,
     ),
-  ).rejects.toThrow("Image copy failed");
+  ).rejects.toThrow("Could not copy the images");
+});
+test("a refused registry call names the step and status", async () => {
+  const registry = customerRegistry(source, {
+    token: async () => "token",
+    fetch: async () => new Response(null, { status: 403 }),
+  });
+  await expect(
+    registry.allowWriter(destination, "builder@project.iam.gserviceaccount.com"),
+  ).rejects.toThrow("Could not read the export repository's access policy (HTTP 403)");
+});
+test("a failed export records the reason its last attempt gave", async () => {
+  const { store, request } = await fixture();
+  const activities = customerExportActivities(store);
+  await activities.failCustomerExport(
+    request,
+    "Could not read the export repository's access policy (HTTP 403)",
+  );
+  const failed = await store.getByKey(`${exportPrefix(request.repoId, request.id)}failed.json`);
+  expect(JSON.parse(Buffer.from(failed ?? []).toString())).toEqual({
+    error: "Could not read the export repository's access policy (HTTP 403)",
+  });
 });
