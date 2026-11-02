@@ -171,14 +171,15 @@ resource "google_service_account_iam_member" "runtime_acts_as_builder" {
 }
 
 # Customer exports copy verified images to their own private repository. The API has no
-# provisioning/IAM permission. Workers may create repositories and read repository metadata
-# (including nonexistent names); IAM management and builder writes stay in customer-* only.
-# Matches by the repository segment, so it holds whichever form Artifact Registry gives resource.name
-# (project ID or number, with or without the service prefix). A prefix on the project-ID form never
-# matched in prod: both bindings were refused with HTTP 403 on customer-* repositories.
-locals {
-  customer_repository_condition = "resource.name.extract('/locations/{location}/repositories/') == '${var.region}' && resource.name.extract('/repositories/{repository}').startsWith('customer-')"
-}
+# provisioning/IAM permission. Workers may create repositories, read repository metadata (including
+# nonexistent names) and read and set repository IAM policies, which is how each export grants the
+# builder writer and the customer reader on its own repository only.
+#
+# Artifact Registry does not honor resource.name conditions on project-level bindings: a conditional
+# grant scoped to customer-* repositories was refused with HTTP 403 in prod and dev, whatever the
+# expression, while the same role granted on the repository itself worked. So the worker's policy
+# access is project-wide, and the builder, which runs code from repositories under test, gets no
+# project-level write at all.
 resource "google_project_iam_custom_role" "customer_repository_create" {
   count       = var.task_images ? 1 : 0
   project     = var.project_id
@@ -207,20 +208,6 @@ resource "google_project_iam_member" "runtime_customer_repository_access" {
   project = var.project_id
   role    = google_project_iam_custom_role.customer_repository_access[0].name
   member  = "serviceAccount:${google_service_account.runtime.email}"
-  condition {
-    title      = "customer-export-repositories"
-    expression = local.customer_repository_condition
-  }
-}
-resource "google_project_iam_member" "builder_customer_images" {
-  count   = var.task_images ? 1 : 0
-  project = var.project_id
-  role    = "roles/artifactregistry.writer"
-  member  = "serviceAccount:${google_service_account.task_builder[0].email}"
-  condition {
-    title      = "customer-export-repositories"
-    expression = local.customer_repository_condition
-  }
 }
 
 locals {

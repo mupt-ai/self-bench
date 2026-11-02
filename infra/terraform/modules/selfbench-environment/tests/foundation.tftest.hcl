@@ -343,11 +343,10 @@ run "task_images" {
   assert {
     condition = (
       google_project_iam_custom_role.customer_repository_create[0].permissions == toset(["artifactregistry.repositories.create", "artifactregistry.repositories.get"]) &&
-      google_project_iam_member.runtime_customer_repository_access[0].condition[0].expression == "resource.name.extract('/locations/{location}/repositories/') == 'us-central1' && resource.name.extract('/repositories/{repository}').startsWith('customer-')" &&
-      google_project_iam_member.builder_customer_images[0].role == "roles/artifactregistry.writer" &&
-      google_project_iam_member.builder_customer_images[0].condition[0].expression == google_project_iam_member.runtime_customer_repository_access[0].condition[0].expression
+      google_project_iam_custom_role.customer_repository_access[0].permissions == toset(["artifactregistry.repositories.getIamPolicy", "artifactregistry.repositories.setIamPolicy"]) &&
+      length(google_project_iam_member.runtime_customer_repository_access[0].condition) == 0
     )
-    error_message = "Customer exports may manage access and copy images only in dedicated customer repositories, never expose the shared task repository."
+    error_message = "Customer exports may only create repositories and manage their access; the builder gets no project-level write."
   }
   assert {
     condition     = google_artifact_registry_repository.dockerhub[0].mode == "REMOTE_REPOSITORY" && !google_artifact_registry_repository.task_cache[0].cleanup_policy_dry_run
