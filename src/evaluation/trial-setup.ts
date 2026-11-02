@@ -19,6 +19,8 @@ import type { runCommand } from "../lib/process.js";
 import { credentialExecution } from "./execution.js";
 import {
   allowedHosts,
+  customEndpointApi,
+  endpointPicksEffort,
   gatewayModelId,
   gatewayTrial,
   gatewayTrialTag,
@@ -105,8 +107,10 @@ export async function setUpTrial(
         ? { subagent: { model: input.subagent.model, credentialId: input.subagent.credentialId } }
         : {}),
       ...(thinking ? { thinking } : {}),
-      // Codex speaks Responses; a custom endpoint must serve it that way, as its direct route did.
-      ...(trial.harness === "codex" ? { api: "openai-responses" as const } : {}),
+      // A custom endpoint is called in the harness's own protocol: Responses for Codex, as its
+      // direct route did, and Messages for Claude Code.
+      ...customEndpointApi(input, trial.harness),
+      ...(endpointPicksEffort(input, trial.harness) ? { endpointEffort: true as const } : {}),
       tags,
     });
     secrets.push(connection.key);

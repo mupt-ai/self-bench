@@ -17,6 +17,10 @@ const pinnedLevels = [
 ] as const satisfies readonly ThinkingLevel[];
 export type PinnedThinking = (typeof pinnedLevels)[number];
 
+/** The APIs a custom endpoint can be called with besides Chat Completions. */
+const customEndpointApis = ["openai-responses", "anthropic-messages"] as const;
+export type CustomEndpointApi = (typeof customEndpointApis)[number];
+
 /**
  * What one trial's agent and judge may call through the gateway, signed by the worker and checked
  * by the API with a secret both share (as callback-grant.ts does), so nothing is stored
@@ -36,8 +40,17 @@ export interface TrialKey {
    * request itself (Codex's is dropped by the gateway). Absent, each call's own level is served.
    */
   readonly thinking?: PinnedThinking;
-  /** The protocol a custom endpoint is called with: Responses for Codex, else Chat Completions. */
-  readonly api?: "openai-responses";
+  /**
+   * The protocol a custom endpoint is called with: the one its harness speaks, Responses for Codex
+   * and Messages for Claude Code, else Chat Completions.
+   */
+  readonly api?: CustomEndpointApi;
+  /**
+   * The endpoint picks each call's reasoning effort, as a router does: the gateway drops the one a
+   * harness asks for and sends none. Dari refuses OpenRouter's `reasoning` field, and Codex asks
+   * a model it has no metadata for (`shift-1`) for effort "none", which Shift's models refuse.
+   */
+  readonly endpointEffort?: true;
   /** A task's LLM judge: any model of its credential's provider (TrialJudge). */
   readonly judge?: TrialJudge;
   /** Attribution for the requests it makes, recorded with their usage and cost. */
@@ -67,7 +80,8 @@ const keySchema = z
       .strict()
       .optional(),
     thinking: z.enum(pinnedLevels).optional(),
-    api: z.literal("openai-responses").optional(),
+    api: z.enum(customEndpointApis).optional(),
+    endpointEffort: z.literal(true).optional(),
     judge: z.object({ credentialId: z.uuid(), provider: z.string().min(1) }).optional(),
     tags: z.record(z.string(), z.string()),
     expiresAt: z.number(),
@@ -109,4 +123,20 @@ export function readTrialKey(
 
 function signature(payload: string, secret: string): string {
   return createHmac("sha256", secret).update(payload).digest("base64url");
+}
+
+/** The credential that serves `model` for a trial: its solver model's or its subagent's. */
+export function solverCredential(key: TrialKey, model: string): string | undefined {
+  return model === key.model
+    ? key.credentialId
+    : model === key.subagent?.model
+      ? key.subagent.credentialId
+      : undefined;
+}
+
+/** The judge's credential, when `model` is one of the judge's provider's. */
+export function judgeCredential(key: TrialKey, model: string): string | undefined {
+  return key.judge && model.startsWith(`${key.judge.provider}/`)
+    ? key.judge.credentialId
+    : undefined;
 }

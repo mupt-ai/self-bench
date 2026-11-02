@@ -111,10 +111,13 @@ export function signInRefusal(
 /**
  * Harnesses a direct provider key can drive: those that speak its API. OpenAI serves no
  * Anthropic Messages for Claude Code, and Anthropic no Responses for Codex; Meta serves both, so a
- * Meta key drives every harness through the gateway. Muse Code speaks only Meta's API.
+ * Meta key drives every harness through the gateway. Muse Code speaks only Meta's API. Dari's
+ * router serves every protocol through the gateway's Chat Completions. A custom endpoint is called
+ * in its harness's own protocol (customEndpointApi), so it runs whichever of them it serves.
  */
 const providerHarnesses: Partial<Record<CatalogModel["provider"], Harness[]>> = {
-  dari: ["pi"],
+  dari: ["pi", "codex", "claude-code"],
+  custom: ["codex", "claude-code", "pi", "mini-swe-agent", "terminus-2"],
   openai: ["codex", "pi", "mini-swe-agent", "terminus-2"],
   anthropic: ["claude-code", "pi", "mini-swe-agent", "terminus-2"],
   meta: ["muse-code", ...openHarnesses],
@@ -129,7 +132,14 @@ export function modelRoutes(model: CatalogModel): CatalogModel[] {
       ? [withReferencePricing({ ...model, harnesses: [...native] })]
       : []),
     ...(model.provider === "custom"
-      ? [{ ...gatewayModel, provider: "openai" as const, harnesses: [...native] }]
+      ? [
+          {
+            ...gatewayModel,
+            provider: "openai" as const,
+            // An OpenAI key serves no Messages, so the custom model there keeps OpenAI's harnesses.
+            harnesses: [...(providerHarnesses.openai ?? [])],
+          },
+        ]
       : []),
     ...gatewayIds.flatMap((gateway) => {
       const routed = gatewayRouteModel(model, gateway);

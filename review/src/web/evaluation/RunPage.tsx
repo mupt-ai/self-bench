@@ -1,8 +1,8 @@
 import React from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import type { CatalogModel, HostedSandbox } from "../../../../src/evaluation/catalog";
-import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
 import { evaluationTaskKey } from "../../../../src/evaluation/models";
+import type { JudgeNeeds } from "../../../../src/harnesses/harbor/host-variables";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { covered, setupCoverage } from "../setup/readiness";
@@ -14,21 +14,34 @@ import {
   submitComparison,
   UnsavedComparisonError,
 } from "./comparison-submission";
-import { RunBlockerNotice, RunExecution, RunSetupCallout, runBlocker } from "./RunExecution";
+import {
+  RunBlockerNotice,
+  type RunDraft,
+  RunExecution,
+  RunSetupCallout,
+  runBlocker,
+} from "./RunExecution";
+import { judgeCredentials, RunJudgePanel } from "./RunJudgePanel";
 import { RunModelsPanel } from "./RunModelsPanel";
 import { RunTaskPicker } from "./RunTaskPicker";
 import { restoreRunDraft } from "./run-draft";
 import { runCredentials, selectionReady } from "./run-readiness";
-import { useEvaluationScope } from "./useEvaluationScope";
+import { type EvaluationScope, useEvaluationScope } from "./useEvaluationScope";
 
-type RunState = { draft: ComparisonDraft; submitted: boolean; sandboxDefaultPending?: boolean };
+type RunState = { draft: RunDraft; submitted: boolean; sandboxDefaultPending?: boolean };
+
+/**
+ * A repository's or benchmark's Run page: models and harnesses against the tasks picked from its
+ * dataset, with a credential for their LLM judge when they have one.
+ */
 export function RunPage() {
-  const { repo = "", url } = useEvaluationScope();
-  return <RunContent key={url} repo={repo} url={url} />;
+  const scope = useEvaluationScope();
+  return <RunContent key={scope.url} scope={scope} />;
 }
-function RunContent({ repo, url }: { repo: string; url: string }) {
+function RunContent({ scope }: { scope: EvaluationScope }) {
+  const { url, pages, label } = scope;
   const { org } = useOrg();
-  useDocumentTitle(`Run · ${repo}`);
+  useDocumentTitle(`Run · ${label}`);
   const [search, setSearch] = useSearchParams();
   const navigate = useNavigate();
   const key = `selfbench-run:${url}`;
@@ -44,6 +57,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
   const [credentials, credentialsError] = useOrgCredentials(org.login);
   const [managed, setManaged] = React.useState<{ models: boolean; sandbox: boolean }>();
   const [availableTasks, setAvailableTasks] = React.useState<EvaluationOptions["tasks"]>([]);
+  const [judge, setJudge] = React.useState<JudgeNeeds>();
   const [error, setError] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [tasksReady, setTasksReady] = React.useState(false);
@@ -87,6 +101,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
       (result) => {
         if (!disposed) {
           setAvailableTasks(result.tasks);
+          setJudge(result.judge);
           setState((current) => {
             if (current.submitted) return current;
             const available = new Set(
@@ -118,9 +133,14 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
   const availableCredentials = runCredentials(credentials, managed?.models);
   const selected = draft.models.filter((model) => model.harnesses.length > 0);
   const pairs = selected.reduce((count, model) => count + model.harnesses.length, 0);
+  // Tasks graded by an LLM need a credential for it, which the run fills their judge variables from.
+  const judgeReady =
+    !judge?.variables.length ||
+    judgeCredentials(credentials ?? []).some((entry) => entry.id === draft.judgeCredentialId);
   const ready =
     tasksReady &&
     draft.tasks.length > 0 &&
+    judgeReady &&
     selectionReady({
       draft,
       models,
@@ -129,7 +149,10 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
     });
   const coverage =
     credentials && managed && !state.submitted && setupCoverage(credentials, managed).evaluate;
-  const blocker = runBlocker({ draft, ready, submitted: state.submitted, tasksReady, pairs });
+  const blocker =
+    !judgeReady && tasksReady && !state.submitted
+      ? "Select a judge credential to continue."
+      : runBlocker({ draft, ready, submitted: state.submitted, tasksReady, pairs });
   const submit = async (missingOnly = false) => {
     if (busy || (!state.submitted && !ready)) return;
     setBusy(true);
@@ -149,7 +172,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
         return;
       }
       sessionStorage.removeItem(key);
-      void navigate(`/repos/${repo}/results`);
+      void navigate(`${pages}/results`);
     } catch (cause) {
       if (cause instanceof UnsavedComparisonError) setState({ draft: frozen, submitted: false });
       setError(
@@ -171,7 +194,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
         return;
       }
       sessionStorage.removeItem(key);
-      void navigate(`/repos/${repo}/results`);
+      void navigate(`${pages}/results`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not resume submission");
     } finally {
@@ -183,7 +206,11 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
       <PageHeader
         className="mb-6"
         title="Run"
-        description="Compare models and harnesses against your accepted tasks."
+        description={
+          scope.repo
+            ? "Compare models and harnesses against your accepted tasks."
+            : `Compare models and harnesses on ${label} from Harbor's registry.`
+        }
       />
       {state.submitted && (
         <div className="panel mb-5 flex flex-wrap items-center justify-between gap-3 p-4">
@@ -191,7 +218,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
           <div className="flex flex-wrap items-center gap-3">
             <Link
               className="text-sm font-semibold text-foreground underline underline-offset-4"
-              to={`/repos/${repo}/results`}
+              to={`${pages}/results`}
             >
               View Results
             </Link>
@@ -218,15 +245,27 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
         blocker && <RunBlockerNotice>{blocker}</RunBlockerNotice>
       )}
       <RunTaskPicker
-        repo={repo}
+        scope={scope}
         availableTasks={availableTasks}
-        draft={draft}
+        picked={draft.tasks}
         tasksReady={tasksReady}
         onChange={(tasks) =>
           setState((current) => ({ ...current, draft: { ...current.draft, tasks } }))
         }
         disabled={busy || state.submitted}
       />
+      {judge?.variables.length ? (
+        <RunJudgePanel
+          pages={pages}
+          needs={judge}
+          credentials={credentials ?? []}
+          value={draft.judgeCredentialId}
+          onChange={(judgeCredentialId) =>
+            setState((current) => ({ ...current, draft: { ...current.draft, judgeCredentialId } }))
+          }
+          disabled={busy || state.submitted}
+        />
+      ) : null}
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
         <RunModelsPanel
           models={models}
@@ -236,7 +275,7 @@ function RunContent({ repo, url }: { repo: string; url: string }) {
           onChange={(value) => setState({ ...state, draft: value, submitted: false })}
         />
         <RunExecution
-          pages={`/repos/${repo}`}
+          pages={pages}
           draft={draft}
           credentials={availableCredentials}
           sandboxes={managed?.sandbox ? ["managed", ...sandboxes] : sandboxes}

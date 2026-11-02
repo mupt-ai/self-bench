@@ -5,7 +5,8 @@ import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import { createPrioritySelectorBackend, createRequestHandler } from "@mupt-ai/dari-gateway";
 import { GATEWAY_PATH } from "./connection.js";
 import { type SelfBenchGatewayDeps, selfBenchPlatform } from "./platform.js";
-import { readTrialKey } from "./trial-key.js";
+import { withServedModel } from "./served-model.js";
+import { readTrialKey, type TrialKey } from "./trial-key.js";
 
 /**
  * The model gateway every trial's agent calls, served by the API under GATEWAY_PATH. Returns a
@@ -19,13 +20,28 @@ export function gatewayRoute(deps: SelfBenchGatewayDeps) {
   });
   return async (request: IncomingMessage, url: URL, response: ServerResponse): Promise<boolean> => {
     if (url.pathname !== GATEWAY_PATH && !url.pathname.startsWith(`${GATEWAY_PATH}/`)) return false;
+    const token = request.headers["x-api-key"] ?? request.headers.authorization?.slice(7) ?? "";
+    const key = readTrialKey(String(token), deps.secret);
+    // The whole exchange, through the stream's end when the call is recorded, reads the model the
+    // provider's response names; a custom Messages endpoint gets adaptive thinking (served-model.ts).
+    await withServedModel(() => serve(request, url, response, key), {
+      adaptiveThinking: key?.api === "anthropic-messages",
+    });
+    return true;
+  };
+
+  async function serve(
+    request: IncomingMessage,
+    url: URL,
+    response: ServerResponse,
+    key: TrialKey | undefined,
+  ) {
     const target = new URL(url.pathname.slice(GATEWAY_PATH.length) || "/", url);
     target.search = url.search;
     const abort = new AbortController();
     response.on("close", () => abort.abort());
     const hasBody = request.method !== "GET" && request.method !== "HEAD";
-    const token = request.headers["x-api-key"] ?? request.headers.authorization?.slice(7) ?? "";
-    const judge = hasBody ? readTrialKey(String(token), deps.secret)?.judge : undefined;
+    const judge = hasBody ? key?.judge : undefined;
     const answer = await handle(
       new Request(target, {
         method: request.method,
@@ -36,7 +52,9 @@ export function gatewayRoute(deps: SelfBenchGatewayDeps) {
           ? {
               body: judge
                 ? judgeBody(Buffer.concat(await request.toArray()), judge.provider)
-                : (Readable.toWeb(request) as unknown as ReadableStream),
+                : key?.endpointEffort
+                  ? withoutEffort(Buffer.concat(await request.toArray()))
+                  : (Readable.toWeb(request) as unknown as ReadableStream),
               duplex: "half",
             }
           : {}),
@@ -46,8 +64,33 @@ export function gatewayRoute(deps: SelfBenchGatewayDeps) {
     response.writeHead(answer.status, Object.fromEntries(answer.headers));
     if (!answer.body) response.end();
     else await pipeline(Readable.fromWeb(answer.body as unknown as NodeReadableStream), response);
-    return true;
-  };
+  }
+}
+
+/**
+ * A harness's call without the reasoning effort it asks for, for an endpoint that picks its own:
+ * Chat Completions' `reasoning_effort` and `reasoning`, Responses' `reasoning`, and Messages'
+ * `thinking` and `output_config.effort`.
+ */
+function withoutEffort(body: Buffer): Buffer | string {
+  try {
+    const payload = JSON.parse(body.toString());
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return body;
+    const {
+      reasoning: _reasoning,
+      reasoning_effort: _effort,
+      thinking: _thinking,
+      ...rest
+    } = payload;
+    const output = rest.output_config;
+    if (output && typeof output === "object" && "effort" in output) {
+      const { effort: _outputEffort, ...kept } = output;
+      rest.output_config = kept;
+    }
+    return JSON.stringify(rest);
+  } catch {
+    return body;
+  }
 }
 
 /**

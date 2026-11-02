@@ -7,7 +7,7 @@ import {
 import type { StopEvaluation } from "./cancel.js";
 import type { ModelSummaryRequest } from "./model-summary.js";
 import { type EvaluationScope, scopeKey } from "./scope.js";
-import type { TaskAuditRequest } from "./task-audit.js";
+import type { TaskAuditRequest, TaskRef } from "./task-audit.js";
 import type { EvaluationInput, FailedTrial } from "./types.js";
 
 function evaluationWorkflowId(scope: EvaluationScope, id: string): string {
@@ -82,9 +82,7 @@ export function failureExplainer(
 /** Starts one task's audit, and tells whether one is running. */
 export interface TaskAuditor {
   start(request: TaskAuditRequest): Promise<void>;
-  state(
-    request: Pick<TaskAuditRequest, "repoId" | "runId" | "taskId">,
-  ): Promise<{ running: boolean }>;
+  state(request: TaskRef): Promise<{ running: boolean }>;
 }
 
 /** Audits a task under one workflow ID per task, so two audits of it never run at once. */
@@ -93,11 +91,9 @@ export function taskAuditor(
   fallbackQueue: string,
   env: NodeJS.ProcessEnv = process.env,
 ): TaskAuditor {
-  const workflowId = ({
-    repoId,
-    runId,
-    taskId,
-  }: Pick<TaskAuditRequest, "repoId" | "runId" | "taskId">) => `audit/${repoId}/${runId}/${taskId}`;
+  // A repository's key is its bare id, so audits running across a deploy keep their workflow IDs.
+  const workflowId = ({ runId, taskId, ...scope }: TaskRef) =>
+    `audit/${scopeKey(scope)}/${runId}/${taskId}`;
   return {
     async start(request) {
       try {

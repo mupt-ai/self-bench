@@ -12,7 +12,7 @@ import { useEvaluationScope } from "./useEvaluationScope";
 
 export function EvaluationPage() {
   const { repo, pages, label } = useEvaluationScope();
-  const { url, runs, credentials, accepted, loading, error, update } = useRepoRuns();
+  const { url, runs, credentials, accepted, loading, error, update, refresh } = useRepoRuns();
   useDocumentTitle(`Results · ${label}`);
   return (
     <PageContent>
@@ -26,6 +26,7 @@ export function EvaluationPage() {
           <ChartPreview pages={pages} variant="button" />
         </span>
         <ModelSummaries />
+        {/* Exports are image-backed tasks, which only a repository's are. */}
         {repo && <CustomerExportButton url={url} runs={runs} />}
       </PageHeader>
       {error && <Notice className="mb-4">{error}</Notice>}
@@ -38,6 +39,7 @@ export function EvaluationPage() {
         baseUrl={url}
         pages={pages}
         onChanged={update}
+        onRetryStarted={refresh}
       />
       {loading && !runs.length && !error && (
         <div className="mt-8">
@@ -55,11 +57,9 @@ export function EvaluationPage() {
               <Link className={buttonStyles.primary} to={`${pages}/run`}>
                 Run Models
               </Link>
-              {repo && (
-                <Link className={buttonStyles.secondary} to={pages}>
-                  Review Tasks
-                </Link>
-              )}
+              <Link className={buttonStyles.secondary} to={pages}>
+                Review Tasks
+              </Link>
             </>
           }
         >

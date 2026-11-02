@@ -1,13 +1,12 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ArtifactStore } from "../../artifacts/index.js";
-import type { CustomerExportRequest } from "../../customer-exports/types.js";
 import type { BenchmarkStore } from "../../db/benchmarks.js";
 import type { ConnectedRepo, RepoStore } from "../../db/repos.js";
-import { runnable } from "../../db/task-record.js";
 import type { TaskStore } from "../../db/tasks.js";
 import type { User, UserStore } from "../../db/users.js";
 import type { Vault } from "../../db/vault.js";
 import type { StopEvaluation } from "../../evaluation/cancel.js";
+import { repositoryDataset } from "../../evaluation/dataset.js";
 import type { FailureExplainer, ModelSummarizer, TaskAuditor } from "../../evaluation/start.js";
 import type { EvaluationInput } from "../../evaluation/types.js";
 import type { ClaudeLogins } from "../../harnesses/claude-code/login.js";
@@ -17,18 +16,17 @@ import type { runCommand } from "../../lib/process.js";
 import { lookupRepositoryById } from "../../public/release-sources.js";
 import { tenantFor } from "../auth/tenant.js";
 import { sendJson } from "../http.js";
-import { auditTaskRoute } from "./audit-task.js";
 import { benchmarkRoutes } from "./benchmarks.js";
 import { credentialRoutes } from "./credentials.js";
-import { customerExportRoute } from "./customer-exports.js";
-import { handleScopedEvaluations } from "./evaluation-scope.js";
-import { explainTrial } from "./explain-trial.js";
-import { modelSummariesRoute } from "./model-summaries.js";
+import { type CustomerExportRegistry, customerExportRoute } from "./customer-exports.js";
+import { EVALUATIONS_PATH, handleScopedEvaluations } from "./evaluation-scope.js";
 
+/** A repository's evaluations: what follows it is EVALUATIONS_PATH. */
 const repoRoute =
-  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/evaluations(?:\/(options|catalog|comparisons|audit|summaries|exports|[a-f0-9-]{36}))?(?:\/(artifacts|[a-f0-9-]{36}))?(?:\/(resume|cancel|delete|explain|download))?$/;
+  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)(\/evaluations(?:\/.*)?)$/;
 export interface EvaluationRoutesOptions {
-  exportCustomer?(request: CustomerExportRequest): Promise<void>;
+  /** Customer exports' registry grants; without it, exports are off. */
+  customerExports?: CustomerExportRegistry;
   users: UserStore;
   repos: RepoStore;
   tasks: TaskStore;
@@ -85,7 +83,8 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
       if (await credentialRoutes(options, request, url, response, user)) return true;
       if (await benchmarkRoutes(options, request, url, response, user)) return true;
       const repoMatch = repoRoute.exec(url.pathname);
-      if (repoMatch?.[1] && repoMatch[2] && repoMatch[3]) {
+      const path = repoMatch?.[4] ? EVALUATIONS_PATH.exec(repoMatch[4]) : null;
+      if (repoMatch?.[1] && repoMatch[2] && repoMatch[3] && path) {
         response.setHeader("cache-control", "no-store");
         const tenant = await tenantFor(users, user, repoMatch[1]);
         const repo = tenant
@@ -95,7 +94,7 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
           sendJson(response, 404, { error: "Repository is not connected here" });
           return true;
         }
-        const [section, id, action] = [repoMatch[4], repoMatch[5], repoMatch[6]];
+        const [, section, id, action] = path;
         if (section === "exports") {
           await customerExportRoute(
             options,
@@ -103,48 +102,8 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
             response,
             { repoId: repo.id, orgId: tenant.id, user },
             id,
-            action === "download",
+            action,
           );
-          request.resume();
-          return true;
-        }
-        const env = options.env ?? process.env;
-        const methods = ["GET", "POST"].includes(request.method ?? "");
-        if (
-          section &&
-          !["audit", "summaries"].includes(section) &&
-          !id &&
-          action === "explain" &&
-          methods
-        ) {
-          await explainTrial(options, request, url, response, {
-            scope: { repoId: repo.id },
-            orgId: repo.orgId,
-            evaluationId: section,
-            user,
-            env,
-          });
-          request.resume();
-          return true;
-        }
-        if (section === "audit" && !id && !action && methods) {
-          await auditTaskRoute(options, request, url, response, { repo, user, env });
-          request.resume();
-          return true;
-        }
-        if (section === "summaries" && !id && !action && methods) {
-          await modelSummariesRoute(options, request, response, {
-            scope: { repoId: repo.id },
-            orgId: repo.orgId,
-            user,
-            env,
-            tasks: async () =>
-              (await options.tasks.listForRepo(repo.id))
-                .filter(runnable)
-                .flatMap(({ runId, taskId, bundleKey, difficulty }) =>
-                  bundleKey ? [{ runId, taskId, bundleKey, difficulty }] : [],
-                ),
-          });
           request.resume();
           return true;
         }
@@ -166,6 +125,7 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
           user,
           owner,
           tenant,
+          dataset: repositoryDataset(options.tasks, repo.id),
           section,
           id,
           action,

@@ -6,9 +6,13 @@ import type {
   ResolvedRouter,
 } from "@mupt-ai/dari-gateway";
 import { HttpError } from "@mupt-ai/dari-gateway/http/errors";
+import { dariEndpoint } from "../db/credential-endpoints.js";
 import type { CredentialInfo, CredentialSecret } from "../db/credentials.js";
+import type { TokenUsage } from "../evaluation/types.js";
+import { customBaseUrl, modelConfig } from "./model-config.js";
+import { reportedServedCost, servedModel } from "./served-model.js";
 import { signInCredential } from "./sign-in.js";
-import { readTrialKey, type TrialKey } from "./trial-key.js";
+import { judgeCredential, readTrialKey, solverCredential, type TrialKey } from "./trial-key.js";
 
 export { withManagedModel } from "./managed-model.js";
 
@@ -55,6 +59,12 @@ export interface SelfBenchGatewayDeps {
    */
   readonly modelPrice?: (model: string) => GatewayModelPrice | undefined;
   /**
+   * What a custom endpoint's call cost at the list rates of the model its response says served it
+   * (served-model.ts): the endpoint reports no price, and may be a router serving each call from a
+   * different model. Undefined when no catalog prices that model, which leaves the call unpriced.
+   */
+  readonly servedModelCost?: (model: string, usage: TokenUsage) => number | undefined;
+  /**
    * A custom credential's endpoint, once it is checked to be one the operator allows the API to
    * call (validateEndpoint); throws when it is not.
    */
@@ -94,7 +104,7 @@ const unavailable = (what: string) =>
  */
 export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform {
   // The key behind each api_key_id this process resolved, so recordRequest can attribute usage.
-  const resolved = new Map<string, TrialKey>();
+  const resolved = new Map<string, TrialKey & { readonly customEndpoint?: true }>();
   const keyOf = (token: string) => {
     const key = readTrialKey(token, deps.secret);
     if (!key)
@@ -130,7 +140,10 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
       const secondaryPrice = secondary && deps.modelPrice?.(secondary.model);
       for (const [stale, entry] of resolved)
         if (entry.expiresAt <= Date.now()) resolved.delete(stale);
-      resolved.set(id, key);
+      resolved.set(
+        id,
+        credential && credential.kind === "custom" ? { ...key, customEndpoint: true } : key,
+      );
       return {
         router_id: ROUTER_ID,
         organization_id: String(key.orgId),
@@ -187,10 +200,16 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
               deps.captureError,
             );
       if (!supplied) throw unavailable("The trial's sign-in");
-      // A custom credential's own endpoint replaces the provider's.
+      // A Dari or custom credential's own endpoint replaces the provider's.
+      if (info.kind === "dari")
+        return { ...supplied, baseUrl: dariEndpoint(info.endpoint ?? undefined) };
       return {
         ...supplied,
-        ...(info.endpoint ? { baseUrl: allowedEndpoint(deps, info.endpoint) } : {}),
+        ...(info.endpoint ? { baseUrl: customBaseUrl(deps, info.endpoint, key) } : {}),
+        // Anthropic's SDK sends the key as x-api-key; compatible endpoints (Shift) take a bearer.
+        ...(info.kind === "custom" && key.api === "anthropic-messages" && "apiKey" in supplied
+          ? { headers: { authorization: `Bearer ${supplied.apiKey}` } }
+          : {}),
       };
     },
     async writePrefixState() {},
@@ -211,6 +230,11 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
       const requestTags = { ...tags };
       delete requestTags.judge;
       delete requestTags.subagent;
+      // A custom endpoint's call is priced by the model that served it, unless it said its price.
+      const cost =
+        key.customEndpoint && solver && summary.cost_source !== "provider"
+          ? servedCost(deps, summary)
+          : { costUsd: summary.total_cost_usd, costSource: summary.cost_source };
       try {
         deps.recordUsage({
           requestId: summary.request_id,
@@ -230,8 +254,7 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
           cacheReadTokens: summary.cache_read_tokens,
           cacheWriteTokens: summary.cache_write_tokens,
           // Null when neither the provider nor a known list price priced the call: unpriced.
-          costUsd: summary.total_cost_usd,
-          costSource: summary.cost_source,
+          ...cost,
         });
       } catch (error) {
         deps.captureError(error);
@@ -246,55 +269,24 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
   };
 }
 
-function solverCredential(key: TrialKey, model: string): string | undefined {
-  return model === key.model
-    ? key.credentialId
-    : model === key.subagent?.model
-      ? key.subagent.credentialId
-      : undefined;
-}
-
-/** The judge's credential, when `model` is one of the judge's provider's. */
-function judgeCredential(key: TrialKey, model: string): string | undefined {
-  return key.judge && model.startsWith(`${key.judge.provider}/`)
-    ? key.judge.credentialId
-    : undefined;
-}
-
-function allowedEndpoint(deps: SelfBenchGatewayDeps, endpoint: string): string {
-  try {
-    return deps.endpoint(endpoint);
-  } catch {
-    throw new HttpError(
-      403,
-      "The credential's endpoint is not one this deployment allows.",
-      "endpoint_not_allowed",
-    );
-  }
-}
-
-/**
- * The model as the catalog describes it, or as a custom credential serves it: an OpenAI Chat
- * Completions endpoint at its own address, whose models no catalog prices. A pinned thinking
- * level is also its default, which the strict router checks every call against.
- */
-function modelConfig(
+/** A custom endpoint's call at the list rates of the model its response named, else unpriced. */
+function servedCost(
   deps: SelfBenchGatewayDeps,
-  key: TrialKey,
-  credential: Pick<CredentialInfo, "kind" | "endpoint">,
-): GatewayModelConfig | undefined {
-  const { model, thinking } = key;
-  if (!model) return undefined;
-  const config =
-    deps.modelConfig?.(model) ??
-    (credential.kind === "custom" && credential.endpoint
-      ? {
-          provider: "custom",
-          native_model_id: model.slice(model.indexOf("/") + 1),
-          api: key.api ?? "openai-completions",
-          base_url: allowedEndpoint(deps, credential.endpoint),
-          cost: { input: 0, output: 0 },
-        }
-      : undefined);
-  return config && thinking ? { ...config, default_thinking_level: thinking } : config;
+  summary: RequestSummary,
+): Pick<GatewayUsage, "costUsd" | "costSource"> {
+  // A router that reports its billed price for the call (Ramp's usage.cost) is taken as it says.
+  const reported = reportedServedCost();
+  if (reported !== undefined) return { costUsd: reported, costSource: "provider" };
+  const model = servedModel();
+  const costUsd = model
+    ? deps.servedModelCost?.(model, {
+        input: summary.input_tokens ?? 0,
+        output: summary.output_tokens ?? 0,
+        cacheRead: summary.cache_read_tokens ?? 0,
+        cacheWrite: summary.cache_write_tokens ?? 0,
+      })
+    : undefined;
+  return costUsd === undefined
+    ? { costUsd: null, costSource: null }
+    : { costUsd, costSource: "pricing" };
 }

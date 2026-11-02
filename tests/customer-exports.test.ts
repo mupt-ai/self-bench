@@ -4,9 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { strFromU8, unzipSync } from "fflate";
 import { LocalArtifactStore } from "../src/artifacts/local.js";
-import { customerPackage } from "../src/customer-exports/package.js";
-import { copyCustomerImages, customerRegistry } from "../src/customer-exports/registry.js";
-import { type CustomerExportRequest, customerRepository } from "../src/customer-exports/types.js";
+import { customerPackage, type ExportRegistry } from "../src/customer-exports/package.js";
+import type { CustomerExportRequest } from "../src/customer-exports/types.js";
 import { gzippedTar } from "./support/tar.js";
 
 const roots: string[] = [];
@@ -17,10 +16,12 @@ const source = "us-central1-docker.pkg.dev/project/selfbench-tasks";
 const id = "12345678-1234-4234-8234-123456789abc";
 const agent = `${source}/run/task/agent@sha256:${"a".repeat(64)}`;
 const verifier = `${source}/run/task/verifier@sha256:${"b".repeat(64)}`;
-const destination = customerRepository(source, 1, id);
-test("customer repository identities are isolated even when tenants reuse an export ID", () => {
-  expect(customerRepository(source, 2, id)).not.toBe(destination);
-});
+const registry: ExportRegistry = {
+  host: "selfbench.example",
+  repository: source,
+  password: "rg_grant.secret",
+  expiresAt: new Date("2026-12-01T00:00:00Z"),
+};
 async function fixture(extra: Record<string, string> = {}) {
   const root = await mkdtemp(join(tmpdir(), "customer-export-"));
   roots.push(root);
@@ -45,8 +46,9 @@ async function fixture(extra: Record<string, string> = {}) {
     id,
     repoId: 1,
     customer: "Acme",
-    email: "customer@example.com",
     evaluationId: crypto.randomUUID(),
+    evaluationCreatedAt: "2026-10-01T00:00:00Z",
+    grantId: crypto.randomUUID(),
     createdAt: "2026-10-01T00:00:00Z",
     createdBy: "owner",
     tasks: [
@@ -55,26 +57,26 @@ async function fixture(extra: Record<string, string> = {}) {
   };
   return { store, request };
 }
-test("a deterministic Harbor ZIP contains both exact image digests, grading and setup, with no proxy or snapshot", async () => {
+test("a deterministic Harbor ZIP pulls both exact digests from SelfBench with the export's key", async () => {
   const { store, request } = await fixture();
   const task = request.tasks[0];
   if (!task) throw new Error("Missing fixture task");
   request.tasks.push({ ...task });
-  const packed = await customerPackage(store, request, source, destination);
-  expect(packed.images).toHaveLength(2);
-  const files = unzipSync(packed.zip);
-  expect(strFromU8(files["tasks/task-0001/environment/Dockerfile"] ?? new Uint8Array())).toBe(
-    `FROM ${agent.replace(source, destination)}\n`,
+  const zip = await customerPackage(store, request, registry);
+  const files = unzipSync(zip);
+  const text = (name: string) => strFromU8(files[name] ?? new Uint8Array());
+  expect(text("tasks/task-0001/environment/Dockerfile")).toBe(
+    `FROM selfbench.example/run/task/agent@sha256:${"a".repeat(64)}\n`,
   );
-  expect(strFromU8(files["tasks/task-0002/tests/Dockerfile"] ?? new Uint8Array())).toBe(
-    `FROM ${verifier.replace(source, destination)}\n`,
+  expect(text("tasks/task-0002/tests/Dockerfile")).toBe(
+    `FROM selfbench.example/run/task/verifier@sha256:${"b".repeat(64)}\n`,
   );
-  expect(strFromU8(files["tasks/task-0001/tests/test.patch"] ?? new Uint8Array())).toBe(
-    "hidden tests",
+  expect(text("tasks/task-0001/tests/test.patch")).toBe("hidden tests");
+  expect(text("README.md")).toContain(
+    "echo 'rg_grant.secret' | docker login selfbench.example --username export --password-stdin",
   );
-  expect(strFromU8(files["README.md"] ?? new Uint8Array())).toContain(
-    `gcloud auth configure-docker ${destination.split("/")[0]}`,
-  );
+  expect(text("README.md")).toContain("works until 2026-12-01");
+  expect(text("README.md")).not.toContain("gcloud");
   expect(
     Object.keys(files).some((name) => name.includes("..") || name.includes("repo.tar.gz")),
   ).toBe(false);
@@ -82,112 +84,37 @@ test("a deterministic Harbor ZIP contains both exact image digests, grading and 
     Object.values(files)
       .map((value) => strFromU8(value))
       .join("\n"),
-  ).not.toContain("/selfbench-tasks/");
-  expect((await customerPackage(store, request, source, destination)).zip).toEqual(packed.zip);
+  ).not.toContain(source);
+  expect(await customerPackage(store, request, registry)).toEqual(zip);
 });
 test("exports refuse historical build bundles, foreign images, service contexts, or unexpected Dockerfiles", async () => {
   const { store, request } = await fixture();
   const original = request.tasks[0];
   if (!original) throw new Error("Missing fixture task");
   request.tasks = [{ ...original, bundleKey: "original/harbor-task.tar.gz" }];
-  await expect(customerPackage(store, request, source, destination)).rejects.toThrow(
+  await expect(customerPackage(store, request, registry)).rejects.toThrow(
     "frozen execution bundle",
   );
   request.tasks = [
     { ...original, images: { agent: agent.replace(source, "attacker.example/repo"), verifier } },
   ];
-  await expect(customerPackage(store, request, source, destination)).rejects.toThrow(
-    "verified images",
-  );
+  await expect(customerPackage(store, request, registry)).rejects.toThrow("task image repository");
   const composed = await fixture({ "harbor-task/tests/docker-compose.yaml": "services: {}" });
-  await expect(
-    customerPackage(composed.store, composed.request, source, destination),
-  ).rejects.toThrow("services");
+  await expect(customerPackage(composed.store, composed.request, registry)).rejects.toThrow(
+    "services",
+  );
   const changed = await fixture({
     "harbor-task/environment/Dockerfile": `FROM ${agent}\nRUN curl example.com`,
   });
-  await expect(
-    customerPackage(changed.store, changed.request, source, destination),
-  ).rejects.toThrow("unexpected image context");
-});
-test("registry provisioning grants only one dedicated repository and preserves IAM etags and bindings", async () => {
-  const calls: { url: string; init?: RequestInit | undefined }[] = [];
-  const registry = customerRegistry(source, {
-    token: async () => "secret-access-token",
-    fetch: async (input, init) => {
-      const url = String(input);
-      calls.push({ url, init });
-      if (url.endsWith(":getIamPolicy"))
-        return Response.json({
-          etag: "etag",
-          bindings: [
-            { role: "roles/artifactregistry.reader", members: ["user:existing@example.com"] },
-          ],
-        });
-      return Response.json({});
-    },
-  });
-  await registry.create(destination);
-  await registry.grant(destination, "customer@example.com");
-  const policy = JSON.parse(String(calls.at(-1)?.init?.body)).policy;
-  expect(policy.etag).toBe("etag");
-  expect(policy.bindings[0].members).toEqual([
-    "user:existing@example.com",
-    "user:customer@example.com",
-  ]);
-  expect(calls.every((call) => call.url.includes(`/repositories/customer-1-${id}`))).toBe(true);
-  await expect(registry.grant(source, "customer@example.com")).rejects.toThrow("dedicated");
-});
-test("missing repositories are created privately and polled before returning", async () => {
-  const calls: string[] = [];
-  const registry = customerRegistry(source, {
-    token: async () => "token",
-    fetch: async (input, init) => {
-      const url = String(input);
-      calls.push(url);
-      if (init?.method === "POST") {
-        expect(JSON.parse(String(init.body)).format).toBe("DOCKER");
-        return Response.json({ name: "projects/project/locations/us-central1/operations/create" });
-      }
-      if (url.includes("/operations/")) throw new Error("Operation polling is not authorized");
-      return calls.length > 2
-        ? Response.json({ format: "DOCKER" })
-        : new Response(null, { status: 404 });
-    },
-  });
-  await registry.create(destination);
-  expect(calls).toHaveLength(3);
+  await expect(customerPackage(changed.store, changed.request, registry)).rejects.toThrow(
+    "unexpected image context",
+  );
 });
 test("patches above the viewer limit are exported in full within the package budget", async () => {
   const patch = "x".repeat(2 * 1024 * 1024 + 100);
   const { store, request } = await fixture({ "harbor-task/tests/test.patch": patch });
-  const packed = await customerPackage(store, request, source, destination);
-  expect(
-    strFromU8(unzipSync(packed.zip)["tasks/task-0001/tests/test.patch"] ?? new Uint8Array()),
-  ).toBe(patch);
-});
-test("copy builds preserve digests, use short-lived build credentials and propagate failure", async () => {
-  let build: Record<string, unknown> | undefined;
-  const cloud = {
-    run: async (value: Record<string, unknown>) => {
-      build = value;
-      return { id: "build", status: "SUCCESS" };
-    },
-    log: async () => "",
-  };
-  await copyCustomerImages(
-    cloud,
-    [{ source: agent, destination: agent.replace(source, destination) }],
-    new AbortController().signal,
+  const zip = await customerPackage(store, request, registry);
+  expect(strFromU8(unzipSync(zip)["tasks/task-0001/tests/test.patch"] ?? new Uint8Array())).toBe(
+    patch,
   );
-  expect(JSON.stringify(build)).toContain("--preserve-digests");
-  expect(JSON.stringify(build)).toContain("$$token");
-  expect(JSON.stringify(build)).not.toContain("secret-access-token");
-  await expect(
-    copyCustomerImages(
-      { ...cloud, run: async () => ({ id: "build", status: "FAILURE" }) },
-      [],
-      new AbortController().signal,
-    ),
-  ).rejects.toThrow("Image copy failed");
 });

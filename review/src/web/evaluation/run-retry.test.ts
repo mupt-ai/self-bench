@@ -68,17 +68,28 @@ test("a custom model retries under its typed name, whatever route reached it", (
   }
 });
 
-test("live, deleted, benchmark, uncredentialed and error-free runs offer no retry", () => {
+test("a benchmark's run retries its errored tasks with the judge credential it ran with", () => {
+  const judgeCredentialId = "5b6c7d8e-9f01-4a2b-8c3d-4e5f6a7b8c9d";
+  const retry = retrySelection(
+    finishedRun((run) => {
+      delete run.repoId;
+      run.benchmarkId = 3;
+      if (run.credentials) run.credentials.judgeCredentialId = judgeCredentialId;
+    }),
+    "pi",
+    ID,
+  );
+  expect(retry?.selection.judgeCredentialId).toBe(judgeCredentialId);
+  expect(() => comparisonSchema.parse(retry?.selection)).not.toThrow();
+});
+
+test("live, deleted, uncredentialed and error-free runs offer no retry", () => {
   for (const change of [
     (run: EvaluationRun) => {
       run.status = "running";
     },
     (run: EvaluationRun) => {
       run.deletedAt = "2026-10-26T00:00:00.000Z";
-    },
-    (run: EvaluationRun) => {
-      delete run.repoId;
-      run.benchmarkId = 3;
     },
     (run: EvaluationRun) => {
       delete run.credentials;

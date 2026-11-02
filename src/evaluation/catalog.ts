@@ -51,7 +51,7 @@ export const dariRouter: CatalogModel = {
   provider: "dari",
   model: "routing",
   label: "Dari Router",
-  harnesses: ["pi"],
+  harnesses: ["pi", "codex", "claude-code"],
   source: "https://dari.dev",
   gateways: {},
 };

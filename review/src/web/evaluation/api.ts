@@ -1,8 +1,12 @@
+import type { DatasetTask } from "../../../../src/evaluation/dataset";
 import type { EvaluationRun } from "../../../../src/evaluation/types";
+import type { JudgeNeeds } from "../../../../src/harnesses/harbor/host-variables";
 
 export type { EvaluationRun, EvaluationTrial, Harness } from "../../../../src/evaluation/types";
+/** The tasks a scope's comparisons pick from, and what their LLM judge reads (EvaluationDataset). */
 export interface EvaluationOptions {
-  tasks: { runId: string; taskId: string; difficulty: string }[];
+  tasks: DatasetTask[];
+  judge?: JudgeNeeds;
 }
 export function evaluationUrl(org: string, repo: string): string {
   return `/api/orgs/${encodeURIComponent(org)}/repos/${repo.split("/").map(encodeURIComponent).join("/")}/evaluations`;

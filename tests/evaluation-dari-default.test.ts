@@ -3,7 +3,12 @@ import { dariEndpoint } from "../src/db/credential-endpoints.js";
 import { credentialSchema } from "../src/db/credentials.js";
 import { dariRouter, evaluationCatalog } from "../src/evaluation/catalog.js";
 import { isDariRun } from "../src/evaluation/dari/cost.js";
-import { gatewayTrial } from "../src/evaluation/gateway-trial.js";
+import {
+  customEndpointApi,
+  endpointPicksEffort,
+  gatewayTrial,
+  trialRoute,
+} from "../src/evaluation/gateway-trial.js";
 import { routeFor } from "../src/evaluation/models.js";
 import { initialEvaluation } from "../src/evaluation/store.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";
@@ -20,7 +25,7 @@ test("Dari Router is built in and needs only a Dari API key", () => {
   expect(
     credentialSchema.parse({ name: "Dari", kind: "dari", value: "test-key" }).endpoint,
   ).toBeUndefined();
-  expect(routeFor(dariRouter, "dari")?.harnesses).toEqual(["pi"]);
+  expect(routeFor(dariRouter, "dari")?.harnesses).toEqual(["pi", "codex", "claude-code"]);
   expect(routeFor(dariRouter, "openai")).toBeUndefined();
   expect(routeFor(dariRouter, "openrouter")).toBeUndefined();
 });
@@ -92,4 +97,38 @@ test("the built-in Dari route uses the existing response-price adapter", () => {
   expect(trial.agent).toBe("harbor_dari:DariPi");
   expect(trial.agentArguments).toEqual(["--agent-kwarg", "model_api=openai-completions"]);
   expect(isDariRun(run)).toBe(true);
+});
+
+test("a Dari credential stays direct on Pi and goes through the gateway on Codex and Claude Code", () => {
+  const input = {
+    modelName: "dari/routing",
+    credentials: { provider: "dari", auth: "api-key" },
+  } as EvaluationInput;
+  expect(trialRoute(input, "pi")).toBe("direct");
+  expect(trialRoute(input, "codex")).toBe("gateway");
+  expect(trialRoute(input, "claude-code")).toBe("gateway");
+});
+
+test("a router picks its own effort, and a custom endpoint is called in its harness's protocol", () => {
+  const dari = { credentials: { provider: "dari", auth: "api-key" } } as EvaluationInput;
+  const custom = { credentials: { provider: "custom", auth: "api-key" } } as EvaluationInput;
+  const openai = { credentials: { provider: "openai", auth: "api-key" } } as EvaluationInput;
+  expect(["pi", "codex", "claude-code"].map((h) => endpointPicksEffort(dari, h as never))).toEqual([
+    true,
+    true,
+    true,
+  ]);
+  expect(endpointPicksEffort(custom, "codex")).toBe(true);
+  expect(endpointPicksEffort(custom, "claude-code")).toBe(false);
+  expect(endpointPicksEffort(openai, "codex")).toBe(false);
+  expect(customEndpointApi(custom, "codex")).toEqual({ api: "openai-responses" });
+  expect(customEndpointApi(custom, "claude-code")).toEqual({ api: "anthropic-messages" });
+  expect(customEndpointApi(custom, "pi")).toEqual({});
+  expect(customEndpointApi(openai, "codex")).toEqual({});
+});
+
+test("a custom model offers Claude Code on its endpoint but not on an OpenAI key", () => {
+  const custom = { ...dariRouter, id: "custom", provider: "custom" as const, harnesses: [] };
+  expect(routeFor(custom, "custom")?.harnesses).toContain("claude-code");
+  expect(routeFor(custom, "openai")?.harnesses).not.toContain("claude-code");
 });

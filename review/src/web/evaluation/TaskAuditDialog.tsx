@@ -28,15 +28,14 @@ export function TaskAuditDialog({
   task: OutcomeGridTask;
   configurations: readonly Configuration[];
   baseUrl: string;
-  /** Where the scope's pages live; only a repository's tasks are audited. */
+  /** Where the scope's pages live. */
   pages: string;
   onClose(): void;
   onOpenTrial(result: TaskResult): void;
 }) {
   const close = useRef<HTMLButtonElement>(null);
   const { session } = useSession();
-  const auditable = !pages.startsWith("/benchmarks/");
-  const enabled = auditable && session.status === "signed-in";
+  const enabled = session.status === "signed-in";
   const { state, auditing, error, audit } = useTaskAudit({
     baseUrl,
     runId: task.runId,
@@ -108,31 +107,29 @@ export function TaskAuditDialog({
         </a>
       </div>
       <div className="min-w-0 space-y-6 p-4 sm:p-6">
-        {auditable && (
-          <section aria-label="Audit" className="space-y-3">
-            {last && (
-              <div className="space-y-1.5">
-                <h3 className="text-sm font-semibold">Verdict: {VERDICTS[last.verdict]}</h3>
-                <p className="text-sm leading-6">{last.text}</p>
-                <p className="text-xs text-muted-foreground">
-                  {last.model} read {last.failures} failed of {last.attempts} scored{" "}
-                  {last.attempts === 1 ? "attempt" : "attempts"} · {momentLabel(last.auditedAt)}
-                </p>
-              </div>
-            )}
-            {offered ? (
-              <FailureExplanationForm
-                baseUrl={baseUrl}
-                explaining={auditing}
-                onExplain={audit}
-                labels={last ? { ...AUDIT, action: "Audit Again" } : AUDIT}
-              />
-            ) : (
-              reason && <p className="text-sm text-muted-foreground">{reason}</p>
-            )}
-            {error && <Notice>{error}</Notice>}
-          </section>
-        )}
+        <section aria-label="Audit" className="space-y-3">
+          {last && (
+            <div className="space-y-1.5">
+              <h3 className="text-sm font-semibold">Verdict: {VERDICTS[last.verdict]}</h3>
+              <p className="text-sm leading-6">{last.text}</p>
+              <p className="text-xs text-muted-foreground">
+                {last.model} read {last.failures} failed of {last.attempts} scored{" "}
+                {last.attempts === 1 ? "attempt" : "attempts"} · {momentLabel(last.auditedAt)}
+              </p>
+            </div>
+          )}
+          {offered ? (
+            <FailureExplanationForm
+              baseUrl={baseUrl}
+              explaining={auditing}
+              onExplain={audit}
+              labels={last ? { ...AUDIT, action: "Audit Again" } : AUDIT}
+            />
+          ) : (
+            reason && <p className="text-sm text-muted-foreground">{reason}</p>
+          )}
+          {error && <Notice>{error}</Notice>}
+        </section>
         <section aria-labelledby="task-attempts" className="space-y-2">
           <h3 id="task-attempts" className="text-sm font-semibold">
             Attempts

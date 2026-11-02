@@ -10,7 +10,7 @@ import { createRegistryGrantStore } from "../db/registry-grants.js";
 import { gatewayRoute } from "../gateway/mount.js";
 import { withManagedModel } from "../gateway/platform.js";
 import { createGatewayUsageStore } from "../gateway/usage-store.js";
-import { gatewayModelPrice, listedModelConfig } from "../gateways/catalog.js";
+import { gatewayModelPrice, listedModelConfig, servedModelCost } from "../gateways/catalog.js";
 import { createGenerationBatches, RunNotFoundError } from "../generation/batches/service.js";
 import { platformModelKey } from "../generation/billing/managed.js";
 import { googleAccessToken } from "../lib/google-access-token.js";
@@ -97,6 +97,7 @@ export async function startApi(
           credentials: withManagedModel(site.vault.credentials, platformModelKey(process.env)),
           modelConfig: listedModelConfig,
           modelPrice: gatewayModelPrice,
+          servedModelCost,
           endpoint: (endpoint) => validateEndpoint(endpoint, process.env),
           recordUsage: (entry) => {
             usage

@@ -1,17 +1,15 @@
 import { z } from "zod";
 import type { ArtifactStore } from "../artifacts/index.js";
 import { modelIdPattern, thinkingLevels } from "../contracts/models.js";
-import type { FrozenTask } from "../db/benchmarks.js";
 import type { ComparisonRecord } from "../db/comparisons.js";
 import type { CredentialInfo } from "../db/credentials.js";
-import type { TaskStore } from "../db/tasks.js";
 import type { Vault } from "../db/vault.js";
 import type { ManagedOffer } from "../generation/billing/managed.js";
 import { mergeJudgeNeeds } from "../harnesses/harbor/host-variables.js";
 import { hostedSandboxes } from "./catalog.js";
 import { comparisonProgress } from "./comparison-progress.js";
 import { type ComparisonOwner, saveComparison } from "./comparison-save.js";
-import { repositoryTasks } from "./frozen-tasks.js";
+import type { EvaluationDataset } from "./dataset.js";
 import { judgeCredentialRefusal } from "./judge.js";
 import { harnessIds } from "./models.js";
 import { getEvaluation } from "./store.js";
@@ -48,7 +46,10 @@ const selectionFields = {
 const comparisonSelection = z.object(selectionFields).strict();
 export type ComparisonSelection = z.infer<typeof comparisonSelection>;
 
-/** A repository's comparison: its approved tasks. */
+/**
+ * A comparison: models over the tasks it picks from its repository or benchmark (every task when
+ * it names none), and the credential their LLM judge calls with when they have one.
+ */
 export const comparisonSchema = z
   .object({
     ...selectionFields,
@@ -58,28 +59,25 @@ export const comparisonSchema = z
           .object({ runId: z.string().min(1).max(100), taskId: z.string().min(1).max(200) })
           .strict(),
       )
-      .min(1),
+      .min(1)
+      .optional(),
+    judgeCredentialId: z.uuid().optional(),
   })
   .strict();
 export type ComparisonDraft = z.infer<typeof comparisonSchema>;
 
-/**
- * A benchmark's comparison: its dataset is the benchmark's, so it picks models, and the credential
- * its tasks' LLM judge calls with when they have one.
- */
-export const benchmarkComparisonSchema = z
-  .object({ ...selectionFields, judgeCredentialId: z.uuid().optional() })
-  .strict();
-export type BenchmarkComparisonDraft = z.infer<typeof benchmarkComparisonSchema>;
-
 export type { ComparisonOwner } from "./comparison-save.js";
 
+/**
+ * Saves a comparison of the draft's models over the tasks it picks from `dataset`, frozen as the
+ * dataset gives them now.
+ */
 export async function createComparison(
   vault: Pick<Vault, "credentials" | "comparisons">,
-  tasks: TaskStore,
+  dataset: Pick<EvaluationDataset, "select">,
   store: ArtifactStore,
   managed: ManagedOffer,
-  owner: ComparisonOwner & { scope: { repoId: number } },
+  owner: ComparisonOwner,
   draft: ComparisonDraft,
   environment: NodeJS.ProcessEnv = process.env,
 ): Promise<ComparisonRecord> {
@@ -91,40 +89,14 @@ export async function createComparison(
     owner,
     selection,
     JSON.stringify(selection),
-    () => repositoryTasks(tasks, owner.scope.repoId, selection.tasks),
-    environment,
-  );
-}
-
-/**
- * Saves a benchmark's comparison against the tasks frozen when it was added, matching its
- * Dataset tab, task files, trial count, and judge requirements even if the registry changes.
- */
-export async function createBenchmarkComparison(
-  vault: Pick<Vault, "credentials" | "comparisons">,
-  store: ArtifactStore,
-  managed: ManagedOffer,
-  owner: ComparisonOwner & { scope: { benchmarkId: number } },
-  tasks: FrozenTask[],
-  draft: BenchmarkComparisonDraft,
-  environment: NodeJS.ProcessEnv = process.env,
-): Promise<ComparisonRecord> {
-  const selection = benchmarkComparisonSchema.parse(draft);
-  return saveComparison(
-    vault,
-    store,
-    managed,
-    owner,
-    selection,
-    JSON.stringify(selection),
-    async () => tasks,
+    () => dataset.select(selection.tasks),
     environment,
     (tasks, saved) => judgeCredential(tasks, saved, selection.judgeCredentialId),
   );
 }
 
 /**
- * The credential a benchmark's LLM judge calls with: an API key whose provider gives the judge
+ * The credential the tasks' LLM judge calls with: an API key whose provider gives the judge
  * variables the tasks read (judgeCredentialRefusal). None when no task has a judge.
  */
 function judgeCredential(

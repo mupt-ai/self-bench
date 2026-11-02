@@ -25,6 +25,8 @@ test("options expose only this repository's approved tasks", async () => {
   const text = await response.text();
   expect(JSON.parse(text)).toEqual({
     tasks: [{ runId: "run-one", taskId: "task-one", difficulty: "easy" }],
+    // A repository's tasks have no LLM judge, but the shape matches a benchmark's.
+    judge: { variables: [], required: [] },
   });
   expect(text).not.toContain("bundleKey");
   expect(response.headers.get("cache-control")).toBe("no-store");

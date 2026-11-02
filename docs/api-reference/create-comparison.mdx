@@ -10,7 +10,7 @@ icon: "chart-scatter"
 <ParamField path="name" type="string" required>Repository name.</ParamField>
 <ParamField header="Authorization" type="string" required>`Bearer` plus a `write` API key.</ParamField>
 <ParamField body="id" type="string" required>Client-generated UUID; reuse it when retrying.</ParamField>
-<ParamField body="tasks" type="array" required>Approved `{runId, taskId}` pairs.</ParamField>
+<ParamField body="tasks" type="array">Approved `{runId, taskId}` pairs. Leave out to run every approved task.</ParamField>
 <ParamField body="models" type="array" required>Model catalog ID, credential ID, and harnesses (up to 12 model choices). Codex and Claude Code rows may also set `subagent: {catalogId, credentialId}`.</ParamField>
 <ParamField body="sandbox" type="string" required>Sandbox from the evaluation catalog.</ParamField>
 <ParamField body="sandboxCredentialId" type="string" required>Matching credential ID.</ParamField>

@@ -1,12 +1,13 @@
-import { type Client, WorkflowExecutionAlreadyStartedError } from "@temporalio/client";
+import type { Client } from "@temporalio/client";
 import type { ArtifactStore } from "../artifacts/index.js";
 import type { SelfBenchConfig } from "../contracts/config/index.js";
-import { selfBenchCustomerExportWorkflow } from "../customer-exports/workflow.js";
+import { isArtifactRegistry } from "../contracts/config/task-images.js";
 import { createApiKeyStore } from "../db/api-keys.js";
 import { createBenchmarkStore } from "../db/benchmarks.js";
 import { createBillingStore } from "../db/billing.js";
 import { type OpenDatabase, openDatabase } from "../db/client.js";
 import { createRunSummaryStore } from "../db/evaluation-summaries.js";
+import { createRegistryGrantStore } from "../db/registry-grants.js";
 import { createReleaseStore } from "../db/releases.js";
 import { createRepoStore } from "../db/repos.js";
 import { createRunStore } from "../db/runs.js";
@@ -128,6 +129,9 @@ export async function openSite(
     artifacts,
     generationQueue ?? config.temporal.taskQueue,
   );
+  const imageRepository = config.taskImages?.repository;
+  const exportRepository =
+    imageRepository && isArtifactRegistry(imageRepository) ? imageRepository : undefined;
   return {
     users,
     close: async () => {
@@ -149,19 +153,16 @@ export async function openSite(
     evaluations: createEvaluationRoutes({
       users,
       repos,
-      ...(config.taskImages?.builder?.kind === "cloud-build"
+      // Customers pull an export's images through `/v2/` with a grant on the task image repository.
+      ...(exportRepository && config.sandboxCallback?.secret
         ? {
-            exportCustomer: async (request) => {
-              try {
-                await client.workflow.start(selfBenchCustomerExportWorkflow, {
-                  workflowId: `customer-export/${request.repoId}/${request.id}`,
-                  taskQueue: config.temporal.taskQueue,
-                  args: [request],
-                  workflowIdReusePolicy: "REJECT_DUPLICATE",
-                });
-              } catch (error) {
-                if (!(error instanceof WorkflowExecutionAlreadyStartedError)) throw error;
-              }
+            customerExports: {
+              repository: exportRepository,
+              grants: createRegistryGrantStore(
+                database.db,
+                config.sandboxCallback.secret,
+                exportRepository,
+              ),
             },
           }
         : {}),
