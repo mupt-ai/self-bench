@@ -116,6 +116,30 @@ test("an export issues a grant for the evaluation's images and a ZIP that pulls 
   expect(JSON.stringify(list)).not.toContain("bundleKey");
   expect(JSON.stringify(list)).not.toContain(password);
 });
+test("concurrent requests for one export share a single key", async () => {
+  const { server, body, path, post, store } = await fixture();
+  const statuses = (await Promise.all([post(), post(), post()])).map((r) => r.status);
+  // One request writes the export; the others see it finished or still being created.
+  expect(statuses.filter((status) => status === 201)).toHaveLength(1);
+  expect(statuses.every((status) => [200, 201, 409].includes(status))).toBe(true);
+  expect(await store().list()).toHaveLength(1);
+  expect((await server.request(`${path}/${body.id}/download`)).status).toBe(200);
+});
+test("a failed write revokes the key the request issued", async () => {
+  const { server, body, post, store } = await fixture();
+  const put = server.artifacts.put.bind(server.artifacts);
+  server.artifacts.put = async (key, ...rest) => {
+    if (key.endsWith("/harbor.zip")) throw new Error("storage unavailable");
+    return await put(key, ...rest);
+  };
+  expect((await post()).status).toBeGreaterThanOrEqual(500);
+  server.artifacts.put = put;
+  const [grant] = await store().list();
+  expect(grant?.id).toBe(body.id);
+  expect(grant?.revokedAt).not.toBeNull();
+  // The revoked key cannot be reused, so the same id is refused rather than silently reissued.
+  expect((await post()).status).toBe(409);
+});
 test("revoking an export stops its key at once", async () => {
   const { server, body, path, post, store } = await fixture();
   await post();

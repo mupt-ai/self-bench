@@ -7,7 +7,7 @@ import {
   EXPORT_DAYS,
   exportPrefix,
 } from "../../customer-exports/types.js";
-import type { RegistryGrantStore } from "../../db/registry-grants.js";
+import { GrantRefusal, type RegistryGrantStore } from "../../db/registry-grants.js";
 import type { User } from "../../db/users.js";
 import { sameScope } from "../../evaluation/scope.js";
 import { listEvaluations } from "../../evaluation/store.js";
@@ -21,6 +21,9 @@ export interface CustomerExportRegistry {
   /** `<region>-docker.pkg.dev/<project>/<repository>`, the task image repository. */
   readonly repository: string;
 }
+
+/** The export's own content was refused: the caller's to fix, not a server fault. */
+class PackageError extends Error {}
 
 const schema = z.strictObject({
   id: z.uuid(),
@@ -152,13 +155,29 @@ export async function customerExportRoute(
         "No completed evaluation has image-backed tasks of 500 or fewer to export. Run an evaluation of the current tasks first.",
     });
   const expiresAt = new Date(Date.now() + EXPORT_DAYS * 24 * 60 * 60 * 1000);
-  const { grant, password } = await exports.grants.createForImages({
-    label: `${input.customer} (export ${input.id})`,
-    images: picked.tasks.flatMap((task) =>
-      task.images ? [task.images.agent, task.images.verifier] : [],
-    ),
-    expiresAt,
-  });
+  // The grant shares the export's id, so a retried or concurrent request reuses it.
+  let issued: Awaited<ReturnType<typeof exports.grants.createForImages>>;
+  try {
+    issued = await exports.grants.createForImages({
+      id: input.id,
+      label: `${input.customer} (export ${input.id})`,
+      images: picked.tasks.flatMap((task) =>
+        task.images ? [task.images.agent, task.images.verifier] : [],
+      ),
+      expiresAt,
+    });
+  } catch (error) {
+    if (error instanceof GrantRefusal)
+      return sendJson(response, 409, { error: "This export ID belongs to a different request" });
+    throw error;
+  }
+  if (!issued.issued) {
+    // Another request with this id issued the grant and owns writing the export.
+    const finished = await saved(key);
+    if (finished) return sendJson(response, 200, await describe(finished));
+    return sendJson(response, 409, { error: "This export is still being created" });
+  }
+  const { grant, password } = issued;
   const entry: CustomerExportRequest = {
     id: input.id,
     repoId: owner.repoId,
@@ -170,28 +189,33 @@ export async function customerExportRoute(
     createdBy: owner.user.login,
     tasks: picked.tasks,
   };
-  let zip: Buffer;
-  try {
-    zip = await customerPackage(artifacts, entry, {
-      host: new URL(options.publicUrl).host,
-      repository: exports.repository,
-      password,
-      expiresAt,
-    });
-  } catch (error) {
-    // Nothing was handed out, so the grant must not outlive the failed export.
-    await exports.grants.revoke(grant.id);
-    return sendJson(response, 400, {
-      error: error instanceof Error ? error.message : "Could not package the export",
-    });
-  }
   const root = exportPrefix(owner.repoId, input.id);
-  await artifacts.put(`${root}harbor.zip`, zip, "application/zip");
-  // Written last: an export is listed only once its ZIP exists.
-  await artifacts.put(
-    `${root}request.json`,
-    Buffer.from(JSON.stringify(entry)),
-    "application/json",
-  );
+  try {
+    let zip: Buffer;
+    try {
+      zip = await customerPackage(artifacts, entry, {
+        host: new URL(options.publicUrl).host,
+        repository: exports.repository,
+        password,
+        expiresAt: grant.expiresAt,
+      });
+    } catch (error) {
+      throw new PackageError(
+        error instanceof Error ? error.message : "Could not package the export",
+      );
+    }
+    await artifacts.put(`${root}harbor.zip`, zip, "application/zip");
+    // Written last: an export is listed only once its ZIP exists.
+    await artifacts.put(
+      `${root}request.json`,
+      Buffer.from(JSON.stringify(entry)),
+      "application/json",
+    );
+  } catch (error) {
+    // Nothing was handed out, so the grant this request issued must not outlive the failed export.
+    await exports.grants.revoke(grant.id);
+    if (error instanceof PackageError) return sendJson(response, 400, { error: error.message });
+    throw error;
+  }
   sendJson(response, 201, await describe(entry));
 }
