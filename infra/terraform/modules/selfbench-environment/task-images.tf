@@ -170,6 +170,21 @@ resource "google_service_account_iam_member" "runtime_acts_as_builder" {
   member             = "serviceAccount:${google_service_account.runtime.email}"
 }
 
+# Customer exports no longer create repositories from the worker. Their bindings are gone, but the
+# deploy identity cannot delete custom roles (iam.roles.delete), so the unused roles are forgotten.
+removed {
+  from = google_project_iam_custom_role.customer_repository_create
+  lifecycle {
+    destroy = false
+  }
+}
+removed {
+  from = google_project_iam_custom_role.customer_repository_access
+  lifecycle {
+    destroy = false
+  }
+}
+
 locals {
   task_image_registry = "${var.region}-docker.pkg.dev/${var.project_id}"
   task_image_env = var.task_images ? {
