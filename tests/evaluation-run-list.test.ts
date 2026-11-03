@@ -109,11 +109,29 @@ test("a run saved without its summary is listed, and its summary rebuilt once", 
   expect(revisions.get(known.id)).toBe(1);
 
   let runs: EvaluationRun[] = [];
-  expect(
-    await recordsRead(async () => {
-      runs = await listed();
-    }),
-  ).toBe(2);
+  let active = 0;
+  let peak = 0;
+  const read = server.artifacts.getByKey.bind(server.artifacts);
+  server.artifacts.getByKey = async (key) => {
+    active += 1;
+    peak = Math.max(peak, active);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return await read(key);
+    } finally {
+      active -= 1;
+    }
+  };
+  try {
+    expect(
+      await recordsRead(async () => {
+        runs = await listed();
+      }),
+    ).toBe(2);
+    expect(peak).toBe(1);
+  } finally {
+    server.artifacts.getByKey = read;
+  }
   expect(runs).toEqual(await fromRecords());
   expect(runs.find((run) => run.id === known.id)?.trials[0]?.status).toBe("completed");
   expect(runs.some((run) => run.id === unseen.id)).toBe(true);

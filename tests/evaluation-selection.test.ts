@@ -156,6 +156,11 @@ test("missing-task runs skip only completed model, harness, thinking and task pa
 
     draft.id = crypto.randomUUID();
     draft.skipCompleted = true;
+    const read = fixture.artifacts.getByKey.bind(fixture.artifacts);
+    fixture.artifacts.getByKey = async (key) => {
+      if (key.includes("/snapshots/")) throw new Error("API must not expand full run snapshots");
+      return read(key);
+    };
     const duplicate = await fixture.request(`${fixture.base}/comparisons`, post(draft));
     expect(duplicate.status).toBe(400);
     expect(await duplicate.json()).toEqual({

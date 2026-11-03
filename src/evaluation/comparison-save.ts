@@ -7,10 +7,11 @@ import { type ManagedOffer, managedHarborEnvironment } from "../generation/billi
 import { type CatalogModel, evaluationCatalog } from "./catalog.js";
 import type { ComparisonSelection } from "./comparisons.js";
 import { defaultThinking, routeFor, signInRefusal, thinkingOptions } from "./models.js";
+import { listRuns } from "./run-list.js";
 import { type EvaluationScope, sameScope } from "./scope.js";
-import { listEvaluations } from "./store.js";
+import { live } from "./store.js";
 import { splitCredentialLimits } from "./trial-input.js";
-import type { EvaluationInput } from "./types.js";
+import type { EvaluationInput, EvaluationRun } from "./types.js";
 
 /** Who a comparison is for: its repository's or org's evaluations, and who asked. */
 export interface ComparisonOwner {
@@ -59,7 +60,7 @@ export async function saveComparison(
   const previous = await comparisons.find(selection.id);
   if (previous) return owned(previous);
   const completed = selection.skipCompleted
-    ? completedConfigurationTasks(await listEvaluations(store, owner.scope))
+    ? completedConfigurationTasks(((await listRuns(store, owner.scope)).runs ?? []).filter(live))
     : new Set<string>();
   if ((await comparisons.countForOrg(owner.orgId)) >= 500)
     throw new Error("Comparison retention limit reached; contact an operator");
@@ -207,7 +208,7 @@ function configurationTaskKey(
   return JSON.stringify([configurationIdentity(model, thinking, harness), runId, taskId]);
 }
 
-function completedConfigurationTasks(runs: Awaited<ReturnType<typeof listEvaluations>>) {
+function completedConfigurationTasks(runs: EvaluationRun[]) {
   const completed = new Set<string>();
   for (const run of runs) {
     for (const trial of run.trials) {
