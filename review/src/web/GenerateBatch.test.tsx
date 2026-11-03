@@ -115,7 +115,9 @@ test("batch creation is one dialog that closes and opens the submitted batch onc
       expect(container.querySelector(`input[aria-label="${label}"]`)?.getAttribute("max")).toBe(
         String(MAX_CANDIDATES_PER_RUN),
       );
-    expect(container.textContent).toContain(`1–${MAX_CANDIDATES_PER_RUN} candidates total.`);
+    expect(
+      container.querySelector(`[aria-label="1–${MAX_CANDIDATES_PER_RUN} candidates total."]`),
+    ).not.toBeNull();
     // One dialog: the generation settings sit beside the counts with no wizard step.
     expect(button("Author Model").textContent).toBe("GPT-6.1 Sol");
     expect(container.textContent).not.toContain("Configure Generation");
