@@ -162,6 +162,8 @@ export const tasks = pgTable(
     sourcePr: integer("source_pr"),
     sourceUrl: text("source_url"),
     baseCommit: text("base_commit"),
+    /** A scenario's title; a pull request's task has its PR instead. */
+    title: text("title"),
     difficulty: text("difficulty", { enum: ["easy", "medium", "hard"] }).notNull(),
     pipelineStatus: text("pipeline_status", {
       enum: ["in_progress", "accepted", "rejected", "infrastructure_failed"],

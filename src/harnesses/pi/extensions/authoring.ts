@@ -3,6 +3,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
+import { WORKSPACE_DIRECTORY } from "../../../generation/task/scenario-workspace.js";
 import { SUBMISSION_FILES } from "../../../generation/task/submission.js";
 import {
   requiredEnvironment,
@@ -23,8 +24,11 @@ function packDeliverable(handOff: string): ToolFailure | undefined {
   if (!verdict.ok) return staticCheckFailure(verdict);
   mkdirSync(handOff, { recursive: true });
   const archive = join(handOff, "source-task.tar.gz");
-  const files = SUBMISSION_FILES.filter((name) => existsSync(join(deliverable, name)));
-  const tar = spawnSync("tar", ["-czf", archive, "-C", deliverable, ...files]);
+  // A scenario's workspace/ travels with the files; a .git an author left in it never does.
+  const files = [...SUBMISSION_FILES, WORKSPACE_DIRECTORY].filter((name) =>
+    existsSync(join(deliverable, name)),
+  );
+  const tar = spawnSync("tar", ["-czf", archive, "--exclude=.git", "-C", deliverable, ...files]);
   if (tar.status !== 0) throw new Error(`could not pack the task: ${tar.stderr}`);
 }
 
@@ -46,7 +50,7 @@ export default function authoringExtension(pi: ExtensionAPI): void {
     name: "verify",
     label: "Verify SelfBench task",
     description:
-      "Takes no arguments. Static-checks the deliverable in /work/task (instruction.md, Dockerfile, smoke.sh, run-tests.sh, test.patch, gold.patch, and services.sh if the tests need services), then hands it to the worker, which compiles it and runs the real image build, smoke, nop, and oracle. This ends your turn: the report arrives as your next message, in a fresh sandbox with /work/task restored. Limited calls per round.",
+      "Takes no arguments. Static-checks the deliverable in /work/task (instruction.md, Dockerfile, smoke.sh, run-tests.sh, test.patch, gold.patch, services.sh if the tests need services, and a scenario's workspace/), then hands it to the worker, which compiles it and runs the real image build, smoke, nop, and oracle. This ends your turn: the report arrives as your next message, in a fresh sandbox with /work/task restored. Limited calls per round.",
     parameters: noArguments,
     executionMode: "sequential",
     async execute() {

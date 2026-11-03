@@ -11,6 +11,7 @@ import { candidateArtifacts } from "../../src/generation/runs/artifacts.js";
 import { assertHostSafeTask } from "../../src/harnesses/harbor/task-safety.js";
 import { runCommand } from "../../src/lib/process.js";
 import { taskArchive } from "../../src/public/task-archive.js";
+import { tarEntries } from "../support/tar.js";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -186,4 +187,21 @@ test("native execution bundles retain service compose contexts and reject invali
       signal,
     ),
   ).rejects.toThrow("Invalid environment image digest");
+});
+
+test("a scenario's download is its compiled task, workspace included", async () => {
+  const toml = `${files["task.toml"]}[metadata]\nsource = "scenario"\n`;
+  const { store, task, gate } = await fixture({ "task.toml": toml });
+  const result = await publishExecutionBundle(store, task, gate, signal);
+  const bundleKey = result.uri.slice(result.uri.indexOf("/runs/") + 1);
+  const download = await taskArchive(store, bundleKey, "scenario");
+  if (!download) throw new Error("Missing public archive");
+  const entries = await tarEntries(download.bytes);
+  const paths = entries.map((entry) => entry.path);
+  expect(paths).toContain("scenario/environment/repo.tar.gz");
+  expect(paths).toContain("scenario/tests/repo.tar.gz");
+  // The compiled Dockerfile builds from the workspace, not from SelfBench's registry.
+  expect(entries.find((entry) => entry.path === "scenario/environment/Dockerfile")?.text).toBe(
+    files["environment/Dockerfile"],
+  );
 });

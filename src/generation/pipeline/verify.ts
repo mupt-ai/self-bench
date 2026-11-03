@@ -14,6 +14,7 @@ import type {
 import { GATE_TASK_FILE, SNAPSHOT_FILE } from "../../sandbox/gate-bundle.js";
 import type { SandboxExecutor } from "../../sandbox/index.js";
 import type { SandboxJobOutcome } from "../../sandbox/jobs.js";
+import type { CompileCandidate } from "../../sandbox/task-compiler.js";
 import { githubToken } from "../../third_party/github/token.js";
 import type { TaskImageBuilder } from "../images/builder.js";
 import { verifierRuntimeFiles } from "../task/runtime-assets.js";
@@ -57,11 +58,21 @@ export async function compileTask(
   callback: SandboxCallback,
 ): Promise<SandboxJobOutcome> {
   const { run, candidate } = input;
+  const scenario = candidate.kind === "scenario";
+  // A scenario's snapshot is its workspace, so its compile clones nothing.
   const [program, token, source] = await Promise.all([
     readAsset("dist/sandbox-compiler.bundle.js"),
-    githubToken(),
+    scenario ? undefined : githubToken(),
     artifactFile(store, input.task.sourceBundle, "/work/source-task.tar.gz"),
   ]);
+  const compiled: CompileCandidate =
+    candidate.kind === "scenario"
+      ? { kind: "scenario", title: candidate.title, difficulty: candidate.difficulty }
+      : {
+          sourcePr: candidate.sourcePr,
+          baseCommit: candidate.baseCommit,
+          difficulty: candidate.difficulty,
+        };
   return await runSandboxJob(
     sandbox,
     {
@@ -81,11 +92,7 @@ export async function compileTask(
             contents: JSON.stringify({
               repositoryUrl: run.repository.url,
               taskId: input.task.taskId,
-              candidate: {
-                sourcePr: candidate.sourcePr,
-                baseCommit: candidate.baseCommit,
-                difficulty: candidate.difficulty,
-              },
+              candidate: compiled,
             }),
           },
           source,

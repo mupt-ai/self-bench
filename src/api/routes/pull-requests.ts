@@ -27,6 +27,8 @@ import type { AuthConfig } from "../auth/config.js";
 import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson } from "../http.js";
 import { requestedGeneration } from "./generation-request.js";
+import { scenarioRoute } from "./scenarios.js";
+import { taskDraftRoute } from "./task-draft.js";
 import { taskFeedbackRoute } from "./task-feedback.js";
 import { taskItem } from "./tasks.js";
 
@@ -59,7 +61,9 @@ export interface PullRequestRoutes {
 
 /**
  * POST …/tasks/from-pr {pr}: one merged PR becomes one task, built by its own workflow. POST
- * …/tasks/<run>/<task>/feedback revises a task the same way (task-feedback.ts).
+ * …/tasks/from-scenario does the same for a described scenario (scenarios.ts), POST
+ * …/tasks/<run>/<task>/feedback revises a task the same way (task-feedback.ts), and GET
+ * …/tasks/<run>/<task>/draft downloads the files a revision would start from (task-draft.ts).
  */
 export function createPullRequestRoutes(options: PullRequestRoutesOptions): PullRequestRoutes {
   const { config, auth, users, repos, tasks, artifacts, start } = options;
@@ -68,6 +72,8 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
     async handle(request, url, response, user) {
       if (await taskFeedbackRoute({ ...options, fetchImpl }, request, url, response, user))
         return true;
+      if (await scenarioRoute(options, request, url, response, user)) return true;
+      if (await taskDraftRoute(options, request, url, response, user)) return true;
       const match = route.exec(url.pathname);
       if (!match?.[1] || !match[2] || !match[3]) return false;
       const listing = match[4] === "pull-requests";

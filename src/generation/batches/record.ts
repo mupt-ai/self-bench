@@ -4,6 +4,7 @@ import {
   type CandidateWorkflowResult,
   candidateWorkflowId,
   type DiscoveryResult,
+  type PullRequestCandidate,
 } from "../../contracts/index.js";
 import { type GenerationBatch, isFinished, settled } from "./types.js";
 
@@ -99,7 +100,7 @@ export function planCandidates(batch: GenerationBatch): boolean {
 /** The author workflows a planned batch starts, one per candidate. */
 export function plannedCandidates(
   batch: GenerationBatch,
-): { workflowId: string; input: CandidateWorkflowInput }[] {
+): { workflowId: string; input: CandidateWorkflowInput & { candidate: PullRequestCandidate } }[] {
   if (batch.phase !== "authoring") return [];
   return batch.candidates.map((item) => ({
     workflowId: item.workflowId,

@@ -35,10 +35,14 @@ export interface AgentRequest {
   readonly record?: Pick<AgentRunRecord, "stage" | "round" | "turn" | "attempt">;
   /** A previous session to continue. */
   readonly resume?: ArtifactRef;
-  /** `clone`: /work/repo at `commit`. `task`: unpack /work/task.tar.gz with the verifier program. */
+  /**
+   * `clone`: /work/repo at `commit`. `task`: unpack /work/task.tar.gz with the verifier program.
+   * `scenario`: no repository; the agent starts in /work/task, where it writes the workspace.
+   */
   readonly workspace:
     | { readonly kind: "clone"; readonly commit: string }
-    | { readonly kind: "task" };
+    | { readonly kind: "task" }
+    | { readonly kind: "scenario" };
   /** Shell run in the workspace after it is prepared, before pi starts. */
   readonly setup?: string;
   readonly extension: string;
@@ -222,8 +226,11 @@ export function agentScript(
 fi
 git clone --no-checkout --filter=blob:none "$SOURCE_REPO_URL" /work/repo
 git -C /work/repo fetch origin "$SOURCE_COMMIT"
-git -C /work/repo checkout --detach "$SOURCE_COMMIT"`
-      : "node /work/sandbox-verifier.js /work/task.tar.gz";
+git -C /work/repo checkout --detach "$SOURCE_COMMIT"
+cd /work/repo`
+      : request.workspace.kind === "task"
+        ? "node /work/sandbox-verifier.js /work/task.tar.gz\ncd /work/repo"
+        : "mkdir -p /work/task\ncd /work/task";
   const resume = request.resume ? ` --session ${RESUMED_SESSION}` : "";
   return `set -euo pipefail
 mkdir -p "$HOME/.pi/agent" ${SESSION_DIRECTORY}
@@ -244,7 +251,6 @@ if [ -n "\${AUTHOR_PI_MODELS:-}" ]; then
   fi
 fi
 ${workspace}
-cd /work/repo
 ${request.setup ?? ""}
 # Keep output flowing while a long tool call runs, so the inactivity timeout never fires.
 (while sleep 60; do echo "[selfbench] agent still running" >&2; done) &

@@ -18,6 +18,7 @@ A key acts as its owner, including workspace roles. `read` keys allow only `GET`
   <Card title="API Keys" icon="key" href="/api-reference/api-keys">Authentication and key management.</Card>
   <Card title="List Tasks" icon="list" href="/api-reference/list-tasks">Read a repository's dataset.</Card>
   <Card title="Create a Batch" icon="list-plus" href="/api-reference/create-batch">Generate tasks from merged PRs.</Card>
+  <Card title="Create a Scenario Task" icon="notebook-pen" href="/api-reference/create-scenario">Generate a task from a described scenario.</Card>
   <Card title="Create a Comparison" icon="chart-scatter" href="/api-reference/create-comparison">Evaluate models on approved tasks.</Card>
   <Card title="Publish a Release" icon="globe" href="/api-reference/publish-release">Make aggregate results public.</Card>
 </CardGroup>
@@ -28,6 +29,8 @@ Repository routes use `/api/orgs/{org}/repos/{owner}/{name}`. Other useful route
 | --- | --- | --- |
 | `GET`, `POST` | `/api/orgs/{org}/repos` | List or connect repositories |
 | `PUT` | `/api/orgs/{org}/repos/{owner}/{name}/tasks/{runId}/{taskId}/review` | Approve or reject a task |
+| `GET` | `/api/orgs/{org}/repos/{owner}/{name}/tasks/{runId}/{taskId}/draft` | Download a task's files |
+| `POST` | `/api/orgs/{org}/repos/{owner}/{name}/tasks/{runId}/{taskId}/feedback` | Revise a task, optionally from edited files |
 | `GET` | `/api/orgs/{org}/repos/{owner}/{name}/evaluations/comparisons` | List comparisons |
 | `GET`, `POST` | `/api/orgs/{org}/credentials` | List or add workspace credentials |
 | `GET` | `/v1/runs/{runId}/export` | Download a batch's Harbor tasks |

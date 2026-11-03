@@ -18,7 +18,7 @@
         "tab": "Guides",
         "groups": [
           { "group": "Get Started", "pages": ["index", "quickstart"] },
-          { "group": "Use SelfBench", "pages": ["guides/generate-tasks", "guides/run-evaluations", "guides/publish-results"] },
+          { "group": "Use SelfBench", "pages": ["guides/generate-tasks", "guides/author-scenarios", "guides/run-evaluations", "guides/publish-results"] },
           { "group": "Concepts", "pages": ["concepts/task-generation", "concepts/self-hosting"] }
         ]
       },
@@ -26,7 +26,7 @@
         "tab": "API Reference",
         "groups": [
           { "group": "Public Results", "pages": ["api-reference/overview", "api-reference/list-results", "api-reference/repository-results"] },
-          { "group": "Workspace API", "pages": ["api-reference/workspace", "api-reference/api-keys", "api-reference/list-tasks", "api-reference/create-batch", "api-reference/create-comparison", "api-reference/create-benchmark", "api-reference/publish-release"] }
+          { "group": "Workspace API", "pages": ["api-reference/workspace", "api-reference/api-keys", "api-reference/list-tasks", "api-reference/create-batch", "api-reference/create-scenario", "api-reference/create-comparison", "api-reference/create-benchmark", "api-reference/publish-release"] }
         ]
       }
     ]

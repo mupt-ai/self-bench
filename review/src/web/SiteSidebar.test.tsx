@@ -29,7 +29,7 @@ function renderSidebar(
 test("sidebar exposes labeled navigation and credentials", () => {
   const html = renderSidebar("/");
   const links = html.match(/<a[^>]*data-slot="sidebar-menu-button"[^>]*>/g) ?? [];
-  expect(links).toHaveLength(6);
+  expect(links).toHaveLength(7);
   expect(html).toContain('aria-label="Organization Navigation"');
   expect(html).toContain('aria-label="Public Benchmarks"');
   expect(html).toContain(">Public Benchmarks</span>");
@@ -39,6 +39,9 @@ test("sidebar exposes labeled navigation and credentials", () => {
   expect(html).toContain(">API Keys</span>");
   expect(html).toContain('aria-label="Billing"');
   expect(html).toContain(">Billing</span>");
+  expect(html).toMatch(
+    /<a[^>]*href="https:\/\/docs\.selfbench\.dev"[^>]*target="_blank"[^>]*aria-label="Docs"/,
+  );
   expect(html).toContain('aria-label="self-bench by dari.dev Home"');
   expect(html).toContain("by dari.dev</span>");
 });
@@ -57,7 +60,7 @@ test("sidebar sorts its pages into named sections, in order", () => {
 
 test("sidebar leaves out Billing without the managed offering", () => {
   const html = renderSidebar("/", "org", false);
-  expect(html.match(/<a[^>]*data-slot="sidebar-menu-button"[^>]*>/g) ?? []).toHaveLength(5);
+  expect(html.match(/<a[^>]*data-slot="sidebar-menu-button"[^>]*>/g) ?? []).toHaveLength(6);
   expect(html).not.toContain("Billing");
 });
 

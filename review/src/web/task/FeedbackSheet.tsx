@@ -13,7 +13,7 @@ import { StateStamp } from "./state";
 
 /**
  * Feedback on a finished task starts an agent that revises it. The revision is a new task of the
- * same PR, so this task and the evaluations that ran it stay as they are.
+ * same PR or scenario, so this task and the evaluations that ran it stay as they are.
  */
 export function FeedbackSheet({
   org,

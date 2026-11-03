@@ -132,6 +132,8 @@ export interface TaskItem {
   reason?: string;
   sourcePr?: number;
   sourceUrl?: string;
+  /** A scenario task's title; scenario tasks have no PR. */
+  title?: string;
   review?: TaskReview;
   syncedAt: string;
   round?: number;
@@ -148,20 +150,6 @@ export interface TaskItem {
 export interface TaskDetail {
   task: TaskItem;
   revisions: TaskItem[];
-}
-
-export async function addPullRequest(
-  org: string,
-  fullName: string,
-  pr: string,
-  generation?: import("../../../src/generation/settings/settings").GenerationSettings,
-): Promise<TaskItem> {
-  const body = await requestJson<{ task: TaskItem }>(`${repoPath(org, fullName)}/tasks/from-pr`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ pr, ...(generation ? { generation } : {}) }),
-  });
-  return body.task;
 }
 
 export function fetchGenerationOptions(org: string, fullName: string) {
@@ -185,7 +173,7 @@ export async function fetchTaskCounts(org: string): Promise<Record<string, RepoT
   return body.counts;
 }
 
-const repoPath = (org: string, fullName: string) =>
+export const repoPath = (org: string, fullName: string) =>
   `/api/orgs/${encodeURIComponent(org)}/repos/${fullName}`;
 
 export async function fetchTasks(org: string, fullName: string): Promise<TaskItem[]> {

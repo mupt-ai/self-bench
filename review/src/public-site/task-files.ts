@@ -15,6 +15,12 @@ export function baseCommit(files: readonly TaskFile[]): string | undefined {
   return /^base_commit\s*=\s*"([0-9a-f]{7,64})"/m.exec(config)?.[1];
 }
 
+/** Whether the task was built from a scenario, whose snapshot is a workspace its author wrote. */
+export function isScenarioTask(files: readonly TaskFile[]): boolean {
+  const config = files.find((file) => file.path === "task.toml")?.text ?? "";
+  return /^source = "scenario"$/m.test(config);
+}
+
 /** A path as a shell reads it: quoted unless it is only letters, digits, and `._/-`. */
 const shellPath = (path: string) => (/^[\w./-]+$/.test(path) ? path : `'${path}'`);
 

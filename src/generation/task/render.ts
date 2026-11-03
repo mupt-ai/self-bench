@@ -1,14 +1,18 @@
 import type { Difficulty } from "../../contracts/index.js";
 import { COMPILER_REVISION, HARBOR_SCHEMA_VERSION } from "./constants.js";
 
-/** A compiled task besides its files: its candidate's identity, and its tier (audit.ts). */
-export interface TaskIdentity {
+/**
+ * A compiled task besides its files: its candidate's identity, and its tier (audit.ts). A pull
+ * request's task names its base commit and PR; a scenario's, the workspace commit its snapshot is.
+ */
+export type TaskIdentity = {
   readonly taskId: string;
   readonly difficulty: Difficulty;
   readonly repo: string;
-  readonly baseCommit: string;
-  readonly sourcePr: number;
-}
+} & (
+  | { readonly baseCommit: string; readonly sourcePr: number }
+  | { readonly scenario: { readonly title: string; readonly workspaceCommit: string } }
+);
 
 /** Every task's limits; an author fits its Dockerfile and tests to them. */
 export const TASK_LIMITS = {
@@ -32,8 +36,13 @@ export function taskToml(task: TaskIdentity): string {
     selfbench_task_id: task.taskId,
     difficulty: task.difficulty,
     repo: task.repo,
-    base_commit: task.baseCommit,
-    source_pr: task.sourcePr,
+    ...("scenario" in task
+      ? {
+          source: "scenario",
+          scenario_title: task.scenario.title,
+          workspace_commit: task.scenario.workspaceCommit,
+        }
+      : { base_commit: task.baseCommit, source_pr: task.sourcePr }),
     compiler_revision: COMPILER_REVISION,
   };
   const limits = [
@@ -49,8 +58,8 @@ export function taskToml(task: TaskIdentity): string {
     "[task]",
     `name = ${tomlString(`selfbench/${task.taskId}`)}`,
     'version = "1.0.0"',
-    `description = ${tomlString(`Reproduce ${task.taskId} from its authentic engineer request.`)}`,
-    `keywords = ["software-engineering", "private-swe", "selfbench", ${tomlString(task.difficulty)}]`,
+    `description = ${tomlString("scenario" in task ? `Handle the scenario: ${task.scenario.title}` : `Reproduce ${task.taskId} from its authentic engineer request.`)}`,
+    `keywords = [${("scenario" in task ? ["scenario", "selfbench"] : ["software-engineering", "private-swe", "selfbench"]).map(tomlString).join(", ")}, ${tomlString(task.difficulty)}]`,
     "",
     "[metadata]",
     ...Object.entries(metadata).map(([key, value]) => `${key} = ${tomlValue(value)}`),

@@ -2,6 +2,7 @@ import { parseArgs } from "node:util";
 import { fail } from "../../lib/util.js";
 import { download, passthrough } from "./api-client.js";
 import { printHelp } from "./help.js";
+import { scenarioCommand, taskCommand } from "./tasks.js";
 import { requiredArgument } from "./values.js";
 
 export async function runCli(args: string[]): Promise<void> {
@@ -21,6 +22,15 @@ export async function runCli(args: string[]): Promise<void> {
       break;
     case "grant":
       await grantCommand(rest);
+      break;
+    case "scenario":
+      await scenarioCommand(rest);
+      break;
+    case "tasks":
+      await taskCommand(rest, true);
+      break;
+    case "task":
+      await taskCommand(rest, false);
       break;
     case "help":
     case "--help":

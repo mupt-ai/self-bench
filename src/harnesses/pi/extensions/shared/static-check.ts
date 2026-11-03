@@ -21,17 +21,24 @@ export function requiredEnvironment(name: string): string {
 
 /**
  * Runs the bundled sandbox-check program over the submission in `directory`: the files, their
- * static checks and audit, and both patches applied to the candidate's base commit.
+ * static checks and audit, and both patches applied to the candidate's base commit, or for a
+ * scenario (SELFBENCH_TASK_SOURCE) to the workspace its author wrote.
  */
 export function runStaticCheck(directory: string): CheckVerdict {
+  const base =
+    process.env.SELFBENCH_TASK_SOURCE === "scenario"
+      ? ["--scenario"]
+      : [
+          process.env.SELFBENCH_REPO_DIRECTORY ?? "/work/repo",
+          requiredEnvironment("SELFBENCH_BASE_COMMIT"),
+        ];
   const result = spawnSync(
     process.execPath,
     [
       requiredEnvironment("SELFBENCH_CHECK_PROGRAM"),
       directory,
       requiredEnvironment("SELFBENCH_DIFFICULTY"),
-      process.env.SELFBENCH_REPO_DIRECTORY ?? "/work/repo",
-      requiredEnvironment("SELFBENCH_BASE_COMMIT"),
+      ...base,
     ],
     { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
   );

@@ -1,4 +1,7 @@
-import type { Candidate, Difficulty } from "../../contracts/index.js";
+import type {
+  Difficulty,
+  PullRequestCandidate as PullRequestSource,
+} from "../../contracts/index.js";
 import { redactSecrets } from "../../lib/redact.js";
 import { apiHeaders, GitHubOAuthError } from "./oauth.js";
 import type { ProvenanceMessage } from "./provenance.js";
@@ -7,7 +10,7 @@ const MAX_BODY_LENGTH = 12_000;
 
 /** Everything the pipeline needs about a PR, before the provenance artifact exists. */
 export interface PullRequestCandidate {
-  readonly candidate: Omit<Candidate, "provenance">;
+  readonly candidate: Omit<PullRequestSource, "provenance">;
   readonly message: ProvenanceMessage;
   readonly title: string;
   readonly changedLines: number;

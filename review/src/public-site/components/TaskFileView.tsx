@@ -2,7 +2,13 @@ import { Check, Copy } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { FileViewer } from "../../components/FileViewer";
 import { formatBytes } from "../../lib/format";
-import { baseCommit, isSnapshot, snapshotCommand, type TaskFile } from "../task-files";
+import {
+  baseCommit,
+  isScenarioTask,
+  isSnapshot,
+  snapshotCommand,
+  type TaskFile,
+} from "../task-files";
 
 /** The chosen file, in the app's file viewer. */
 export function FilePane({
@@ -41,6 +47,13 @@ function NotShown({
       <p className="px-4 py-3 text-muted-foreground">
         Not shown here: a binary or large file ({formatBytes(file.sizeBytes)}). It is in the
         download.
+      </p>
+    );
+  if (isScenarioTask(files))
+    return (
+      <p className="max-w-3xl px-4 py-3">
+        The workspace the agent starts with ({formatBytes(file.sizeBytes)}), written for this
+        scenario. Both of its copies, in environment/ and tests/, are in the download.
       </p>
     );
   const commit = baseCommit(files);

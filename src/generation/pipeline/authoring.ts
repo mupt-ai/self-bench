@@ -44,6 +44,9 @@ const SUBMISSION = "/work/submission";
 const VERIFY_REQUEST = "/work/verify";
 const DRAFT = "/work/draft.tar.gz";
 const RESTORE_DRAFT = `mkdir -p /work/task && tar -xzf ${DRAFT} -C /work/task`;
+/** A scenario's attached files, as the API packed them (scenario-request.ts). */
+const ATTACHMENTS = "/work/attachments.tar.gz";
+const UNPACK_ATTACHMENTS = `mkdir -p /work/attachments && tar -xzf ${ATTACHMENTS} --no-same-owner -C /work/attachments`;
 
 /**
  * The round's outcome: the submission, or why the round delivered nothing. Tools that package
@@ -80,13 +83,18 @@ export async function startAuthoringTurn(
 ): Promise<SandboxJobOutcome> {
   const { run, candidate, round, turn } = input;
   const attempt = Context.current().info.attempt;
-  const [provenance, extension, checker, report, draft] = await Promise.all([
+  const attachments = candidate.kind === "scenario" ? candidate.attachments : undefined;
+  const [provenance, extension, checker, report, draft, attached] = await Promise.all([
     store.get(candidate.provenance),
     readAsset("dist/extension-authoring.bundle.js"),
     readAsset("dist/sandbox-check.bundle.js"),
     input.report ? store.get(input.report) : undefined,
     input.draft ? artifactFile(store, input.draft.sourceBundle, DRAFT) : undefined,
+    attachments ? artifactFile(store, attachments, ATTACHMENTS) : undefined,
   ]);
+  const setup = [draft ? RESTORE_DRAFT : "", attached ? UNPACK_ATTACHMENTS : ""]
+    .filter(Boolean)
+    .join("\n");
   const verifyReport =
     report && verifyReportSchema.parse(JSON.parse(Buffer.from(report).toString("utf8")));
   return await startAgent({
@@ -98,8 +106,11 @@ export async function startAuthoringTurn(
     prefix: `${turnPrefix(input)}/attempt-${attempt}`,
     record: { stage: "authoring", round, turn, attempt },
     ...(input.session ? { resume: input.session } : {}),
-    workspace: { kind: "clone", commit: candidate.baseCommit },
-    ...(draft ? { setup: RESTORE_DRAFT } : {}),
+    workspace:
+      candidate.kind === "scenario"
+        ? { kind: "scenario" }
+        : { kind: "clone", commit: candidate.baseCommit },
+    ...(setup ? { setup } : {}),
     extension: "/work/authoring.js",
     tools: "read,bash,grep,find,ls,verify,submit_task",
     prompt:
@@ -117,12 +128,15 @@ export async function startAuthoringTurn(
       { path: "/work/sandbox-check.js", contents: checker },
       { path: "/work/provenance.json", contents: provenance },
       ...(draft ? [draft] : []),
+      ...(attached ? [attached] : []),
     ],
     outputs: HAND_OFFS.map(({ bundle }) => bundle),
     delivers: HAND_OFFS.map(({ bundle }) => [bundle]),
     environment: {
       SELFBENCH_DELIVERABLE: "/work/task",
-      SELFBENCH_BASE_COMMIT: candidate.baseCommit,
+      ...(candidate.kind === "scenario"
+        ? { SELFBENCH_TASK_SOURCE: "scenario" }
+        : { SELFBENCH_BASE_COMMIT: candidate.baseCommit }),
       SELFBENCH_DIFFICULTY: candidate.difficulty,
       SELFBENCH_SUBMISSION: SUBMISSION,
       SELFBENCH_VERIFY_REQUEST: VERIFY_REQUEST,
@@ -187,42 +201,61 @@ export function authoringPrompt(
   feedback?: string,
   maintainerFeedback?: string,
 ): string {
-  const tiers = Object.entries(difficultyThresholds)
-    .map(
-      ([tier, t]) =>
-        `${tier}: ≥${t.changedLines} changed implementation lines across ≥${t.implementationFiles} file${t.implementationFiles === 1 ? "" : "s"}`,
-    )
-    .join("; ");
+  const scenario = candidate.kind === "scenario";
   const shared = {
-    howToWork: renderPrompt("how-to-work", {
+    howToWork: renderPrompt(scenario ? "scenario-how-to-work" : "how-to-work", {
       verifyBudget: AUTHOR_VERIFY_BUDGET,
       round,
       rounds: MAX_AUTHORING_ROUNDS,
     }),
     feedback: feedback ? renderPrompt("feedback", { feedback }) : "",
   };
-  if (!report) {
-    return renderPrompt("authoring", {
+  if (report) {
+    return renderPrompt("revision", {
       ...shared,
-      sourceUrl: candidate.sourceUrl,
-      sourcePr: candidate.sourcePr,
-      baseCommit: candidate.baseCommit,
-      completedCommit: candidate.completedCommit,
-      difficulty: candidate.difficulty,
-      request: candidate.request,
-      tiers,
-      limits: `${TASK_LIMITS.cpus} CPUs, ${TASK_LIMITS.memoryMb / 1024} GB of memory, ${TASK_LIMITS.storageMb / 1024} GB of storage, ${TASK_LIMITS.buildSeconds / 60} minutes to build each image, and ${TASK_LIMITS.testsSeconds / 60} minutes for the tests (fail-to-pass runs twice)`,
-      maintainer: maintainerFeedback
-        ? renderPrompt("maintainer-feedback", { feedback: maintainerFeedback.trim() })
-        : "",
+      reason: feedback
+        ? "The reviewer requested revisions. The report below describes your latest tested draft, not a failed check."
+        : "Your previous submission did not pass verification. Read the report below and address its failures.",
+      fresh: scenario
+        ? "This is a fresh sandbox: /work/task holds your last submitted draft, workspace/ included."
+        : "This is a fresh sandbox: the repository was re-cloned and /work/task holds your last submitted draft.",
+      report: report.trim(),
     });
   }
-  return renderPrompt("revision", {
+  const limits = `${TASK_LIMITS.cpus} CPUs, ${TASK_LIMITS.memoryMb / 1024} GB of memory, ${TASK_LIMITS.storageMb / 1024} GB of storage, ${TASK_LIMITS.buildSeconds / 60} minutes to build each image, and ${TASK_LIMITS.testsSeconds / 60} minutes for the tests (fail-to-pass runs twice)`;
+  const maintainer = maintainerFeedback
+    ? renderPrompt("maintainer-feedback", { feedback: maintainerFeedback.trim() })
+    : "";
+  if (candidate.kind === "scenario") {
+    return renderPrompt("scenario-authoring", {
+      ...shared,
+      title: candidate.title,
+      difficulty: candidate.difficulty,
+      request: candidate.request,
+      attachments: candidate.attachments
+        ? "The requester attached files; they are in /work/attachments. They are real examples of what the agent faced: build the workspace from them where the scenario calls for them."
+        : "The requester attached no files.",
+      limits,
+      maintainer,
+    });
+  }
+  const tiers = Object.entries(difficultyThresholds)
+    .map(
+      ([tier, t]) =>
+        `${tier}: ≥${t.changedLines} changed implementation lines across ≥${t.implementationFiles} file${t.implementationFiles === 1 ? "" : "s"}`,
+    )
+    .join("; ");
+  return renderPrompt("authoring", {
     ...shared,
-    reason: feedback
-      ? "The reviewer requested revisions. The report below describes your latest tested draft, not a failed check."
-      : "Your previous submission did not pass verification. Read the report below and address its failures.",
-    report: report.trim(),
+    sourceUrl: candidate.sourceUrl,
+    sourcePr: candidate.sourcePr,
+    baseCommit: candidate.baseCommit,
+    completedCommit: candidate.completedCommit,
+    difficulty: candidate.difficulty,
+    request: candidate.request,
+    tiers,
+    limits,
+    maintainer,
   });
 }
 

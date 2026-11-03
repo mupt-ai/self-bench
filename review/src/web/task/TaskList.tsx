@@ -1,4 +1,4 @@
-import { GitPullRequest } from "lucide-react";
+import { GitPullRequest, NotebookPen } from "lucide-react";
 import { Link } from "react-router";
 import type { TaskItem } from "../api";
 import { cn } from "../primitives/cn";
@@ -61,12 +61,17 @@ export function TaskList({
                   {task.taskId}
                 </span>
                 <span className="flex min-w-0 items-center gap-2 text-xs leading-5 text-muted-foreground">
-                  {task.sourcePr && (
+                  {task.sourcePr ? (
                     <span className="shrink-0 font-mono xl:hidden">
                       PR #{task.sourcePr}
                       <span className="ml-2 text-input">/</span>
                     </span>
-                  )}
+                  ) : task.title ? (
+                    <span className="min-w-0 truncate xl:hidden" title={task.title}>
+                      {task.title}
+                      <span className="ml-2 text-input">/</span>
+                    </span>
+                  ) : null}
                   <span className="truncate font-mono" title={task.runId}>
                     {task.runId}
                   </span>
@@ -91,6 +96,11 @@ export function TaskList({
                   <>
                     <GitPullRequest className="size-3.5" aria-hidden="true" />#{task.sourcePr}
                   </>
+                ) : task.title ? (
+                  <span className="flex min-w-0 items-center gap-1.5" title={task.title}>
+                    <NotebookPen className="size-3.5 shrink-0" aria-hidden="true" />
+                    <span className="truncate font-sans">Scenario</span>
+                  </span>
                 ) : (
                   "—"
                 )}

@@ -5,31 +5,16 @@ import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 
-export async function passthrough(
-  method: "GET" | "POST",
-  path: string,
-  json?: unknown,
-): Promise<void> {
-  const body =
-    json === undefined
-      ? {}
-      : { body: new TextEncoder().encode(JSON.stringify(json)), contentType: "application/json" };
-  console.log(JSON.stringify(await requestJson(path, { method, ...body }), null, 2));
+type Method = "GET" | "POST" | "PUT" | "DELETE";
+
+export async function passthrough(method: Method, path: string, json?: unknown): Promise<void> {
+  console.log(JSON.stringify(await requestJson(path, method, json), null, 2));
 }
 
 export async function download(runId: string, outputPath: string): Promise<void> {
-  const base = process.env.SELFBENCH_API_URL ?? "http://127.0.0.1:8080";
-  const headers = new Headers();
-  if (process.env.SELFBENCH_API_TOKEN) {
-    headers.set("authorization", `Bearer ${process.env.SELFBENCH_API_TOKEN}`);
-  }
-  const response = await fetch(new URL(`/v1/runs/${encodeURIComponent(runId)}/export`, base), {
-    headers,
-  });
-  if (!response.ok) {
-    const value = (await response.json()) as Record<string, unknown>;
-    throw new Error(String(value.error ?? `SelfBench API returned ${response.status}`));
-  }
+  const path = `/v1/runs/${encodeURIComponent(runId)}/export`;
+  const response = await fetch(apiUrl(path), { headers: authHeaders(path) });
+  if (!response.ok) throw await apiError(response);
   const expectedSha256 = response.headers.get("x-content-sha256");
   if (!expectedSha256 || !response.body) {
     throw new Error("SelfBench API returned an export without integrity metadata");
@@ -63,26 +48,51 @@ export async function download(runId: string, outputPath: string): Promise<void>
   console.log(JSON.stringify({ runId, output: destination }, null, 2));
 }
 
-async function requestJson(
+export async function requestJson(
   path: string,
-  options: { method: "GET" | "POST"; body?: Uint8Array; contentType?: string },
+  method: Method = "GET",
+  json?: unknown,
 ): Promise<Record<string, unknown>> {
-  const base = process.env.SELFBENCH_API_URL ?? "http://127.0.0.1:8080";
-  const headers = new Headers();
-  if (options.contentType) {
-    headers.set("content-type", options.contentType);
-  }
-  if (process.env.SELFBENCH_API_TOKEN) {
-    headers.set("authorization", `Bearer ${process.env.SELFBENCH_API_TOKEN}`);
-  }
-  const response = await fetch(new URL(path, base), {
-    method: options.method,
+  const headers = authHeaders(path);
+  if (json !== undefined) headers.set("content-type", "application/json");
+  const response = await fetch(apiUrl(path), {
+    method,
     headers,
-    ...(options.body ? { body: Buffer.from(options.body) } : {}),
+    ...(json !== undefined ? { body: JSON.stringify(json) } : {}),
   });
-  const value = (await response.json()) as Record<string, unknown>;
-  if (!response.ok) {
-    throw new Error(String(value.error ?? `SelfBench API returned ${response.status}`));
-  }
-  return value;
+  if (!response.ok) throw await apiError(response);
+  return (await response.json()) as Record<string, unknown>;
+}
+
+/** A binary response, checked against the SHA-256 the server sent with it. */
+export async function requestBytes(path: string): Promise<Uint8Array> {
+  const response = await fetch(apiUrl(path), { headers: authHeaders(path) });
+  if (!response.ok) throw await apiError(response);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  const expected = response.headers.get("x-content-sha256");
+  if (expected && createHash("sha256").update(bytes).digest("hex") !== expected)
+    throw new Error("the download failed its SHA-256 integrity check");
+  return bytes;
+}
+
+function apiUrl(path: string): URL {
+  return new URL(path, process.env.SELFBENCH_API_URL ?? "http://127.0.0.1:8080");
+}
+
+/**
+ * A personal API key (SELFBENCH_API_KEY, `sbk_…`) acts as its owner, which the /api routes need;
+ * the operator's SELFBENCH_API_TOKEN is preferred on /v1, where registry grants need it. Either
+ * goes as the bearer token.
+ */
+function authHeaders(path: string): Headers {
+  const headers = new Headers();
+  const { SELFBENCH_API_KEY: key, SELFBENCH_API_TOKEN: operator } = process.env;
+  const token = path.startsWith("/api/") ? key || operator : operator || key;
+  if (token) headers.set("authorization", `Bearer ${token}`);
+  return headers;
+}
+
+async function apiError(response: Response): Promise<Error> {
+  const value = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  return new Error(String(value.error ?? `SelfBench API returned ${response.status}`));
 }

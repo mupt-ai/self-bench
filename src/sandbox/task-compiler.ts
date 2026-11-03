@@ -1,9 +1,15 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { Candidate } from "../contracts/index.js";
+import type { PullRequestCandidate, ScenarioCandidate } from "../contracts/index.js";
 import { compileHarborTask } from "../generation/task/compiler.js";
 import { pinBaseImages } from "../generation/task/dockerfile.js";
 import type { RegistryOptions } from "../generation/task/image-registry.js";
+import type { TaskIdentity } from "../generation/task/render.js";
+import {
+  WORKSPACE_DIRECTORY,
+  workspaceProblems,
+  workspaceRepository,
+} from "../generation/task/scenario-workspace.js";
 import { checkSubmission, readSubmission } from "../generation/task/submission.js";
 import { runCommand } from "../lib/process.js";
 import { githubRepository } from "../third_party/github/repository.js";
@@ -28,12 +34,19 @@ export interface TaskCompilerServices {
   readonly registry?: RegistryOptions;
 }
 
+/** What the compiler needs of the candidate: its tier, and where its snapshot comes from. */
+export type CompileCandidate =
+  | (Pick<PullRequestCandidate, "sourcePr" | "baseCommit" | "difficulty"> & {
+      readonly kind?: "pull_request";
+    })
+  | Pick<ScenarioCandidate, "kind" | "title" | "difficulty">;
+
 export interface SubmissionCompileInput {
   readonly repositoryUrl: string;
   /** Where the submission bundle was unpacked. */
   readonly directory: string;
   readonly taskId: string;
-  readonly candidate: Pick<Candidate, "sourcePr" | "baseCommit" | "difficulty">;
+  readonly candidate: CompileCandidate;
   readonly token?: string;
   readonly signal?: AbortSignal;
 }
@@ -47,50 +60,74 @@ export interface SubmissionCompileResult {
 
 /**
  * Trusted compiler: checks a submission, pins its base images, and renders it as a Harbor task
- * over the repository cloned at the candidate's base commit. What the author must fix comes back
- * as errors; a clone or registry that fails throws, for the caller to retry.
+ * over the repository cloned at the candidate's base commit, or over a scenario's workspace. What
+ * the author must fix comes back as errors; a clone or registry that fails throws, for the caller
+ * to retry.
  */
 export async function compileSubmission(
   input: SubmissionCompileInput,
   services: TaskCompilerServices = defaultCompilerServices,
 ): Promise<SubmissionCompileResult> {
+  const { candidate } = input;
+  const scenario = candidate.kind === "scenario";
   const submission = await readSubmission(input.directory);
-  const check = checkSubmission(submission, input.candidate.difficulty);
-  if (check.errors.length > 0) return { compileErrors: check.errors, auditBlockers: [] };
+  const check = checkSubmission(
+    submission,
+    candidate.difficulty,
+    scenario ? "scenario" : "pull_request",
+  );
+  const workspace = join(input.directory, WORKSPACE_DIRECTORY);
+  const errors = [...check.errors, ...(scenario ? await workspaceProblems(workspace) : [])];
+  if (errors.length > 0) return { compileErrors: errors, auditBlockers: [] };
   const signal = input.signal ? { signal: input.signal } : {};
   const pinned = await pinBaseImages(submission.Dockerfile, { ...services.registry, ...signal });
   if (pinned.problems.length > 0) {
     return { compileErrors: pinned.problems, auditBlockers: check.blockers };
   }
-  const task = {
-    taskId: input.taskId,
-    difficulty: check.difficulty,
-    repo: githubRepository(input.repositoryUrl),
-    baseCommit: input.candidate.baseCommit,
-    sourcePr: input.candidate.sourcePr,
-  };
+  const repo = githubRepository(input.repositoryUrl);
   const bundle = await withTemporaryDirectory(
     `selfbench-compile-${input.taskId}-`,
     async (root) => {
       const repository = join(root, "repository");
-      await services
-        .cloneRepository(
-          input.repositoryUrl,
-          task.baseCommit,
-          repository,
-          input.token,
-          input.signal,
-        )
-        .catch((error: unknown) => {
-          throw new TaskCompilerInfrastructureError("failed to materialize source repository", {
-            cause: error,
+      let task: TaskIdentity;
+      let commit: string;
+      if (candidate.kind === "scenario") {
+        const workspaceCommit = await workspaceRepository(workspace, repository, input.signal);
+        commit = workspaceCommit;
+        task = {
+          taskId: input.taskId,
+          difficulty: check.difficulty,
+          repo,
+          scenario: { title: candidate.title, workspaceCommit },
+        };
+      } else {
+        commit = candidate.baseCommit;
+        task = {
+          taskId: input.taskId,
+          difficulty: check.difficulty,
+          repo,
+          baseCommit: candidate.baseCommit,
+          sourcePr: candidate.sourcePr,
+        };
+        await services
+          .cloneRepository(
+            input.repositoryUrl,
+            candidate.baseCommit,
+            repository,
+            input.token,
+            input.signal,
+          )
+          .catch((error: unknown) => {
+            throw new TaskCompilerInfrastructureError("failed to materialize source repository", {
+              cause: error,
+            });
           });
-        });
+      }
       // The snapshot holds no Git history, as the solver gets the repository.
       const snapshot = join(root, "repo.tar.gz");
       await runCommand(
         "git",
-        ["-C", repository, "archive", "--format=tar.gz", `--output=${snapshot}`, task.baseCommit],
+        ["-C", repository, "archive", "--format=tar.gz", `--output=${snapshot}`, commit],
         signal,
       );
       const compiled = { ...submission, Dockerfile: pinned.dockerfile };

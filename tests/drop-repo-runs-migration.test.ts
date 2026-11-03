@@ -26,6 +26,7 @@ test("review migrations preserve batch ownership, tasks, reviews and tombstones"
       "0021_task_revisions.sql",
       "0007_independent_discovery_batches.sql",
       "0026_task_base_commit.sql",
+      "0030_task_scenario_title.sql",
     ]) {
       await client.exec(await readFile(join(migrationsFolder(), file), "utf8"));
     }

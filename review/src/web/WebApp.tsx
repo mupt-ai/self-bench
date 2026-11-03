@@ -20,6 +20,7 @@ import { GroupSettingsPage } from "./groups/GroupSettingsPage";
 import { GroupsPage } from "./groups/GroupsPage";
 import { SiteSkeleton } from "./LoadingSkeleton";
 import { AddPrPage } from "./pages/AddPrPage";
+import { AddScenarioPage } from "./pages/AddScenarioPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RepoPage } from "./pages/RepoPage";
 import { RepoSettingsPage } from "./pages/RepoSettingsPage";
@@ -118,6 +119,7 @@ export function WebApp() {
                     <Route path="batches" element={<BatchesPage />} />
                     <Route path="batches/:batchId" element={<BatchPage />} />
                     <Route path="add-prs" element={<AddPrPage />} />
+                    <Route path="add-scenario" element={<AddScenarioPage />} />
                     <Route path="evaluations" element={<EvaluationPage />} />
                     <Route path="results" element={<EvaluationPage />} />
                     <Route path="releases" element={<ReleasesPage />} />
