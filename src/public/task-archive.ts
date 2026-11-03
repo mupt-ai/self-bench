@@ -9,6 +9,12 @@ import { GATE_TASK_FILE, SNAPSHOT_PATHS } from "../sandbox/gate-bundle.js";
 
 /** The largest archive served; a task without its repository snapshots is far smaller. */
 const MAX_ARCHIVE_BYTES = 32 * 1024 * 1024;
+/**
+ * A scenario's archive keeps one copy of its workspace (environment/repo.tar.gz; tests/ holds the
+ * same bytes), which may be up to 50 MB before compression (generation/task/scenario-workspace.ts).
+ */
+const MAX_SCENARIO_ARCHIVE_BYTES = 64 * 1024 * 1024;
+const VERIFIER_SNAPSHOT = "harbor-task/tests/repo.tar.gz";
 /** Archives kept in memory, by bundle and folder, least recently used first. */
 const MAX_CACHED_BYTES = 64 * 1024 * 1024;
 const COMPILED_BUNDLE = "/harbor-task.tar.gz";
@@ -86,7 +92,7 @@ async function build(
   const gate = gateKey ? await store.stat(gateKey).catch(() => undefined) : undefined;
   const body = await store.openReadByKey(gate && gateKey ? gateKey : bundleKey);
   if (!body) return undefined;
-  let { bytes, scenario } = await repack(body, folder, new Set(SNAPSHOT_PATHS));
+  let { bytes, scenario } = await repack(body, folder, new Set(SNAPSHOT_PATHS), MAX_ARCHIVE_BYTES);
   if (scenario) {
     // An accepted task runs an execution bundle published beside its compiled one (task-images.ts).
     const compiled = bundleKey.endsWith(EXECUTION_BUNDLE)
@@ -94,7 +100,12 @@ async function build(
       : bundleKey;
     const whole = await store.openReadByKey(compiled);
     if (!whole) return undefined;
-    ({ bytes } = await repack(whole, folder, new Set()));
+    ({ bytes } = await repack(
+      whole,
+      folder,
+      new Set([VERIFIER_SNAPSHOT]),
+      MAX_SCENARIO_ARCHIVE_BYTES,
+    ));
   }
   const etag = `"${createHash("sha256").update(bytes).digest("base64url").slice(0, 27)}"`;
   return { bytes, etag };
@@ -108,6 +119,7 @@ async function repack(
   body: Readable,
   folder: string,
   omitted: ReadonlySet<string>,
+  limit: number,
 ): Promise<{ bytes: Buffer; scenario: boolean }> {
   const input = extract();
   const reading = pipeline(body, createGunzip(), input);
@@ -119,7 +131,7 @@ async function repack(
   const collect = new PassThrough();
   collect.on("data", (chunk: Buffer) => {
     size += chunk.length;
-    if (size > MAX_ARCHIVE_BYTES) collect.destroy(new Error("over the size limit"));
+    if (size > limit) collect.destroy(new Error("over the size limit"));
     else chunks.push(chunk);
   });
   // No file name or time in the gzip header, so the same entries always give the same bytes.
@@ -132,8 +144,7 @@ async function repack(
     await writing;
   } catch (error) {
     input.destroy();
-    if (size > MAX_ARCHIVE_BYTES)
-      throw new TaskArchiveTooLarge("task archive is too large to serve");
+    if (size > limit) throw new TaskArchiveTooLarge("task archive is too large to serve");
     throw error;
   }
   return { bytes: Buffer.concat(chunks), scenario };

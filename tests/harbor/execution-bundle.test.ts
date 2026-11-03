@@ -199,7 +199,7 @@ test("a scenario's download is its compiled task, workspace included", async () 
   const entries = await tarEntries(download.bytes);
   const paths = entries.map((entry) => entry.path);
   expect(paths).toContain("scenario/environment/repo.tar.gz");
-  expect(paths).toContain("scenario/tests/repo.tar.gz");
+  expect(paths).not.toContain("scenario/tests/repo.tar.gz");
   // The compiled Dockerfile builds from the workspace, not from SelfBench's registry.
   expect(entries.find((entry) => entry.path === "scenario/environment/Dockerfile")?.text).toBe(
     files["environment/Dockerfile"],

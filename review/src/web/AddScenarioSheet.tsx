@@ -9,6 +9,7 @@ import { Dialog, DialogFooter, DialogHeader } from "./Dialog";
 import { GenerationFields } from "./GenerationFields";
 import { GenerationSteps } from "./GenerationSteps";
 import { cn } from "./primitives/cn";
+import { InfoTooltip } from "./primitives/tooltip";
 import type { SiteOrg } from "./session";
 import { addScenario, type ScenarioInput } from "./task-start-api";
 import { Button, controlStyles, fieldStyles, Input, Notice, Select } from "./ui";
@@ -134,7 +135,12 @@ export function AddScenarioSheet({ org, fullName, onClose, onComplete }: AddScen
                   </Select>
                 </label>
                 <label htmlFor="scenario-files" className={fieldStyles}>
-                  Attachments
+                  <span className="flex items-center gap-1.5">
+                    Attachments
+                    <InfoTooltip
+                      label={`Optional real files from the situation, such as the spreadsheet or the emails: up to ${MAX_ATTACHMENTS} files and ${MAX_ATTACHMENT_BYTES / 1024 / 1024} MB. Details the scenario doesn't depend on are replaced with fictional ones.`}
+                    />
+                  </span>
                   <Input
                     id="scenario-files"
                     type="file"
@@ -145,11 +151,6 @@ export function AddScenarioSheet({ org, fullName, onClose, onComplete }: AddScen
                   />
                 </label>
               </div>
-              <p className="text-xs leading-5 text-muted-foreground">
-                Optional: real files from the situation, such as the spreadsheet or the emails. Up
-                to {MAX_ATTACHMENTS} files and {MAX_ATTACHMENT_BYTES / 1024 / 1024} MB. Details the
-                scenario doesn't depend on are replaced with fictional ones.
-              </p>
               {tooLarge && (
                 <Notice>
                   Attach at most {MAX_ATTACHMENTS} files, {MAX_ATTACHMENT_BYTES / 1024 / 1024} MB in

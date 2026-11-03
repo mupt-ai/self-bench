@@ -51,10 +51,14 @@ function NotShown({
     );
   if (isScenarioTask(files))
     return (
-      <p className="max-w-3xl px-4 py-3">
-        The workspace the agent starts with ({formatBytes(file.sizeBytes)}), written for this
-        scenario. Both of its copies, in environment/ and tests/, are in the download.
-      </p>
+      <div className="flex flex-col gap-3 px-4 py-3">
+        <p className="max-w-3xl">
+          The workspace the agent starts with ({formatBytes(file.sizeBytes)}), written for this
+          scenario. The download holds the copy in environment/; this command, run where you
+          unpacked it, puts the same copy in tests/.
+        </p>
+        <Command text={`cp ${taskId}/environment/repo.tar.gz ${taskId}/tests/repo.tar.gz`} />
+      </div>
     );
   const commit = baseCommit(files);
   return (
