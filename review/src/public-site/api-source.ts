@@ -1,5 +1,8 @@
+import { groupHref } from "../../../src/public/release-groups";
 import type { PublishedLine } from "../../../src/public/release-types";
 import type {
+  PublicGroup,
+  PublicGroupCard,
   PublicRepoPage,
   PublicRepoSummary,
   PublicTask,
@@ -63,12 +66,12 @@ export function apiSource(base = "", carried = carriedData()): PublicSource {
   };
   // The home page asks for repositories and lines together; concurrent callers share one
   // request, and the next call after it settles fetches again.
-  let directory: Promise<PublicRepoSummary[]> | undefined;
+  let directory: Promise<{ cards: PublicRepoSummary[]; groups: PublicGroupCard[] }> | undefined;
   const everything = () => {
     if (!directory) {
-      const request = answer<{ cards: PublicRepoSummary[] }>(`${base}/api/public/results`).then(
-        (answer) => answer?.cards ?? [],
-      );
+      const request = answer<{ cards: PublicRepoSummary[]; groups?: PublicGroupCard[] }>(
+        `${base}/api/public/results`,
+      ).then((answer) => ({ cards: answer?.cards ?? [], groups: answer?.groups ?? [] }));
       const settled = () => {
         if (directory === request) directory = undefined;
       };
@@ -88,8 +91,12 @@ export function apiSource(base = "", carried = carriedData()): PublicSource {
   const tasksOf = (releaseId: string) =>
     `${base}/api/public/releases/${encodeURIComponent(releaseId)}/tasks`;
   return {
-    listRepos: async () => (await everything()).filter((card) => card.defaultLine),
-    listLines: async () => everything(),
+    listRepos: async () => (await everything()).cards.filter((card) => card.defaultLine),
+    listLines: async () => (await everything()).cards,
+    listGroups: async () => (await everything()).groups,
+    getGroup: async (publisher, slug) =>
+      (await answer<{ group: PublicGroup }>(`${base}/api/public${groupHref(publisher, slug)}`))
+        ?.group,
     getRepo: async (owner, name) => (await repository(owner, name)).getRepo(owner, name),
     getLine: async (owner, name, publisher) =>
       (await repository(owner, name)).getLine(owner, name, publisher),

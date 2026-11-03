@@ -170,6 +170,22 @@ resource "google_service_account_iam_member" "runtime_acts_as_builder" {
   member             = "serviceAccount:${google_service_account.runtime.email}"
 }
 
+# Customer exports no longer create repositories from the worker. The deploy identity cannot delete
+# custom roles (iam.roles.delete), and Terraform keeps trying to delete one already deleted by hand,
+# so state forgets them; an admin deletes them (gcloud iam roles delete) once they are unbound.
+removed {
+  from = google_project_iam_custom_role.customer_repository_create
+  lifecycle {
+    destroy = false
+  }
+}
+removed {
+  from = google_project_iam_custom_role.customer_repository_access
+  lifecycle {
+    destroy = false
+  }
+}
+
 locals {
   task_image_registry = "${var.region}-docker.pkg.dev/${var.project_id}"
   task_image_env = var.task_images ? {

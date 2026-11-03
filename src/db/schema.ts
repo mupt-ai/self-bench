@@ -26,29 +26,6 @@ export const evaluationRecords = pgTable("evaluation_records", {
   sealed: text("sealed").notNull(),
 });
 
-/**
- * Organization model and sandbox credentials. `secret` is the sealed JSON of the credential's
- * value (plus the Modal token ID or Vercel team/project); only the worker and create path open it.
- * `max_sandboxes` and `max_builds` limit its work at once (credentialSchema).
- */
-export const credentials = pgTable(
-  "credentials",
-  {
-    id: uuid("id").primaryKey(),
-    orgId: bigint("org_id", { mode: "number" }).notNull(),
-    name: text("name").notNull(),
-    kind: text("kind").notNull(),
-    auth: text("auth").notNull(),
-    endpoint: text("endpoint"),
-    maxSandboxes: integer("max_sandboxes"),
-    maxBuilds: integer("max_builds"),
-    secret: text("secret"),
-    createdAt: timestamptz("created_at").notNull().defaultNow(),
-    deletedAt: timestamptz("deleted_at"),
-  },
-  (table) => [index("credentials_org").on(table.orgId)],
-);
-
 /** A saved evaluation comparison: the expanded per-model inputs the worker runs. */
 export const comparisons = pgTable(
   "comparisons",
@@ -58,6 +35,7 @@ export const comparisons = pgTable(
     /** The repository whose tasks it runs, or else the benchmark (benchmarks table). */
     repoId: bigint("repo_id", { mode: "number" }),
     benchmarkId: bigint("benchmark_id", { mode: "number" }),
+    groupId: bigint("group_id", { mode: "number" }),
     signature: text("signature").notNull(),
     inputs: jsonb("inputs").notNull(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
@@ -65,7 +43,11 @@ export const comparisons = pgTable(
   (table) => [
     index("comparisons_repo").on(table.repoId),
     index("comparisons_benchmark").on(table.benchmarkId),
-    check("comparisons_scope", sql`(${table.repoId} is null) <> (${table.benchmarkId} is null)`),
+    index("comparisons_group").on(table.groupId),
+    check(
+      "comparisons_scope",
+      sql`num_nonnulls(${table.repoId}, ${table.benchmarkId}, ${table.groupId}) = 1`,
+    ),
   ],
 );
 
@@ -246,8 +228,9 @@ export const generationBatches = pgTable("generation_batches", {
 });
 
 /**
- * Public releases: append-only snapshots a workspace published for a public repository. A
- * line is one workspace plus one GitHub repository id; its current release is the newest row
+ * Public releases: append-only snapshots a workspace published for a public repository or a
+ * repository group. A line is one workspace plus one GitHub repository id, or one group; its
+ * current release is the newest row
  * not withdrawn. No foreign keys, so disconnecting a repository or deleting tasks never
  * touches what was published. `payload` is what the public API serves; `detail` is private.
  */
@@ -256,7 +239,11 @@ export const releases = pgTable(
   {
     id: uuid("id").primaryKey(),
     orgId: bigint("org_id", { mode: "number" }).notNull(),
-    githubRepoId: bigint("github_repo_id", { mode: "number" }).notNull(),
+    /** The repository a repository's line releases; null on a group's line. */
+    githubRepoId: bigint("github_repo_id", { mode: "number" }),
+    /** The repository group a group's line releases (repository_groups); null otherwise. */
+    groupId: bigint("group_id", { mode: "number" }),
+    /** The repository's `owner/name`, or the group's address. */
     fullName: text("full_name").notNull(),
     publisherLogin: text("publisher_login").notNull(),
     /** The line's head when this row was written; null for a line's first release. */
@@ -276,25 +263,16 @@ export const releases = pgTable(
     index("releases_full_name").on(sql`lower(${table.fullName})`),
     // Only one successor per row, and only one first release per line.
     unique("releases_line_predecessor")
-      .on(table.orgId, table.githubRepoId, table.predecessorId)
+      .on(table.orgId, table.githubRepoId, table.groupId, table.predecessorId)
       .nullsNotDistinct(),
+    index("releases_group").on(table.groupId),
+    check("releases_line", sql`num_nonnulls(${table.githubRepoId}, ${table.groupId}) = 1`),
   ],
 );
 
 export * from "./billing-schema.js";
+export * from "./credential-schema.js";
 export * from "./evaluation-schema.js";
 export * from "./gateway-schema.js";
-
-/** Customers' pull grants for accepted tasks' images, until expired or revoked (registry-grants.ts). */
-export const registryGrants = pgTable("registry_grants", {
-  id: uuid("id").primaryKey(),
-  label: text("label").notNull(),
-  taskIds: jsonb("task_ids").$type<number[]>().notNull(),
-  /** `<name>@sha256:…` in the task image repository. */
-  images: jsonb("images").$type<string[]>().notNull(),
-  /** Whether it also reaches the verifier images, which hold the tasks' tests. */
-  withVerifier: boolean("with_verifier").notNull(),
-  createdAt: timestamptz("created_at").notNull().defaultNow(),
-  expiresAt: timestamptz("expires_at").notNull(),
-  revokedAt: timestamptz("revoked_at"),
-});
+export * from "./group-schema.js";
+export * from "./registry-grant-schema.js";

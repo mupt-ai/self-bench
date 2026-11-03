@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import { ModelPicker } from "../ModelPicker";
+import { InfoTooltip } from "../primitives/tooltip";
 import { Button, Input, Notice, Select } from "../ui";
 import { evaluationRequest } from "./api";
 import { credentialProvider, isSandbox } from "./credential-presentation";
@@ -157,26 +158,29 @@ export function FailureExplanationForm({
                 )}
               </div>
             )}
-            <Button
-              className="sm:col-start-3"
-              disabled={busy || !credential || !model}
-              onClick={async () => {
-                if (inFlight.current || busy || !credential || !model) return;
-                inFlight.current = true;
-                setSubmitting(true);
-                try {
-                  await onExplain({ credentialId: credential.id, model });
-                } finally {
-                  inFlight.current = false;
-                  setSubmitting(false);
-                }
-              }}
-            >
-              {busy ? labels.busy : labels.action}
-            </Button>
+            <span className="flex items-center gap-2 sm:col-start-3">
+              <Button
+                className="flex-1"
+                disabled={busy || !credential || !model}
+                onClick={async () => {
+                  if (inFlight.current || busy || !credential || !model) return;
+                  inFlight.current = true;
+                  setSubmitting(true);
+                  try {
+                    await onExplain({ credentialId: credential.id, model });
+                  } finally {
+                    inFlight.current = false;
+                    setSubmitting(false);
+                  }
+                }}
+              >
+                {busy ? labels.busy : labels.action}
+              </Button>
+              <InfoTooltip label="Provider charges apply." />
+            </span>
           </div>
-          <p aria-live="polite" className="text-xs text-muted-foreground">
-            {busy ? labels.busy : "Provider charges apply."}
+          <p aria-live="polite" className="text-xs text-muted-foreground empty:hidden">
+            {busy ? labels.busy : ""}
           </p>
         </fieldset>
       )}

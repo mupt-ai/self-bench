@@ -1,6 +1,8 @@
-import { repositoryPath, segmentsOf } from "../public/paths.js";
+import { groupPath, repositoryPath, segmentsOf } from "../public/paths.js";
+import { groupHref } from "../public/release-groups.js";
 import type { PublicReleaseRoutes } from "./routes/public-releases.js";
 import { homeBody, notFoundBody, pageData, repositoryBody } from "./site-body.js";
+import { groupBody, groupHead } from "./site-group.js";
 import { homeHead, notFoundHead, type PageHead, repositoryHead } from "./site-head.js";
 
 /** A selfbench.dev page as the server writes it, before the shell is filled in. */
@@ -26,16 +28,31 @@ export function sitePages(origin: string, publicRoutes: PublicReleaseRoutes) {
   return async (pathname: string): Promise<SitePage> => {
     if (pathname === "/") {
       const repositories = await publicRoutes.repositories().catch(() => undefined);
+      const groups = repositories && (await publicRoutes.groups().catch(() => undefined));
       const directory = repositories && (await publicRoutes.directoryBody().catch(() => undefined));
       return {
         status: 200,
         head: homeHead(origin),
-        body: homeBody(repositories ?? []),
+        body: homeBody(repositories ?? [], groups ?? []),
         data: pageData("/api/public/results", directory),
         partial: !repositories,
       };
     }
-    const path = repositoryPath(segmentsOf(pathname));
+    const segments = segmentsOf(pathname);
+    const named = groupPath(segments);
+    if (named) {
+      const group = await publicRoutes.groupFor(named.publisher, named.slug).catch(() => undefined);
+      if (!group) return { status: 404, head: notFoundHead(), body: notFoundBody() };
+      const api = `/api/public${groupHref(named.publisher, named.slug)}`;
+      const data = await publicRoutes.groupBody(named.publisher, named.slug).catch(() => undefined);
+      return {
+        status: 200,
+        head: groupHead(origin, group),
+        body: groupBody(group),
+        data: pageData(api, data),
+      };
+    }
+    const path = repositoryPath(segments);
     if (!path) return { status: 404, head: notFoundHead(), body: notFoundBody() };
     const fullName = `${path.owner}/${path.name}`;
     const lines = await publicRoutes.linesFor(fullName).catch(() => []);

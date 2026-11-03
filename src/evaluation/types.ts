@@ -153,5 +153,10 @@ export interface EvaluationRun extends Omit<EvaluationInput, "tasks"> {
    * leave it out, but its record stays, for releases that already show its trials.
    */
   deletedAt?: string;
+  /**
+   * Set only in a repository group's lists, on a run of one of its members rather than the
+   * group's own: the member's `owner/name`. Such a run is managed from its repository.
+   */
+  sourceRepository?: string;
   deletedBy?: string;
 }

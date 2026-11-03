@@ -75,6 +75,7 @@ export function CredentialGroup({
                   {credential.endpoint && <> · {credential.endpoint}</>}
                   {credential.maxSandboxes && <> · Up to {credential.maxSandboxes} at once</>}
                   {credential.maxBuilds && <> · Up to {credential.maxBuilds} builds at once</>}
+                  {credential.models?.length && <> · {credential.models.join(", ")}</>}
                 </p>
               </div>
               {canManage && (

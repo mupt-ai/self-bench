@@ -1,4 +1,4 @@
-import { currentOf, headOf, type ReleaseRow } from "../db/releases.js";
+import { currentOf, headOf, type LinePayload, type ReleaseRow } from "../db/releases.js";
 import type { ModelSummaryReport } from "../evaluation/model-summary.js";
 import type { ReleasePreview } from "./release-build.js";
 
@@ -38,7 +38,12 @@ export interface ReleaseList {
   resultsSiteUrl: string | null;
 }
 
-export function summaryOf(row: ReleaseRow, rows: readonly ReleaseRow[]): ReleaseSummary {
+export function summaryOf(
+  row: ReleaseRow<LinePayload>,
+  rows: readonly ReleaseRow<LinePayload>[],
+): ReleaseSummary {
+  // A group's release publishes its scores only.
+  const published = "repository" in row.payload ? row.payload : undefined;
   return {
     id: row.id,
     releasedAt: row.releasedAt,
@@ -49,9 +54,9 @@ export function summaryOf(row: ReleaseRow, rows: readonly ReleaseRow[]): Release
     publisher: row.publisherLogin,
     tasks: row.payload.tasks,
     settings: row.payload.settings.length,
-    tasksPublished: row.payload.tasksPublished === true,
-    trialsPublished: row.payload.trialsPublished === true,
-    summariesPublished: row.payload.modelSummaries !== undefined,
+    tasksPublished: published?.tasksPublished === true,
+    trialsPublished: published?.trialsPublished === true,
+    summariesPublished: published?.modelSummaries !== undefined,
     current: currentOf(rows)?.id === row.id,
     head: headOf(rows)?.id === row.id,
   };
@@ -59,7 +64,7 @@ export function summaryOf(row: ReleaseRow, rows: readonly ReleaseRow[]): Release
 
 /** A preview with the head and current release the dialog shows beside it. */
 export function viewOf(
-  rows: readonly ReleaseRow[],
+  rows: readonly ReleaseRow<LinePayload>[],
   preview: ReleasePreview,
   report?: ModelSummaryReport,
 ): ReleaseView {

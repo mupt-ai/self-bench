@@ -1,3 +1,4 @@
+import { groupHref, type PublishedGroup } from "../public/release-groups.js";
 import type { PublishedLine } from "../public/release-types.js";
 import {
   defaultLineOf,
@@ -69,26 +70,40 @@ export function repositoryHead(
   };
 }
 
+/** How SelfBench measures, for the Dataset of a repository or a group. */
+const MEASUREMENT_TECHNIQUE =
+  "Tasks built from the repository's merged pull requests, each scored by hidden tests";
+
+/** What a page's results are, as schema.org data: a repository's, or a group's. */
+export interface ResultsData {
+  origin: string;
+  canonical: string;
+  /** Its place in the site after the home page, each with its address. */
+  crumbs: { name: string; item: string }[];
+  name: string;
+  description: string;
+  publisher: { login: string; kind: "org" | "user" };
+  date: { datePublished: string } | { dateModified: string };
+  /** The repositories it measures. */
+  repositories: string[];
+  /** The public API address its numbers download from. */
+  contentUrl: string;
+}
+
 /**
- * A repository page as schema.org data. Its breadcrumbs name its place in the site, so results
- * can show "SelfBench › owner/name" rather than guess from the address. Its release is a
+ * A page's results as schema.org data. Its breadcrumbs name its place in the site, so results
+ * can show "SelfBench › owner/name" rather than guess from the address. Its results are a
  * Dataset: what was measured, by whom, when, and where the numbers can be downloaded, which is
  * what Google Dataset Search lists.
  */
-function repositoryStructuredData(
-  origin: string,
-  line: PublishedLine,
-  canonical: string,
-  own: string | undefined,
-): Record<string, unknown> {
-  const { release } = line;
-  const { fullName } = release.repository;
-  const { login, kind } = release.publisher;
-  const crumbs = [
-    { name: SITE_NAME, item: `${origin}/` },
-    { name: fullName, item: `${origin}/${fullName}` },
-    ...(own ? [{ name: `Run by ${own}`, item: canonical }] : []),
-  ];
+export function resultsStructuredData(data: ResultsData): Record<string, unknown> {
+  const { origin, canonical, publisher } = data;
+  const crumbs = [{ name: SITE_NAME, item: `${origin}/` }, ...data.crumbs];
+  const about = data.repositories.map((fullName) => ({
+    "@type": "SoftwareSourceCode",
+    name: fullName,
+    codeRepository: `https://github.com/${fullName}`,
+  }));
   return {
     "@context": "https://schema.org",
     "@graph": [
@@ -103,26 +118,21 @@ function repositoryStructuredData(
       {
         "@type": "Dataset",
         "@id": `${canonical}#results`,
-        name: `${fullName} coding agent benchmark results${own ? ` run by ${own}` : ""}`,
+        name: data.name,
         // The whole summary: a dataset's description is read in full, not cut to a snippet.
-        description: repositoryDescription(line, Number.POSITIVE_INFINITY),
+        description: data.description,
         url: canonical,
         creator: {
-          "@type": kind === "user" ? "Person" : "Organization",
-          name: login,
-          url: `https://github.com/${login}`,
+          "@type": publisher.kind === "user" ? "Person" : "Organization",
+          name: publisher.login,
+          url: `https://github.com/${publisher.login}`,
         },
         includedInDataCatalog: { "@type": "DataCatalog", name: SITE_NAME, url: `${origin}/` },
-        datePublished: release.releasedAt,
+        ...data.date,
         isAccessibleForFree: true,
-        keywords: ["coding agents", "AI models", "benchmark", "evals", fullName],
-        about: {
-          "@type": "SoftwareSourceCode",
-          name: fullName,
-          codeRepository: `https://github.com/${fullName}`,
-        },
-        measurementTechnique:
-          "Tasks built from the repository's merged pull requests, each scored by hidden tests",
+        keywords: ["coding agents", "AI models", "benchmark", "evals", ...data.repositories],
+        about: about.length === 1 ? about[0] : about,
+        measurementTechnique: MEASUREMENT_TECHNIQUE,
         variableMeasured: [
           { "@type": "PropertyValue", name: "Accuracy", unitText: "percent" },
           { "@type": "PropertyValue", name: "Cost per task", unitText: "USD" },
@@ -130,11 +140,36 @@ function repositoryStructuredData(
         distribution: {
           "@type": "DataDownload",
           encodingFormat: "application/json",
-          contentUrl: `${origin}/api/public/results/${fullName}`,
+          contentUrl: data.contentUrl,
         },
       },
     ],
   };
+}
+
+/** A repository page as schema.org data (`resultsStructuredData`). */
+function repositoryStructuredData(
+  origin: string,
+  line: PublishedLine,
+  canonical: string,
+  own: string | undefined,
+): Record<string, unknown> {
+  const { release } = line;
+  const { fullName } = release.repository;
+  return resultsStructuredData({
+    origin,
+    canonical,
+    crumbs: [
+      { name: fullName, item: `${origin}/${fullName}` },
+      ...(own ? [{ name: `Run by ${own}`, item: canonical }] : []),
+    ],
+    name: `${fullName} coding agent benchmark results${own ? ` run by ${own}` : ""}`,
+    description: repositoryDescription(line, Number.POSITIVE_INFINITY),
+    publisher: release.publisher,
+    date: { datePublished: release.releasedAt },
+    repositories: [fullName],
+    contentUrl: `${origin}/api/public/results/${fullName}`,
+  });
 }
 
 /** The line a repository address shows: its publisher's, or the repository's default one. */
@@ -210,15 +245,19 @@ const newest = (dates: readonly string[]) =>
   );
 
 /**
- * Every page the site can show, for search engines: the home page, each repository's page, and
- * each other publisher's line, at their canonical addresses, each dated by its newest release.
+ * Every page the site can show, for search engines: the home page, each repository's page, each
+ * other publisher's line, and each repository group, at their canonical addresses, each dated by its newest release.
  * Built from the released lines, so a new release is listed without any step of its own.
  */
 export function sitemapOf(
   origin: string,
   repositories: readonly (readonly PublishedLine[])[],
+  groups: readonly PublishedGroup[] = [],
 ): string {
-  const pages: { loc: string; lastmod: string | undefined }[] = [];
+  const pages: { loc: string; lastmod: string | undefined }[] = groups.map((group) => ({
+    loc: `${origin}${groupHref(group.publisher.login, group.slug)}`,
+    lastmod: group.updatedAt,
+  }));
   for (const lines of repositories) {
     const fallback = defaultLineOf(lines);
     if (!fallback) continue;
@@ -238,7 +277,10 @@ export function sitemapOf(
   pages.sort((left, right) => left.loc.localeCompare(right.loc));
   const home = {
     loc: `${origin}/`,
-    lastmod: newest(repositories.flat().map((line) => line.release.releasedAt)),
+    lastmod: newest([
+      ...repositories.flat().map((line) => line.release.releasedAt),
+      ...groups.map((group) => group.updatedAt),
+    ]),
   };
   const urls = [home, ...pages].map(
     ({ loc, lastmod }) =>

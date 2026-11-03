@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LocalArtifactStore } from "../src/artifacts/local.js";
@@ -90,6 +90,12 @@ test("Audit Task needs a failed attempt and the task's files, and starts with a 
       Buffer.from(JSON.stringify({ taskId: "task-one", files: [] })),
       "application/json",
     );
+    // Warm summaries are sufficient for admission; the API must not read transcripts.
+    const read = fixture.artifacts.getByKey.bind(fixture.artifacts);
+    fixture.artifacts.getByKey = async (key) => {
+      if (key.includes("/snapshots/")) throw new Error("API must not expand full run snapshots");
+      return read(key);
+    };
     expect((await post()).status).toBe(400);
     expect((await post({ credentialId: own.id, model: "not-a-catalog-model" })).status).toBe(400);
     expect((await post({ credentialId: own.id, model: "gpt-6-sol" })).status).toBe(202);
@@ -111,8 +117,17 @@ test("an audit keeps the model's verdict, or why the model gave none, through th
   const store = new LocalArtifactStore(await mkdtemp(join(tmpdir(), "selfbench-audit-")));
   const input = evaluationInput();
   const run = initialEvaluation(input, "GPT-6 Sol");
-  Object.assign(run.trials[0] ?? {}, { status: "completed", rewards: { reward: 0 } });
+  Object.assign(run.trials[0] ?? {}, {
+    status: "completed",
+    rewards: { reward: 0 },
+    artifacts: ["0/verifier/pytest-stdout.txt"],
+  });
   await saveEvaluation(store, run);
+  await store.put(
+    `evaluations/repos/${input.repoId}/${run.id}/artifacts/0/verifier/pytest-stdout.txt`,
+    Buffer.from("AssertionError: expected trailing comma"),
+    "text/plain",
+  );
   const filesKey = "tasks/files.json";
   await store.put(
     filesKey,
@@ -141,12 +156,14 @@ test("an audit keeps the model's verdict, or why the model gave none, through th
   const prompts: string[] = [];
   const command = async (_name: string, args: readonly string[], options?: CommandOptions) => {
     expect(options?.env?.OPENAI_API_KEY).toBe(key);
-    prompts.push(args.join(" "));
+    const material = args.find((arg) => arg.startsWith("@"));
+    prompts.push(`${args.join(" ")}\n${material ? await readFile(material.slice(1), "utf8") : ""}`);
     return reply;
   };
   const options = { vault, command, env: {}, redact: (text: string) => text };
   await auditTask(store, request, options);
   expect(prompts[0]).toContain("Is this task fair?");
+  expect(prompts[0]).toContain("AssertionError: expected trailing comma");
   expect(await readTaskAudit(store, task)).toMatchObject({
     audit: { verdict: "unfair", text: "The tests want a format.", attempts: 1, failures: 1 },
   });

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocation, useNavigationType, useSearchParams } from "react-router";
+import { GroupCard } from "../components/GroupCard";
 import { RepoCard } from "../components/RepoCard";
 import { SearchBox } from "../components/SearchBox";
-import type { PublicRepoSummary } from "../contract";
+import type { PublicGroupCard, PublicRepoSummary } from "../contract";
 import { select } from "../effects/marks";
 import { publisherName } from "../format";
 import { homeView, onSaveHome, saveHomeView, startJourney } from "../home-view";
@@ -19,6 +20,7 @@ const HOME_LIMIT = 100;
 interface HomeData {
   repos: PublicRepoSummary[];
   lines: PublicRepoSummary[];
+  groups: PublicGroupCard[];
 }
 
 /**
@@ -33,9 +35,9 @@ function useHomeData(source: PublicSource) {
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let live = true;
-    Promise.all([source.listRepos(), source.listLines()]).then(
-      ([repos, lines]) => {
-        const next = { repos: repos.slice(0, HOME_LIMIT), lines };
+    Promise.all([source.listRepos(), source.listLines(), source.listGroups()]).then(
+      ([repos, lines, groups]) => {
+        const next = { repos: repos.slice(0, HOME_LIMIT), lines, groups };
         if (!live || JSON.stringify(next) === JSON.stringify(kept)) return;
         kept = next;
         setData(next);
@@ -123,19 +125,61 @@ export function HomePage() {
 
       {!data && !failed && <p className="text-center text-muted-foreground">Loading…</p>}
       {failed && <p className="text-center text-muted-foreground">Results could not be loaded.</p>}
-      {data &&
-        (needle ? (
-          <Grid
-            cards={data.lines.filter((card) => matches(card, needle))}
-            byLine
-            onOpen={opened}
-            empty={<NoMatch query={query.trim()} />}
-          />
-        ) : (
-          <Grid cards={data.repos} onOpen={opened} empty={<NoMatch />} />
-        ))}
+      {data && <Directory data={data} needle={needle} query={query} onOpen={opened} />}
     </div>
   );
+}
+
+/**
+ * The repository groups, then the repositories: each repository's default line, or with a
+ * search, every line and group that matches it.
+ */
+function Directory({
+  data,
+  needle,
+  query,
+  onOpen,
+}: {
+  data: HomeData;
+  needle: string;
+  query: string;
+  onOpen: (card: PublicRepoSummary, element: HTMLElement) => void;
+}) {
+  const groups = needle ? data.groups.filter((card) => groupMatches(card, needle)) : data.groups;
+  const cards = needle ? data.lines.filter((card) => matches(card, needle)) : data.repos;
+  // A search that finds only groups shows them alone, not "no evals" beneath them.
+  const empty = groups.length > 0 ? null : <NoMatch query={needle ? query.trim() : undefined} />;
+  const grid = <Grid cards={cards} byLine={!!needle} onOpen={onOpen} empty={empty} />;
+  return (
+    <>
+      {groups.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-sm font-medium">Repository Groups</h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {groups.map((card) => (
+              <GroupCard key={`${card.publisher.login}/${card.slug}`} card={card} />
+            ))}
+          </div>
+        </section>
+      )}
+      {groups.length > 0 && cards.length > 0 ? (
+        // Named only beside the groups, which would otherwise read as part of the grid.
+        <section className="flex flex-col gap-3">
+          <h2 className="text-sm font-medium">Repositories</h2>
+          {grid}
+        </section>
+      ) : (
+        grid
+      )}
+    </>
+  );
+}
+
+/** A group matches on its name, address, publisher, or any member repository. */
+function groupMatches(card: PublicGroupCard, needle: string): boolean {
+  return [card.name, card.slug, card.publisher.login, publisherName(card.publisher)]
+    .concat(card.repositories)
+    .some((text) => text.toLowerCase().includes(needle));
 }
 
 /** A card matches on its repository, its publisher's login, or the name the card shows. */

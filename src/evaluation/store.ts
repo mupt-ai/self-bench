@@ -3,14 +3,12 @@ import type { ArtifactStore } from "../artifacts/index.js";
 import type { RunSummaryStore } from "../db/evaluation-summaries.js";
 import { reportError } from "../lib/telemetry/sentry.js";
 import { dariRouter } from "./catalog.js";
-import { type EvaluationScope, scopeOf } from "./scope.js";
+import { type EvaluationScope, scopePath } from "./scope.js";
 import type { EvaluationInput, EvaluationRun } from "./types.js";
 
 export function evaluationPrefix(scope: EvaluationScope, id = ""): string {
-  const { repoId, benchmarkId } = scopeOf(scope);
   if (id && !/^[a-f0-9-]{36}$/.test(id)) throw new Error("Invalid evaluation identity");
-  const root =
-    repoId !== undefined ? `evaluations/repos/${repoId}` : `evaluations/benchmarks/${benchmarkId}`;
+  const root = `evaluations/${scopePath(scope)}`;
   return `${root}/${id ? `${id}/` : ""}`;
 }
 export function initialEvaluation(input: EvaluationInput, modelLabel: string): EvaluationRun {
@@ -208,10 +206,20 @@ export async function listEvaluations(
 export const live = (run: Pick<EvaluationRun, "deletedAt">): boolean => !run.deletedAt;
 
 /** Every run of the scope, deleted ones included, newest first. */
-export async function readEvaluations(
+async function readEvaluations(
   store: ArtifactStore,
   scope: EvaluationScope,
 ): Promise<EvaluationRun[]> {
+  const runs: EvaluationRun[] = [];
+  for await (const run of iterateEvaluations(store, scope)) runs.push(run);
+  return runs.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+}
+
+/** Read one full snapshot at a time, allowing callers to discard transcripts before the next. */
+export async function* iterateEvaluations(
+  store: ArtifactStore,
+  scope: EvaluationScope,
+): AsyncGenerator<EvaluationRun> {
   const prefix = evaluationPrefix(scope);
   const entries = (await store.list(prefix.slice(0, -1))).filter((entry) =>
     entry.key.startsWith(prefix),
@@ -222,13 +230,8 @@ export async function readEvaluations(
     const id = entry.key.slice(prefix.length).split("/")[0];
     if (id && entry.key > (latest.get(id) ?? "")) latest.set(id, entry.key);
   }
-  const runs = await Promise.all(
-    [...latest.values()].map(async (key) => {
-      const bytes = await store.getByKey(key);
-      return bytes ? (JSON.parse(Buffer.from(bytes).toString("utf8")) as EvaluationRun) : undefined;
-    }),
-  );
-  return runs
-    .filter((run): run is EvaluationRun => !!run)
-    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  for (const key of latest.values()) {
+    const bytes = await store.getByKey(key);
+    if (bytes) yield JSON.parse(Buffer.from(bytes).toString("utf8")) as EvaluationRun;
+  }
 }

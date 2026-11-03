@@ -2,6 +2,7 @@ import { knownCostLabel } from "../evaluation/cost-total.js";
 import { harnessLabels } from "../evaluation/models.js";
 import { gateways, isGateway } from "../gateways/index.js";
 import { directoryOf } from "../public/directory.js";
+import { groupHref, type PublishedGroup } from "../public/release-groups.js";
 import type { PublishedLine, ReleaseSetting } from "../public/release-types.js";
 import {
   defaultLineOf,
@@ -28,16 +29,33 @@ const dollars = (value: number) => (value === 0 ? "$0" : `$${value.toFixed(value
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 const day = (iso: string) => iso.slice(0, 10);
 
-const link = (href: string, text: string) =>
+export const link = (href: string, text: string) =>
   `<a href="${escapeAttribute(href)}">${escapeText(text)}</a>`;
-const HOME_LINK = `<p>${link("/", "All Repositories on SelfBench")}</p>`;
+export const HOME_LINK = `<p>${link("/", "All Repositories on SelfBench")}</p>`;
 
 /** The page's main content, as the root's only child; `kind` sets its layout in page-text.css. */
-const main = (kind: "home" | "repository" | "missing", parts: readonly string[]) =>
+export const main = (kind: "home" | "repository" | "group" | "missing", parts: readonly string[]) =>
   `<main class="page-text" data-page="${kind}">${parts.join("")}</main>`;
 
-/** The directory's heading and every repository's default line, newest first, as the page lists them. */
-export function homeBody(repositories: readonly (readonly PublishedLine[])[]): string {
+/** The home page's repository groups, most recently changed first, as the page lists them. */
+function groupsText(groups: readonly PublishedGroup[]): string[] {
+  if (groups.length === 0) return [];
+  const items = groups.map((group) => {
+    const names = group.members.map((member) => member.repository.fullName).join(", ");
+    const summary = `${group.members.length} repositories (${names}), ${plural(group.tasks, "task")}, ${plural(group.settings.length, "setting")}, run by ${group.publisher.login}.`;
+    return `<li>${link(groupHref(group.publisher.login, group.slug), group.name)} <span>${escapeText(summary)}</span></li>`;
+  });
+  return ["<h2>Repository Groups</h2>", `<ul>${items.join("")}</ul>`];
+}
+
+/**
+ * The directory's heading, the repository groups, and every repository's default line, newest
+ * first, as the page lists them.
+ */
+export function homeBody(
+  repositories: readonly (readonly PublishedLine[])[],
+  groups: readonly PublishedGroup[] = [],
+): string {
   const cards = directoryOf(repositories.flat())
     .filter((card) => card.defaultLine)
     .slice(0, HOME_LIMIT);
@@ -62,6 +80,9 @@ export function homeBody(repositories: readonly (readonly PublishedLine[])[]): s
   return main("home", [
     `<h1>${escapeText(HOME_HEADING)}</h1>`,
     `<p>${escapeText(HOME_DESCRIPTION)}</p>`,
+    ...groupsText(groups),
+    // Under their own heading only beside the groups', as on the page.
+    groups.length > 0 && items.length > 0 ? "<h2>Repositories</h2>" : "",
     items.length > 0 ? `<ul>${items.join("")}</ul>` : "",
   ]);
 }
@@ -105,7 +126,7 @@ const ranked = (settings: readonly ReleaseSetting[]) =>
   );
 
 /** Every setting, as the page's table starts. */
-function settingsTable(settings: readonly ReleaseSetting[]): string {
+export function settingsTable(settings: readonly ReleaseSetting[]): string {
   const rows = ranked(settings).map((setting) => {
     const [model, ...rest] = COLUMNS.map(([, cell]) => escapeText(cell(setting)));
     return `<tr><th scope="row">${model}</th>${rest.map((cell) => `<td>${cell}</td>`).join("")}</tr>`;

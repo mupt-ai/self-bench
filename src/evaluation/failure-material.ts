@@ -100,14 +100,16 @@ export async function storedFailureMaterial(
 }
 
 /** Where a failed trial's material waits for explainTrialFailure, beside its other artifacts. */
-export function materialKey(trial: Pick<FailedTrial, "repoId" | "benchmarkId" | "id" | "index">) {
+export function materialKey(
+  trial: Pick<FailedTrial, "repoId" | "benchmarkId" | "groupId" | "id" | "index">,
+) {
   return `${evaluationPrefix(trial, trial.id)}failures/${trial.index}.md`;
 }
 
 /** Keeps a saved trial's failure material for explainTrialFailure; a failure only loses it. */
 export async function keepFailureMaterial(
   store: ArtifactStore,
-  trial: Pick<FailedTrial, "repoId" | "benchmarkId" | "id" | "index">,
+  trial: Pick<FailedTrial, "repoId" | "benchmarkId" | "groupId" | "id" | "index">,
   material: string,
 ): Promise<void> {
   await store

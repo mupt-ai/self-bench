@@ -49,7 +49,13 @@ export function ScopeLayout({
             <Breadcrumbs items={[parent, { label, mono: true }]} />
             <nav
               className="flex gap-6 overflow-x-auto border-b border-border [&_a]:shrink-0 [&_a]:border-b-2 [&_a]:border-transparent [&_a]:py-3 [&_a]:text-sm [&_a]:font-medium [&_a]:text-muted-foreground [&_a:hover]:text-foreground [&_a.active]:border-foreground [&_a.active]:text-foreground"
-              aria-label={kind === "repository" ? "Repository Sections" : "Benchmark Sections"}
+              aria-label={
+                kind === "repository"
+                  ? "Repository Sections"
+                  : kind === "group"
+                    ? "Group Sections"
+                    : "Benchmark Sections"
+              }
             >
               <NavLink to={pages} end>
                 Dataset

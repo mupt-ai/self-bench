@@ -4,8 +4,8 @@ import { type EvaluationScope, scopeKey, scopeOf } from "./scope.js";
 import {
   evaluationPrefix,
   getEvaluation,
+  iterateEvaluations,
   keepSummary,
-  readEvaluations,
   runSummariesOf,
   runSummary,
   savedSince,
@@ -56,9 +56,10 @@ function rebuild(
   const read = (async () => {
     const run = await getEvaluation(store, scope, id);
     if (!run) return undefined;
-    // Saved while the list is answered: the list need not wait for the database.
-    void keepSummary(store, run);
-    return runSummary(run);
+    const summary = runSummary(run);
+    // A slow summary save must not retain the full snapshot's transcripts either.
+    void keepSummary(store, summary);
+    return summary;
   })().finally(() => rebuilding.delete(key));
   rebuilding.set(key, read);
   return read;
@@ -76,7 +77,9 @@ export async function listRuns(
   const summaries = runSummariesOf(store);
   if (!summaries) {
     // No database here (a local run): every record is read, as before summaries.
-    const runs = (await readEvaluations(store, scope)).map(runSummary);
+    const runs: EvaluationRun[] = [];
+    for await (const run of iterateEvaluations(store, scope)) runs.push(runSummary(run));
+    newestFirst(runs);
     const tag = tagOf(runs.map((run) => [run.id, run.revision]));
     return tag === have ? { tag } : { tag, runs };
   }
@@ -85,16 +88,23 @@ export async function listRuns(
     summaries.revisions(scope),
   ]);
   const ids = folders.filter((id) => RUN_ID.test(id));
-  // Each run's summary revision if it is current, else its rebuilt summary.
-  const checked = await Promise.all(
+  // Metadata checks stay parallel; only full snapshot expansion must be serialized.
+  const revisionsChecked = await Promise.all(
     ids.map(async (id) => {
       const revision = revisions.get(id);
-      if (revision !== undefined && !(await savedSince(store, { ...scopeOf(scope), id, revision })))
-        return { id, revision };
-      const run = await rebuild(store, scope, id);
-      return run ? { id, revision: run.revision, run } : undefined;
+      const current =
+        revision !== undefined && !(await savedSince(store, { ...scopeOf(scope), id, revision }));
+      return { id, revision: current ? revision : undefined };
     }),
   );
+  const checked: ({ id: string; revision: number; run?: EvaluationRun } | undefined)[] = [];
+  for (const { id, revision } of revisionsChecked) {
+    if (revision !== undefined) checked.push({ id, revision });
+    else {
+      const run = await rebuild(store, scope, id);
+      checked.push(run ? { id, revision: run.revision, run } : undefined);
+    }
+  }
   const current = checked.filter((entry) => entry !== undefined);
   if (have !== undefined && have === tagOf(current.map((entry) => [entry.id, entry.revision])))
     return { tag: have };
@@ -103,15 +113,15 @@ export async function listRuns(
       ? (await summaries.list(scope)).map((summary) => [summary.id, summary])
       : [],
   );
-  const runs = await Promise.all(
-    current.map(async ({ id, run }) => {
-      if (run) return run;
-      const summary = stored.get(id);
-      // A summary can only have moved on since it was checked; one gone altogether (its
-      // repository disconnected meanwhile) is read from the record.
-      return summary ? (JSON.parse(summary.body) as EvaluationRun) : rebuild(store, scope, id);
-    }),
-  );
+  const read = async ({ id, run }: (typeof current)[number]) => {
+    if (run) return run;
+    const summary = stored.get(id);
+    // A summary can only have moved on since it was checked; one gone altogether (its
+    // repository disconnected meanwhile) is read from the record.
+    return summary ? (JSON.parse(summary.body) as EvaluationRun) : rebuild(store, scope, id);
+  };
+  const runs: (EvaluationRun | undefined)[] = [];
+  for (const entry of current) runs.push(await read(entry));
   const listed = newestFirst(runs.filter((run) => run !== undefined));
   return { tag: tagOf(listed.map((run) => [run.id, run.revision])), runs: listed };
 }

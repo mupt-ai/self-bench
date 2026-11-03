@@ -4,7 +4,6 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { sql } from "drizzle-orm";
-import { createSessionSigner, SESSION_COOKIE } from "../../src/api/auth/session.js";
 import { sendApiError } from "../../src/api/http.js";
 import { createSiteAuth } from "../../src/api/routes/auth.js";
 import { createPublicReleaseRoutes } from "../../src/api/routes/public-releases.js";
@@ -20,6 +19,7 @@ import { saveEvaluation } from "../../src/evaluation/store.js";
 import type { EvaluationRun } from "../../src/evaluation/types.js";
 import { releasedTrials } from "../../src/public/release-sources.js";
 import { full, names } from "./release-fixture.js";
+import { sessionFetch } from "./session-fetch.js";
 import { type TestDatabase, testAuthConfig, testDatabase } from "./site-fixture.js";
 import { taskBundle } from "./tar.js";
 import { seedTasks } from "./task-rows.js";
@@ -160,18 +160,8 @@ export async function releaseServer(
       publicRoutes.refresh();
     },
   });
-  const signer = createSessionSigner(testAuthConfig.sessionSecret);
   const base = "/api/orgs/acme/repos/vercel/next.js/releases";
-  const request = (path: string, init: RequestInit = {}, githubId: number | null = 1) =>
-    fetch(`${publicUrl}${path}`, {
-      ...init,
-      headers: {
-        origin: publicUrl,
-        "content-type": "application/json",
-        ...(githubId === null ? {} : { cookie: `${SESSION_COOKIE}=${signer.issue(githubId)}` }),
-        ...init.headers,
-      },
-    });
+  const request = sessionFetch(() => publicUrl);
   return {
     db: database.db,
     artifacts,

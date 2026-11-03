@@ -6,8 +6,9 @@ import { askModel, type FailureSummaryOptions } from "./failure-summary.js";
 import { harnessLabels } from "./models.js";
 import { redactOutput } from "./output.js";
 import { evaluationPrompt } from "./prompts.js";
-import { type EvaluationScope, scopeOf } from "./scope.js";
-import { evaluationPrefix, listEvaluations } from "./store.js";
+import { listRuns } from "./run-list.js";
+import { type EvaluationScope, scopeOf, scopePath } from "./scope.js";
+import { evaluationPrefix, getEvaluation, live } from "./store.js";
 import type { EvaluationRun, EvaluationTrial } from "./types.js";
 
 /** The longest audit kept; the prompt asks for a verdict and a few sentences. */
@@ -57,9 +58,7 @@ export type TaskRef = EvaluationScope & Pick<TaskAuditRequest, "runId" | "taskId
 
 /** Where a task's latest audit is kept, apart from any one evaluation. */
 function taskAuditKey({ runId, taskId, ...scope }: TaskRef): string {
-  const { repoId, benchmarkId } = scopeOf(scope);
-  const root = repoId !== undefined ? `repos/${repoId}` : `benchmarks/${benchmarkId}`;
-  return `audits/${root}/${encodeURIComponent(runId)}/${encodeURIComponent(taskId)}.json`;
+  return `audits/${scopePath(scope)}/${encodeURIComponent(runId)}/${encodeURIComponent(taskId)}.json`;
 }
 
 const failureKey = (task: TaskRef) => taskAuditKey(task).replace(/\.json$/, ".failed.json");
@@ -156,7 +155,7 @@ async function judge(
   const key = (await options.vault?.credentials.secret(orgId, credentialId))?.value;
   if (!key) throw new Error("Audit API key is unavailable.");
 
-  const attempts = taskAttempts(await listEvaluations(store, scope), request);
+  const attempts = taskAttempts(((await listRuns(store, scope)).runs ?? []).filter(live), request);
   const failures = attempts.filter(failedAttempt);
   if (!failures.length) return true;
   const redact = (text: string) => options.redact(redactOutput(text, [key]));
@@ -234,33 +233,36 @@ async function auditMaterial(
       (attempt) => `${configurationOf(attempt)}: ${failedAttempt(attempt) ? "failed" : "passed"}`,
     )
     .join("\n");
-  const failures = await Promise.all(
-    attempts
-      .filter(failedAttempt)
-      .slice(-MAX_FAILURES)
-      .map(async (attempt) => {
-        const prefix = `${evaluationPrefix(scope, attempt.run.id)}artifacts/`;
-        const output = await Promise.all(
-          attempt.trial.artifacts
-            .filter((name) => VERIFIER_FILE.test(name))
-            .sort()
-            .map(async (name) => {
-              const bytes = await store.getByKey(`${prefix}${name}`);
-              return `${name.split("/").at(-1)}:\n${Buffer.from(bytes ?? []).toString("utf8")}`;
-            }),
-        );
-        return [
-          `<failed_attempt configuration="${configurationOf(attempt)}">`,
-          section("verifier_checks", JSON.stringify(attempt.trial.rewards), 1_000),
-          timeLimit(attempt.trial) ?? "",
-          section("verifier_output", output.join("\n\n"), 12_000),
-          section("explanation", attempt.trial.failureSummary?.text, 2_000),
-          "</failed_attempt>",
-        ]
-          .filter(Boolean)
-          .join("\n");
-      }),
-  );
+  const failures: string[] = [];
+  // Only the newest failures need evidence. Expand one run at a time in the worker,
+  // retaining excerpts, not entire runs' logs and transcripts.
+  for (const attempt of attempts.filter(failedAttempt).slice(-MAX_FAILURES)) {
+    const run = await getEvaluation(store, scope, attempt.run.id);
+    const trial = run?.trials[attempt.index];
+    if (!trial) continue;
+    const prefix = `${evaluationPrefix(scope, attempt.run.id)}artifacts/`;
+    const output = await Promise.all(
+      trial.artifacts
+        .filter((name) => VERIFIER_FILE.test(name))
+        .sort()
+        .map(async (name) => {
+          const bytes = await store.getByKey(`${prefix}${name}`);
+          return `${name.split("/").at(-1)}:\n${Buffer.from(bytes ?? []).toString("utf8")}`;
+        }),
+    );
+    failures.push(
+      [
+        `<failed_attempt configuration="${configurationOf(attempt)}">`,
+        section("verifier_checks", JSON.stringify(attempt.trial.rewards), 1_000),
+        timeLimit(attempt.trial) ?? "",
+        section("verifier_output", output.join("\n\n"), 12_000),
+        section("explanation", attempt.trial.failureSummary?.text, 2_000),
+        "</failed_attempt>",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    );
+  }
   return [
     section("instruction", files.get("instruction.md"), 10_000),
     section("held_out_tests", files.get("tests/test.patch"), 30_000),

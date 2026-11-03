@@ -5,8 +5,9 @@ import {
   explanationModel,
   explanationSelectionSchema,
 } from "../../evaluation/explanation-model.js";
+import { listRuns } from "../../evaluation/run-list.js";
 import type { EvaluationScope } from "../../evaluation/scope.js";
-import { listEvaluations } from "../../evaluation/store.js";
+import { live } from "../../evaluation/store.js";
 import { failedAttempt, readTaskAudit, taskAttempts } from "../../evaluation/task-audit.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
 import type { EvaluationRoutesOptions } from "./evaluations.js";
@@ -78,10 +79,10 @@ export async function auditTaskRoute(
     return;
   }
   const [runs, { running }] = await Promise.all([
-    listEvaluations(options.artifacts, scope),
+    listRuns(options.artifacts, scope),
     options.audit.state(ref),
   ]);
-  const attempts = taskAttempts(runs, task);
+  const attempts = taskAttempts((runs.runs ?? []).filter(live), task);
   if (!attempts.some(failedAttempt)) {
     sendJson(response, 409, {
       error: "No attempt failed this task, so there is nothing to audit.",

@@ -6,6 +6,7 @@ import {
   type CredentialStore,
   credentialSchema,
   maxSandboxesSchema,
+  savedModelsSchema,
 } from "../../src/db/credentials.js";
 import { type EncryptedRecordStore, RecordStoreError } from "../../src/db/encrypted-records.js";
 import type { Vault } from "../../src/db/vault.js";
@@ -79,6 +80,7 @@ export function memoryVault(records: EncryptedRecordStore = new MemoryRecords())
         ...(endpoint ? { endpoint } : {}),
         ...(parsed.maxSandboxes ? { maxSandboxes: parsed.maxSandboxes } : {}),
         ...(parsed.maxBuilds ? { maxBuilds: parsed.maxBuilds } : {}),
+        ...(parsed.models?.length ? { models: parsed.models } : {}),
         secret: {
           value,
           ...(tokenId ? { tokenId } : {}),
@@ -98,6 +100,15 @@ export function memoryVault(records: EncryptedRecordStore = new MemoryRecords())
       if (!row) throw new Error("Credential not found");
       if (value === undefined) delete row[column];
       else row[column] = maxSandboxesSchema.parse(value);
+    },
+    async saveModels(orgId, id, models) {
+      const row = live(orgId, id);
+      if (!row) throw new Error("Credential not found");
+      const parsed = savedModelsSchema.parse(models);
+      if (row.kind !== "custom" && parsed.length)
+        throw new Error("Only custom providers save model IDs");
+      if (parsed.length) row.models = parsed;
+      else delete row.models;
     },
     async remove(orgId, id) {
       const row = live(orgId, id);

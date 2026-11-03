@@ -1,5 +1,6 @@
 import React from "react";
 import { REGISTRY_REFERENCE, registryReference } from "../../../../src/contracts/harbor-registry";
+import { InfoTooltip } from "../primitives/tooltip";
 import { AddScopeButton } from "../ScopeCard";
 import { Button, Input } from "../ui";
 
@@ -64,8 +65,12 @@ export function AddBenchmarkCard({
       }}
     >
       <label className="grid gap-2 text-sm font-semibold" htmlFor="benchmark-reference">
-        Harbor Registry Dataset
+        <span className="flex items-center gap-1.5">
+          Harbor Registry Dataset
+          <InfoTooltip label="Without @ref, each run uses the latest version." />
+        </span>
         <Input
+          aria-label="Harbor Registry Dataset"
           id="benchmark-reference"
           placeholder="org/name@ref"
           list="benchmark-suggestions"
@@ -76,7 +81,7 @@ export function AddBenchmarkCard({
           value={value}
           disabled={busy}
           aria-invalid={error ? true : undefined}
-          aria-describedby={error ? "benchmark-error" : "benchmark-help"}
+          aria-describedby={error ? "benchmark-error" : busy ? "benchmark-help" : undefined}
           onChange={(event) => {
             setValue(event.target.value);
             setError("");
@@ -93,11 +98,11 @@ export function AddBenchmarkCard({
           {error}
         </p>
       ) : (
-        <p id="benchmark-help" className="text-xs text-muted-foreground">
-          {busy
-            ? "Downloading and checking each task…"
-            : "Without @ref, each run uses the latest version."}
-        </p>
+        busy && (
+          <p id="benchmark-help" className="text-xs text-muted-foreground">
+            Downloading and checking each task…
+          </p>
+        )
       )}
       <div className="mt-auto flex justify-end gap-2">
         <Button

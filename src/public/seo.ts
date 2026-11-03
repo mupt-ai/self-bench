@@ -1,4 +1,5 @@
 import { frontierSettings } from "./directory.js";
+import type { PublishedGroup } from "./release-groups.js";
 import type { PublishedLine, ReleaseSetting } from "./release-types.js";
 
 /**
@@ -59,25 +60,30 @@ function nameBeside(setting: ReleaseSetting, other?: ReleaseSetting): string {
 const DESCRIPTION_LIMIT = 160;
 
 /**
- * A repository page's description: its most accurate setting and the best one for less (the next
+ * A results page's description: its most accurate setting and the best one for less (the next
  * on the frontier: the most accurate of the settings that cost less), then what was measured.
  * Search results show only the first 150 or so characters, so the picks come first, and whole
  * sentences are left off the end rather than cut.
  */
-export function repositoryDescription(line: PublishedLine, limit = DESCRIPTION_LIMIT): string {
-  const { release } = line;
-  const [best, next] = frontierSettings(release.settings).sort(
+function resultsDescription(
+  subject: string,
+  settings: readonly ReleaseSetting[],
+  tasks: number,
+  /** Where the tasks came from, ending the last sentence. */
+  from: string,
+  limit: number,
+): string {
+  const [best, next] = frontierSettings(settings).sort(
     (left, right) =>
       right.accuracy - left.accuracy ||
       left.costPerTaskUsd - right.costPerTaskUsd ||
       left.id.localeCompare(right.id),
   );
-  const settings = release.settings.length;
   const [question, ...rest] = [
-    `Which coding agent works best on ${release.repository.fullName}?`,
+    `Which coding agent works best on ${subject}?`,
     best ? `Most accurate: ${nameBeside(best, next)}, ${scored(best)} per task.` : "",
     next ? `Best for less: ${nameBeside(next, best)}, ${scored(next)}.` : "",
-    `${settings} model ${settings === 1 ? "setting" : "settings"} scored on ${release.tasks} ${release.tasks === 1 ? "task" : "tasks"} from its merged pull requests.`,
+    `${settings.length} model ${settings.length === 1 ? "setting" : "settings"} scored on ${tasks} ${tasks === 1 ? "task" : "tasks"} ${from}.`,
   ].filter(Boolean);
   // Whole sentences, in order, while they fit; the question always leads.
   let text = question ?? "";
@@ -86,6 +92,34 @@ export function repositoryDescription(line: PublishedLine, limit = DESCRIPTION_L
     text = `${text} ${part}`;
   }
   return text;
+}
+
+/** A repository page's description (`resultsDescription`). */
+export function repositoryDescription(line: PublishedLine, limit = DESCRIPTION_LIMIT): string {
+  const { release } = line;
+  return resultsDescription(
+    release.repository.fullName,
+    release.settings,
+    release.tasks,
+    "from its merged pull requests",
+    limit,
+  );
+}
+
+export function groupTitle(name: string): string {
+  return `${name}: Coding Agent Benchmark · ${SITE_NAME}`;
+}
+
+/** A repository group's description, as a repository's, over every member's tasks. */
+export function groupDescription(group: PublishedGroup, limit = DESCRIPTION_LIMIT): string {
+  const count = group.members.length;
+  return resultsDescription(
+    group.name,
+    group.settings,
+    group.tasks,
+    `from the merged pull requests of ${count} ${count === 1 ? "repository" : "repositories"}`,
+    limit,
+  );
 }
 
 /**

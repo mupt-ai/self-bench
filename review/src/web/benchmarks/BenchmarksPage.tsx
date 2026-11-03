@@ -11,7 +11,7 @@ type Benchmarks = { status: "loading" } | { status: "ok"; benchmarks: Benchmark[
 /** The org's benchmarks: Harbor registry datasets it runs models on, apart from its repositories. */
 export function BenchmarksPage() {
   const { org } = useOrg();
-  useDocumentTitle(`Benchmarks · ${org.login}`);
+  useDocumentTitle(`Public Benchmarks · ${org.login}`);
   const [benchmarks, setBenchmarks] = React.useState<Benchmarks>({ status: "loading" });
   const [error, setError] = React.useState<string | null>(null);
   React.useEffect(() => {
@@ -51,7 +51,7 @@ export function BenchmarksPage() {
   return (
     <PageFrame>
       <PageHeader
-        title="Benchmarks"
+        title="Public Benchmarks"
         description="Datasets from Harbor's registry that models run on, apart from your repositories."
       />
       {error && <Notice className="mb-4">{error}</Notice>}

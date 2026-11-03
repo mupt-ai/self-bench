@@ -31,8 +31,38 @@ export function repositoryPath(segments: readonly string[]): RepositoryPath | un
   }
   const [owner = "", name = "", publisher] = decoded;
   if (!valid(owner, 39) || !valid(name, 100)) return undefined;
+  // The groups' own addresses; GitHub has no account by that name.
+  if (owner.toLowerCase() === GROUPS) return undefined;
   if (publisher !== undefined && !valid(publisher, 39)) return undefined;
   return publisher === undefined ? { owner, name } : { owner, name, publisher };
+}
+
+const GROUPS = "groups";
+
+/** A group's slug: lower-case letters, digits and single hyphens, as `python-web-frameworks`. */
+export const GROUP_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+export const GROUP_SLUG_MAX = 60;
+
+/** A repository group's page, `/groups/publisher/slug`. */
+export interface GroupPath {
+  publisher: string;
+  slug: string;
+}
+
+/** The group named by path segments `["groups", publisher, slug]`, or undefined. */
+export function groupPath(segments: readonly string[]): GroupPath | undefined {
+  if (segments.length !== 3 || segments[0]?.toLowerCase() !== GROUPS) return undefined;
+  let publisher: string;
+  let slug: string;
+  try {
+    publisher = decodeURIComponent(segments[1] ?? "");
+    slug = decodeURIComponent(segments[2] ?? "");
+  } catch {
+    return undefined;
+  }
+  if (!valid(publisher, 39) || !GROUP_SLUG.test(slug) || slug.length > GROUP_SLUG_MAX)
+    return undefined;
+  return { publisher, slug };
 }
 
 /** The non-empty segments of a URL path. */

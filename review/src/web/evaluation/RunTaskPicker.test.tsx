@@ -31,7 +31,7 @@ test("individual task deselection removes slash-containing task IDs", async () =
     return (
       <MemoryRouter>
         <RunTaskPicker
-          scope={{ repo: "owner/repo", pages: "/repos/owner/repo" }}
+          scope={{ kind: "repository", repo: "owner/repo", pages: "/repos/owner/repo" }}
           availableTasks={availableTasks}
           picked={tasks}
           tasksReady

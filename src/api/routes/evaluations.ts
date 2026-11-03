@@ -1,6 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { BenchmarkStore } from "../../db/benchmarks.js";
+import type { GroupStore } from "../../db/groups.js";
+import type { ReleaseStore } from "../../db/releases.js";
 import type { ConnectedRepo, RepoStore } from "../../db/repos.js";
 import type { TaskStore } from "../../db/tasks.js";
 import type { User, UserStore } from "../../db/users.js";
@@ -20,6 +22,7 @@ import { benchmarkRoutes } from "./benchmarks.js";
 import { credentialRoutes } from "./credentials.js";
 import { type CustomerExportRegistry, customerExportRoute } from "./customer-exports.js";
 import { EVALUATIONS_PATH, handleScopedEvaluations } from "./evaluation-scope.js";
+import { groupRoutes } from "./groups.js";
 
 /** A repository's evaluations: what follows it is EVALUATIONS_PATH. */
 const repoRoute =
@@ -49,6 +52,13 @@ export interface EvaluationRoutesOptions {
   registryCommand?: typeof runCommand;
   /** The org's benchmarks (Harbor registry datasets); without them, no benchmark routes. */
   benchmarks?: BenchmarkStore;
+  /** The org's repository groups; without them, no group routes. */
+  groups?: GroupStore;
+  /** Group releases, which deleting a group withdraws, and who is told the pages it changed. */
+  groupReleases?: {
+    store: Pick<ReleaseStore, "withdrawLine">;
+    changed?: (paths: string[]) => void;
+  };
   vault?: Vault;
   codexLogins?: CodexLogins;
   claudeLogins?: ClaudeLogins;
@@ -82,6 +92,7 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
     ): Promise<boolean> {
       if (await credentialRoutes(options, request, url, response, user)) return true;
       if (await benchmarkRoutes(options, request, url, response, user)) return true;
+      if (await groupRoutes(options, privateNow, request, url, response, user)) return true;
       const repoMatch = repoRoute.exec(url.pathname);
       const path = repoMatch?.[4] ? EVALUATIONS_PATH.exec(repoMatch[4]) : null;
       if (repoMatch?.[1] && repoMatch[2] && repoMatch[3] && path) {

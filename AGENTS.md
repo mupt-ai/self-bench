@@ -11,6 +11,12 @@
 - Write the intended casing in the source. Do not add CSS `capitalize` or a runtime title-casing utility; existing intentional uppercase badge styling may remain.
 - Apply this rule to new UI and update label-sensitive tests when changing existing copy.
 
+## Helper Text Goes in Tooltips
+
+- Don't put explanatory helper text, hints, or disclaimers under fields, headings, or buttons (for example "Leave blank for no limit." or "Provider charges apply."). Put it in an `InfoTooltip` (`review/src/web/primitives/tooltip.tsx`) next to the label, heading, or control it explains: `<span className="flex items-center gap-1.5">Label <InfoTooltip label="…" /></span>`.
+- When the tooltip sits inside a `<label>`, give the control an `aria-label` matching the visible label so its accessible name doesn't swallow the tooltip text. Next to a heading, put the tooltip beside the `<h2>`, not inside it; in a `<legend>`, give the fieldset an `aria-label`.
+- Keep inline only what the user must see without hovering: errors, live status ("Loading…", "Saving…"), empty states, a confirmation dialog's statement of what the action does, and one-time warnings such as an API key secret shown only once.
+
 ## Model Vendors
 
 - Every model vendor has one color and one display name, in `VENDOR_COLORS` and `VENDOR_NAMES` in `src/public/vendors.ts`. Both results charts (the selfbench.dev repository page and the app's Results page), the public tables, and the link preview images the server draws use them, so a vendor looks the same everywhere.
@@ -44,6 +50,7 @@ All of it is built from the released lines on every request, so a release or wit
 
   `src/api/site-pages.ts` puts a page together, and the shared strings are in `src/public/seo.ts`.
 - **Keep the server's text in step with the page.** `site-body.ts` repeats what the page shows: its headings ("All Settings", "Tasks", "Other Benchmarks of This Repo") and the settings table's column names (`ModelTable.tsx`). When you rename, add or remove one on the page, make the same change there. The home heading is `HOME_HEADING` in `seo.ts`, which both use. Keep exactly one `<h1>` per page, with the page's own heading.
+- **Repository groups** (`/groups/<publisher>/<slug>`, `GroupPage.tsx`) show a group's current release (`group_releases`, built in `src/api/routes/group-releases.ts`), not its members' own releases. Their head and text are in `src/api/site-group.ts`, and the home page's Repository Groups section is in `site-body.ts`. `groups` is reserved as a repository owner (`paths.ts`): GitHub has no such account.
 - **Titles live in one place.** The site sets the same titles as the server (`useTitle` with `HOME_TITLE` or `repositoryTitle`), so change them in `seo.ts` only.
 - **A new page needs all of these,** or search engines get a 404, a generic head or an empty page:
   1. its status in `site-pages.ts`
