@@ -41,6 +41,7 @@ export function modelConfig(
             base_url: customBaseUrl(deps, credential.endpoint, key),
             // With no level asked for (endpointEffort), the call goes without one.
             ...(key.endpointEffort ? { supported_thinking_levels: ["off" as const] } : {}),
+            ...ROUTER_LIMITS,
             cost: { input: 0, output: 0 },
           }
         : undefined);
@@ -72,6 +73,17 @@ function dariModelConfig(endpoint: string | null | undefined): GatewayModelConfi
     base_url: dariEndpoint(endpoint ?? undefined),
     // The router picks each call's effort, and refuses OpenRouter's `reasoning` field.
     supported_thinking_levels: ["off"],
+    ...ROUTER_LIMITS,
     cost: { input: 0, output: 0 },
   };
 }
+
+/**
+ * The limits a router endpoint is described with, whose model the catalog does not know (Dari,
+ * Shift-1, Ramp's Switchyard). Without them the gateway takes a 128k context window, and Pi caps
+ * each call's output at what that window leaves after the prompt: a long Codex run's ~124k prompt
+ * left almost none, so the router stopped every turn at `max_output_tokens`. The router serves
+ * models with windows of 400k to 1M tokens and enforces each one's own limits, so the gateway
+ * takes the largest and leaves the rest to it.
+ */
+const ROUTER_LIMITS = { context_window: 1_048_576, max_output_tokens: 128_000 } as const;

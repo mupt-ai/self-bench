@@ -266,3 +266,23 @@ test("a router's reported price is recorded as it reports it, ahead of the list 
   ]);
   expect(priced).toEqual([]);
 });
+
+test("a long Codex run keeps the router's output room: the router's window is not taken as 128k", async () => {
+  // ~130k tokens of prompt (Pi estimates four characters a token). On a 128k window Pi would cap
+  // the call's output at the minimum, and the router would stop every turn at max_output_tokens.
+  const response = await fetch(`${apiUrl}/responses`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${trialKey("openai-responses", true)}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: `dari/model/${MODEL}`,
+      stream: true,
+      input: "a ".repeat(260_000),
+    }),
+  });
+  await response.text();
+  expect(calls).toHaveLength(1);
+  expect(Number(calls[0]?.body.max_output_tokens)).toBeGreaterThan(100_000);
+});

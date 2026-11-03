@@ -116,6 +116,9 @@ describe("the platform a trial key resolves to", () => {
         native_model_id: "acme-coder",
         api: "openai-completions",
         base_url: "https://approved.example/v1",
+        // A router's own limits decide; the gateway's 128k default would starve long runs' output.
+        context_window: 1_048_576,
+        max_output_tokens: 128_000,
         cost: { input: 0, output: 0 },
       },
     });
