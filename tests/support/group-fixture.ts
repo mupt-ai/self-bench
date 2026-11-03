@@ -12,7 +12,6 @@ import { createGroupReleaseRoutes } from "../../src/api/routes/group-releases.js
 import { createPublicReleaseRoutes } from "../../src/api/routes/public-releases.js";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { createApiKeyStore } from "../../src/db/api-keys.js";
-import { createGroupReleaseStore } from "../../src/db/group-releases.js";
 import { createGroupStore } from "../../src/db/groups.js";
 import { createReleaseStore } from "../../src/db/releases.js";
 import { createRepoStore } from "../../src/db/repos.js";
@@ -116,10 +115,8 @@ export function groupSuite() {
       fetchImpl: githubFetch,
     });
     const groups = createGroupStore(fixture.database.db);
-    const groupReleases = createGroupReleaseStore(fixture.database.db);
-    const publicRoutes = createPublicReleaseRoutes(createReleaseStore(fixture.database.db), {
-      groups: groupReleases,
-    });
+    const groupReleases = createReleaseStore(fixture.database.db);
+    const publicRoutes = createPublicReleaseRoutes(groupReleases);
     let routes:
       | {
           evaluations: ReturnType<typeof createEvaluationRoutes>;
@@ -177,9 +174,7 @@ export function groupSuite() {
   });
 
   beforeEach(async () => {
-    await fixture.database.db.execute(
-      sql`truncate table repository_groups, group_releases cascade`,
-    );
+    await fixture.database.db.execute(sql`truncate table repository_groups, releases cascade`);
     for (const repo of REPOS) isPrivate[repo.githubId] = false;
   });
 }

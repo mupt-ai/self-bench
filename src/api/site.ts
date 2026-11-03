@@ -7,7 +7,6 @@ import { createBenchmarkStore } from "../db/benchmarks.js";
 import { createBillingStore } from "../db/billing.js";
 import { type OpenDatabase, openDatabase } from "../db/client.js";
 import { createRunSummaryStore } from "../db/evaluation-summaries.js";
-import { createGroupReleaseStore } from "../db/group-releases.js";
 import { createGroupStore } from "../db/groups.js";
 import { createRegistryGrantStore } from "../db/registry-grants.js";
 import { createReleaseStore } from "../db/releases.js";
@@ -105,7 +104,6 @@ export async function openSite(
   const usage = createUsageStore(database.db);
   const releases = createReleaseStore(database.db);
   const groups = createGroupStore(database.db);
-  const groupReleases = createGroupReleaseStore(database.db);
   // Unset means no public results site: no host serves it and nothing links to it.
   const resultsSiteUrl = process.env.SELFBENCH_RESULTS_SITE_URL?.trim().replace(/\/+$/, "") || null;
   // Only prod's site may be indexed; dev's, and any local run, never tells a search engine.
@@ -122,7 +120,6 @@ export async function openSite(
     limiter,
     artifacts,
     trials: releasedTrials(database.db, artifacts),
-    groups: groupReleases,
   });
   /** What both repositories' and groups' release routes read. */
   const releaseDeps = {
@@ -185,7 +182,7 @@ export async function openSite(
         : {}),
       benchmarks: createBenchmarkStore(database.db),
       groups,
-      groupReleases: { store: groupReleases, changed: publicChanged },
+      groupReleases: { store: releases, changed: publicChanged },
       tasks,
       artifacts,
       publicUrl,
@@ -208,7 +205,7 @@ export async function openSite(
     groupReleases: createGroupReleaseRoutes({
       ...releaseDeps,
       groups,
-      releases: groupReleases,
+      releases,
       onPublicChange: publicChanged,
     }),
     publicReleases,

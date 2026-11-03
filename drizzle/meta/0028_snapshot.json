@@ -1,5 +1,5 @@
 {
-  "id": "dc143305-e621-442a-b5f9-3de04cb09a05",
+  "id": "b793d893-875e-4abc-bdd9-8a742bb664c1",
   "prevId": "788b0221-4b13-4a68-86a0-20a660253ee4",
   "version": "7",
   "dialect": "postgresql",
@@ -598,7 +598,13 @@
           "name": "github_repo_id",
           "type": "bigint",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "group_id": {
+          "name": "group_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
         },
         "full_name": {
           "name": "full_name",
@@ -710,6 +716,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "releases_group": {
+          "name": "releases_group",
+          "columns": [
+            {
+              "expression": "group_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -721,12 +742,18 @@
           "columns": [
             "org_id",
             "github_repo_id",
+            "group_id",
             "predecessor_id"
           ]
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "releases_line": {
+          "name": "releases_line",
+          "value": "num_nonnulls(\"releases\".\"github_repo_id\", \"releases\".\"group_id\") = 1"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.repo_runs": {
@@ -2435,156 +2462,6 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.group_releases": {
-      "name": "group_releases",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "group_id": {
-          "name": "group_id",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "slug": {
-          "name": "slug",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "publisher_login": {
-          "name": "publisher_login",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "predecessor_id": {
-          "name": "predecessor_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "released_by": {
-          "name": "released_by",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "released_by_login": {
-          "name": "released_by_login",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "released_at": {
-          "name": "released_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "withdrawn_at": {
-          "name": "withdrawn_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "withdrawn_by_login": {
-          "name": "withdrawn_by_login",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "hash": {
-          "name": "hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "payload": {
-          "name": "payload",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "detail": {
-          "name": "detail",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "group_releases_line_time": {
-          "name": "group_releases_line_time",
-          "columns": [
-            {
-              "expression": "group_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "released_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "group_releases_address": {
-          "name": "group_releases_address",
-          "columns": [
-            {
-              "expression": "lower(\"publisher_login\")",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "slug",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "group_releases_line_predecessor": {
-          "name": "group_releases_line_predecessor",
-          "nullsNotDistinct": true,
-          "columns": [
-            "group_id",
-            "predecessor_id"
-          ]
-        }
-      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

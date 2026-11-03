@@ -251,8 +251,9 @@ export const generationBatches = pgTable("generation_batches", {
 });
 
 /**
- * Public releases: append-only snapshots a workspace published for a public repository. A
- * line is one workspace plus one GitHub repository id; its current release is the newest row
+ * Public releases: append-only snapshots a workspace published for a public repository or a
+ * repository group. A line is one workspace plus one GitHub repository id, or one group; its
+ * current release is the newest row
  * not withdrawn. No foreign keys, so disconnecting a repository or deleting tasks never
  * touches what was published. `payload` is what the public API serves; `detail` is private.
  */
@@ -261,7 +262,11 @@ export const releases = pgTable(
   {
     id: uuid("id").primaryKey(),
     orgId: bigint("org_id", { mode: "number" }).notNull(),
-    githubRepoId: bigint("github_repo_id", { mode: "number" }).notNull(),
+    /** The repository a repository's line releases; null on a group's line. */
+    githubRepoId: bigint("github_repo_id", { mode: "number" }),
+    /** The repository group a group's line releases (repository_groups); null otherwise. */
+    groupId: bigint("group_id", { mode: "number" }),
+    /** The repository's `owner/name`, or the group's address. */
     fullName: text("full_name").notNull(),
     publisherLogin: text("publisher_login").notNull(),
     /** The line's head when this row was written; null for a line's first release. */
@@ -281,8 +286,10 @@ export const releases = pgTable(
     index("releases_full_name").on(sql`lower(${table.fullName})`),
     // Only one successor per row, and only one first release per line.
     unique("releases_line_predecessor")
-      .on(table.orgId, table.githubRepoId, table.predecessorId)
+      .on(table.orgId, table.githubRepoId, table.groupId, table.predecessorId)
       .nullsNotDistinct(),
+    index("releases_group").on(table.groupId),
+    check("releases_line", sql`num_nonnulls(${table.githubRepoId}, ${table.groupId}) = 1`),
   ],
 );
 

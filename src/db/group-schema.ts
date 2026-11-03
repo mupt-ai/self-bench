@@ -1,15 +1,12 @@
-import { sql } from "drizzle-orm";
 import {
   bigint,
   bigserial,
-  index,
   integer,
   jsonb,
   pgTable,
   primaryKey,
   text,
   timestamp,
-  unique,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -20,7 +17,7 @@ const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode
 /**
  * Repository groups: a workspace's named set of its connected repositories, evaluated together
  * like one repository. Its runs are its own (EvaluationScope's `groupId`), over its members'
- * approved tasks, and its releases are its own too (`group_releases`).
+ * approved tasks, and its releases are a line of `releases` (`group_id`).
  */
 export const repositoryGroups = pgTable(
   "repository_groups",
@@ -54,37 +51,4 @@ export const groupSummaries = pgTable(
     body: text("body").notNull(),
   },
   (table) => [primaryKey({ columns: [table.groupId, table.id] })],
-);
-
-/**
- * A group's public releases, append-only like `releases`: a line is one group, its current
- * release the newest row not withdrawn. No foreign keys, so deleting the group never touches
- * what was published; `payload` is what the public API serves, `detail` is private.
- */
-export const groupReleases = pgTable(
-  "group_releases",
-  {
-    id: uuid("id").primaryKey(),
-    groupId: bigint("group_id", { mode: "number" }).notNull(),
-    orgId: bigint("org_id", { mode: "number" }).notNull(),
-    /** The group's address and the workspace's login when released: its page's address. */
-    slug: text("slug").notNull(),
-    publisherLogin: text("publisher_login").notNull(),
-    predecessorId: uuid("predecessor_id"),
-    releasedBy: bigint("released_by", { mode: "number" }).notNull(),
-    releasedByLogin: text("released_by_login").notNull(),
-    releasedAt: timestamptz("released_at").notNull().defaultNow(),
-    withdrawnAt: timestamptz("withdrawn_at"),
-    withdrawnByLogin: text("withdrawn_by_login"),
-    hash: text("hash").notNull(),
-    payload: jsonb("payload").notNull(),
-    detail: jsonb("detail").notNull(),
-  },
-  (table) => [
-    index("group_releases_line_time").on(table.groupId, table.releasedAt),
-    index("group_releases_address").on(sql`lower(${table.publisherLogin})`, table.slug),
-    unique("group_releases_line_predecessor")
-      .on(table.groupId, table.predecessorId)
-      .nullsNotDistinct(),
-  ],
 );

@@ -1,8 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { BenchmarkStore } from "../../db/benchmarks.js";
-import type { GroupReleaseStore } from "../../db/group-releases.js";
 import type { GroupStore } from "../../db/groups.js";
+import type { ReleaseStore } from "../../db/releases.js";
 import type { ConnectedRepo, RepoStore } from "../../db/repos.js";
 import type { TaskStore } from "../../db/tasks.js";
 import type { User, UserStore } from "../../db/users.js";
@@ -56,7 +56,7 @@ export interface EvaluationRoutesOptions {
   groups?: GroupStore;
   /** Group releases, which deleting a group withdraws, and who is told the pages it changed. */
   groupReleases?: {
-    store: Pick<GroupReleaseStore, "withdrawAll">;
+    store: Pick<ReleaseStore, "withdrawLine">;
     changed?: (paths: string[]) => void;
   };
   vault?: Vault;

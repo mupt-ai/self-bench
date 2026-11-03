@@ -206,9 +206,11 @@ export async function groupRoutes(
     if (active.includes(true))
       return send([409, { error: "Cancel this group's unfinished runs before deleting it" }]);
     // Its page goes with it: nothing would be left to withdraw it from.
-    const withdrawn = await options.groupReleases?.store.withdrawAll(group.id, user.login);
-    if (withdrawn?.length)
-      options.groupReleases?.changed?.(["/", groupHref(tenant.login, group.slug)]);
+    const withdrawn = await options.groupReleases?.store.withdrawLine(
+      { orgId: tenant.id, groupId: group.id },
+      user.login,
+    );
+    if (withdrawn) options.groupReleases?.changed?.(["/", groupHref(tenant.login, group.slug)]);
     await store.remove(tenant.id, group.slug);
     track(user, "repository group deleted", {}, tenant);
     return send([200, { ok: true }]);
