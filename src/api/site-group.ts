@@ -1,8 +1,8 @@
 import { groupHref, mostAccurate, type PublishedGroup } from "../public/release-groups.js";
-import { groupDescription, groupTitle, SITE_NAME } from "../public/seo.js";
+import { groupDescription, groupTitle } from "../public/seo.js";
 import { escapeText } from "./http.js";
 import { HOME_LINK, link, main, settingsTable } from "./site-body.js";
-import { MEASUREMENT_TECHNIQUE, type PageHead } from "./site-head.js";
+import { type PageHead, resultsStructuredData } from "./site-head.js";
 
 /**
  * A repository group's page, as the server writes it before any script runs: its head for
@@ -23,55 +23,22 @@ const memberHref = (fullName: string) => `https://github.com/${fullName}`;
 
 export function groupHead(origin: string, group: PublishedGroup): PageHead {
   const canonical = groupCanonical(origin, group);
-  const { login, kind } = group.publisher;
-  const repositories = group.members.map((member) => member.repository.fullName);
+  const { login } = group.publisher;
   return {
     title: groupTitle(group.name),
     description: groupDescription(group),
     canonical,
-    structuredData: {
-      "@context": "https://schema.org",
-      "@graph": [
-        {
-          "@type": "BreadcrumbList",
-          itemListElement: [
-            { name: SITE_NAME, item: `${origin}/` },
-            { name: group.name, item: canonical },
-          ].map((crumb, index) => ({ "@type": "ListItem", position: index + 1, ...crumb })),
-        },
-        {
-          "@type": "Dataset",
-          "@id": `${canonical}#results`,
-          name: `${group.name} coding agent benchmark results run by ${login}`,
-          description: groupDescription(group, Number.POSITIVE_INFINITY),
-          url: canonical,
-          creator: {
-            "@type": kind === "user" ? "Person" : "Organization",
-            name: login,
-            url: `https://github.com/${login}`,
-          },
-          includedInDataCatalog: { "@type": "DataCatalog", name: SITE_NAME, url: `${origin}/` },
-          dateModified: group.updatedAt,
-          isAccessibleForFree: true,
-          keywords: ["coding agents", "AI models", "benchmark", "evals", ...repositories],
-          about: repositories.map((fullName) => ({
-            "@type": "SoftwareSourceCode",
-            name: fullName,
-            codeRepository: `https://github.com/${fullName}`,
-          })),
-          measurementTechnique: MEASUREMENT_TECHNIQUE,
-          variableMeasured: [
-            { "@type": "PropertyValue", name: "Accuracy", unitText: "percent" },
-            { "@type": "PropertyValue", name: "Cost per task", unitText: "USD" },
-          ],
-          distribution: {
-            "@type": "DataDownload",
-            encodingFormat: "application/json",
-            contentUrl: `${origin}/api/public${groupHref(login, group.slug)}`,
-          },
-        },
-      ],
-    },
+    structuredData: resultsStructuredData({
+      origin,
+      canonical,
+      crumbs: [{ name: group.name, item: canonical }],
+      name: `${group.name} coding agent benchmark results run by ${login}`,
+      description: groupDescription(group, Number.POSITIVE_INFINITY),
+      publisher: group.publisher,
+      date: { dateModified: group.updatedAt },
+      repositories: group.members.map((member) => member.repository.fullName),
+      contentUrl: `${origin}/api/public${groupHref(login, group.slug)}`,
+    }),
   };
 }
 

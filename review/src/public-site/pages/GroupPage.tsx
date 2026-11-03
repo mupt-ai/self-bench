@@ -1,13 +1,10 @@
-import { useState } from "react";
 import { useParams } from "react-router";
 import { mostAccurate } from "../../../../src/public/release-groups";
 import { Avatar } from "../components/Avatar";
-import { ModelTable } from "../components/ModelTable";
-import { ResultsChart } from "../components/ResultsChart";
+import { SettingsPanels, useSettingMarks } from "../components/SettingsPanels";
 import type { PublicGroup, PublicGroupMember } from "../contract";
 import { pageBody, revealGroup } from "../effects/marks";
 import { ago, percent, publisherName, settingLabel } from "../format";
-import { PANEL } from "../frame";
 import { AdaptiveTable, type Column } from "../mobile/AdaptiveTable";
 import { APP_URL } from "../PublicLayout";
 import { groupTitle } from "../seo";
@@ -33,15 +30,11 @@ export function GroupPage() {
 }
 
 function Group({ group }: { group: PublicGroup }) {
-  // The chart's pointer and vendor chips mark the same settings in the table, and the table
-  // row under the pointer lights up its point, as on a repository page.
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [highlighted, setHighlighted] = useState<ReadonlySet<string> | null>(null);
-  const [rowId, setRowId] = useState<string | null>(null);
-  const shown = activeId ?? rowId;
+  const marks = useSettingMarks();
+  const shown = marks.activeId ?? marks.rowId;
   const repositories = group.members.length;
   return (
-    <article className="flex flex-col gap-8" {...pageBody}>
+    <article className="flex flex-col gap-8">
       <header className="flex flex-col gap-3">
         <h1 className="min-w-0 text-2xl font-semibold tracking-tight wrap-anywhere">
           {group.name}
@@ -67,31 +60,12 @@ function Group({ group }: { group: PublicGroup }) {
       </header>
 
       {group.settings.length > 0 ? (
-        <>
-          <section {...revealGroup} className="flex min-w-0 flex-col gap-3">
-            <h2 className="text-base font-medium">Model Tradeoffs</h2>
-            <div className={`p-2 ${PANEL}`}>
-              <ResultsChart
-                settings={group.settings}
-                onActiveChange={setActiveId}
-                onHighlightChange={setHighlighted}
-                selectedId={rowId}
-              />
-            </div>
-          </section>
-          <section {...revealGroup} className="flex min-w-0 flex-col gap-3">
-            <h2 className="text-sm font-medium">All Settings</h2>
-            <p className="text-sm text-muted-foreground">
-              Each setting scored over every repository's tasks together.
-            </p>
-            <ModelTable
-              settings={group.settings}
-              activeId={shown}
-              highlighted={highlighted}
-              onRowHover={setRowId}
-            />
-          </section>
-        </>
+        <SettingsPanels
+          {...marks}
+          settings={group.settings}
+          chartKey={group.releaseId}
+          note="Each setting scored over every repository's tasks together."
+        />
       ) : (
         <p className="text-muted-foreground">This release has no settings.</p>
       )}
