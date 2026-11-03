@@ -93,12 +93,12 @@ function AgentLimit({ path }: { path: string }) {
       >
         <div className="grid gap-5 p-6 sm:grid-cols-[minmax(0,1fr)_13rem] sm:items-start sm:gap-8">
           <div>
-            <h2 className="flex items-center gap-1.5 text-base leading-7 font-semibold">
-              Agent Time Limit
+            <div className="flex items-center gap-1.5">
+              <h2 className="text-base leading-7 font-semibold">Agent Time Limit</h2>
               <InfoTooltip
                 label={`How long a model may work on each task before it is stopped and graded, from ${AGENT_MINUTES.min} to ${AGENT_MINUTES.max} minutes. Leave room for the repository's test suite. Past runs keep the limit they ran with.`}
               />
-            </h2>
+            </div>
           </div>
           <div className="grid gap-2">
             <label htmlFor="agent-minutes" className="flex">

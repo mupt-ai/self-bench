@@ -38,12 +38,14 @@ export function RunJudgePanel({
       <div className="flex items-start gap-3">
         <Scale className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <div className="min-w-0 flex-1">
-          <h2 id="judge-heading" className="flex items-center gap-1.5 text-sm font-semibold">
-            LLM Judge
+          <div className="flex items-center gap-1.5">
+            <h2 id="judge-heading" className="text-sm font-semibold">
+              LLM Judge
+            </h2>
             <InfoTooltip
               label={`These tasks are graded by a model, which reads ${needs.variables.join(", ")}. Its calls use the key you pick here, and cost extra on that key.`}
             />
-          </h2>
+          </div>
         </div>
       </div>
       {eligible.length ? (

@@ -141,7 +141,7 @@ export function GenerateBatch({
             }}
           >
             <div className="px-4 pt-6 pb-6 sm:px-6">
-              <fieldset className="m-0 min-w-0 border-0 p-0">
+              <fieldset className="m-0 min-w-0 border-0 p-0" aria-label="Candidates">
                 <legend className="mb-4 flex items-center gap-1.5 text-sm font-semibold">
                   Candidates
                   <InfoTooltip label={`1–${MAX_CANDIDATES_PER_RUN} candidates total.`} />
