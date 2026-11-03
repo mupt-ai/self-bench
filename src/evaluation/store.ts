@@ -208,7 +208,7 @@ export async function listEvaluations(
 export const live = (run: Pick<EvaluationRun, "deletedAt">): boolean => !run.deletedAt;
 
 /** Every run of the scope, deleted ones included, newest first. */
-export async function readEvaluations(
+async function readEvaluations(
   store: ArtifactStore,
   scope: EvaluationScope,
 ): Promise<EvaluationRun[]> {
