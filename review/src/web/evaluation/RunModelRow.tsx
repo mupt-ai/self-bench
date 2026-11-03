@@ -13,7 +13,7 @@ import {
 import { ModelPicker } from "../ModelPicker";
 import { Input, Select } from "../ui";
 import type { Harness } from "./api";
-import { nextModelSelection } from "./model-selection";
+import { nextModelSelection, pickerValue, savedSelection } from "./model-selection";
 
 const mobileLabel = "mb-2 block text-xs font-semibold text-muted-foreground xl:hidden";
 
@@ -65,8 +65,14 @@ export function RunModelRow({
         <span className={mobileLabel}>Model</span>
         <ModelPicker
           models={models}
-          value={selected.catalogId}
+          value={
+            models.some((entry) => entry.id === pickerValue(selected))
+              ? pickerValue(selected)
+              : selected.catalogId
+          }
           onSelect={(nextModel) => {
+            const saved = savedSelection(nextModel, credentials, selected.harnesses[0]);
+            if (saved) return onChange(saved);
             const next = nextModelSelection(nextModel, credentials, selected.harnesses[0]) ??
               nextModelSelection(nextModel, credentials) ?? {
                 catalogId: nextModel.id,

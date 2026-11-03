@@ -26,29 +26,6 @@ export const evaluationRecords = pgTable("evaluation_records", {
   sealed: text("sealed").notNull(),
 });
 
-/**
- * Organization model and sandbox credentials. `secret` is the sealed JSON of the credential's
- * value (plus the Modal token ID or Vercel team/project); only the worker and create path open it.
- * `max_sandboxes` and `max_builds` limit its work at once (credentialSchema).
- */
-export const credentials = pgTable(
-  "credentials",
-  {
-    id: uuid("id").primaryKey(),
-    orgId: bigint("org_id", { mode: "number" }).notNull(),
-    name: text("name").notNull(),
-    kind: text("kind").notNull(),
-    auth: text("auth").notNull(),
-    endpoint: text("endpoint"),
-    maxSandboxes: integer("max_sandboxes"),
-    maxBuilds: integer("max_builds"),
-    secret: text("secret"),
-    createdAt: timestamptz("created_at").notNull().defaultNow(),
-    deletedAt: timestamptz("deleted_at"),
-  },
-  (table) => [index("credentials_org").on(table.orgId)],
-);
-
 /** A saved evaluation comparison: the expanded per-model inputs the worker runs. */
 export const comparisons = pgTable(
   "comparisons",
@@ -294,6 +271,7 @@ export const releases = pgTable(
 );
 
 export * from "./billing-schema.js";
+export * from "./credential-schema.js";
 export * from "./evaluation-schema.js";
 export * from "./gateway-schema.js";
 export * from "./group-schema.js";
