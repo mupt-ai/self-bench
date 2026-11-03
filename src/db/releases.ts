@@ -8,7 +8,7 @@ import type { Database } from "./client.js";
 import { chainOrder, currentOf } from "./release-chain.js";
 import { releases } from "./schema.js";
 
-export { chainOrder, currentOf, headOf } from "./release-chain.js";
+export { currentOf, headOf } from "./release-chain.js";
 
 /** One workspace's releases of one GitHub repository. */
 export interface ReleaseLine {
@@ -17,7 +17,7 @@ export interface ReleaseLine {
 }
 
 /** One workspace's releases of one of its repository groups. */
-export interface GroupLine {
+interface GroupLine {
   readonly orgId: number;
   readonly groupId: number;
 }

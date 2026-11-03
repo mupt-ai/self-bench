@@ -38,13 +38,13 @@ export type ReleaseRequest = z.infer<typeof releaseRequest>;
 export type Reply = readonly [status: number, body: unknown];
 
 /** What a line's rule reads now: its inputs, and the Model Summaries report it may publish. */
-export interface Gathered {
+interface Gathered {
   inputs: ReleaseInputs;
   report?: ModelSummaryReport;
 }
 
 /** A release ready to write: what its row stores, beyond the line, head and releaser. */
-export interface Built {
+interface Built {
   fullName: string;
   hash: string;
   payload: LinePayload;

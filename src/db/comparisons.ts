@@ -3,6 +3,7 @@ import { type EvaluationScope, scopeOf } from "../evaluation/scope.js";
 import type { EvaluationInput } from "../evaluation/types.js";
 import type { Database } from "./client.js";
 import { comparisons } from "./schema.js";
+import { scopeTables } from "./scope-tables.js";
 
 /** A saved evaluation comparison: the expanded per-model inputs the worker runs. */
 export interface ComparisonRecord {
@@ -35,17 +36,11 @@ export function createComparisonStore(db: Database) {
   return {
     find,
     async listForScope(scope: EvaluationScope): Promise<ComparisonRecord[]> {
-      const { repoId, benchmarkId, groupId } = scopeOf(scope);
+      const { comparison, id } = scopeTables(scope);
       const rows = await db
         .select()
         .from(comparisons)
-        .where(
-          repoId !== undefined
-            ? eq(comparisons.repoId, repoId)
-            : benchmarkId !== undefined
-              ? eq(comparisons.benchmarkId, benchmarkId)
-              : eq(comparisons.groupId, groupId ?? 0),
-        )
+        .where(eq(comparison, id))
         .orderBy(desc(comparisons.createdAt));
       return rows.map(record);
     },

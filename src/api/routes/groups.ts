@@ -4,16 +4,15 @@ import { GroupSlugTaken, type RepositoryGroup } from "../../db/groups.js";
 import type { ConnectedRepo } from "../../db/repos.js";
 import { runnable } from "../../db/task-record.js";
 import type { User } from "../../db/users.js";
-import { unfinished } from "../../evaluation/comparisons.js";
 import { groupDataset } from "../../evaluation/dataset.js";
 import { track } from "../../lib/telemetry/posthog.js";
 import type { GroupList, GroupView } from "../../public/group-views.js";
 import { GROUP_SLUG, GROUP_SLUG_MAX } from "../../public/paths.js";
 import { groupHref } from "../../public/release-groups.js";
-import { tenantFor } from "../auth/tenant.js";
-import { readBody, sendJson, trustedMutation } from "../http.js";
+import { readBody } from "../http.js";
 import { EVALUATIONS_PATH, handleScopedEvaluations } from "./evaluation-scope.js";
 import type { EvaluationRoutesOptions } from "./evaluations.js";
+import { openOrgScope, unfinishedRuns } from "./org-scope.js";
 
 /** `/api/orgs/<org>/groups`, or one group (`<slug>`) and what follows it. */
 const route = /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/groups(?:\/([a-z0-9-]{1,60})(\/.*)?)?$/;
@@ -33,8 +32,6 @@ const groupRequest = z
       .refine((ids) => new Set(ids).size === ids.length, "Repositories must not repeat"),
   })
   .strict();
-
-type Reply = readonly [status: number, body: unknown];
 
 /** Whether a repository may be private now (evaluations.ts `privateNow`). */
 export type PrivateNow = (repo: ConnectedRepo, user: User) => Promise<boolean>;
@@ -57,18 +54,11 @@ export async function groupRoutes(
   const [, login, slug, rest = ""] = match;
   // A group's releases are answered by group-releases.ts.
   if (rest === "/releases" || rest.startsWith("/releases/")) return false;
-  response.setHeader("cache-control", "no-store");
-  const send = ([status, body]: Reply) => {
-    sendJson(response, status, body);
-    request.resume();
-    return true;
-  };
-  const tenant = await tenantFor(options.users, user, login ?? "");
   const store = options.groups;
-  if (!tenant || !store) return send([404, { error: "Organization not found" }]);
+  const opened = await openOrgScope(options, request, response, user, login ?? "", !!store);
+  if ("sent" in opened || !store) return true;
+  const { tenant, send } = opened;
   const method = request.method ?? "GET";
-  if (method !== "GET" && !trustedMutation(request, options.publicUrl, user))
-    return send([403, { error: "Same-origin JSON request required" }]);
   const connected = await options.repos.list(tenant.id);
   const approved = async (repo: ConnectedRepo) =>
     (await options.tasks.listForRepo(repo.id)).filter(runnable).length;
@@ -196,15 +186,8 @@ export async function groupRoutes(
     }
   }
   if (method === "DELETE") {
-    // Its runs are followed and cancelled only through it, as a benchmark's are.
-    const records = options.vault
-      ? await options.vault.comparisons.listForScope({ groupId: group.id })
-      : [];
-    const active = await Promise.all(
-      records.map((record) => unfinished(options.artifacts, record)),
-    );
-    if (active.includes(true))
-      return send([409, { error: "Cancel this group's unfinished runs before deleting it" }]);
+    const refused = await unfinishedRuns(options, { groupId: group.id }, "group");
+    if (refused) return send(refused);
     // Its page goes with it: nothing would be left to withdraw it from.
     const withdrawn = await options.groupReleases?.store.withdrawLine(
       { orgId: tenant.id, groupId: group.id },
