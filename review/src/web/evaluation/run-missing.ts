@@ -19,14 +19,14 @@ export interface MissingWork {
   settings: MissingSetting[];
   /** Trials the comparisons run: each setting's missing tasks. */
   trials: number;
-  /** One per twelve models, the most a comparison takes. */
+  /** One per set of settings with the same gaps, of at most twelve models each. */
   selections: RetrySelection[];
 }
 
 /** The most models one comparison takes (comparisonSchema). */
 const MODELS_PER_COMPARISON = 12;
 
-/** A setting's identity among runs: model, its typed name if custom, credential, reasoning, harness. */
+/** A setting among runs: model, its typed name if custom, reasoning and harness, and a credential. */
 interface Setting {
   catalogId: string;
   customModel?: string;
@@ -40,11 +40,9 @@ interface Setting {
 /**
  * The comparisons that give every setting the scope has run a completed result on every task it
  * can use now, as each setting ran before: its model, reasoning and model credential, on the
- * newest run's sandbox. A setting whose model credential is gone is left out, as is a run before
- * runs recorded their credentials. Undefined when nothing is missing.
- *
- * The comparison names the tasks any setting misses and skips, per setting, the ones it already
- * completed (`skipCompleted`, as Run Missing Tasks does), so each setting runs only its own gaps.
+ * newest run's sandbox. A setting run with several model credentials uses its newest that still
+ * exists, and one with none left is left out, as is a run before runs recorded credentials.
+ * Undefined when nothing is missing.
  */
 export function missingWork(
   runs: readonly EvaluationRun[],
@@ -56,17 +54,21 @@ export function missingWork(
 ): MissingWork | undefined {
   const usable = new Set(credentials.map((credential) => credential.id));
   const settings = new Map<string, Setting>();
-  const live = runs.filter((run) => !run.deletedAt && run.credentials);
+  const live = runs
+    .filter((run) => !run.deletedAt && run.credentials)
+    // Oldest first, so a setting run with several credentials keeps its newest usable one.
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
   for (const run of live) {
     const credentialId = run.credentials?.modelCredentialId ?? "";
-    if (credentialId !== "managed-model" && !usable.has(credentialId)) continue;
     const customModel = run.model === "custom" ? run.modelName.replace(/^[^/]+\//, "") : undefined;
     for (const harness of run.harnesses) {
-      const key = JSON.stringify([run.model, customModel, credentialId, run.thinking, harness]);
+      // A setting is its model, reasoning and harness, whatever credential reached the model, as
+      // the server tells configurations apart (completedConfigurationTasks).
+      const key = JSON.stringify([run.model, customModel, run.thinking, harness]);
       const setting = settings.get(key) ?? {
         catalogId: run.model,
         ...(customModel ? { customModel } : {}),
-        credentialId,
+        credentialId: "",
         ...(run.thinking ? { thinking: run.thinking } : {}),
         harness,
         label: [
@@ -76,6 +78,8 @@ export function missingWork(
         ].join(" · "),
         done: new Set<string>(),
       };
+      if (credentialId === "managed-model" || usable.has(credentialId))
+        setting.credentialId = credentialId;
       settings.set(key, setting);
       // A trial still going counts as done: running it again would run it twice.
       for (const trial of run.trials)
@@ -84,22 +88,22 @@ export function missingWork(
     }
   }
   const keys = tasks.map((task) => evaluationTaskKey(task.runId, task.taskId));
+  // A setting none of whose credentials remain is left out.
   const gaps = [...settings.values()]
+    .filter((setting) => setting.credentialId)
     .map((setting) => ({ setting, missing: keys.filter((key) => !setting.done.has(key)) }))
     .filter((gap) => gap.missing.length > 0);
   if (gaps.length === 0) return undefined;
-  const newest = [...live].sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+  const newest = live.at(-1);
   const sandboxId = sandboxCredentialId ?? newest?.credentials?.sandboxCredentialId ?? "";
   const kind = credentials.find((credential) => credential.id === sandboxId)?.kind;
-  // One model entry per model, reasoning and credential, with every harness that has gaps.
-  const models = new Map<string, RetrySelection["models"][number]>();
-  for (const { setting } of gaps) {
-    const key = JSON.stringify([
-      setting.catalogId,
-      setting.customModel,
-      setting.credentialId,
-      setting.thinking,
-    ]);
+  const judgeCredentialId = newest?.credentials?.judgeCredentialId;
+  // A comparison runs each of its models on all its tasks, and skips only completed trials, so
+  // settings with the same gaps go together: none runs a task it has, or is still running.
+  const byGaps = new Map<string, Map<string, RetrySelection["models"][number]>>();
+  for (const { setting, missing } of gaps) {
+    const models = byGaps.get(missing.join("\n")) ?? new Map();
+    const key = JSON.stringify([setting.catalogId, setting.customModel, setting.thinking]);
     const entry = models.get(key) ?? {
       catalogId: setting.catalogId,
       ...(setting.customModel ? { customModel: setting.customModel } : {}),
@@ -109,14 +113,24 @@ export function missingWork(
     };
     entry.harnesses.push(setting.harness);
     models.set(key, entry);
+    byGaps.set(missing.join("\n"), models);
   }
-  const missing = new Set(gaps.flatMap((gap) => gap.missing));
-  const judgeCredentialId = newest?.credentials?.judgeCredentialId;
-  const entries = [...models.values()];
-  const chunks = Array.from(
-    { length: Math.ceil(entries.length / MODELS_PER_COMPARISON) },
-    (_, index) => entries.slice(index * MODELS_PER_COMPARISON, (index + 1) * MODELS_PER_COMPARISON),
-  );
+  const selections = [...byGaps].flatMap(([missingKeys, models]) => {
+    const missing = new Set(missingKeys.split("\n"));
+    const entries = [...models.values()];
+    return Array.from(
+      { length: Math.ceil(entries.length / MODELS_PER_COMPARISON) },
+      (_, index): RetrySelection => ({
+        id: newId(),
+        models: entries.slice(index * MODELS_PER_COMPARISON, (index + 1) * MODELS_PER_COMPARISON),
+        sandbox: sandboxId === "managed-sandbox" ? "managed" : (kind ?? newest?.sandbox ?? ""),
+        sandboxCredentialId: sandboxId,
+        tasks: tasks.filter((task) => missing.has(evaluationTaskKey(task.runId, task.taskId))),
+        ...(judgeCredentialId ? { judgeCredentialId } : {}),
+        skipCompleted: true,
+      }),
+    );
+  });
   return {
     settings: gaps.map(({ setting, missing }) => ({
       label: setting.label,
@@ -124,14 +138,6 @@ export function missingWork(
       missing: missing.length,
     })),
     trials: gaps.reduce((sum, gap) => sum + gap.missing.length, 0),
-    selections: chunks.map((chunk) => ({
-      id: newId(),
-      models: chunk,
-      sandbox: sandboxId === "managed-sandbox" ? "managed" : (kind ?? newest?.sandbox ?? ""),
-      sandboxCredentialId: sandboxId,
-      tasks: tasks.filter((task) => missing.has(evaluationTaskKey(task.runId, task.taskId))),
-      ...(judgeCredentialId ? { judgeCredentialId } : {}),
-      skipCompleted: true,
-    })),
+    selections,
   };
 }

@@ -13,6 +13,8 @@ interface RepoRuns {
   url: string;
   runs: EvaluationRun[];
   credentials: CredentialInfo[];
+  /** Whether `credentials` loaded: an empty list may only be one that has not, or failed. */
+  credentialsReady: boolean;
   /** The tasks runs can use (a repository's accepted ones, or a benchmark's), once loaded. */
   accepted?: AcceptedTask[];
   loading: boolean;
@@ -54,6 +56,7 @@ export function RepoRunsProvider({
 }) {
   const [runs, setRuns] = React.useState<EvaluationRun[]>([]);
   const [credentials, setCredentials] = React.useState<CredentialInfo[]>([]);
+  const [credentialsReady, setCredentialsReady] = React.useState(false);
   const [accepted, setAccepted] = React.useState<AcceptedTask[]>();
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
@@ -71,7 +74,9 @@ export function RepoRunsProvider({
       `/api/orgs/${encodeURIComponent(org)}/credentials`,
     )
       .then((result) => {
-        if (!disposed) setCredentials(result.credentials);
+        if (disposed) return;
+        setCredentials(result.credentials);
+        setCredentialsReady(true);
       })
       .catch(() => undefined);
     return () => {
@@ -185,6 +190,7 @@ export function RepoRunsProvider({
       url,
       runs,
       credentials,
+      credentialsReady,
       ...(accepted ? { accepted } : {}),
       loading,
       error,
@@ -192,7 +198,18 @@ export function RepoRunsProvider({
       update,
       refresh,
     }),
-    [url, runs, credentials, accepted, loading, error, onResults, update, refresh],
+    [
+      url,
+      runs,
+      credentials,
+      credentialsReady,
+      accepted,
+      loading,
+      error,
+      onResults,
+      update,
+      refresh,
+    ],
   );
   return <RepoRunsContext.Provider value={value}>{children}</RepoRunsContext.Provider>;
 }

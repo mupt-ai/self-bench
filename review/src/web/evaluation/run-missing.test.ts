@@ -114,3 +114,54 @@ test("nothing is missing once every setting completed every task, and twelve mod
   expect(work?.selections.map((selection) => selection.models.length)).toEqual([12, 1]);
   expect(new Set(work?.selections.map((selection) => selection.id)).size).toBe(2);
 });
+
+test("settings with different gaps go in different comparisons, so a running trial is not started again", () => {
+  const work = missingWork(
+    [
+      // Sol misses t2 and t3; Luna is running t3 and misses only t2.
+      run("sol", "codex", { t1: "completed" }),
+      run("luna", "codex", { t1: "completed", t3: "running" }),
+    ],
+    tasks,
+    credentials,
+    newId,
+  );
+  const plan = work?.selections.map((selection) => [
+    selection.models.map((model) => model.catalogId),
+    selection.tasks.map((task) => task.taskId),
+  ]);
+  expect(plan).toEqual([
+    [["sol"], ["t2", "t3"]],
+    [["luna"], ["t2"]],
+  ]);
+});
+
+test("one setting run with two credentials is one setting, on its newest credential", () => {
+  const work = missingWork(
+    [
+      run("sol", "codex", { t1: "completed" }, { createdAt: "2026-10-01T00:00:00Z" }),
+      run(
+        "sol",
+        "codex",
+        { t2: "completed" },
+        {
+          id: "newer",
+          createdAt: "2026-11-02T00:00:00Z",
+          credentials: {
+            modelCredentialId: "other",
+            sandboxCredentialId: "sandbox",
+            provider: "openai",
+          },
+        },
+      ),
+    ],
+    tasks,
+    [...credentials, { id: "other", kind: "openai" as const }],
+    newId,
+  );
+  expect(work?.settings).toHaveLength(1);
+  expect(work?.selections[0]?.models).toEqual([
+    { catalogId: "sol", credentialId: "other", thinking: "high", harnesses: ["codex"] },
+  ]);
+  expect(work?.selections[0]?.tasks.map((task) => task.taskId)).toEqual(["t3"]);
+});

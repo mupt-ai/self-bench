@@ -26,7 +26,9 @@ export function RunMissing({
   /** The tasks the scope's runs can use now. */
   tasks: EvaluationOptions["tasks"];
 }) {
-  const { runs, credentials, loading, refresh } = useRepoRuns();
+  const { runs, credentials, credentialsReady, loading: runsLoading, refresh } = useRepoRuns();
+  // Without the org's credentials every setting would look unrunnable, so wait for them.
+  const loading = runsLoading || !credentialsReady;
   const navigate = useNavigate();
   const [open, setOpen] = React.useState(false);
   const [sandbox, setSandbox] = React.useState<string>();
