@@ -78,7 +78,7 @@ export async function startReviewRound(
     workspace: { kind: "task" },
     extension: "/work/reviewer.js",
     tools: "read,grep,find,ls,accept_task,submit_suggestions,reject_task",
-    prompt: renderPrompt("review", {
+    prompt: renderPrompt(candidate.kind === "scenario" ? "scenario-review" : "review", {
       taskId: task.taskId,
       request: candidate.request.trim(),
       report: renderVerifyReport(report).trim(),

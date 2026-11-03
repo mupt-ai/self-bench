@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Difficulty } from "../../contracts/index.js";
 import { errorMessage } from "../../lib/util.js";
-import { auditPatches } from "./audit.js";
+import { auditPatches, auditScenarioPatches } from "./audit.js";
 import { baseImageProblems } from "./dockerfile.js";
 import { assertSafePatchPaths } from "./paths.js";
 
@@ -23,6 +23,12 @@ const REQUIRED_FILES = [
 export const SUBMISSION_FILES = [...REQUIRED_FILES, "services.sh"] as const;
 
 export type Submission = Readonly<Record<(typeof SUBMISSION_FILES)[number], string>>;
+
+/**
+ * Where a task's snapshot comes from: a pull request's repository at its base commit, or the
+ * `workspace/` a scenario's author writes beside these files (scenario-workspace.ts).
+ */
+export type TaskSource = "pull_request" | "scenario";
 
 export interface SubmissionCheck {
   /** What keeps the submission from compiling. */
@@ -47,7 +53,11 @@ export async function readSubmission(directory: string): Promise<Submission> {
  * Every check that needs neither Docker nor the repository. The author's `verify` runs it in its
  * sandbox, and the trusted compiler runs it again.
  */
-export function checkSubmission(submission: Submission, assigned: Difficulty): SubmissionCheck {
+export function checkSubmission(
+  submission: Submission,
+  assigned: Difficulty,
+  source: TaskSource = "pull_request",
+): SubmissionCheck {
   const errors = REQUIRED_FILES.filter((name) => !submission[name].trim()).map(
     (name) => `${name} is missing or empty`,
   );
@@ -74,7 +84,8 @@ export function checkSubmission(submission: Submission, assigned: Difficulty): S
     if (SECRET_MATERIAL.test(submission[name])) errors.push(`${name} references secret material`);
   }
   if (errors.length > 0) return { errors, blockers: [], difficulty: assigned };
-  return { errors, ...auditPatches(submission["gold.patch"], submission["test.patch"], assigned) };
+  const audit = source === "scenario" ? auditScenarioPatches : auditPatches;
+  return { errors, ...audit(submission["gold.patch"], submission["test.patch"], assigned) };
 }
 
 const SECRET_MATERIAL =

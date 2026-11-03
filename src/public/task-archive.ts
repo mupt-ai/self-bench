@@ -9,9 +9,16 @@ import { GATE_TASK_FILE, SNAPSHOT_PATHS } from "../sandbox/gate-bundle.js";
 
 /** The largest archive served; a task without its repository snapshots is far smaller. */
 const MAX_ARCHIVE_BYTES = 32 * 1024 * 1024;
+/**
+ * A scenario's archive keeps one copy of its workspace (environment/repo.tar.gz; tests/ holds the
+ * same bytes), which may be up to 50 MB before compression (generation/task/scenario-workspace.ts).
+ */
+const MAX_SCENARIO_ARCHIVE_BYTES = 64 * 1024 * 1024;
+const VERIFIER_SNAPSHOT = "harbor-task/tests/repo.tar.gz";
 /** Archives kept in memory, by bundle and folder, least recently used first. */
 const MAX_CACHED_BYTES = 64 * 1024 * 1024;
 const COMPILED_BUNDLE = "/harbor-task.tar.gz";
+const EXECUTION_BUNDLE = "/execution-task.tar.gz";
 const TASK_ROOT = "harbor-task/";
 
 export interface TaskArchive {
@@ -34,8 +41,10 @@ export class TaskArchiveTooLarge extends Error {}
  * repository snapshots (`environment/repo.tar.gz` and `tests/repo.tar.gz`, each the repository
  * at the task's base commit, tens of MB or more), under `folder/` so that tasks unpack side by
  * side. Read from the gate task beside a compiled bundle when there is one (kilobytes), else
- * from the bundle itself. The same bundle always gives the same bytes. Undefined when no object
- * is at `bundleKey`.
+ * from the bundle itself. A scenario's snapshots are the workspace its author wrote, which no
+ * repository can recreate, so its archive is the whole compiled task it was checked as, which
+ * builds without SelfBench's registry. The same bundle always gives the same bytes. Undefined
+ * when no object is at `bundleKey`.
  */
 export function taskArchive(
   store: Store,
@@ -83,13 +92,35 @@ async function build(
   const gate = gateKey ? await store.stat(gateKey).catch(() => undefined) : undefined;
   const body = await store.openReadByKey(gate && gateKey ? gateKey : bundleKey);
   if (!body) return undefined;
-  const bytes = await repack(body, folder);
+  let { bytes, scenario } = await repack(body, folder, new Set(SNAPSHOT_PATHS), MAX_ARCHIVE_BYTES);
+  if (scenario) {
+    // An accepted task runs an execution bundle published beside its compiled one (task-images.ts).
+    const compiled = bundleKey.endsWith(EXECUTION_BUNDLE)
+      ? `${posix.dirname(posix.dirname(bundleKey))}${COMPILED_BUNDLE}`
+      : bundleKey;
+    const whole = await store.openReadByKey(compiled);
+    if (!whole) return undefined;
+    ({ bytes } = await repack(
+      whole,
+      folder,
+      new Set([VERIFIER_SNAPSHOT]),
+      MAX_SCENARIO_ARCHIVE_BYTES,
+    ));
+  }
   const etag = `"${createHash("sha256").update(bytes).digest("base64url").slice(0, 27)}"`;
   return { bytes, etag };
 }
 
-/** The archive's task entries, renamed from `harbor-task/` to `folder/`, snapshots left out. */
-async function repack(body: Readable, folder: string): Promise<Buffer> {
+/**
+ * The archive's task entries, renamed from `harbor-task/` to `folder/`, `omitted` left out, and
+ * whether its task.toml names a scenario.
+ */
+async function repack(
+  body: Readable,
+  folder: string,
+  omitted: ReadonlySet<string>,
+  limit: number,
+): Promise<{ bytes: Buffer; scenario: boolean }> {
   const input = extract();
   const reading = pipeline(body, createGunzip(), input);
   // A failure here also ends the loop below; it is rethrown by the final await.
@@ -100,39 +131,42 @@ async function repack(body: Readable, folder: string): Promise<Buffer> {
   const collect = new PassThrough();
   collect.on("data", (chunk: Buffer) => {
     size += chunk.length;
-    if (size > MAX_ARCHIVE_BYTES) collect.destroy(new Error("over the size limit"));
+    if (size > limit) collect.destroy(new Error("over the size limit"));
     else chunks.push(chunk);
   });
   // No file name or time in the gzip header, so the same entries always give the same bytes.
   const writing = pipeline(output, createGzip(), collect);
   writing.catch(() => undefined);
-  const snapshots = new Set<string>(SNAPSHOT_PATHS);
+  let scenario = false;
   try {
-    await copyEntries(input, output, { folder, snapshots });
+    scenario = await copyEntries(input, output, { folder, omitted });
     await reading;
     await writing;
   } catch (error) {
     input.destroy();
-    if (size > MAX_ARCHIVE_BYTES)
-      throw new TaskArchiveTooLarge("task archive is too large to serve");
+    if (size > limit) throw new TaskArchiveTooLarge("task archive is too large to serve");
     throw error;
   }
-  return Buffer.concat(chunks);
+  return { bytes: Buffer.concat(chunks), scenario };
 }
 
-/** Copies the task's entries from `input` into `output`, then finishes `output`. */
+/**
+ * Copies the task's entries from `input` into `output`, then finishes `output`. True when its
+ * task.toml names a scenario (generation/task/render.ts).
+ */
 async function copyEntries(
   input: ReturnType<typeof extract>,
   output: ReturnType<typeof pack>,
-  options: { folder: string; snapshots: ReadonlySet<string> },
-): Promise<void> {
-  const { folder, snapshots } = options;
+  options: { folder: string; omitted: ReadonlySet<string> },
+): Promise<boolean> {
+  const { folder, omitted } = options;
+  let scenario = false;
   for await (const entry of input) {
     const name = entryPath(entry.header.name);
     const { type } = entry.header;
     if (
       !name.startsWith(TASK_ROOT) ||
-      snapshots.has(name) ||
+      omitted.has(name) ||
       (type !== "file" && type !== "directory")
     ) {
       entry.resume();
@@ -147,6 +181,14 @@ async function copyEntries(
       mtime: entry.header.mtime,
       size: type === "file" ? entry.header.size : 0,
     };
+    if (path === "task.toml" && type === "file") {
+      const text = Buffer.concat(await Array.fromAsync(entry as AsyncIterable<Buffer>));
+      scenario = /^source = "scenario"$/m.test(text.toString("utf8"));
+      await new Promise<void>((resolve, reject) =>
+        output.entry(header, text, (error) => (error ? reject(error) : resolve())),
+      );
+      continue;
+    }
     await new Promise<void>((resolve, reject) => {
       const sink = output.entry(header, (error) => (error ? reject(error) : resolve()));
       entry.on("error", reject);
@@ -154,6 +196,7 @@ async function copyEntries(
     });
   }
   output.finalize();
+  return scenario;
 }
 
 /** An entry's path inside the archive, refusing any that would leave its root. */

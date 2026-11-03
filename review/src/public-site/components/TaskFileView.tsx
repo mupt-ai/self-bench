@@ -2,7 +2,13 @@ import { Check, Copy } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { FileViewer } from "../../components/FileViewer";
 import { formatBytes } from "../../lib/format";
-import { baseCommit, isSnapshot, snapshotCommand, type TaskFile } from "../task-files";
+import {
+  baseCommit,
+  isScenarioTask,
+  isSnapshot,
+  snapshotCommand,
+  type TaskFile,
+} from "../task-files";
 
 /** The chosen file, in the app's file viewer. */
 export function FilePane({
@@ -42,6 +48,17 @@ function NotShown({
         Not shown here: a binary or large file ({formatBytes(file.sizeBytes)}). It is in the
         download.
       </p>
+    );
+  if (isScenarioTask(files))
+    return (
+      <div className="flex flex-col gap-3 px-4 py-3">
+        <p className="max-w-3xl">
+          The workspace the agent starts with ({formatBytes(file.sizeBytes)}), written for this
+          scenario. The download holds the copy in environment/; this command, run where you
+          unpacked it, puts the same copy in tests/.
+        </p>
+        <Command text={`cp ${taskId}/environment/repo.tar.gz ${taskId}/tests/repo.tar.gz`} />
+      </div>
     );
   const commit = baseCommit(files);
   return (

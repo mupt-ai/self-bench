@@ -27,12 +27,7 @@ export function auditPatches(
   assigned: Difficulty,
 ): PatchAudit {
   const gold = patchMetrics(goldPatch);
-  const tests = new Set(patchPaths(testPatch));
-  const blockers: string[] = [];
-  const overlap = patchPaths(goldPatch).filter((path) => tests.has(path));
-  if (overlap.length > 0) {
-    blockers.push(`gold.patch and test.patch both change ${overlap.join(", ")}`);
-  }
+  const blockers = overlapBlockers(goldPatch, testPatch);
   const tiers = Object.keys(difficultyThresholds) as Difficulty[];
   const reached = tiers
     .slice(0, tiers.indexOf(assigned) + 1)
@@ -48,6 +43,25 @@ export function auditPatches(
     );
   }
   return { difficulty: reached ?? "easy", blockers };
+}
+
+/**
+ * A scenario's: the hidden tests and the reference outcome share no file. Its gold patch is the
+ * outcome a correct agent leaves (an answer file, an edited calendar), whose size says nothing
+ * about how hard the scenario is, so the requester's tier stands.
+ */
+export function auditScenarioPatches(
+  goldPatch: string,
+  testPatch: string,
+  assigned: Difficulty,
+): PatchAudit {
+  return { difficulty: assigned, blockers: overlapBlockers(goldPatch, testPatch) };
+}
+
+function overlapBlockers(goldPatch: string, testPatch: string): string[] {
+  const tests = new Set(patchPaths(testPatch));
+  const overlap = patchPaths(goldPatch).filter((path) => tests.has(path));
+  return overlap.length > 0 ? [`gold.patch and test.patch both change ${overlap.join(", ")}`] : [];
 }
 
 /** How many files a patch changes, and its added and removed lines. */

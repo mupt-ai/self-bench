@@ -100,7 +100,7 @@ test("feedback starts a separate task from the submitted draft and records its l
   );
   expect(started[1]?.input.revision?.draft.taskId).toBe(taskId);
   // The revision starts from the commit the original task was authored on, not the PR's base now.
-  expect(started[1]?.input.candidate.baseCommit).toBe(authoredOn);
+  expect(started[1]?.input.candidate).toMatchObject({ baseCommit: authoredOn });
   expect(started[1]?.input.revision?.draft.sourceBundle.uri).toContain(revision.runId);
   const revisionRow = await store.find(1, revision.runId, revision.taskId);
   expect(revisionRow).toMatchObject({

@@ -2,10 +2,10 @@ import { Context } from "@temporalio/activity";
 import { z } from "zod";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import {
-  type Candidate,
-  candidateSchema,
   type Difficulty,
   type DiscoveryResult,
+  type PullRequestCandidate,
+  pullRequestCandidateSchema,
   type RunRequest,
 } from "../../contracts/index.js";
 import type { SandboxExecutor } from "../../sandbox/index.js";
@@ -153,7 +153,7 @@ export async function finishDiscoveryShard(
   const plan = planSchema.parse(result.inline[OUTPUT]);
   const excluded = new Set(input.excludedSourcePrs);
   const seen = new Set<number>();
-  const candidates: Candidate[] = [];
+  const candidates: PullRequestCandidate[] = [];
   for (const raw of plan.candidates) {
     assertPullRequestBelongsToRepository(run.repository.url, raw.sourceUrl, raw.sourcePr);
     // Over-quota, repeated, or excluded proposals are dropped rather than failing the shard.
@@ -184,7 +184,12 @@ export async function finishDiscoveryShard(
       "application/json",
     );
     candidates.push(
-      candidateSchema.parse({ ...raw, candidateId, request: message.content, provenance }),
+      pullRequestCandidateSchema.parse({
+        ...raw,
+        candidateId,
+        request: message.content,
+        provenance,
+      }),
     );
   }
   const report = await store.put(

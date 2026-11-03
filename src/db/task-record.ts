@@ -18,6 +18,7 @@ export function taskFrom(row: {
     ...(task.sourcePr !== null ? { sourcePr: task.sourcePr } : {}),
     ...(task.sourceUrl ? { sourceUrl: task.sourceUrl } : {}),
     ...(task.baseCommit ? { baseCommit: task.baseCommit } : {}),
+    ...(task.title ? { title: task.title } : {}),
     difficulty: task.difficulty,
     pipelineStatus: task.pipelineStatus,
     stage: task.stage,

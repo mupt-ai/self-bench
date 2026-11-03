@@ -1,4 +1,5 @@
 import {
+  BookOpen,
   CreditCard,
   FolderGit2,
   Gauge,
@@ -47,9 +48,14 @@ interface NavItem {
   to: string;
   icon: LucideIcon;
   active: (pathname: string) => boolean;
+  /** Opens another site in a new tab instead of a page of the app. */
+  external?: boolean;
 }
 
-/** The sidebar's sections, in order: what is evaluated, and the workspace itself. */
+/** SelfBench's documentation, a separate Mintlify site (docs/). */
+const DOCS_URL = "https://docs.selfbench.dev";
+
+/** The sidebar's sections, in order: what is evaluated, the workspace itself, and help. */
 function sectionsOf(billing: boolean): { label: string; items: NavItem[] }[] {
   return [
     {
@@ -101,6 +107,10 @@ function sectionsOf(billing: boolean): { label: string; items: NavItem[] }[] {
             ]
           : []),
       ],
+    },
+    {
+      label: "Help",
+      items: [{ label: "Docs", to: DOCS_URL, icon: BookOpen, active: () => false, external: true }],
     },
   ];
 }
@@ -173,10 +183,23 @@ export function SiteSidebar({
                       <SidebarMenuItem key={item.to}>
                         <NavTooltip collapsed={collapsed} label={item.label}>
                           <SidebarMenuButton asChild isActive={item.active(pathname)}>
-                            <Link to={item.to} onClick={onNavigate} aria-label={item.label}>
-                              <item.icon />
-                              {!collapsed && <span>{item.label}</span>}
-                            </Link>
+                            {item.external ? (
+                              <a
+                                href={item.to}
+                                target="_blank"
+                                rel="noreferrer"
+                                onClick={onNavigate}
+                                aria-label={item.label}
+                              >
+                                <item.icon />
+                                {!collapsed && <span>{item.label}</span>}
+                              </a>
+                            ) : (
+                              <Link to={item.to} onClick={onNavigate} aria-label={item.label}>
+                                <item.icon />
+                                {!collapsed && <span>{item.label}</span>}
+                              </Link>
+                            )}
                           </SidebarMenuButton>
                         </NavTooltip>
                       </SidebarMenuItem>

@@ -140,7 +140,9 @@ function TaskPageContent() {
               },
             ]}
           />
-          <h1 className="font-mono text-xl leading-7 font-medium wrap-anywhere">
+          <h1
+            className={`${task.title ? "" : "font-mono "}text-xl leading-7 font-medium wrap-anywhere`}
+          >
             {task.sourceUrl ? (
               <a
                 className="hover:underline hover:underline-offset-4"

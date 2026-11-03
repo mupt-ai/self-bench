@@ -76,10 +76,11 @@ export async function saveGenerationRecords(
   records: EncryptedRecordStore,
   runId: string,
   reference: GenerationReference,
-  githubToken: string,
+  /** None for a scenario, whose run never reads GitHub. */
+  githubToken: string | undefined,
 ) {
   await records.write(generationRecordPath(runId), reference, 0);
-  await saveGenerationGitHubToken(records, runId, githubToken);
+  if (githubToken) await saveGenerationGitHubToken(records, runId, githubToken);
 }
 
 /** Persist the submitter's GitHub token for a run's worker; the hosted worker has none. */

@@ -1,0 +1,48 @@
+---
+title: "Create a Scenario Task"
+api: "POST https://app.selfbench.dev/api/orgs/{org}/repos/{owner}/{name}/tasks/from-scenario"
+description: "Generate one task from a described scenario and its files."
+icon: "notebook-pen"
+---
+
+<ParamField path="org" type="string" required>Workspace login.</ParamField>
+<ParamField path="owner" type="string" required>GitHub owner.</ParamField>
+<ParamField path="name" type="string" required>Repository name.</ParamField>
+<ParamField header="Authorization" type="string" required>`Bearer` plus a `write` API key.</ParamField>
+<ParamField body="title" type="string" required>Up to 120 characters.</ParamField>
+<ParamField body="scenario" type="string" required>The situation the agent should handle; up to 20,000 characters.</ParamField>
+<ParamField body="difficulty" type="string">`easy`, `medium` (default), or `hard`.</ParamField>
+<ParamField body="attachments" type="object[]">Up to 20 files, 20 MB in all, each `{ "name": "schedule.xlsx", "content": "<base64>" }`. Names are plain file names.</ParamField>
+<ParamField body="generation" type="object">Model, reasoning, sandbox, and credential choices, as for [Create a Batch](/api-reference/create-batch). Required when credential storage is configured.</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://app.selfbench.dev/api/orgs/mupt-ai/repos/mupt-ai/self-bench/tasks/from-scenario \
+  -H "Authorization: Bearer $SELFBENCH_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Traded to a New Team",
+    "scenario":"My schedule spreadsheet says team 6; a later email traded me to team 3.",
+    "difficulty":"medium",
+    "attachments":[{"name":"schedule.csv","content":"dGVhbSxkYXRlCjYsTW9uCg=="}],
+    "generation":{"authorModel":"<model-id>","verifierModel":"<model-id>","reasoning":"high",
+      "modelAccess":"managed","sandbox":"managed"}}'
+```
+</RequestExample>
+
+<ResponseExample>
+```json
+{
+  "task": {
+    "runId": "scn-mupt-ai-self-bench-…",
+    "taskId": "scenario-traded-to-a-new-team",
+    "title": "Traded to a New Team",
+    "difficulty": "medium",
+    "state": "in_progress"
+  }
+}
+```
+</ResponseExample>
+
+Returns `201`. Follow the task with `GET …/tasks/{runId}/{taskId}`.
+
+To revise a task, `POST …/tasks/{runId}/{taskId}/feedback` with `{ "feedback": "…", "generation": { … } }`. `GET …/tasks/{runId}/{taskId}/draft` downloads the task's files as a `.tar.gz` (instruction, Dockerfile, patches, scripts, and a scenario's `workspace/`); send an edited copy (up to 22 MB compressed) back base64-encoded as `draft` in the feedback request, and the revision starts from it. See [Author Scenarios](/guides/author-scenarios).

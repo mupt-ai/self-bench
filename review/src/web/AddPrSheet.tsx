@@ -1,11 +1,12 @@
 import React from "react";
 import { addPrBatch } from "./add-pr-batch";
-import { addPullRequest, fetchMergedPullRequests, type MergedPullRequest } from "./api";
+import { fetchMergedPullRequests, type MergedPullRequest } from "./api";
 import { Dialog, DialogFooter, DialogHeader } from "./Dialog";
 import { GenerationFields } from "./GenerationFields";
 import { GenerationSteps } from "./GenerationSteps";
 import { PrSelectionList } from "./PrSelectionList";
 import type { SiteOrg } from "./session";
+import { addPullRequest } from "./task-start-api";
 import { Button, Notice } from "./ui";
 import { useGenerationSettings } from "./useGenerationSettings";
 

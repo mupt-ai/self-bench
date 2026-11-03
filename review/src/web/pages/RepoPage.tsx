@@ -1,4 +1,4 @@
-import { GitBranch, LockKeyhole, Plus } from "lucide-react";
+import { GitBranch, LockKeyhole, NotebookPen, Plus } from "lucide-react";
 import React from "react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router";
 import { type ConnectedRepo, fetchConnectedRepos, fetchTasks, type TaskItem } from "../api";
@@ -168,6 +168,17 @@ function RepoTasksPage() {
           >
             <Plus aria-hidden="true" />
             Add PRs
+          </Link>
+          <Link
+            className={buttonStyles.secondary}
+            to={`/repos/${fullName}/add-scenario`}
+            onClick={(event) => {
+              if (deleting) event.preventDefault();
+            }}
+            aria-disabled={deleting}
+          >
+            <NotebookPen aria-hidden="true" />
+            Add Scenario
           </Link>
         </div>
       </PageHeader>

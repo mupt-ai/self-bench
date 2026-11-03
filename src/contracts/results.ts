@@ -1,6 +1,6 @@
 import type { ArtifactRef, Difficulty } from "./common.js";
 import type { RunRequest } from "./run.js";
-import type { AuthoredTask, AuthoredTaskDraft, Candidate } from "./task.js";
+import type { AuthoredTask, AuthoredTaskDraft, Candidate, PullRequestCandidate } from "./task.js";
 import type { PipelineStage } from "./verify.js";
 
 type RunPhase =
@@ -110,6 +110,6 @@ export interface CandidateWorkflowResult {
 }
 
 export interface DiscoveryResult {
-  readonly candidates: readonly Candidate[];
+  readonly candidates: readonly PullRequestCandidate[];
   readonly report: ArtifactRef;
 }

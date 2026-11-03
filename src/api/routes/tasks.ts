@@ -34,6 +34,8 @@ export interface TaskListItem {
   readonly reason?: string;
   readonly sourcePr?: number;
   readonly sourceUrl?: string;
+  /** A scenario's title; scenario tasks have no sourcePr. */
+  readonly title?: string;
   readonly review?: TaskRecord["review"];
   readonly syncedAt: string;
   readonly round?: number;
@@ -220,6 +222,7 @@ export function taskItem(task: TaskRecord, cost?: GenerationCost): TaskListItem 
     ...(reason ? { reason, reasonSummary: reason.split("\n")[0]?.slice(0, 240) ?? reason } : {}),
     ...(task.sourcePr !== undefined ? { sourcePr: task.sourcePr } : {}),
     ...(task.sourceUrl ? { sourceUrl: task.sourceUrl } : {}),
+    ...(task.title ? { title: task.title } : {}),
     ...(task.review ? { review: task.review } : {}),
     syncedAt: task.syncedAt,
     ...(task.round !== undefined ? { round: task.round } : {}),

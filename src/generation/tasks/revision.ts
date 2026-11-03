@@ -68,6 +68,6 @@ export async function stageRevisionDraft(
 /** A submission's files as one tarball, as authors hand them off. */
 export const SOURCE_BUNDLE = "source-task.tar.gz";
 
-function revisionPrefix(runId: string, candidateId: string): string {
+export function revisionPrefix(runId: string, candidateId: string): string {
   return `runs/${runId}/authoring/${candidateId}/revision`;
 }

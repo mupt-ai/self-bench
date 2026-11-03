@@ -1,9 +1,9 @@
 import type {
   ArtifactRef,
   AuthoredTaskDraft,
-  Candidate,
   Difficulty,
   PipelineStage,
+  PullRequestCandidate,
   RunRequest,
   RunStatus,
   TaskProgress,
@@ -42,7 +42,7 @@ export function candidate(
   id: string,
   sourcePr: number,
   difficulty: Difficulty = "hard",
-): Candidate {
+): PullRequestCandidate {
   return {
     candidateId: id,
     difficulty,
@@ -137,7 +137,9 @@ export function greenOutcome(
   };
 }
 
-export function acceptingActivities(discovered: readonly Candidate[]): SelfBenchActivities {
+export function acceptingActivities(
+  discovered: readonly PullRequestCandidate[],
+): SelfBenchActivities {
   return {
     discoverCandidateShard: async ({ shardIndex }) => ({
       candidates: shardIndex === 0 ? discovered : [],

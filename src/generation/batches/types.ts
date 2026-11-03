@@ -1,8 +1,8 @@
 import type {
   ArtifactRef,
-  Candidate,
   CandidateWorkflowResult,
   DiscoveryResult,
+  PullRequestCandidate,
   RunRequest,
 } from "../../contracts/index.js";
 import type { SandboxCostSnapshot } from "../../sandbox/contracts.js";
@@ -22,7 +22,8 @@ interface BatchShard extends BatchItem {
   result?: DiscoveryResult;
 }
 interface BatchCandidate extends BatchItem {
-  candidate: Candidate;
+  /** Batches only ever author merged pull requests. */
+  candidate: PullRequestCandidate;
   result?: CandidateWorkflowResult;
 }
 /** Phases after which a batch never changes again. */
