@@ -1,5 +1,8 @@
 import { directoryOf } from "../../../src/public/directory";
+import { groupCardOf } from "../../../src/public/release-groups";
 import type {
+  PublicGroup,
+  PublicGroupCard,
   PublicRepoPage,
   PublicRepoSummary,
   PublicTask,
@@ -28,6 +31,10 @@ export interface PublicSource {
   taskDownloadUrl(releaseId: string, taskId: string): string;
   /** One setting's trial on a task, or undefined when the release did not publish it. */
   getTrial(releaseId: string, taskId: string, settingId: string): Promise<PublicTrial | undefined>;
+  /** Every repository group with something to show, most recently changed first. */
+  listGroups(): Promise<PublicGroupCard[]>;
+  /** One repository group's page, or undefined when it has nothing to show. */
+  getGroup(publisher: string, slug: string): Promise<PublicGroup | undefined>;
 }
 
 /**
@@ -48,12 +55,13 @@ const sameName = (left: string, right: string) => left.toLowerCase() === right.t
 /**
  * A source over pages held in memory. One page per release line. A repository's default
  * line is its endorsed line, else its most recently released one, for the directory and the
- * repository page alike. The directory's cards are built exactly as the server builds them.
- * Used by tests and the local fixture loader.
+ * repository page alike. The directory's cards are built exactly as the server builds them, and
+ * `groups` are the groups' current releases. Used by tests and the local fixture loader.
  */
 export function memorySource(
   pages: readonly PublicRepoPage[],
   published: MemoryTasks = {},
+  groups: readonly PublicGroup[] = [],
 ): PublicSource {
   const newestFirst = (candidates: readonly PublicRepoPage[]) =>
     [...candidates].sort((left, right) =>
@@ -78,6 +86,7 @@ export function memorySource(
   });
   const cards = () =>
     directoryOf(pages.map((page) => ({ release: page.release, endorsed: page.endorsed })));
+
   return {
     async listRepos() {
       return cards().filter((card) => card.defaultLine);
@@ -105,6 +114,14 @@ export function memorySource(
     taskDownloadUrl: (releaseId, taskId) => `#download/${releaseId}/${taskId}.tar.gz`,
     async getTrial(releaseId, taskId, settingId) {
       return published[releaseId]?.trials?.[taskId]?.[settingId];
+    },
+    async listGroups() {
+      return groups.map(groupCardOf);
+    },
+    async getGroup(publisher, slug) {
+      return groups.find(
+        (group) => sameName(group.publisher.login, publisher) && group.slug === slug,
+      );
     },
   };
 }

@@ -19,7 +19,7 @@ export function RunTaskPicker({
   disabled,
   readOnly = false,
 }: {
-  scope: Pick<EvaluationScope, "pages" | "repo">;
+  scope: Pick<EvaluationScope, "kind" | "pages" | "repo">;
   availableTasks: EvaluationOptions["tasks"];
   /** The tasks picked so far. */
   picked: RunDraft["tasks"];
@@ -28,8 +28,9 @@ export function RunTaskPicker({
   disabled: boolean;
   readOnly?: boolean;
 }) {
-  // A repository's tasks are the ones its review accepted; a benchmark's are its whole dataset.
-  const accepted = scope.repo !== undefined;
+  // A repository's (or group's) tasks are the ones review accepted; a benchmark's are its whole
+  // dataset.
+  const accepted = scope.kind !== "benchmark";
   const noun = (count: number) => `${accepted ? "Accepted " : ""}${count === 1 ? "Task" : "Tasks"}`;
   const none = accepted ? "No approved tasks are available." : "No tasks are available.";
   const loading = accepted ? "Loading approved tasks…" : "Loading tasks…";

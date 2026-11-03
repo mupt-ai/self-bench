@@ -224,13 +224,16 @@ export function createResultsSite(options: ResultsSiteOptions) {
       // Every page the site can show, read from the released lines like the pages themselves, so
       // it lists a release as soon as its page shows it. Kept by the CDN as briefly as pages are.
       if (url.pathname === "/sitemap.xml" && options.indexable) {
-        const repositories = await options.publicRoutes.repositories().catch(() => undefined);
-        if (!repositories) {
+        const [repositories, groups] = await Promise.all([
+          options.publicRoutes.repositories(),
+          options.publicRoutes.groups(),
+        ]).catch(() => [undefined, undefined]);
+        if (!repositories || !groups) {
           response.setHeader("cache-control", "no-store");
           sendJson(response, 503, { error: "Try again shortly" });
           return true;
         }
-        sendTagged(request, response, tagged(sitemapOf(origin, repositories)), {
+        sendTagged(request, response, tagged(sitemapOf(origin, repositories, groups)), {
           "cache-control": PAGE_CACHE,
           "content-type": "application/xml; charset=utf-8",
         });

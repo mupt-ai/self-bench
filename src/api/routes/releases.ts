@@ -1,58 +1,26 @@
-import type { IncomingMessage, ServerResponse } from "node:http";
-import { z } from "zod";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import { buildCommit } from "../../contracts/config/build-metadata.js";
 import type { Database } from "../../db/client.js";
-import {
-  currentOf,
-  headOf,
-  ReleaseConflict,
-  type ReleaseLine,
-  type ReleaseRow,
-  type ReleaseStore,
-} from "../../db/releases.js";
+import type { ReleaseLine, ReleaseStore } from "../../db/releases.js";
 import type { ConnectedRepo, RepoStore } from "../../db/repos.js";
-import type { Org, User, UserStore } from "../../db/users.js";
+import type { UserStore } from "../../db/users.js";
 import { catalogVersion } from "../../evaluation/catalog.js";
 import { readModelSummaries } from "../../evaluation/model-summary.js";
 import { track } from "../../lib/telemetry/posthog.js";
-import {
-  type BuiltRelease,
-  buildRelease,
-  previewRelease,
-  ReleaseRefused,
-} from "../../public/release-build.js";
+import { type BuiltRelease, buildRelease, ReleaseRefused } from "../../public/release-build.js";
 import {
   type GitHubRepository,
   lookupRepositoryById,
   releaseInputs,
 } from "../../public/release-sources.js";
-import { type ReleaseList, summaryOf, viewOf } from "../../public/release-views.js";
 import { GitHubOAuthError } from "../../third_party/github/oauth.js";
-import { tenantFor } from "../auth/tenant.js";
-import { readBody, sendJson, trustedMutation } from "../http.js";
+import { createLineRoutes, type LineKind } from "./release-line.js";
 
-const NAME = "([A-Za-z0-9_.-]+)";
+const NAME = "[A-Za-z0-9_.-]+";
+/** `[org, owner/name, section?, action?]`. */
 const route = new RegExp(
-  `^/api/orgs/${NAME}/repos/${NAME}/${NAME}/releases(?:/(preview|[a-f0-9-]{36}))?(?:/(withdraw))?$`,
+  `^/api/orgs/(${NAME})/repos/(${NAME}/${NAME})/releases(?:/(preview|[a-f0-9-]{36}))?(?:/(withdraw))?$`,
 );
-
-const releaseRequest = z
-  .object({
-    settings: z.array(z.string().min(1).max(4096)).min(1).max(500),
-    /** The line's head as the releaser saw it; null for a first release. */
-    head: z.uuid().nullable(),
-    /** The fingerprint of the preview the releaser confirmed. */
-    fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
-    /** Publish the tasks too, for anyone to browse and download on selfbench.dev. */
-    publishTasks: z.boolean().optional(),
-    /** Publish each setting's result and transcript on each task too; needs `publishTasks`. */
-    publishTrials: z.boolean().optional(),
-    /** Publish the latest Model Summaries report's sections on the released settings. */
-    publishSummaries: z.boolean().optional(),
-  })
-  .strict();
-type ReleaseRequest = z.infer<typeof releaseRequest>;
 
 export interface ReleaseRoutesOptions {
   readonly db: Database;
@@ -78,126 +46,76 @@ export interface PublicChange {
   publisher: string;
 }
 
-/** A signed-in member's request, scoped to one connected repository. */
-interface Scope {
-  readonly user: User;
-  readonly tenant: Org;
-  readonly repo: ConnectedRepo;
-  readonly line: ReleaseLine;
-}
-
+/**
+ * A connected repository's releases on selfbench.dev: its results for the settings the releaser
+ * ticks, and optionally its tasks, each setting's trial on them, and its Model Summaries.
+ */
 export function createReleaseRoutes(options: ReleaseRoutesOptions) {
-  const { users, repos, releases } = options;
   const fetchImpl = options.fetchImpl ?? fetch;
-
-  /** Reads what the rule needs now and builds the preview from it. */
-  const gather = async (scope: Scope, rows: readonly ReleaseRow[]) => {
-    const [inputs, { report }] = await Promise.all([
-      releaseInputs(
-        options.db,
-        options.artifacts,
-        { repoId: scope.repo.id, orgId: scope.tenant.id },
-        rows,
-      ),
-      readModelSummaries(options.artifacts, { repoId: scope.repo.id }),
-    ]);
-    return { inputs, report, view: viewOf(rows, previewRelease(inputs), report) };
-  };
-
-  /** Writes a release for the settings the request names, or answers why not. */
-  const release = async (
-    scope: Scope,
-    rows: readonly ReleaseRow[],
-    body: ReleaseRequest,
-    response: ServerResponse,
-  ) => {
-    const { inputs, report, view: fresh } = await gather(scope, rows);
-    const head = headOf(rows);
-    // Someone released, or withdrew and released, since this person looked.
-    if (body.head !== (head?.id ?? null)) {
-      sendJson(response, 409, {
-        error: head
-          ? `${head.releasedByLogin} released at ${head.releasedAt}. Review the refreshed preview.`
-          : "The release you saw is gone. Review the refreshed preview.",
-        ...fresh,
-      });
-      return;
-    }
-    // Results, tasks, or the current release changed since the preview was taken.
-    if (body.fingerprint !== fresh.preview.fingerprint) {
-      sendJson(response, 409, {
-        error:
-          "Results, tasks, or the current release changed since you opened this. Review the refreshed preview.",
-        ...fresh,
-      });
-      return;
-    }
-    const token = await users.gitHubToken(scope.user.githubId);
-    if (!token) throw new GitHubOAuthError("no GitHub token stored for this user", 401);
-    let github: GitHubRepository | undefined;
-    try {
-      github = await lookupRepositoryById(
-        options.githubApiUrl,
-        token,
-        scope.repo.githubId,
-        fetchImpl,
-      );
-    } catch (error) {
-      if (!(error instanceof GitHubOAuthError)) throw error;
-      sendJson(response, 503, {
-        error: "GitHub could not confirm that the repository is public. Try again in a moment.",
-      });
-      return;
-    }
-    // Checked live: the repository may have turned private since it was connected.
-    if (!github || github.private) {
-      sendJson(response, 400, { error: "Only public repositories can be released." });
-      return;
-    }
-    if (body.publishSummaries && !report) {
-      sendJson(response, 400, {
-        error:
-          "There are no model summaries to publish. Summarize models on the Results page first.",
-      });
-      return;
-    }
-    let built: BuiltRelease;
-    try {
-      built = buildRelease(inputs, body.settings, {
-        repository: { id: github.id, fullName: github.fullName },
-        publisher: { login: scope.tenant.login, kind: scope.tenant.kind },
-        publishTasks: body.publishTasks === true,
-        publishTrials: body.publishTrials === true,
-        ...(body.publishSummaries && report ? { summaries: report } : {}),
-      });
-    } catch (error) {
-      if (!(error instanceof ReleaseRefused)) throw error;
-      sendJson(response, 400, { error: error.message });
-      return;
-    }
-    // Unchanged results write no row: a double click or a retry. The line is read again after
-    // the GitHub lookup, so a withdrawal meanwhile is not mistaken for "still public".
-    const now = await releases.list(scope.line);
-    const current = currentOf(now);
-    if (current && current.hash === built.hash && headOf(now)?.id === head?.id) {
-      sendJson(response, 200, { unchanged: true, release: summaryOf(current, now) });
-      return;
-    }
-    const { private: isPrivate, archived, ...repository } = github;
-    try {
-      const row = await releases.insert({
-        line: scope.line,
+  const line = (repo: ConnectedRepo): ReleaseLine => ({
+    orgId: repo.orgId,
+    githubRepoId: repo.githubId,
+  });
+  const kind: LineKind<ConnectedRepo> = {
+    route,
+    notFound: "Repository is not connected here",
+    find: (tenant, fullName) => options.repos.find(tenant.id, fullName),
+    lineOf: (_tenant, repo) => line(repo),
+    async gather(tenant, repo, rows) {
+      const [inputs, { report }] = await Promise.all([
+        releaseInputs(options.db, options.artifacts, { repoId: repo.id, orgId: tenant.id }, rows),
+        readModelSummaries(options.artifacts, { repoId: repo.id }),
+      ]);
+      return { inputs, ...(report ? { report } : {}) };
+    },
+    async build({ tenant, subject: repo, token, body, gathered }) {
+      let github: GitHubRepository | undefined;
+      try {
+        github = await lookupRepositoryById(options.githubApiUrl, token, repo.githubId, fetchImpl);
+      } catch (error) {
+        if (!(error instanceof GitHubOAuthError)) throw error;
+        return [
+          503,
+          {
+            error: "GitHub could not confirm that the repository is public. Try again in a moment.",
+          },
+        ];
+      }
+      // Checked live: the repository may have turned private since it was connected.
+      if (!github || github.private)
+        return [400, { error: "Only public repositories can be released." }];
+      const { report } = gathered;
+      if (body.publishSummaries && !report)
+        return [
+          400,
+          {
+            error:
+              "There are no model summaries to publish. Summarize models on the Results page first.",
+          },
+        ];
+      let built: BuiltRelease;
+      try {
+        built = buildRelease(gathered.inputs, body.settings, {
+          repository: { id: github.id, fullName: github.fullName },
+          publisher: { login: tenant.login, kind: tenant.kind },
+          publishTasks: body.publishTasks === true,
+          publishTrials: body.publishTrials === true,
+          ...(body.publishSummaries && report ? { summaries: report } : {}),
+        });
+      } catch (error) {
+        if (!(error instanceof ReleaseRefused)) throw error;
+        return [400, { error: error.message }];
+      }
+      const { private: isPrivate, archived, ...repository } = github;
+      return {
         fullName: github.fullName,
-        publisherLogin: scope.tenant.login,
-        ...(head ? { predecessorId: head.id } : {}),
-        releasedBy: { id: scope.user.id, login: scope.user.login },
         hash: built.hash,
         payload: {
           ...built.payload,
           repository: { ...repository, ...built.payload.repository },
           publisher: {
             ...built.payload.publisher,
-            ...(scope.tenant.avatarUrl ? { avatarUrl: scope.tenant.avatarUrl } : {}),
+            ...(tenant.avatarUrl ? { avatarUrl: tenant.avatarUrl } : {}),
           },
         },
         detail: {
@@ -205,82 +123,13 @@ export function createReleaseRoutes(options: ReleaseRoutesOptions) {
           provenance: { selfbenchBuild: buildCommit, catalogVersion },
           repositoryFlags: { private: isPrivate, archived },
         },
-      });
-      options.onPublicChange?.({ fullName: github.fullName, publisher: scope.tenant.login });
-      track(scope.user, "release published", { repo: github.fullName }, scope.tenant);
-      const after = await releases.list(scope.line);
-      sendJson(response, 201, { release: summaryOf(row, after) });
-    } catch (error) {
-      if (!(error instanceof ReleaseConflict)) throw error;
-      const after = await releases.list(scope.line);
-      sendJson(response, 409, {
-        error: "Someone else released first. Review the refreshed preview.",
-        ...(await gather(scope, after)).view,
-      });
-    }
-  };
-
-  return {
-    /** Answers /api/orgs/:org/repos/:owner/:name/releases; true when the response was sent. */
-    async handle(
-      request: IncomingMessage,
-      url: URL,
-      response: ServerResponse,
-      user: User,
-    ): Promise<boolean> {
-      const match = route.exec(url.pathname);
-      if (!match?.[1] || !match[2] || !match[3]) return false;
-      response.setHeader("cache-control", "no-store");
-      const [section, action] = [match[4], match[5]];
-      const tenant = await tenantFor(users, user, match[1]);
-      const repo = tenant ? await repos.find(tenant.id, `${match[2]}/${match[3]}`) : undefined;
-      if (!tenant || !repo) {
-        sendJson(response, 404, { error: "Repository is not connected here" });
-        return true;
-      }
-      const mutation = request.method === "POST";
-      if (mutation && !trustedMutation(request, options.publicUrl, user)) {
-        sendJson(response, 403, { error: "Same-origin JSON request required" });
-        return true;
-      }
-      const scope: Scope = {
-        user,
-        tenant,
-        repo,
-        line: { orgId: tenant.id, githubRepoId: repo.githubId },
       };
-      const rows = await releases.list(scope.line);
-      if (request.method === "GET" && !section) {
-        const list: ReleaseList = {
-          releases: rows.map((row) => summaryOf(row, rows)),
-          resultsSiteUrl: options.resultsSiteUrl,
-        };
-        sendJson(response, 200, list);
-      } else if (request.method === "GET" && section === "preview") {
-        sendJson(response, 200, (await gather(scope, rows)).view);
-      } else if (mutation && section && section !== "preview" && action === "withdraw") {
-        const withdrawn = z.uuid().safeParse(section).success
-          ? await releases.withdraw(scope.line, section, user.login)
-          : undefined;
-        if (!withdrawn) {
-          sendJson(response, 404, { error: "Release not found or already withdrawn" });
-        } else {
-          options.onPublicChange?.({
-            fullName: withdrawn.fullName,
-            publisher: withdrawn.publisherLogin,
-          });
-          sendJson(response, 200, {
-            release: summaryOf(withdrawn, await releases.list(scope.line)),
-          });
-        }
-      } else if (mutation && !section) {
-        const body = releaseRequest.parse(
-          JSON.parse((await readBody(request, 1024 * 1024)).toString()),
-        );
-        await release(scope, rows, body, response);
-      } else sendJson(response, 405, { error: "Method not allowed" });
-      return true;
+    },
+    changed(tenant, row, user, released) {
+      options.onPublicChange?.({ fullName: row.fullName, publisher: row.publisherLogin });
+      if (released) track(user, "release published", { repo: row.fullName }, tenant);
     },
   };
+  return createLineRoutes(options, kind);
 }
 export type ReleaseRoutes = ReturnType<typeof createReleaseRoutes>;

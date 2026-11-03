@@ -1,12 +1,13 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { ReleaseStore } from "../../db/releases.js";
-import { directoryOf } from "../../public/directory.js";
-import { repositoryPath, segmentsOf } from "../../public/paths.js";
-import type { PublishedLine, PublishedRelease } from "../../public/release-types.js";
+import { groupPath, repositoryPath, segmentsOf } from "../../public/paths.js";
+import type { PublishedGroup } from "../../public/release-groups.js";
+import type { PublishedLine } from "../../public/release-types.js";
 import { sendJson } from "../http.js";
+import { type Snapshot, snapshotOf } from "../public-snapshot.js";
 import { clientIp, type RateLimiter } from "../rate-limit.js";
-import { sendTagged, type TaggedBody, tagged } from "../tagged.js";
+import { sendTagged } from "../tagged.js";
 import { createPublicTaskRoutes, type PublicTaskRoutesOptions } from "./public-tasks.js";
 
 /** How long the snapshot of released lines is served before the next read of the table. */
@@ -20,58 +21,6 @@ const SNAPSHOT_MS = 5_000;
  */
 const CACHED = "public, max-age=0, s-maxage=10";
 const JSON_TYPE = "application/json; charset=utf-8";
-
-/**
- * Every current release line, as read at one moment, with the public responses built from it.
- * Each response is built and tagged the first time it is asked for, then reused until the next
- * read, so a request costs no read of the table and a client or CDN already holding a response
- * is answered with a bodyless 304.
- */
-interface Snapshot {
-  /** Current lines by lower-case repository name, newest first. */
-  byRepository: Map<string, PublishedLine[]>;
-  /** Current releases by id. */
-  byRelease: Map<string, PublishedRelease>;
-  releases: () => TaggedBody;
-  directory: () => TaggedBody;
-  /** One repository's response, or undefined when nothing is released for it. */
-  repository: (fullName: string) => TaggedBody | undefined;
-}
-
-/** `build`, run once on first use. */
-function once<T>(build: () => T): () => T {
-  let built: { value: T } | undefined;
-  return () => {
-    built ??= { value: build() };
-    return built.value;
-  };
-}
-
-function snapshotOf(lines: PublishedLine[]): Snapshot {
-  const byRepository = new Map<string, PublishedLine[]>();
-  for (const line of lines) {
-    const key = line.release.repository.fullName.toLowerCase();
-    byRepository.set(key, [...(byRepository.get(key) ?? []), line]);
-  }
-  const repositories = new Map<string, TaggedBody>();
-  return {
-    byRepository,
-    byRelease: new Map(lines.map((line) => [line.release.releaseId, line.release])),
-    releases: once(() => tagged(JSON.stringify({ lines }))),
-    directory: once(() => tagged(JSON.stringify({ cards: directoryOf(lines) }))),
-    repository(fullName) {
-      const key = fullName.toLowerCase();
-      const found = byRepository.get(key);
-      if (!found) return undefined;
-      let body = repositories.get(key);
-      if (!body) {
-        body = tagged(JSON.stringify({ lines: found }));
-        repositories.set(key, body);
-      }
-      return body;
-    },
-  };
-}
 
 export interface PublicReleaseRoutesOptions {
   /** Refuses callers over their share; the routes are anonymous. */
@@ -90,7 +39,7 @@ export interface PublicReleaseRoutesOptions {
  */
 export function createPublicReleaseRoutes(
   releases: Pick<ReleaseStore, "currentLines"> &
-    Partial<Pick<ReleaseStore, "releasedTasks" | "releasedResults">>,
+    Partial<Pick<ReleaseStore, "releasedTasks" | "releasedResults" | "currentGroups">>,
   options: PublicReleaseRoutesOptions = {},
 ) {
   const now = options.now ?? Date.now;
@@ -120,7 +69,12 @@ export function createPublicReleaseRoutes(
     if (!reading || now() - reading.at >= SNAPSHOT_MS) {
       reads += 1;
       const read = reads;
-      const entry = { snapshot: releases.currentLines().then(snapshotOf), at: now() };
+      const entry = {
+        snapshot: Promise.all([releases.currentLines(), releases.currentGroups?.() ?? []]).then(
+          ([lines, records]) => snapshotOf(lines, records),
+        ),
+        at: now(),
+      };
       reading = entry;
       entry.snapshot.then(
         (snapshot) => {
@@ -167,6 +121,18 @@ export function createPublicReleaseRoutes(
     async repositoryBody(fullName: string): Promise<string | undefined> {
       return (await snapshot()).repository(fullName)?.body;
     },
+    /** Every group with something to show, for the home page and the sitemap. */
+    async groups(): Promise<PublishedGroup[]> {
+      return (await snapshot()).groups;
+    },
+    /** One group's page, or undefined when it has nothing to show. */
+    async groupFor(publisher: string, slug: string): Promise<PublishedGroup | undefined> {
+      return (await snapshot()).group(publisher, slug);
+    },
+    /** The body /api/public/groups/<publisher>/<slug> answers, or undefined. */
+    async groupBody(publisher: string, slug: string): Promise<string | undefined> {
+      return (await snapshot()).groupBody(publisher, slug)?.body;
+    },
     /** Answers /api/public/*; true when the response was sent. */
     async handle(request: IncomingMessage, url: URL, response: ServerResponse): Promise<boolean> {
       if (!url.pathname.startsWith("/api/public/")) return false;
@@ -212,6 +178,20 @@ export function createPublicReleaseRoutes(
           "cache-control": CACHED,
           "content-type": JSON_TYPE,
         });
+        return true;
+      }
+      const group = route === "groups" ? groupPath([route, ...rest]) : undefined;
+      if (group) {
+        const body = (await snapshot()).groupBody(group.publisher, group.slug);
+        if (body) {
+          sendTagged(request, response, body, {
+            "cache-control": CACHED,
+            "content-type": JSON_TYPE,
+          });
+        } else {
+          uncached();
+          sendJson(response, 404, { error: "No such repository group" });
+        }
         return true;
       }
       const repository =

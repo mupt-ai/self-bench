@@ -1,10 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, getTableColumns, isNull, or, type SQL, sql } from "drizzle-orm";
+import type { GroupReleasePayload, PublishedGroup } from "../public/release-groups.js";
 import type { ReleaseTask } from "../public/release-rule.js";
 import { endpointHostsOf, type ReleasedResults } from "../public/release-trials.js";
 import type { PublishedLine, PublishedRelease, ReleasePayload } from "../public/release-types.js";
 import type { Database } from "./client.js";
+import { chainOrder, currentOf } from "./release-chain.js";
 import { releases } from "./schema.js";
+
+export { currentOf, headOf } from "./release-chain.js";
 
 /** One workspace's releases of one GitHub repository. */
 export interface ReleaseLine {
@@ -12,10 +16,25 @@ export interface ReleaseLine {
   readonly githubRepoId: number;
 }
 
+/** One workspace's releases of one of its repository groups. */
+interface GroupLine {
+  readonly orgId: number;
+  readonly groupId: number;
+}
+
+/** A line of releases: a repository's, or a repository group's. */
+export type AnyLine = ReleaseLine | GroupLine;
+
+/** What a line's rows store in `payload`: a repository's release, or a group's. */
+export type LinePayload = ReleasePayload | GroupReleasePayload;
+
+const lineKey = (line: AnyLine) =>
+  "groupId" in line ? `group/${line.groupId}` : `${line.orgId}/${line.githubRepoId}`;
+
 /** A release row. What the public API serves is `published()`; the rest stays on the server. */
-export interface ReleaseRow {
+export interface ReleaseRow<Payload extends LinePayload = ReleasePayload> {
   readonly id: string;
-  readonly line: ReleaseLine;
+  readonly line: AnyLine;
   readonly fullName: string;
   readonly publisherLogin: string;
   /** The head this row was written after; absent for a line's first release. */
@@ -27,19 +46,19 @@ export interface ReleaseRow {
   /** SHA-256 of the payload, the trials behind it, and declined settings; unchanged writes no row. */
   readonly hash: string;
   /** What selfbench.dev shows. */
-  readonly payload: ReleasePayload;
+  readonly payload: Payload;
   /** How the release was built: tasks, trials, declined settings. Empty on public reads. */
   readonly detail: Record<string, unknown>;
 }
 
 export interface NewRelease {
-  readonly line: ReleaseLine;
+  readonly line: AnyLine;
   readonly fullName: string;
   readonly publisherLogin: string;
   readonly predecessorId?: string;
   readonly releasedBy: { readonly id: number; readonly login: string };
   readonly hash: string;
-  readonly payload: ReleasePayload;
+  readonly payload: LinePayload;
   readonly detail: Record<string, unknown>;
 }
 
@@ -51,9 +70,14 @@ type StoredRow = Omit<typeof releases.$inferSelect, "detail" | "releasedBy"> & {
   detail?: unknown;
 };
 
-const rowFrom = (row: StoredRow): ReleaseRow => ({
+const rowFrom = <Payload extends LinePayload = ReleasePayload>(
+  row: StoredRow,
+): ReleaseRow<Payload> => ({
   id: row.id,
-  line: { orgId: row.orgId, githubRepoId: row.githubRepoId },
+  line:
+    row.groupId !== null
+      ? { orgId: row.orgId, groupId: row.groupId }
+      : { orgId: row.orgId, githubRepoId: row.githubRepoId ?? 0 },
   fullName: row.fullName,
   publisherLogin: row.publisherLogin,
   ...(row.predecessorId ? { predecessorId: row.predecessorId } : {}),
@@ -62,7 +86,7 @@ const rowFrom = (row: StoredRow): ReleaseRow => ({
   ...(row.withdrawnAt ? { withdrawnAt: row.withdrawnAt.toISOString() } : {}),
   ...(row.withdrawnByLogin ? { withdrawnByLogin: row.withdrawnByLogin } : {}),
   hash: row.hash,
-  payload: row.payload as ReleasePayload,
+  payload: row.payload as Payload,
   detail: (row.detail as Record<string, unknown> | undefined) ?? {},
 });
 
@@ -72,6 +96,11 @@ const published = (row: ReleaseRow): PublishedRelease => ({
   releaseId: row.id,
   releasedAt: row.releasedAt,
 });
+const publishedGroup = (row: ReleaseRow<GroupReleasePayload>): PublishedGroup => ({
+  ...row.payload,
+  releaseId: row.id,
+  updatedAt: row.releasedAt,
+});
 
 const isUniqueViolation = (error: unknown): boolean => {
   const code = (error as { code?: unknown; cause?: { code?: unknown } }).code;
@@ -79,31 +108,11 @@ const isUniqueViolation = (error: unknown): boolean => {
   return code === "23505" || causeCode === "23505";
 };
 
-/**
- * A line's rows along the predecessor chain, newest first. Each row names the head it was
- * written after, so the chain, not the clock, decides which row is newest.
- */
-function chainOrder(rows: readonly ReleaseRow[]): ReleaseRow[] {
-  const next = new Map(rows.map((row) => [row.predecessorId ?? "", row]));
-  const chain: ReleaseRow[] = [];
-  for (let row = next.get(""); row && chain.length < rows.length; row = next.get(row.id))
-    chain.push(row);
-  // The unique constraint keeps every row on the chain; any stray row is kept rather than lost.
-  const onChain = new Set(chain.map((row) => row.id));
-  return [...chain.reverse(), ...rows.filter((row) => !onChain.has(row.id))];
-}
-
-/** The line's newest row, withdrawn or not. A release names the head it was built on. */
-export const headOf = (rows: readonly ReleaseRow[]): ReleaseRow | undefined => rows[0];
-/** The line's newest row not withdrawn: what the public sees. */
-export const currentOf = (rows: readonly ReleaseRow[]): ReleaseRow | undefined =>
-  rows.find((row) => !row.withdrawnAt);
-
 /** Each line's current release among `rows`, which must hold whole lines. Newest first. */
-function currentAmong(rows: readonly ReleaseRow[]): ReleaseRow[] {
-  const byLine = new Map<string, ReleaseRow[]>();
+function currentAmong<Row extends ReleaseRow<LinePayload>>(rows: readonly Row[]): Row[] {
+  const byLine = new Map<string, Row[]>();
   for (const row of rows) {
-    const key = `${row.line.orgId}/${row.line.githubRepoId}`;
+    const key = lineKey(row.line);
     byLine.set(key, [...(byLine.get(key) ?? []), row]);
   }
   return [...byLine.values()]
@@ -113,8 +122,15 @@ function currentAmong(rows: readonly ReleaseRow[]): ReleaseRow[] {
 
 export function createReleaseStore(db: Database, options: { now?: () => Date } = {}) {
   const now = options.now ?? (() => new Date());
-  const ofLine = (line: ReleaseLine) =>
-    and(eq(releases.orgId, line.orgId), eq(releases.githubRepoId, line.githubRepoId));
+  const ofLine = (line: AnyLine) =>
+    "groupId" in line
+      ? and(eq(releases.orgId, line.orgId), eq(releases.groupId, line.groupId))
+      : and(
+          eq(releases.orgId, line.orgId),
+          eq(releases.githubRepoId, line.githubRepoId),
+          isNull(releases.groupId),
+        );
+  const repositoryRows = isNull(releases.groupId);
   const newestFirst = [desc(releases.releasedAt), desc(releases.id)];
   const rowsWhere = async (where?: SQL) =>
     (
@@ -123,7 +139,7 @@ export function createReleaseStore(db: Database, options: { now?: () => Date } =
         .from(releases)
         .where(where)
         .orderBy(...newestFirst)
-    ).map(rowFrom);
+    ).map((row) => rowFrom<LinePayload>(row));
   // `detail` is the bulk of a row and never public, so public reads leave it out.
   const { detail: _detail, releasedBy: _releasedBy, ...publicColumns } = getTableColumns(releases);
   const publicRowsWhere = async (where?: SQL) =>
@@ -133,26 +149,32 @@ export function createReleaseStore(db: Database, options: { now?: () => Date } =
         .from(releases)
         .where(where)
         .orderBy(...newestFirst)
-    ).map(rowFrom);
-  const asLines = (rows: readonly ReleaseRow[]): PublishedLine[] =>
-    rows.map((row) => ({ release: published(row), endorsed: false }));
+    ).map((row) => rowFrom<LinePayload>(row));
+  const asLines = (rows: readonly ReleaseRow<LinePayload>[]): PublishedLine[] =>
+    rows.map((row) => ({ release: published(row as ReleaseRow), endorsed: false }));
   return {
     /** Every row of the line, newest first, withdrawn ones included. */
-    async list(line: ReleaseLine): Promise<ReleaseRow[]> {
-      return chainOrder(await rowsWhere(ofLine(line)));
+    async list<Payload extends LinePayload = ReleasePayload>(
+      line: AnyLine,
+    ): Promise<ReleaseRow<Payload>[]> {
+      return chainOrder((await rowsWhere(ofLine(line))) as ReleaseRow<Payload>[]);
     },
     /**
      * Inserts a release that names the head it was built on. Two releases naming the same
      * head, or two first releases of a line, cannot both succeed.
      */
-    async insert(release: NewRelease): Promise<ReleaseRow> {
+    async insert<Payload extends LinePayload = ReleasePayload>(
+      release: NewRelease,
+    ): Promise<ReleaseRow<Payload>> {
       try {
         const [row] = await db
           .insert(releases)
           .values({
             id: randomUUID(),
             orgId: release.line.orgId,
-            githubRepoId: release.line.githubRepoId,
+            ...("groupId" in release.line
+              ? { groupId: release.line.groupId }
+              : { githubRepoId: release.line.githubRepoId }),
             fullName: release.fullName,
             publisherLogin: release.publisherLogin,
             predecessorId: release.predecessorId ?? null,
@@ -165,20 +187,33 @@ export function createReleaseStore(db: Database, options: { now?: () => Date } =
           })
           .returning();
         if (!row) throw new Error("release insert returned no row");
-        return rowFrom(row);
+        return rowFrom<Payload>(row);
       } catch (error) {
         if (isUniqueViolation(error)) throw new ReleaseConflict("Someone else released first");
         throw error;
       }
     },
     /** Hides a release from the public; the line falls back to its previous release. */
-    async withdraw(line: ReleaseLine, id: string, login: string): Promise<ReleaseRow | undefined> {
+    async withdraw<Payload extends LinePayload = ReleasePayload>(
+      line: AnyLine,
+      id: string,
+      login: string,
+    ): Promise<ReleaseRow<Payload> | undefined> {
       const [row] = await db
         .update(releases)
         .set({ withdrawnAt: now(), withdrawnByLogin: login })
         .where(and(ofLine(line), eq(releases.id, id), isNull(releases.withdrawnAt)))
         .returning();
-      return row ? rowFrom(row) : undefined;
+      return row ? rowFrom<Payload>(row) : undefined;
+    },
+    /** Withdraws every public release of a line: what deleting a group does. */
+    async withdrawLine(line: AnyLine, login: string): Promise<number> {
+      const rows = await db
+        .update(releases)
+        .set({ withdrawnAt: now(), withdrawnByLogin: login })
+        .where(and(ofLine(line), isNull(releases.withdrawnAt)))
+        .returning({ id: releases.id });
+      return rows.length;
     },
     /**
      * The tasks a release was built on, as its row records them (`detail.releasedTasks`), in key
@@ -208,7 +243,8 @@ export function createReleaseStore(db: Database, options: { now?: () => Date } =
         })
         .from(releases)
         .where(eq(releases.id, id));
-      if (!row) return undefined;
+      // A group's release publishes no trials.
+      if (!row || row.githubRepoId === null) return undefined;
       return {
         line: { orgId: row.orgId, githubRepoId: row.githubRepoId },
         results:
@@ -220,7 +256,14 @@ export function createReleaseStore(db: Database, options: { now?: () => Date } =
     },
     /** Every line's current release, newest first. */
     async currentLines(): Promise<PublishedLine[]> {
-      return asLines(currentAmong(await publicRowsWhere()));
+      return asLines(currentAmong(await publicRowsWhere(repositoryRows)));
+    },
+    /** Every repository group's current release, newest first. */
+    async currentGroups(): Promise<PublishedGroup[]> {
+      const rows = (await publicRowsWhere(
+        sql`${releases.groupId} is not null`,
+      )) as ReleaseRow<GroupReleasePayload>[];
+      return currentAmong(rows).map(publishedGroup);
     },
     /** The current release of each line whose latest release names `fullName`, newest first. */
     async currentLinesFor(fullName: string): Promise<PublishedLine[]> {
@@ -230,9 +273,13 @@ export function createReleaseStore(db: Database, options: { now?: () => Date } =
       const named = await db
         .selectDistinct({ orgId: releases.orgId, githubRepoId: releases.githubRepoId })
         .from(releases)
-        .where(eq(sql`lower(${releases.fullName})`, wanted));
+        .where(and(eq(sql`lower(${releases.fullName})`, wanted), repositoryRows));
       if (named.length === 0) return [];
-      const current = currentAmong(await publicRowsWhere(or(...named.map(ofLine))));
+      const lines = named.map(({ orgId, githubRepoId }) => ({
+        orgId,
+        githubRepoId: githubRepoId ?? 0,
+      }));
+      const current = currentAmong(await publicRowsWhere(or(...lines.map(ofLine))));
       return asLines(current.filter((row) => row.fullName.toLowerCase() === wanted));
     },
   };

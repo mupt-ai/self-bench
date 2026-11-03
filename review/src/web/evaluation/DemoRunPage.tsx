@@ -88,7 +88,11 @@ export function DemoRunPage() {
         submitted.
       </Notice>
       <RunTaskPicker
-        scope={{ repo: "demo/sample-repository", pages: "/repos/demo/sample-repository" }}
+        scope={{
+          kind: "repository",
+          repo: "demo/sample-repository",
+          pages: "/repos/demo/sample-repository",
+        }}
         availableTasks={tasks}
         picked={draft.tasks}
         tasksReady

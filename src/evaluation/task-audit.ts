@@ -7,7 +7,7 @@ import { harnessLabels } from "./models.js";
 import { redactOutput } from "./output.js";
 import { evaluationPrompt } from "./prompts.js";
 import { listRuns } from "./run-list.js";
-import { type EvaluationScope, scopeOf } from "./scope.js";
+import { type EvaluationScope, scopeOf, scopePath } from "./scope.js";
 import { evaluationPrefix, getEvaluation, live } from "./store.js";
 import type { EvaluationRun, EvaluationTrial } from "./types.js";
 
@@ -58,9 +58,7 @@ export type TaskRef = EvaluationScope & Pick<TaskAuditRequest, "runId" | "taskId
 
 /** Where a task's latest audit is kept, apart from any one evaluation. */
 function taskAuditKey({ runId, taskId, ...scope }: TaskRef): string {
-  const { repoId, benchmarkId } = scopeOf(scope);
-  const root = repoId !== undefined ? `repos/${repoId}` : `benchmarks/${benchmarkId}`;
-  return `audits/${root}/${encodeURIComponent(runId)}/${encodeURIComponent(taskId)}.json`;
+  return `audits/${scopePath(scope)}/${encodeURIComponent(runId)}/${encodeURIComponent(taskId)}.json`;
 }
 
 const failureKey = (task: TaskRef) => taskAuditKey(task).replace(/\.json$/, ".failed.json");

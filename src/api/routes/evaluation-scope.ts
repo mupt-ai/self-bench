@@ -23,6 +23,7 @@ import type { EvaluationDataset } from "../../evaluation/dataset.js";
 import { evaluationTaskKey } from "../../evaluation/models.js";
 import { listRuns } from "../../evaluation/run-list.js";
 import { sameScope } from "../../evaluation/scope.js";
+import { runScope, scopedRun, scopedRuns } from "../../evaluation/scoped-runs.js";
 import { evaluationPrefix, getEvaluation, live } from "../../evaluation/store.js";
 import { managedHarborEnvironment, managedOffer } from "../../generation/billing/managed.js";
 import { track } from "../../lib/telemetry/posthog.js";
@@ -94,7 +95,8 @@ export async function handleScopedEvaluations(
   }
   if (section && !SECTIONS.has(section) && !id && action === "explain" && methods) {
     await explainTrial(options, request, url, response, {
-      scope,
+      // A group's member run is explained where it lives, in its repository.
+      scope: (await runScope(artifacts, scope, dataset, section)) ?? scope,
       orgId,
       evaluationId: section,
       user,
@@ -235,7 +237,8 @@ export async function handleScopedEvaluations(
   } else if (section === "options") {
     sendJson(response, 200, await dataset.options());
   } else if (section) {
-    const run = await getEvaluation(artifacts, scope, section);
+    // A group shows its members' runs too, so one may be opened from it.
+    const run = await scopedRun(artifacts, scope, dataset, section);
     if (!run) sendJson(response, 404, { error: "Evaluation not found" });
     else if (id === "artifacts") await sendArtifact(artifacts, run, url, response);
     else if (!id) sendJson(response, 200, run);
@@ -246,7 +249,7 @@ export async function handleScopedEvaluations(
     const have = /^(?:W\/)?"([^"]+)"$/.exec(request.headers["if-none-match"] ?? "")?.[1];
     // A dataset that hides some trials tags its own view, so only one that hides none can answer
     // from the stored list's tag alone.
-    const listed = await listRuns(artifacts, scope, dataset.visible ? undefined : have);
+    const listed = await scopedRuns(artifacts, scope, dataset, dataset.visible ? undefined : have);
     const visible = await dataset.visible?.(listed.runs ?? []);
     const tag = visible?.tag
       ? createHash("sha256").update(`${listed.tag}.${visible.tag}`).digest("base64url").slice(0, 27)

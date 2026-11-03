@@ -14,3 +14,9 @@ Two choices in the release flow publish more than the aggregates:
 - **Publish Results by Task**, available with Publish Tasks and off by default, also shows whether each setting passed each task, with that trial's grading, test output, and solver transcript, secrets redacted. Harbor logs, artifacts, and endpoint hosts stay private.
 
 Review both before publishing if your benchmark tasks or their transcripts should remain private. Anyone can read the released aggregates through the [Public Results API](/api-reference/overview).
+
+## Repository Groups
+
+A repository group evaluates several connected repositories together, as if they were one. Create one under **Repository Groups** in the sidebar, then use its tabs as you would a repository's: **Dataset** lists every member's approved tasks, **Run** starts evaluations on them, and **Results** compares models over all of them.
+
+A group's Results count its members' own runs as well as runs started from the group, so a model you already ran on every member shows up at once; **Run** with missing tasks only fills the gaps. Runs started from the group don't appear on each member's Results page. Its **Releases** tab publishes the group at `selfbench.dev/groups/<workspace>/<address>`: each setting's accuracy and cost over every member's tasks, and on each member. Every member must be public on GitHub. A group publishes its scores only, never its tasks or transcripts.

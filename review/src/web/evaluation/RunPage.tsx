@@ -207,7 +207,7 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
         className="mb-6"
         title="Run"
         description={
-          scope.repo
+          scope.kind !== "benchmark"
             ? "Compare models and harnesses against your accepted tasks."
             : `Compare models and harnesses on ${label} from Harbor's registry.`
         }

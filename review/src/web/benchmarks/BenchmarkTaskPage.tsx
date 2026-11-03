@@ -27,7 +27,7 @@ export function BenchmarkTaskPage() {
       <header className={`border-b border-border bg-background py-5 ${pageGutter}`}>
         <Breadcrumbs
           items={[
-            { label: "Benchmarks", to: "/benchmarks" },
+            { label: "Public Benchmarks", to: "/benchmarks" },
             { label: fullName, to: `/benchmarks/${fullName}`, mono: true },
             { label: "Task" },
           ]}

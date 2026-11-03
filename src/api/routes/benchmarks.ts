@@ -3,14 +3,13 @@ import { z } from "zod";
 import { REGISTRY_REFERENCE } from "../../contracts/harbor-registry.js";
 import type { Benchmark, BenchmarkStore } from "../../db/benchmarks.js";
 import type { User } from "../../db/users.js";
-import { unfinished } from "../../evaluation/comparisons.js";
 import { benchmarkDataset } from "../../evaluation/dataset.js";
 import { freezeRegistryTasks } from "../../evaluation/frozen-tasks.js";
 import { expandBundle } from "../../generation/runs/bundle.js";
-import { tenantFor } from "../auth/tenant.js";
-import { readBody, sendJson, trustedMutation } from "../http.js";
+import { readBody } from "../http.js";
 import { EVALUATIONS_PATH, handleScopedEvaluations } from "./evaluation-scope.js";
 import type { EvaluationRoutesOptions } from "./evaluations.js";
+import { openOrgScope, type Reply, unfinishedRuns } from "./org-scope.js";
 
 const NAME = "[A-Za-z0-9][A-Za-z0-9._-]{0,98}";
 /** `/api/orgs/<org>/benchmarks`, or one benchmark (`<org>/<name>`) and what follows it. */
@@ -18,7 +17,6 @@ const route = new RegExp(`^/api/orgs/([A-Za-z0-9_.-]+)/benchmarks(?:/(${NAME}/${
 
 const addSchema = z.strictObject({ reference: z.string() });
 
-type Reply = readonly [status: number, body: unknown];
 const METHOD_NOT_ALLOWED: Reply = [405, { error: "Method not allowed" }];
 
 interface Context {
@@ -45,17 +43,10 @@ export async function benchmarkRoutes(
   const match = route.exec(url.pathname);
   if (!match?.[1]) return false;
   const [, login, name, rest = ""] = match;
-  response.setHeader("cache-control", "no-store");
-  const send = ([status, body]: Reply) => {
-    sendJson(response, status, body);
-    request.resume();
-    return true;
-  };
-  const tenant = await tenantFor(options.users, user, login);
   const store = options.benchmarks;
-  if (!tenant || !store) return send([404, { error: "Organization not found" }]);
-  if (request.method !== "GET" && !trustedMutation(request, options.publicUrl, user))
-    return send([403, { error: "Same-origin JSON request required" }]);
+  const opened = await openOrgScope(options, request, response, user, login, !!store);
+  if ("sent" in opened || !store) return true;
+  const { tenant, send } = opened;
   const context: Context = { options, store, tenant, user, request, url };
   if (!name) return send(await collection(context));
 
@@ -156,12 +147,8 @@ async function member(context: Context, benchmark: Benchmark, rest: string): Pro
  * cancelled only through it.
  */
 async function remove({ options, store, tenant }: Context, benchmark: Benchmark): Promise<Reply> {
-  const records = options.vault
-    ? await options.vault.comparisons.listForScope({ benchmarkId: benchmark.id })
-    : [];
-  const active = await Promise.all(records.map((record) => unfinished(options.artifacts, record)));
-  if (active.includes(true))
-    return [409, { error: "Cancel this benchmark's unfinished comparisons before removing it" }];
+  const refused = await unfinishedRuns(options, { benchmarkId: benchmark.id }, "benchmark");
+  if (refused) return refused;
   await store.remove(tenant.id, benchmark.name);
   return [200, { ok: true }];
 }

@@ -35,6 +35,24 @@ test("repository URLs mirror GitHub, dotted names included", () => {
   }
 });
 
+test("a repository group's page renders its pooled leaderboard and its members", async () => {
+  const { syntheticSource } = await import("./mobile/checks/synthetic");
+  const source = syntheticSource();
+  const group = await source.getGroup("acme-labs", "widget-toolkits");
+  expect(group?.members.map((member) => member.repository.fullName)).toEqual([
+    "example-org/widgets",
+    "example-org/many-models",
+  ]);
+  // Static rendering stops at the loading state, before any repository page's.
+  const html = render("/groups/acme-labs/widget-toolkits");
+  expect(html).toContain("Loading…");
+  expect(html).not.toContain("Find the best models for your repo");
+  expect((await source.listGroups()).map((card) => card.slug)).toEqual([
+    "widget-toolkits",
+    "solo-setting",
+  ]);
+});
+
 test("unknown paths render the frame and nothing else while the client redirects home", () => {
   // <Navigate> only acts in the browser, so a static render shows the empty frame.
   const html = render("/nothing/here/at/all");

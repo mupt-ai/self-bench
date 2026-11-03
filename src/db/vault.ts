@@ -4,7 +4,8 @@ import type { Database } from "./client.js";
 import { type ComparisonStore, createComparisonStore } from "./comparisons.js";
 import { type CredentialStore, createCredentialStore } from "./credentials.js";
 import { createEncryptedRecords, type EncryptedRecordStore } from "./encrypted-records.js";
-import { benchmarks, repos } from "./schema.js";
+import type { repos } from "./schema.js";
+import { scopeTables } from "./scope-tables.js";
 
 /** Everything sealed with the evaluation credential key, plus the comparisons that use it. */
 export interface Vault {
@@ -23,17 +24,12 @@ export function createVault(db: Database, key: string): Vault {
     records: createEncryptedRecords(db, key),
     credentials: createCredentialStore(db, key),
     comparisons: createComparisonStore(db),
-    async scopeOrg({ repoId, benchmarkId }) {
-      const [owner] =
-        benchmarkId !== undefined
-          ? await db
-              .select({ orgId: benchmarks.orgId })
-              .from(benchmarks)
-              .where(eq(benchmarks.id, benchmarkId))
-          : repoId !== undefined
-            ? await db.select({ orgId: repos.orgId }).from(repos).where(eq(repos.id, repoId))
-            : [];
-      return owner?.orgId;
+    async scopeOrg(scope) {
+      const { owner: table, id } = scopeTables(scope);
+      // Each owning table has an id and the org it belongs to.
+      const owner = table as typeof repos;
+      const [found] = await db.select({ orgId: owner.orgId }).from(owner).where(eq(owner.id, id));
+      return found?.orgId;
     },
   };
 }

@@ -25,13 +25,45 @@ import {
 } from "./api";
 import { ReleaseDialog } from "./ReleaseDialog";
 
-/** The Releases tab: this workspace's releases of the repository, and the Release action. */
-export function ReleasesPage() {
+/** What a Releases tab releases: a repository, or a repository group. */
+export interface ReleaseTarget {
+  url: string;
+  /** What titles name it by. */
+  label: string;
+  /** A repository's `owner/name`, for links to its tasks; none for a group. */
+  repo?: string;
+  /** Its public page on selfbench.dev. */
+  pageUrl(site: string, release: ReleaseSummary): string;
+  description: string;
+  /** What is public while nothing is released. */
+  empty: string;
+}
+
+/** The repository the route names, as a Releases tab releases it. */
+function useRepositoryTarget(): ReleaseTarget {
   const { org } = useOrg();
   const { owner = "", name = "" } = useParams();
   const repo = `${owner}/${name}`;
-  const url = releasesUrl(org.login, repo);
-  useDocumentTitle(`Releases · ${repo}`);
+  return {
+    url: releasesUrl(org.login, repo),
+    label: repo,
+    repo,
+    pageUrl: (site, release) => publicPageUrl(site, release.fullName, release.publisher),
+    description: "Publish this repository's results on selfbench.dev. Each release is kept.",
+    empty: `Nothing from this workspace is public for ${repo}. Release Results publishes accuracy and cost for the settings you choose.`,
+  };
+}
+
+/** The Releases tab: this workspace's releases of the repository, and the Release action. */
+export function ReleasesPage() {
+  return <Releases target={useRepositoryTarget()} />;
+}
+
+/** A Releases tab: the target's releases, and the Release action. */
+export function Releases({ target }: { target: ReleaseTarget }) {
+  const { org } = useOrg();
+  const { url, label } = target;
+  useDocumentTitle(`Releases · ${label}`);
   const [list, setList] = React.useState<ReleaseList>();
   const [error, setError] = React.useState("");
   const [notice, setNotice] = React.useState("");
@@ -66,14 +98,11 @@ export function ReleasesPage() {
 
   return (
     <PageContent>
-      <PageHeader
-        title="Releases"
-        description="Publish this repository's results on selfbench.dev. Each release is kept."
-      >
+      <PageHeader title="Releases" description={target.description}>
         {current && site && (
           <a
             className={buttonStyles.secondary}
-            href={publicPageUrl(site, current.fullName, current.publisher)}
+            href={target.pageUrl(site, current)}
             target="_blank"
             rel="noreferrer"
           >
@@ -94,9 +123,8 @@ export function ReleasesPage() {
       {!list ? (
         !error && <ListSkeleton label="Loading Releases" />
       ) : list.releases.length === 0 ? (
-        <EmptyState title="Not Released Yet" visual={<GhostRelease repo={repo} />}>
-          Nothing from this workspace is public for {repo}. Release Results publishes accuracy and
-          cost for the settings you choose.
+        <EmptyState title="Not Released Yet" visual={<GhostRelease repo={label} />}>
+          {target.empty}
         </EmptyState>
       ) : (
         <DataTable>
@@ -154,7 +182,7 @@ export function ReleasesPage() {
       {releasing && (
         <ReleaseDialog
           url={url}
-          repo={repo}
+          {...(target.repo ? { repo: target.repo } : {})}
           workspace={org}
           onClose={() => setReleasing(false)}
           onReleased={(release, unchanged) => {
