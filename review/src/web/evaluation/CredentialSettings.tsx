@@ -1,6 +1,7 @@
 import React from "react";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
+import { InfoTooltip } from "../primitives/tooltip";
 import { Button, fieldStyles, Input } from "../ui";
 import { isSandbox } from "./credential-presentation";
 
@@ -19,9 +20,19 @@ function SandboxLimitField({
 }) {
   return (
     <label className={fieldStyles} htmlFor="credential-max-sandboxes">
-      Max Concurrent Sandboxes
+      <span className="flex items-center gap-1.5">
+        Max Concurrent Sandboxes
+        <InfoTooltip
+          label={`${
+            sandbox
+              ? "Generation and evaluations share this credential's sandbox limit. Use your plan's limit, such as 20 on E2B Hobby."
+              : "Evaluation trials and generation sandboxes calling this credential share this limit. Lower it if the provider rate-limits you."
+          } Leave blank for no limit. A new limit leaves started work running.`}
+        />
+      </span>
       <Input
         id="credential-max-sandboxes"
+        aria-label="Max Concurrent Sandboxes"
         type="number"
         inputMode="numeric"
         min={1}
@@ -33,12 +44,6 @@ function SandboxLimitField({
           onChange(event.target.value === "" ? undefined : Number(event.target.value))
         }
       />
-      <span className="text-xs font-normal leading-5 text-muted-foreground">
-        {sandbox
-          ? "Generation and evaluations share this credential's sandbox limit. Use your plan's limit, such as 20 on E2B Hobby."
-          : "Evaluation trials and generation sandboxes calling this credential share this limit. Lower it if the provider rate-limits you."}{" "}
-        Leave blank for no limit.
-      </span>
     </label>
   );
 }
@@ -85,9 +90,13 @@ function BuildLimitField({
 }) {
   return (
     <label className={fieldStyles} htmlFor="credential-max-builds">
-      Max Concurrent Builds
+      <span className="flex items-center gap-1.5">
+        Max Concurrent Builds
+        <InfoTooltip label="Evaluations build each task's template once before its trials, and E2B counts those builds apart from sandboxes. Use your plan's limit, such as 20 on E2B Hobby. Leave blank for no limit. A new limit leaves started work running." />
+      </span>
       <Input
         id="credential-max-builds"
+        aria-label="Max Concurrent Builds"
         type="number"
         inputMode="numeric"
         min={1}
@@ -99,11 +108,6 @@ function BuildLimitField({
           onChange(event.target.value === "" ? undefined : Number(event.target.value))
         }
       />
-      <span className="text-xs font-normal leading-5 text-muted-foreground">
-        Evaluations build each task's template once before its trials, and E2B counts those builds
-        apart from sandboxes. Use your plan's limit, such as 20 on E2B Hobby. Leave blank for no
-        limit.
-      </span>
     </label>
   );
 }
@@ -184,9 +188,6 @@ export function EditCredentialDialog({
             </label>
             <CredentialLimitFields kind={credential.kind} limits={limits} onChange={setLimits} />
           </fieldset>
-          <p className="mt-4 text-xs leading-5 text-muted-foreground">
-            A new limit leaves started work running. New work waits for a free slot.
-          </p>
           {error && (
             <p role="alert" className="mt-4 text-sm text-destructive">
               {error}

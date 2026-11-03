@@ -2,6 +2,7 @@ import React from "react";
 import { useParams } from "react-router";
 import { AGENT_MINUTES } from "../../../../src/contracts/agent-limit";
 import { requestJson } from "../api";
+import { InfoTooltip } from "../primitives/tooltip";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { Button, Input, Notice, PageContent, PageHeader } from "../ui";
@@ -92,11 +93,12 @@ function AgentLimit({ path }: { path: string }) {
       >
         <div className="grid gap-5 p-6 sm:grid-cols-[minmax(0,1fr)_13rem] sm:items-start sm:gap-8">
           <div>
-            <h2 className="text-base leading-7 font-semibold">Agent Time Limit</h2>
-            <p className="mt-1 max-w-[56ch] text-sm leading-6 text-muted-foreground">
-              How long a model may work on each task before it is stopped and graded. Leave room for
-              the repository's test suite.
-            </p>
+            <h2 className="flex items-center gap-1.5 text-base leading-7 font-semibold">
+              Agent Time Limit
+              <InfoTooltip
+                label={`How long a model may work on each task before it is stopped and graded, from ${AGENT_MINUTES.min} to ${AGENT_MINUTES.max} minutes. Leave room for the repository's test suite. Past runs keep the limit they ran with.`}
+              />
+            </h2>
           </div>
           <div className="grid gap-2">
             <label htmlFor="agent-minutes" className="flex">
@@ -119,13 +121,9 @@ function AgentLimit({ path }: { path: string }) {
                 Minutes
               </span>
             </label>
-            <p className="text-sm text-muted-foreground sm:text-right">
-              {AGENT_MINUTES.min} to {AGENT_MINUTES.max} minutes
-            </p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-muted/40 px-6 py-3">
-          <p className="text-sm text-muted-foreground">Past runs keep the limit they ran with.</p>
+        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border bg-muted/40 px-6 py-3">
           <Button type="submit" variant="primary" disabled={!valid || !changed || busy}>
             {busy ? "Saving…" : "Save"}
           </Button>

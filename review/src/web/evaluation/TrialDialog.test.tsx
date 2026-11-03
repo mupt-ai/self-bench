@@ -32,7 +32,7 @@ test.each([false, true])(
     expect(explainButton()?.disabled).toBe(false);
     expect(posts()).toEqual([]);
     expect(document.querySelector('input[type="checkbox"]')).toBeNull();
-    expect(document.body.textContent).toContain("Provider charges apply.");
+    expect(document.body.querySelector('[aria-label="Provider charges apply."]')).not.toBeNull();
     await submitExplanation();
     expect(posts()).toEqual([
       {

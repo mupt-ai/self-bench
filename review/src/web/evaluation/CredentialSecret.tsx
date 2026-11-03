@@ -1,6 +1,7 @@
 import { Eye, EyeOff } from "lucide-react";
 import React from "react";
 import type { CredentialDraft } from "../../../../src/db/credentials";
+import { InfoTooltip } from "../primitives/tooltip";
 import { fieldStyles, Input } from "../ui";
 
 export function CredentialSecret({
@@ -30,9 +31,13 @@ export function CredentialSecret({
     <>
       {importing ? (
         <label className={fieldStyles} htmlFor="credential-auth-file">
-          Codex auth.json
+          <span className="flex items-center gap-1.5">
+            Codex auth.json
+            <InfoTooltip label="From your Codex CLI sign-in." />
+          </span>
           <Input
             id="credential-auth-file"
+            aria-label="Codex auth.json"
             type="file"
             required
             accept="application/json,.json"
@@ -63,13 +68,13 @@ export function CredentialSecret({
               }
             }}
           />
-          <span className="text-xs font-normal leading-5 text-muted-foreground">
-            From your Codex CLI sign-in.
-          </span>
         </label>
       ) : (
         <div className={fieldStyles}>
-          <label htmlFor="credential-secret">{keyLabel}</label>
+          <span className="flex items-center gap-1.5">
+            <label htmlFor="credential-secret">{keyLabel}</label>
+            {hint && <InfoTooltip label={hint} />}
+          </span>
           <div className="relative">
             <Input
               id="credential-secret"
@@ -94,9 +99,6 @@ export function CredentialSecret({
               )}
             </button>
           </div>
-          {hint && (
-            <span className="text-xs font-normal leading-5 text-muted-foreground">{hint}</span>
-          )}
         </div>
       )}
     </>

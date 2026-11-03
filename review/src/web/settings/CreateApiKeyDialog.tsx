@@ -1,5 +1,6 @@
 import React from "react";
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
+import { InfoTooltip } from "../primitives/tooltip";
 import { Button, fieldStyles, Input, Select } from "../ui";
 import { type ApiKeyScope, type CreatedApiKey, createApiKey, scopeLabels } from "./api-keys";
 
@@ -61,9 +62,13 @@ export function CreateApiKeyDialog({
             />
           </label>
           <label className={fieldStyles} htmlFor="api-key-scope">
-            Scope
+            <span className="flex items-center gap-1.5">
+              Scope
+              <InfoTooltip label="Read-only keys can list and download but never start, change, or delete anything." />
+            </span>
             <Select
               id="api-key-scope"
+              aria-label="Scope"
               value={scope}
               onChange={(event) => setScope(event.target.value as ApiKeyScope)}
             >
@@ -71,9 +76,6 @@ export function CreateApiKeyDialog({
               <option value="read">{scopeLabels.read}</option>
             </Select>
           </label>
-          <p className="text-xs leading-5 text-muted-foreground">
-            Read-only keys can list and download but never start, change, or delete anything.
-          </p>
           {error && (
             <p role="alert" className="text-sm text-destructive">
               {error}

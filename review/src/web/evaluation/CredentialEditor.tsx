@@ -7,7 +7,7 @@ import { ClaudeSignIn } from "./ClaudeSignIn";
 import { CredentialSecret } from "./CredentialSecret";
 import { CredentialLimitFields } from "./CredentialSettings";
 import { isSandbox, providers, sandboxes, signIns } from "./credential-presentation";
-import { DariRouterField } from "./DariRouterField";
+import { CustomEndpointField, DariRouterField } from "./DariRouterField";
 import { DeviceSignIn } from "./DeviceSignIn";
 
 export function CredentialEditor({
@@ -199,20 +199,10 @@ export function CredentialEditor({
                 />
               )}
               {draft.kind === "custom" && (
-                <label className={fieldStyles} htmlFor="credential-endpoint">
-                  Endpoint
-                  <Input
-                    id="credential-endpoint"
-                    type="url"
-                    required
-                    placeholder="https://approved-host.example/v1"
-                    value={draft.endpoint ?? ""}
-                    onChange={(event) => setDraft({ ...draft, endpoint: event.target.value })}
-                  />
-                  <span className="text-xs font-normal leading-5 text-muted-foreground">
-                    An OpenAI-compatible HTTPS endpoint on an approved host.
-                  </span>
-                </label>
+                <CustomEndpointField
+                  value={draft.endpoint}
+                  onChange={(endpoint) => setDraft({ ...draft, endpoint })}
+                />
               )}
               {draft.kind === "modal" && (
                 <label className={fieldStyles} htmlFor="credential-token-id">

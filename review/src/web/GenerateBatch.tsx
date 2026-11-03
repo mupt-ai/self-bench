@@ -16,6 +16,7 @@ import { batchPath } from "./batches/presentation";
 import { Dialog, DialogFooter, DialogHeader } from "./Dialog";
 import { GenerationFields } from "./GenerationFields";
 import { cn } from "./primitives/cn";
+import { InfoTooltip } from "./primitives/tooltip";
 import { covered, setupCoverage } from "./setup/readiness";
 import { SetupCallout } from "./setup/SetupCallout";
 import { Button, controlStyles, fieldStyles, Input } from "./ui";
@@ -141,7 +142,10 @@ export function GenerateBatch({
           >
             <div className="px-4 pt-6 pb-6 sm:px-6">
               <fieldset className="m-0 min-w-0 border-0 p-0">
-                <legend className="mb-4 text-sm font-semibold">Candidates</legend>
+                <legend className="mb-4 flex items-center gap-1.5 text-sm font-semibold">
+                  Candidates
+                  <InfoTooltip label={`1–${MAX_CANDIDATES_PER_RUN} candidates total.`} />
+                </legend>
                 <div className="grid grid-cols-3 gap-3">
                   {(
                     [
@@ -172,15 +176,15 @@ export function GenerateBatch({
                     </label>
                   ))}
                 </div>
-                <p className="mt-3 text-sm text-muted-foreground">
-                  1–{MAX_CANDIDATES_PER_RUN} candidates total.
-                </p>
               </fieldset>
               <label htmlFor="batch-focus" className={cn(fieldStyles, "mt-8")}>
-                Focus
+                <span className="flex items-center gap-1.5">
+                  Focus
+                  <InfoTooltip label="Optional. Describe the PRs discovery should pick. With a focus, it searches further back and may return fewer candidates." />
+                </span>
                 <textarea
                   id="batch-focus"
-                  aria-describedby="batch-focus-help"
+                  aria-label="Focus"
                   rows={3}
                   maxLength={MAX_FOCUS_LENGTH}
                   placeholder="Complex Next.js features: App Router, server actions, middleware, caching"
@@ -190,10 +194,6 @@ export function GenerateBatch({
                   onChange={(event) => setFocus(event.target.value)}
                 />
               </label>
-              <p id="batch-focus-help" className="mt-2 text-sm text-muted-foreground">
-                Optional. Describe the PRs discovery should pick. With a focus, it searches further
-                back and may return fewer candidates.
-              </p>
               <div className="mt-8">
                 {optionsError ? (
                   <div role="alert" className="space-y-3 text-sm text-destructive">
