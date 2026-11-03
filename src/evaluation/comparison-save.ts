@@ -7,10 +7,11 @@ import { type ManagedOffer, managedHarborEnvironment } from "../generation/billi
 import { type CatalogModel, evaluationCatalog } from "./catalog.js";
 import type { ComparisonSelection } from "./comparisons.js";
 import { defaultThinking, routeFor, signInRefusal, thinkingOptions } from "./models.js";
+import { listRuns } from "./run-list.js";
 import { type EvaluationScope, sameScope } from "./scope.js";
-import { listEvaluations } from "./store.js";
+import { live } from "./store.js";
 import { splitCredentialLimits } from "./trial-input.js";
-import type { EvaluationInput } from "./types.js";
+import type { EvaluationInput, EvaluationRun } from "./types.js";
 
 /** Who a comparison is for: its repository's or org's evaluations, and who asked. */
 export interface ComparisonOwner {
@@ -64,7 +65,9 @@ export async function saveComparison(
     ? completedConfigurationTasks(
         (
           await Promise.all(
-            [owner.scope, ...(owner.sources ?? [])].map((scope) => listEvaluations(store, scope)),
+            [owner.scope, ...(owner.sources ?? [])].map(async (scope) =>
+              ((await listRuns(store, scope)).runs ?? []).filter(live),
+            ),
           )
         ).flat(),
       )
@@ -215,7 +218,7 @@ function configurationTaskKey(
   return JSON.stringify([configurationIdentity(model, thinking, harness), runId, taskId]);
 }
 
-function completedConfigurationTasks(runs: Awaited<ReturnType<typeof listEvaluations>>) {
+function completedConfigurationTasks(runs: EvaluationRun[]) {
   const completed = new Set<string>();
   for (const run of runs) {
     for (const trial of run.trials) {
