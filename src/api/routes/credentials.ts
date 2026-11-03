@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { z } from "zod";
-import { credentialSchema, maxSandboxesSchema } from "../../db/credentials.js";
+import { credentialSchema, maxSandboxesSchema, savedModelsSchema } from "../../db/credentials.js";
 import { RecordStoreError } from "../../db/encrypted-records.js";
 import type { User } from "../../db/users.js";
 import { assertCredentialUnused } from "../../evaluation/comparisons.js";
@@ -21,6 +21,7 @@ const updateSchema = z
     name: credentialSchema.shape.name.optional(),
     maxSandboxes: maxSandboxesSchema.nullable().optional(),
     maxBuilds: maxSandboxesSchema.nullable().optional(),
+    models: savedModelsSchema.optional(),
   })
   .strict();
 
@@ -87,14 +88,15 @@ export async function credentialRoutes(
         canManage: org.role === "admin",
       });
     } else if (mutation && credentialId && (action === "update" || action === "limit")) {
-      const { name, maxSandboxes, maxBuilds } = updateSchema.parse(
-        JSON.parse((await readBody(request, 1024)).toString()),
+      const { name, maxSandboxes, maxBuilds, models } = updateSchema.parse(
+        JSON.parse((await readBody(request, 8192)).toString()),
       );
       if (name !== undefined) await credentials.rename(org.id, credentialId, name);
       if (maxSandboxes !== undefined)
         await credentials.limit(org.id, credentialId, maxSandboxes ?? undefined);
       if (maxBuilds !== undefined)
         await credentials.limit(org.id, credentialId, maxBuilds ?? undefined, "maxBuilds");
+      if (models !== undefined) await credentials.saveModels(org.id, credentialId, models);
       sendJson(response, 200, await credentials.find(org.id, credentialId));
     } else if (mutation && credentialId) {
       if (!(await credentials.find(org.id, credentialId))) throw new Error("Credential not found");

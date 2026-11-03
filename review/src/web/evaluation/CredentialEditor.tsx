@@ -5,7 +5,7 @@ import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
 import { Button, fieldStyles, Input, Select } from "../ui";
 import { ClaudeSignIn } from "./ClaudeSignIn";
 import { CredentialSecret } from "./CredentialSecret";
-import { CredentialLimitFields } from "./CredentialSettings";
+import { CredentialLimitFields, CustomEndpointFields } from "./CredentialSettings";
 import { isSandbox, providers, sandboxes, signIns } from "./credential-presentation";
 import { DariRouterField } from "./DariRouterField";
 import { DeviceSignIn } from "./DeviceSignIn";
@@ -37,6 +37,7 @@ export function CredentialEditor({
     endpoint: previous?.endpoint,
     maxSandboxes: previous?.maxSandboxes,
     maxBuilds: previous?.maxBuilds,
+    ...(previous?.models ? { models: previous.models } : {}),
   });
   const [busy, setBusy] = React.useState(false);
   const [signingIn, setSigningIn] = React.useState(false);
@@ -199,20 +200,11 @@ export function CredentialEditor({
                 />
               )}
               {draft.kind === "custom" && (
-                <label className={fieldStyles} htmlFor="credential-endpoint">
-                  Endpoint
-                  <Input
-                    id="credential-endpoint"
-                    type="url"
-                    required
-                    placeholder="https://approved-host.example/v1"
-                    value={draft.endpoint ?? ""}
-                    onChange={(event) => setDraft({ ...draft, endpoint: event.target.value })}
-                  />
-                  <span className="text-xs font-normal leading-5 text-muted-foreground">
-                    An OpenAI-compatible HTTPS endpoint on an approved host.
-                  </span>
-                </label>
+                <CustomEndpointFields
+                  endpoint={draft.endpoint ?? ""}
+                  models={(draft.models ?? []).join(", ")}
+                  onChange={({ endpoint, models }) => setDraft({ ...draft, endpoint, models })}
+                />
               )}
               {draft.kind === "modal" && (
                 <label className={fieldStyles} htmlFor="credential-token-id">
