@@ -24,7 +24,13 @@ export function GroupSettingsPage() {
   const group: GroupView | undefined = list?.groups.find((each) => each.slug === slug);
   useDocumentTitle(`Settings · ${group?.name ?? slug} · SelfBench`);
   const remove = async () => {
-    if (!group || !window.confirm(`Delete ${group.name}? Its runs stop showing here.`)) return;
+    if (
+      !group ||
+      !window.confirm(
+        `Delete ${group.name}? Its runs stop showing here, and its public page is withdrawn.`,
+      )
+    )
+      return;
     setBusy(true);
     try {
       await groupRequest(groupsUrl(org.login, slug), { method: "DELETE" });
@@ -58,7 +64,7 @@ export function GroupSettingsPage() {
             <div className="min-w-0">
               <h2 className="font-semibold">Delete Group</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Its runs stop showing here. Its releases stay public until withdrawn.
+                Its runs stop showing here, and its public page is withdrawn.
               </p>
             </div>
             <Button variant="destructive" disabled={busy} onClick={() => void remove()}>

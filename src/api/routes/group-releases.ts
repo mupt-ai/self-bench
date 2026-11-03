@@ -125,6 +125,13 @@ export function createGroupReleaseRoutes(options: GroupReleaseRoutesOptions) {
     body: z.infer<typeof releaseRequest>,
   ) => {
     const { members, owner, inputs, view } = await gather(tenant.id, group, rows);
+    // The page names every member, so each must still be here to be scored and checked.
+    if (members.length < group.repositoryIds.length) {
+      const error =
+        "A repository in this group is no longer connected. Reconnect or remove it in Settings first.";
+      sendJson(response, 400, { error });
+      return;
+    }
     const head = headOf(rows);
     if (body.head !== (head?.id ?? null) || body.fingerprint !== view.preview.fingerprint) {
       sendJson(response, 409, {

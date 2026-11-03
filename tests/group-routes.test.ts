@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { sql } from "drizzle-orm";
 import { createGroupStore } from "../src/db/groups.js";
 import { saveEvaluation } from "../src/evaluation/store.js";
 import {
@@ -79,8 +80,28 @@ test("a group's release scores its own runs over the group and on each repositor
   const directory = await (await request("/api/public/results")).json();
   expect(directory.groups).toMatchObject([{ slug: "python-web" }]);
 
-  // Withdrawing takes it down; deleting the group would leave a release as it was.
-  const { releases } = await json<{ releases: { id: string }[] }>(base);
-  await request(`${base}/${releases[0]?.id}/withdraw`, { method: "POST" });
+  // Deleting the group takes its page down too: nothing would be left to withdraw it from.
+  expect((await request("/api/orgs/acme/groups/python-web", { method: "DELETE" })).status).toBe(
+    200,
+  );
   expect((await request("/api/public/groups/acme/python-web")).status).toBe(404);
+});
+
+test("a group with a disconnected member cannot be released", async () => {
+  await request("/api/orgs/acme/groups", {
+    method: "POST",
+    body: JSON.stringify({ ...group, repositoryIds: [11, 22] }),
+  });
+  // A member that is no longer connected: the group still names it.
+  await fixture.database.db.execute(
+    sql`update repository_groups set repository_ids = '[11, 22, 33]'::jsonb`,
+  );
+  const base = "/api/orgs/acme/groups/python-web/releases";
+  const view = await json<{ head: null; preview: { fingerprint: string } }>(`${base}/preview`);
+  const response = await request(base, {
+    method: "POST",
+    body: JSON.stringify({ settings: ["x"], head: null, fingerprint: view.preview.fingerprint }),
+  });
+  expect(response.status).toBe(400);
+  expect((await response.json()).error).toContain("no longer connected");
 });

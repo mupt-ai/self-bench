@@ -128,6 +128,16 @@ export function createGroupReleaseStore(db: Database, options: { now?: () => Dat
         .returning();
       return row ? rowFrom(row) : undefined;
     },
+    /** Withdraws every release of a group still public: what deleting the group does. */
+    async withdrawAll(groupId: number, login: string): Promise<GroupReleaseRow[]> {
+      return (
+        await db
+          .update(groupReleases)
+          .set({ withdrawnAt: now(), withdrawnByLogin: login })
+          .where(and(ofGroup(groupId), isNull(groupReleases.withdrawnAt)))
+          .returning()
+      ).map(rowFrom);
+    },
     /** Every group's current release, newest first. */
     async currentGroups(): Promise<PublishedGroup[]> {
       const rows = (

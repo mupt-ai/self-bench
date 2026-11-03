@@ -185,6 +185,7 @@ export async function openSite(
         : {}),
       benchmarks: createBenchmarkStore(database.db),
       groups,
+      groupReleases: { store: groupReleases, changed: publicChanged },
       tasks,
       artifacts,
       publicUrl,

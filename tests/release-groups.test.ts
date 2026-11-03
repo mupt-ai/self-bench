@@ -138,3 +138,11 @@ test("a group page's head, text and sitemap entry name it at its one address", (
   const sitemap = sitemapOf("https://selfbench.dev", [], [released]);
   expect(sitemap).toContain("<loc>https://selfbench.dev/groups/Acme/web-frameworks</loc>");
 });
+
+test("a reused group address shows only its newest release", async () => {
+  const { snapshotOf } = await import("../src/api/public-snapshot.js");
+  const older = { ...released, releaseId: "old", name: "Old" };
+  const snapshot = snapshotOf([], [released, older]);
+  expect(snapshot.groups.map((group) => group.releaseId)).toEqual(["release-1"]);
+  expect(snapshot.group("acme", "web-frameworks")?.name).toBe("Web Frameworks");
+});

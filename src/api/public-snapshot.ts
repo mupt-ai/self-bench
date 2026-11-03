@@ -51,15 +51,20 @@ function keptBodies<T>(): (key: string, value: T | undefined) => TaggedBody | un
   };
 }
 
-export function snapshotOf(lines: PublishedLine[], groups: PublishedGroup[] = []): Snapshot {
+export function snapshotOf(lines: PublishedLine[], released: PublishedGroup[] = []): Snapshot {
+  let groups = released;
   const byRepository = new Map<string, PublishedLine[]>();
   for (const line of lines) {
     const key = line.release.repository.fullName.toLowerCase();
     byRepository.set(key, [...(byRepository.get(key) ?? []), line]);
   }
-  const byGroup = new Map(
-    groups.map((group) => [groupKey(group.publisher.login, group.slug), group]),
-  );
+  // A deleted group's address can be reused; only the newest release at an address is shown.
+  const byGroup = new Map<string, PublishedGroup>();
+  for (const group of groups) {
+    const key = groupKey(group.publisher.login, group.slug);
+    if (!byGroup.has(key)) byGroup.set(key, group);
+  }
+  groups = [...byGroup.values()];
   const repositoryBodies = keptBodies<{ lines: PublishedLine[] }>();
   const groupBodies = keptBodies<{ group: PublishedGroup }>();
   const group = (publisher: string, slug: string) => byGroup.get(groupKey(publisher, slug));

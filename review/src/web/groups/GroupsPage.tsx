@@ -37,7 +37,12 @@ export function GroupsPage() {
     void load();
   }, [load]);
   const remove = (group: GroupView) => {
-    if (!window.confirm(`Delete ${group.name}? Its runs stop showing here.`)) return;
+    if (
+      !window.confirm(
+        `Delete ${group.name}? Its runs stop showing here, and its public page is withdrawn.`,
+      )
+    )
+      return;
     groupRequest(groupsUrl(org.login, group.slug), { method: "DELETE" }).then(
       () => void load(),
       (cause: Error) => setError(cause.message),

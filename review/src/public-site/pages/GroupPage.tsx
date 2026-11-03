@@ -140,8 +140,11 @@ function Members({ group, shownId }: { group: PublicGroup; shownId: string | nul
       cell: (member) => {
         if (shown) {
           const score = member.scores[shown.id];
+          // No results there is not a score of zero.
           return (
-            <span className="font-mono tabular-nums">{score ? percent(score.accuracy) : "—"}</span>
+            <span className="font-mono tabular-nums">
+              {score && score.tasks > 0 ? percent(score.accuracy) : "—"}
+            </span>
           );
         }
         const best = mostAccurate(group, member);
