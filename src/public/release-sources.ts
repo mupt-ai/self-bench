@@ -76,7 +76,11 @@ export function releaseInputs(
   return lineInputs(
     db,
     artifacts,
-    { scope: { repoId: scope.repoId }, orgId: scope.orgId, tasks: releaseTasks(db, scope.repoId) },
+    {
+      scopes: [{ repoId: scope.repoId }],
+      orgId: scope.orgId,
+      tasks: releaseTasks(db, scope.repoId),
+    },
     rows,
   );
 }
@@ -88,12 +92,19 @@ export function releaseInputs(
 export async function lineInputs(
   db: Database,
   artifacts: ArtifactStore,
-  source: { scope: EvaluationScope; orgId: number; tasks: Promise<ReleaseTask[]> },
+  source: {
+    /** Whose runs count: the line's own scope, and for a group its members' too. */
+    scopes: readonly EvaluationScope[];
+    orgId: number;
+    tasks: Promise<ReleaseTask[]>;
+  },
   rows: readonly LineRow[],
 ): Promise<ReleaseInputs> {
   const [taskList, runs, credentialFacts] = await Promise.all([
     source.tasks,
-    listRuns(artifacts, source.scope).then(({ runs = [] }) => runs.filter(live)),
+    Promise.all(source.scopes.map((scope) => listRuns(artifacts, scope))).then((lists) =>
+      lists.flatMap(({ runs = [] }) => runs.filter(live)),
+    ),
     releaseCredentials(db, source.orgId),
   ]);
   const head = headOf(rows);

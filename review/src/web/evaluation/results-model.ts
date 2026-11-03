@@ -50,6 +50,8 @@ export interface Batch {
   startedBy: string;
   /** How the run reached the model. */
   route: string;
+  /** In a repository group, the member repository whose own run this is. */
+  source?: string;
   results: TaskResult[];
 }
 
@@ -180,6 +182,7 @@ function batchesOf(
       createdAt: run.createdAt,
       startedBy: run.startedBy,
       route: routeOf(run),
+      ...(run.sourceRepository ? { source: run.sourceRepository } : {}),
       results: [],
     };
     batches.set(run.id, batch);

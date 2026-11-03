@@ -25,6 +25,8 @@ export interface ComparisonOwner {
    * explained; unset for a benchmark and anything not confirmed public.
    */
   privateRepo?: boolean;
+  /** Other scopes whose finished results a "missing only" comparison skips too: a group's members. */
+  sources?: readonly EvaluationScope[];
 }
 
 /**
@@ -59,7 +61,13 @@ export async function saveComparison(
   const previous = await comparisons.find(selection.id);
   if (previous) return owned(previous);
   const completed = selection.skipCompleted
-    ? completedConfigurationTasks(await listEvaluations(store, owner.scope))
+    ? completedConfigurationTasks(
+        (
+          await Promise.all(
+            [owner.scope, ...(owner.sources ?? [])].map((scope) => listEvaluations(store, scope)),
+          )
+        ).flat(),
+      )
     : new Set<string>();
   if ((await comparisons.countForOrg(owner.orgId)) >= 500)
     throw new Error("Comparison retention limit reached; contact an operator");

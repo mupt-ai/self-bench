@@ -98,7 +98,12 @@ export function createGroupReleaseRoutes(options: GroupReleaseRoutesOptions) {
     const inputs = await lineInputs(
       options.db,
       options.artifacts,
-      { scope: { groupId: group.id }, orgId, tasks: Promise.resolve(tasks) },
+      {
+        // The group's own runs and its members' count alike, as its Results page shows them.
+        scopes: [{ groupId: group.id }, ...members.map((repo) => ({ repoId: repo.id }))],
+        orgId,
+        tasks: Promise.resolve(tasks),
+      },
       rows,
     );
     const head = headOf(rows);

@@ -5,6 +5,7 @@ import { type JudgeNeeds, mergeJudgeNeeds } from "../harnesses/harbor/host-varia
 import { repositoryTasks } from "./frozen-tasks.js";
 import type { SummaryTask } from "./model-summary.js";
 import { evaluationTaskKey } from "./models.js";
+import type { EvaluationScope } from "./scope.js";
 import type { EvaluationInput, EvaluationRun } from "./types.js";
 import { visibleTrials } from "./visible-trials.js";
 
@@ -35,6 +36,11 @@ export interface EvaluationDataset {
    * edits its tasks, so only it hides trials of tasks deleted since.
    */
   visible?(runs: EvaluationRun[]): Promise<{ runs: EvaluationRun[]; tag: string }>;
+  /**
+   * Other scopes whose runs count here as well, with the name each is shown by: a repository
+   * group's members, whose own runs on their tasks count toward the group's results.
+   */
+  readonly sources?: readonly { scope: EvaluationScope; name: string }[];
 }
 
 /** A repository's approved tasks. */
@@ -116,6 +122,7 @@ export function groupDataset(
     return byKey;
   };
   return {
+    sources: members.map((member) => ({ scope: { repoId: member.repoId }, name: member.fullName })),
     async options() {
       const listed = await Promise.all(
         each.map(async ({ member, dataset }) =>

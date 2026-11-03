@@ -155,6 +155,8 @@ export async function groupRoutes(
         orgId: tenant.id,
         tenant: tenant.login,
         login: user.login,
+        // Run Missing skips what a member's own runs already finished, as Results counts those.
+        sources: members.map((repo) => ({ repoId: repo.id })),
         // Failures may be explained only when every member is public.
         ...(starting
           ? {

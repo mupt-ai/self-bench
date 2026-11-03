@@ -26,7 +26,9 @@ export function BatchHeading({ batch }: { batch: Batch }) {
       >
         {momentLabel(batch.createdAt)}
       </Link>
-      <span className="truncate text-muted-foreground">{batch.route}</span>
+      <span className="truncate text-muted-foreground">
+        {batch.source ? `${batch.route} · from ${batch.source}` : batch.route}
+      </span>
     </>
   );
 }
@@ -129,7 +131,13 @@ export function ResultGroupRows({
               <td colSpan={6} className={TASK_INDENT}>
                 <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
                   <span className="text-muted-foreground">
-                    {run.error ?? `${run.sandbox} · started by ${run.startedBy}`}
+                    {run.error ??
+                      [
+                        run.sandbox,
+                        `started by ${run.startedBy}`,
+                        // A member's own run, counted in its group, is managed from its repository.
+                        ...(run.sourceRepository ? [`from ${run.sourceRepository}`] : []),
+                      ].join(" · ")}
                   </span>
                   {baseUrl && onChanged && (
                     <span className="flex flex-wrap gap-2">
@@ -143,18 +151,20 @@ export function ResultGroupRows({
                           onStarted={onRetryStarted}
                         />
                       )}
-                      {live && (
+                      {live && !run.sourceRepository && (
                         <CancelEvaluation<EvaluationRun>
                           endpoint={`${baseUrl}/${encodeURIComponent(run.id)}/cancel`}
                           subject="Run"
                           onCancelled={onChanged}
                         />
                       )}
-                      <DeleteRun
-                        endpoint={`${baseUrl}/${encodeURIComponent(run.id)}/delete`}
-                        live={live}
-                        onDeleted={onChanged}
-                      />
+                      {!run.sourceRepository && (
+                        <DeleteRun
+                          endpoint={`${baseUrl}/${encodeURIComponent(run.id)}/delete`}
+                          live={live}
+                          onDeleted={onChanged}
+                        />
+                      )}
                     </span>
                   )}
                 </div>
