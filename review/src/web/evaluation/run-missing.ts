@@ -103,7 +103,13 @@ export function missingWork(
   const byGaps = new Map<string, Map<string, RetrySelection["models"][number]>>();
   for (const { setting, missing } of gaps) {
     const models = byGaps.get(missing.join("\n")) ?? new Map();
-    const key = JSON.stringify([setting.catalogId, setting.customModel, setting.thinking]);
+    // Harnesses share an entry only on one credential: a sign-in serves its own harness alone.
+    const key = JSON.stringify([
+      setting.catalogId,
+      setting.customModel,
+      setting.thinking,
+      setting.credentialId,
+    ]);
     const entry = models.get(key) ?? {
       catalogId: setting.catalogId,
       ...(setting.customModel ? { customModel: setting.customModel } : {}),

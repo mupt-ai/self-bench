@@ -165,3 +165,33 @@ test("one setting run with two credentials is one setting, on its newest credent
   ]);
   expect(work?.selections[0]?.tasks.map((task) => task.taskId)).toEqual(["t3"]);
 });
+
+test("harnesses of one model on different credentials stay separate entries", () => {
+  const work = missingWork(
+    [
+      run(
+        "sol",
+        "codex",
+        { t1: "completed" },
+        {
+          credentials: {
+            modelCredentialId: "chatgpt",
+            sandboxCredentialId: "sandbox",
+            provider: "openai",
+          },
+        },
+      ),
+      run("sol", "pi", { t1: "completed" }),
+    ],
+    tasks,
+    [...credentials, { id: "chatgpt", kind: "openai" as const }],
+    newId,
+  );
+  expect(work?.selections).toHaveLength(1);
+  expect(work?.selections[0]?.models.map((model) => [model.credentialId, model.harnesses])).toEqual(
+    [
+      ["chatgpt", ["codex"]],
+      ["key", ["pi"]],
+    ],
+  );
+});
