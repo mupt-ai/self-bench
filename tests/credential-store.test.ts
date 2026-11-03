@@ -211,3 +211,73 @@ test("the records migration copies org and personal accounts once, keeping IDs",
     await database.close();
   }
 });
+
+test("a custom endpoint saves its model IDs so the Run page can offer them", async () => {
+  const database = await testDatabase();
+  try {
+    const { credentials: store } = createVault(database.db, key);
+    const env = { SELFBENCH_CUSTOM_MODEL_HOSTS: "api.shift.ac" };
+    const shift = await store.create(
+      1,
+      {
+        name: "Shift",
+        kind: "custom",
+        auth: "api-key",
+        value: "shift-key",
+        endpoint: "https://api.shift.ac/v1",
+        models: [" shift-1 ", "", "shift-1"],
+      },
+      env,
+    );
+    // Trimmed, blank and repeated IDs dropped.
+    expect(shift.models).toEqual(["shift-1"]);
+    await store.saveModels(1, shift.id, ["shift-1", "shift-1-fast"]);
+    expect((await store.find(1, shift.id))?.models).toEqual(["shift-1", "shift-1-fast"]);
+    await store.saveModels(1, shift.id, []);
+    expect(await store.find(1, shift.id)).not.toHaveProperty("models");
+    await expect(store.saveModels(1, shift.id, ["has space"])).rejects.toThrow();
+    await expect(store.saveModels(2, shift.id, ["shift-1"])).rejects.toThrow("not found");
+    // Only a custom endpoint names its own models.
+    const openai = await store.create(
+      1,
+      { name: "OpenAI", kind: "openai", auth: "api-key", value: "k" },
+      {},
+    );
+    await expect(store.saveModels(1, openai.id, ["gpt-6-astra"])).rejects.toThrow("custom");
+    expect(
+      credentialSchema.safeParse({ name: "O", kind: "openai", value: "k", models: ["x"] }).success,
+    ).toBe(false);
+  } finally {
+    await database.close();
+  }
+});
+
+test("saved model IDs must be ones a comparison accepts", () => {
+  expect(
+    credentialSchema.safeParse({
+      name: "Shift",
+      kind: "custom",
+      value: "k",
+      endpoint: "https://api.shift.ac/v1",
+      models: ["-shift", "shift-1"],
+    }).success,
+  ).toBe(false);
+  expect(
+    credentialSchema.safeParse({
+      name: "Shift",
+      kind: "custom",
+      value: "k",
+      endpoint: "https://api.shift.ac/v1",
+      models: ["has space"],
+    }).success,
+  ).toBe(false);
+  expect(
+    credentialSchema.safeParse({
+      name: "Shift",
+      kind: "custom",
+      value: "k",
+      endpoint: "https://api.shift.ac/v1",
+      models: ["shift-1", "", "org/router:fast"],
+    }).success,
+  ).toBe(true);
+});

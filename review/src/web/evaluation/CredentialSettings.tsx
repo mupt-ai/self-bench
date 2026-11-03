@@ -48,6 +48,76 @@ function SandboxLimitField({
   );
 }
 
+/** Model IDs as typed: separated by commas, spaces or new lines. */
+function parseModelIds(text: string): string[] {
+  return [...new Set(text.split(/[\s,]+/).filter(Boolean))];
+}
+
+/**
+ * A custom endpoint's saved model IDs, which the Run page offers with the credential, so a router
+ * such as Shift-1 or Switchyard need not be typed each time.
+ */
+function ModelIdsField({ value, onChange }: { value: string; onChange(value: string): void }) {
+  return (
+    <label className={fieldStyles} htmlFor="credential-models">
+      <span className="flex items-center gap-1.5">
+        Model IDs
+        <InfoTooltip label="Separate IDs with commas. The Run page lists each one with this credential." />
+      </span>
+      <Input
+        id="credential-models"
+        aria-label="Model IDs"
+        autoComplete="off"
+        placeholder="shift-1, switchyard"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
+  );
+}
+
+/** A new custom endpoint's address and saved model IDs. */
+export function CustomEndpointFields({
+  endpoint,
+  models,
+  onChange,
+}: {
+  endpoint: string;
+  models: string;
+  onChange(value: { endpoint: string; models: string[] }): void;
+}) {
+  // The typed text is kept as typed, so a trailing comma is not lost while the IDs are edited.
+  const [text, setText] = React.useState(models);
+  return (
+    <>
+      <label className={fieldStyles} htmlFor="credential-endpoint">
+        <span className="flex items-center gap-1.5">
+          Endpoint
+          <InfoTooltip label="An OpenAI-compatible HTTPS endpoint on an approved host." />
+        </span>
+        <Input
+          id="credential-endpoint"
+          aria-label="Endpoint"
+          type="url"
+          required
+          placeholder="https://approved-host.example/v1"
+          value={endpoint}
+          onChange={(event) =>
+            onChange({ endpoint: event.target.value, models: parseModelIds(text) })
+          }
+        />
+      </label>
+      <ModelIdsField
+        value={text}
+        onChange={(next) => {
+          setText(next);
+          onChange({ endpoint, models: parseModelIds(next) });
+        }}
+      />
+    </>
+  );
+}
+
 /**
  * A sandbox account's optional limit on image builds at once; blank means none. E2B counts
  * template builds apart from sandboxes.
@@ -117,6 +187,8 @@ export interface CredentialSettings {
   name: string;
   maxSandboxes: number | null;
   maxBuilds?: number | null;
+  /** A custom endpoint's model IDs; an empty list clears them. */
+  models?: string[];
 }
 
 export function EditCredentialDialog({
@@ -134,6 +206,7 @@ export function EditCredentialDialog({
     maxBuilds: credential.maxBuilds,
   });
   const [name, setName] = React.useState(credential.name);
+  const [models, setModels] = React.useState((credential.models ?? []).join(", "));
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
   return (
@@ -164,6 +237,7 @@ export function EditCredentialDialog({
               name: name.trim(),
               maxSandboxes: limits.maxSandboxes ?? null,
               ...(credential.kind === "e2b" ? { maxBuilds: limits.maxBuilds ?? null } : {}),
+              ...(credential.kind === "custom" ? { models: parseModelIds(models) } : {}),
             });
           } catch (cause) {
             setError(cause instanceof Error ? cause.message : "Could not save the credential");
@@ -186,6 +260,7 @@ export function EditCredentialDialog({
                 onChange={(event) => setName(event.target.value)}
               />
             </label>
+            {credential.kind === "custom" && <ModelIdsField value={models} onChange={setModels} />}
             <CredentialLimitFields kind={credential.kind} limits={limits} onChange={setLimits} />
           </fieldset>
           {error && (

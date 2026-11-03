@@ -3,7 +3,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
-import { hasModelSelection, nextModelSelection } from "./model-selection";
+import {
+  hasModelSelection,
+  nextModelSelection,
+  pickerValue,
+  savedCustomModels,
+  savedSelection,
+} from "./model-selection";
 import { RunModelTable } from "./RunModelTable";
 
 const model: CatalogModel = {
@@ -180,4 +186,32 @@ test("an empty inline row offers the model picker and disables dependent control
   expect(html).toContain('aria-haspopup="listbox"');
   expect(html.match(/<select[^>]*disabled=""/g)).toHaveLength(3);
   expect(html).not.toContain('role="dialog"');
+});
+
+test("a custom endpoint's saved model IDs are picked with their credential and model ID", () => {
+  const shift: CredentialInfo = {
+    ...credential,
+    id: "shift",
+    name: "Shift",
+    kind: "custom",
+    endpoint: "https://api.shift.ac/v1",
+    models: ["shift-1"],
+  };
+  const ramp: CredentialInfo = { ...shift, id: "ramp", name: "Ramp", models: ["switchyard"] };
+  const saved = savedCustomModels([credential, shift, ramp]);
+  expect(saved.map((entry) => entry.label)).toEqual(["shift-1 (Shift)", "switchyard (Ramp)"]);
+  const [shiftEntry] = saved;
+  if (!shiftEntry) throw new Error("Missing saved entry");
+  // Picking one fills in the Custom Model, its ID and its credential, on the requested harness.
+  const selection = savedSelection(shiftEntry, [credential, shift, ramp], "codex");
+  expect(selection).toEqual({
+    catalogId: "custom",
+    customModel: "shift-1",
+    credentialId: "shift",
+    harnesses: ["codex"],
+  });
+  if (!selection) throw new Error("Missing selection");
+  expect(pickerValue(selection)).toBe(shiftEntry.id);
+  // A catalog model is not a saved one.
+  expect(savedSelection(model, [shift])).toBeUndefined();
 });

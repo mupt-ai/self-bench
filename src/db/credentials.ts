@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, count, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { createSecretBox } from "../api/auth/crypto.js";
+import { modelIdPattern } from "../contracts/models.js";
 import { gatewayIds } from "../gateways/index.js";
 import type { Database } from "./client.js";
 import { credentialEndpoint, dariEndpoint } from "./credential-endpoints.js";
@@ -35,6 +36,16 @@ const claudeToken = /^sk-ant-oat[A-Za-z0-9_-]+$/;
  */
 export const maxSandboxesSchema = z.number().int().min(1).max(1000);
 
+/**
+ * A custom endpoint's saved model IDs (`shift-1`, `switchyard`), so the Run page offers each with
+ * its credential instead of a typed ID. Trimmed, blank and repeated entries dropped, at most 20.
+ */
+export const savedModelsSchema = z
+  .array(z.string().trim())
+  .max(20)
+  .transform((models) => [...new Set(models.filter(Boolean))])
+  .pipe(z.array(z.string().regex(modelIdPattern, "Model IDs use letters, numbers and . _ : / -")));
+
 export const credentialSchema = z
   .object({
     name: z.string().trim().min(1).max(80),
@@ -51,6 +62,7 @@ export const credentialSchema = z
     maxSandboxes: maxSandboxesSchema.optional(),
     // Image builds a sandbox account runs at once; E2B counts them apart from its sandboxes.
     maxBuilds: maxSandboxesSchema.optional(),
+    models: savedModelsSchema.optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -92,6 +104,8 @@ export const credentialSchema = z
     }
     if (value.kind !== "custom" && value.kind !== "dari" && value.endpoint)
       issue("Only custom and Dari providers accept an endpoint");
+    if (value.kind !== "custom" && value.models?.length)
+      issue("Only custom providers save model IDs");
   });
 export type CredentialDraft = z.infer<typeof credentialSchema>;
 
@@ -116,6 +130,8 @@ export interface CredentialInfo {
   endpoint?: string;
   maxSandboxes?: number;
   maxBuilds?: number;
+  /** A custom endpoint's saved model IDs. */
+  models?: string[];
 }
 export interface CredentialSecret {
   value: string;
@@ -139,6 +155,7 @@ export function createCredentialStore(db: Database, key: string) {
     ...(row.endpoint ? { endpoint: row.endpoint } : {}),
     ...(row.maxSandboxes ? { maxSandboxes: row.maxSandboxes } : {}),
     ...(row.maxBuilds ? { maxBuilds: row.maxBuilds } : {}),
+    ...(row.models?.length ? { models: row.models } : {}),
   });
   const live = (orgId: number, id: string) =>
     and(eq(credentials.orgId, orgId), eq(credentials.id, id), isNull(credentials.deletedAt));
@@ -205,6 +222,7 @@ export function createCredentialStore(db: Database, key: string) {
           endpoint,
           maxSandboxes: parsed.maxSandboxes,
           maxBuilds: parsed.maxBuilds,
+          ...(parsed.models?.length ? { models: parsed.models } : {}),
           secret: seal(id, secret),
         })
         .onConflictDoNothing()
@@ -229,6 +247,18 @@ export function createCredentialStore(db: Database, key: string) {
       await db
         .update(credentials)
         .set({ [column]: parsed })
+        .where(live(orgId, id));
+    },
+    /** Replaces a custom endpoint's saved model IDs; an empty list clears them. */
+    async saveModels(orgId: number, id: string, models: string[]): Promise<void> {
+      const credential = await find(orgId, id);
+      if (!credential) throw new Error("Credential not found");
+      const parsed = savedModelsSchema.parse(models);
+      if (credential.kind !== "custom" && parsed.length)
+        throw new Error("Only custom providers save model IDs");
+      await db
+        .update(credentials)
+        .set({ models: parsed.length ? parsed : null })
         .where(live(orgId, id));
     },
     /** Renames a credential; work saved with it keeps its ID, so it shows the new name. */

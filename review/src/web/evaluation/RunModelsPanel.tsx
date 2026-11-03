@@ -4,7 +4,7 @@ import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import type { ComparisonSelection } from "../../../../src/evaluation/comparisons";
 import { InfoTooltip } from "../primitives/tooltip";
 import { Button } from "../ui";
-import { customModel } from "./model-selection";
+import { customModel, savedCustomModels } from "./model-selection";
 import { RunModelTable } from "./RunModelTable";
 
 /** A Run page's models and harnesses, up to 12 configurations. */
@@ -48,7 +48,7 @@ export function RunModelsPanel<D extends ComparisonSelection>({
         </InfoTooltip>
       </div>
       <RunModelTable
-        models={[...models, customModel]}
+        models={[...savedCustomModels(credentials), ...models, customModel]}
         credentials={credentials}
         draft={draft}
         onChange={onChange}

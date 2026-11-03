@@ -27,30 +27,3 @@ export function DariRouterField({
     </label>
   );
 }
-
-/** A custom credential's OpenAI-compatible endpoint. */
-export function CustomEndpointField({
-  value,
-  onChange,
-}: {
-  value: CredentialDraft["endpoint"];
-  onChange(endpoint: string): void;
-}) {
-  return (
-    <label className={fieldStyles} htmlFor="credential-endpoint">
-      <span className="flex items-center gap-1.5">
-        Endpoint
-        <InfoTooltip label="An OpenAI-compatible HTTPS endpoint on an approved host." />
-      </span>
-      <Input
-        id="credential-endpoint"
-        aria-label="Endpoint"
-        type="url"
-        required
-        placeholder="https://approved-host.example/v1"
-        value={value ?? ""}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </label>
-  );
-}

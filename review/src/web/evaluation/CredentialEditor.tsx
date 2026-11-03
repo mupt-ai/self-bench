@@ -5,9 +5,9 @@ import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
 import { Button, fieldStyles, Input, Select } from "../ui";
 import { ClaudeSignIn } from "./ClaudeSignIn";
 import { CredentialSecret } from "./CredentialSecret";
-import { CredentialLimitFields } from "./CredentialSettings";
+import { CredentialLimitFields, CustomEndpointFields } from "./CredentialSettings";
 import { isSandbox, providers, sandboxes, signIns } from "./credential-presentation";
-import { CustomEndpointField, DariRouterField } from "./DariRouterField";
+import { DariRouterField } from "./DariRouterField";
 import { DeviceSignIn } from "./DeviceSignIn";
 
 export function CredentialEditor({
@@ -37,6 +37,7 @@ export function CredentialEditor({
     endpoint: previous?.endpoint,
     maxSandboxes: previous?.maxSandboxes,
     maxBuilds: previous?.maxBuilds,
+    ...(previous?.models ? { models: previous.models } : {}),
   });
   const [busy, setBusy] = React.useState(false);
   const [signingIn, setSigningIn] = React.useState(false);
@@ -199,9 +200,10 @@ export function CredentialEditor({
                 />
               )}
               {draft.kind === "custom" && (
-                <CustomEndpointField
-                  value={draft.endpoint}
-                  onChange={(endpoint) => setDraft({ ...draft, endpoint })}
+                <CustomEndpointFields
+                  endpoint={draft.endpoint ?? ""}
+                  models={(draft.models ?? []).join(", ")}
+                  onChange={({ endpoint, models }) => setDraft({ ...draft, endpoint, models })}
                 />
               )}
               {draft.kind === "modal" && (

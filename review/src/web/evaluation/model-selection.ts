@@ -18,6 +18,54 @@ export const customModel: CatalogModel = {
   source: "",
 };
 
+/** The prefix of a saved custom model's picker ID: `saved:<credential id>:<model id>`. */
+const SAVED = "saved:";
+
+/**
+ * Each custom endpoint's saved model IDs as picker entries, labelled with their credential. They
+ * stand for the Custom Model on that credential with that model ID (savedSelection).
+ */
+export function savedCustomModels(credentials: readonly CredentialInfo[]): CatalogModel[] {
+  return credentials.flatMap((credential) =>
+    credential.kind === "custom"
+      ? (credential.models ?? []).map((model) => ({
+          ...customModel,
+          id: `${SAVED}${credential.id}:${model}`,
+          model,
+          label: `${model} (${credential.name})`,
+        }))
+      : [],
+  );
+}
+
+/** The Custom Model selection a saved entry stands for, or undefined for any other model. */
+export function savedSelection(
+  model: CatalogModel,
+  credentials: CredentialInfo[],
+  requestedHarness?: Harness,
+): ComparisonDraft["models"][number] | undefined {
+  if (!model.id.startsWith(SAVED)) return undefined;
+  const credentialId = model.id.slice(SAVED.length, model.id.indexOf(":", SAVED.length));
+  const credential = credentials.find((entry) => entry.id === credentialId);
+  if (!credential) return undefined;
+  const picked =
+    nextModelSelection(customModel, [credential], requestedHarness) ??
+    nextModelSelection(customModel, [credential]);
+  return {
+    catalogId: customModel.id,
+    customModel: model.model,
+    credentialId,
+    harnesses: picked?.harnesses ?? [],
+  };
+}
+
+/** The picker entry a selection shows: its saved custom model when it is one. */
+export function pickerValue(selection: ComparisonDraft["models"][number]): string {
+  return selection.catalogId === customModel.id && selection.customModel && selection.credentialId
+    ? `${SAVED}${selection.credentialId}:${selection.customModel}`
+    : selection.catalogId;
+}
+
 export function nextModelSelection(
   model: CatalogModel,
   credentials: CredentialInfo[],
