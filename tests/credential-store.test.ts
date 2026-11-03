@@ -251,3 +251,33 @@ test("a custom endpoint saves its model IDs so the Run page can offer them", asy
     await database.close();
   }
 });
+
+test("saved model IDs must be ones a comparison accepts", () => {
+  expect(
+    credentialSchema.safeParse({
+      name: "Shift",
+      kind: "custom",
+      value: "k",
+      endpoint: "https://api.shift.ac/v1",
+      models: ["-shift", "shift-1"],
+    }).success,
+  ).toBe(false);
+  expect(
+    credentialSchema.safeParse({
+      name: "Shift",
+      kind: "custom",
+      value: "k",
+      endpoint: "https://api.shift.ac/v1",
+      models: ["has space"],
+    }).success,
+  ).toBe(false);
+  expect(
+    credentialSchema.safeParse({
+      name: "Shift",
+      kind: "custom",
+      value: "k",
+      endpoint: "https://api.shift.ac/v1",
+      models: ["shift-1", "", "org/router:fast"],
+    }).success,
+  ).toBe(true);
+});

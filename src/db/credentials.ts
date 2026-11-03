@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, count, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { createSecretBox } from "../api/auth/crypto.js";
+import { modelIdPattern } from "../contracts/models.js";
 import { gatewayIds } from "../gateways/index.js";
 import type { Database } from "./client.js";
 import { credentialEndpoint, dariEndpoint } from "./credential-endpoints.js";
@@ -40,15 +41,10 @@ export const maxSandboxesSchema = z.number().int().min(1).max(1000);
  * its credential instead of a typed ID. Trimmed, blank and repeated entries dropped, at most 20.
  */
 export const savedModelsSchema = z
-  .array(
-    z
-      .string()
-      .trim()
-      .max(200)
-      .regex(/^[^\s]*$/, "Model IDs cannot contain spaces"),
-  )
+  .array(z.string().trim())
   .max(20)
-  .transform((models) => [...new Set(models.filter(Boolean))]);
+  .transform((models) => [...new Set(models.filter(Boolean))])
+  .pipe(z.array(z.string().regex(modelIdPattern, "Model IDs use letters, numbers and . _ : / -")));
 
 export const credentialSchema = z
   .object({
