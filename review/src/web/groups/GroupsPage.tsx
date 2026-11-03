@@ -7,7 +7,7 @@ import { AddScopeButton, ScopeCard } from "../ScopeCard";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { Notice, PageFrame, PageHeader } from "../ui";
-import { type GroupList, type GroupView, groupRequest, groupsUrl } from "./api";
+import { deleteGroup, type GroupList, type GroupView, groupRequest, groupsUrl } from "./api";
 import { GroupDialog } from "./GroupDialog";
 
 /**
@@ -36,18 +36,11 @@ export function GroupsPage() {
     setList(undefined);
     void load();
   }, [load]);
-  const remove = (group: GroupView) => {
-    if (
-      !window.confirm(
-        `Delete ${group.name}? Its runs stop showing here, and its public page is withdrawn.`,
-      )
-    )
-      return;
-    groupRequest(groupsUrl(org.login, group.slug), { method: "DELETE" }).then(
-      () => void load(),
+  const remove = (group: GroupView) =>
+    deleteGroup(org.login, group).then(
+      (deleted) => deleted && void load(),
       (cause: Error) => setError(cause.message),
     );
-  };
   return (
     <PageFrame>
       <PageHeader

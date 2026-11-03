@@ -4,7 +4,6 @@ import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { sql } from "drizzle-orm";
-import { createSessionSigner, SESSION_COOKIE } from "../../src/api/auth/session.js";
 import { sendApiError } from "../../src/api/http.js";
 import { createSiteAuth } from "../../src/api/routes/auth.js";
 import { createEvaluationRoutes } from "../../src/api/routes/evaluations.js";
@@ -19,6 +18,7 @@ import { credentials } from "../../src/db/schema.js";
 import { createTaskStore } from "../../src/db/tasks.js";
 import { createUserStore } from "../../src/db/users.js";
 import type { EvaluationRun } from "../../src/evaluation/types.js";
+import { sessionFetch } from "./session-fetch.js";
 import { type TestDatabase, testAuthConfig, testDatabase } from "./site-fixture.js";
 import { seedTasks } from "./task-rows.js";
 
@@ -33,7 +33,6 @@ let origin = "";
 let credentialId = "";
 /** Each GitHub repository's visibility, as the fake GitHub reports it. */
 export const isPrivate: Record<number, boolean> = {};
-const signer = createSessionSigner(testAuthConfig.sessionSecret);
 export const REPOS = [
   { githubId: 11, fullName: "pallets/flask", repoId: 0 },
   { githubId: 22, fullName: "django/django", repoId: 0 },
@@ -179,16 +178,7 @@ export function groupSuite() {
   });
 }
 
-export const request = (path: string, init: RequestInit = {}) =>
-  fetch(`${origin}${path}`, {
-    ...init,
-    headers: {
-      origin,
-      "content-type": "application/json",
-      cookie: `${SESSION_COOKIE}=${signer.issue(1)}`,
-      ...init.headers,
-    },
-  });
+export const request = sessionFetch(() => origin);
 export const json = async <T>(path: string, init?: RequestInit) =>
   (await request(path, init)).json() as T;
 

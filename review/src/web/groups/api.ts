@@ -42,3 +42,15 @@ export async function groupRequest<Result>(
 export async function fetchGroup(org: string, slug: string): Promise<GroupView> {
   return (await groupRequest<{ group: GroupView }>(groupsUrl(org, slug))).group;
 }
+
+/** Deletes a group once its deleter confirms; false when they decline. */
+export async function deleteGroup(org: string, group: Pick<GroupView, "name" | "slug">) {
+  if (
+    !window.confirm(
+      `Delete ${group.name}? Its runs stop showing here, and its public page is withdrawn.`,
+    )
+  )
+    return false;
+  await groupRequest(groupsUrl(org, group.slug), { method: "DELETE" });
+  return true;
+}

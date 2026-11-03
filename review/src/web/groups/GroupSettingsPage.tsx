@@ -4,7 +4,7 @@ import { ListSkeleton } from "../LoadingSkeleton";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { Button, Notice, PageContent, PageHeader } from "../ui";
-import { type GroupList, type GroupView, groupRequest, groupsUrl } from "./api";
+import { deleteGroup, type GroupList, type GroupView, groupRequest, groupsUrl } from "./api";
 import { GroupDialog } from "./GroupDialog";
 
 /** A group's settings: its name, address, and members, and deleting it. */
@@ -24,17 +24,11 @@ export function GroupSettingsPage() {
   const group: GroupView | undefined = list?.groups.find((each) => each.slug === slug);
   useDocumentTitle(`Settings · ${group?.name ?? slug} · SelfBench`);
   const remove = async () => {
-    if (
-      !group ||
-      !window.confirm(
-        `Delete ${group.name}? Its runs stop showing here, and its public page is withdrawn.`,
-      )
-    )
-      return;
+    if (!group) return;
     setBusy(true);
     try {
-      await groupRequest(groupsUrl(org.login, slug), { method: "DELETE" });
-      navigate("/groups");
+      if (await deleteGroup(org.login, group)) navigate("/groups");
+      else setBusy(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not delete the group");
       setBusy(false);
