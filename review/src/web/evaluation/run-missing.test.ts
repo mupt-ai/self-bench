@@ -76,7 +76,7 @@ test("harnesses of one model share an entry, and a gone credential's settings ar
   const work = missingWork(
     [
       run("sol", "codex", { t1: "completed" }),
-      run("sol", "pi", { t2: "completed" }),
+      run("sol", "pi", { t1: "completed" }),
       run(
         "gone",
         "codex",
