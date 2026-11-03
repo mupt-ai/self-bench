@@ -3,6 +3,7 @@ import { Window } from "happy-dom";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter, Outlet, Route, Routes } from "react-router";
+import { RepoRunsProvider } from "./RepoRuns";
 import { RunPage } from "./RunPage";
 import { restoreRunDraft } from "./run-draft";
 
@@ -53,6 +54,7 @@ test("Run defaults fresh drafts to an offered managed sandbox without replacing 
         );
       if (endpoint === `${url}/options`) return Response.json({ tasks: [] });
       if (endpoint === "/api/orgs/team/credentials") return Response.json({ credentials: [] });
+      if (endpoint === url) return Response.json({ runs: [] });
       throw new Error(`Unexpected request: ${endpoint}`);
     }) as typeof globalThis.fetch);
     await act(async () => {
@@ -60,7 +62,14 @@ test("Run defaults fresh drafts to an offered managed sandbox without replacing 
         <MemoryRouter initialEntries={[path]}>
           <Routes>
             <Route element={<Outlet context={{ org: { login: "team" }, orgs: [] }} />}>
-              <Route path="/repos/:owner/:name/run" element={<RunPage />} />
+              <Route
+                path="/repos/:owner/:name/run"
+                element={
+                  <RepoRunsProvider org="team" url={url}>
+                    <RunPage />
+                  </RepoRunsProvider>
+                }
+              />
             </Route>
           </Routes>
         </MemoryRouter>,

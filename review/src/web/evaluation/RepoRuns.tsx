@@ -5,7 +5,8 @@ import { type EvaluationOptions, type EvaluationRun, evaluationRequest, runsRequ
 
 /**
  * A repository's or benchmark's evaluation runs and the org's credentials, shared by the Results
- * page's table and the chart preview in the header. They load when the Results page opens, refresh each
+ * page's table, the Run page's Missing Results, and the chart preview in the header. They load when
+ * the Results or Run page opens, refresh each
  * time it opens again, and while a run is unfinished every 3 seconds there; elsewhere they rest.
  */
 interface RepoRuns {
@@ -56,7 +57,10 @@ export function RepoRunsProvider({
   const [accepted, setAccepted] = React.useState<AcceptedTask[]>();
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
-  const onResults = /\/results\/?$/.test(useLocation().pathname);
+  const { pathname } = useLocation();
+  const onResults = /\/results\/?$/.test(pathname);
+  // The Run page offers to fill the gaps in these runs, so it reads them too.
+  const onRun = /\/run\/?$/.test(pathname);
   const showing = React.useRef(onResults);
   showing.current = onResults;
   const refreshNow = React.useRef<(comparisonId?: string) => void>(() => {});
@@ -128,12 +132,12 @@ export function RepoRunsProvider({
       clearTimeout(timer);
     };
   }, [url]);
-  // Opening the Results page loads the runs, or refreshes them if they were loaded on an earlier
-  // visit, so a comparison started on the Run page shows at once.
+  // Opening the Results or Run page loads the runs, or refreshes them if they were loaded on an
+  // earlier visit, so a comparison started on the Run page shows at once.
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new repository's refresh replaces refreshNow, and must run.
   React.useEffect(() => {
-    if (onResults) refreshNow.current();
-  }, [onResults, url]);
+    if (onResults || onRun) refreshNow.current();
+  }, [onResults, onRun, url]);
   // The tasks runs can use, for the coverage view: which tasks a configuration hasn't run, and for
   // a repository, from the Dataset page's task list, when each was accepted, which says whether a
   // run left a task out or it came after. Reloaded each time the Results page opens, since a
