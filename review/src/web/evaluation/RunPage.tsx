@@ -22,6 +22,7 @@ import {
   runBlocker,
 } from "./RunExecution";
 import { judgeCredentials, RunJudgePanel } from "./RunJudgePanel";
+import { RunMissing } from "./RunMissing";
 import { RunModelsPanel } from "./RunModelsPanel";
 import { RunTaskPicker } from "./RunTaskPicker";
 import { restoreRunDraft } from "./run-draft";
@@ -212,6 +213,9 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
             : `Compare models and harnesses on ${label} from Harbor's registry.`
         }
       />
+      {tasksReady && !state.submitted && (
+        <RunMissing url={url} pages={pages} tasks={availableTasks} />
+      )}
       {state.submitted && (
         <div className="panel mb-5 flex flex-wrap items-center justify-between gap-3 p-4">
           <p className="text-sm">These settings belong to a submitted request.</p>

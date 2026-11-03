@@ -5,13 +5,16 @@ import { type EvaluationOptions, type EvaluationRun, evaluationRequest, runsRequ
 
 /**
  * A repository's or benchmark's evaluation runs and the org's credentials, shared by the Results
- * page's table and the chart preview in the header. They load when the Results page opens, refresh each
+ * page's table, the Run page's Missing Results, and the chart preview in the header. They load when
+ * the Results or Run page opens, refresh each
  * time it opens again, and while a run is unfinished every 3 seconds there; elsewhere they rest.
  */
 interface RepoRuns {
   url: string;
   runs: EvaluationRun[];
   credentials: CredentialInfo[];
+  /** Whether `credentials` loaded: an empty list may only be one that has not, or failed. */
+  credentialsReady: boolean;
   /** The tasks runs can use (a repository's accepted ones, or a benchmark's), once loaded. */
   accepted?: AcceptedTask[];
   loading: boolean;
@@ -53,10 +56,14 @@ export function RepoRunsProvider({
 }) {
   const [runs, setRuns] = React.useState<EvaluationRun[]>([]);
   const [credentials, setCredentials] = React.useState<CredentialInfo[]>([]);
+  const [credentialsReady, setCredentialsReady] = React.useState(false);
   const [accepted, setAccepted] = React.useState<AcceptedTask[]>();
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
-  const onResults = /\/results\/?$/.test(useLocation().pathname);
+  const { pathname } = useLocation();
+  const onResults = /\/results\/?$/.test(pathname);
+  // The Run page offers to fill the gaps in these runs, so it reads them too.
+  const onRun = /\/run\/?$/.test(pathname);
   const showing = React.useRef(onResults);
   showing.current = onResults;
   const refreshNow = React.useRef<(comparisonId?: string) => void>(() => {});
@@ -67,7 +74,9 @@ export function RepoRunsProvider({
       `/api/orgs/${encodeURIComponent(org)}/credentials`,
     )
       .then((result) => {
-        if (!disposed) setCredentials(result.credentials);
+        if (disposed) return;
+        setCredentials(result.credentials);
+        setCredentialsReady(true);
       })
       .catch(() => undefined);
     return () => {
@@ -128,12 +137,12 @@ export function RepoRunsProvider({
       clearTimeout(timer);
     };
   }, [url]);
-  // Opening the Results page loads the runs, or refreshes them if they were loaded on an earlier
-  // visit, so a comparison started on the Run page shows at once.
+  // Opening the Results or Run page loads the runs, or refreshes them if they were loaded on an
+  // earlier visit, so a comparison started on the Run page shows at once.
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new repository's refresh replaces refreshNow, and must run.
   React.useEffect(() => {
-    if (onResults) refreshNow.current();
-  }, [onResults, url]);
+    if (onResults || onRun) refreshNow.current();
+  }, [onResults, onRun, url]);
   // The tasks runs can use, for the coverage view: which tasks a configuration hasn't run, and for
   // a repository, from the Dataset page's task list, when each was accepted, which says whether a
   // run left a task out or it came after. Reloaded each time the Results page opens, since a
@@ -181,6 +190,7 @@ export function RepoRunsProvider({
       url,
       runs,
       credentials,
+      credentialsReady,
       ...(accepted ? { accepted } : {}),
       loading,
       error,
@@ -188,7 +198,18 @@ export function RepoRunsProvider({
       update,
       refresh,
     }),
-    [url, runs, credentials, accepted, loading, error, onResults, update, refresh],
+    [
+      url,
+      runs,
+      credentials,
+      credentialsReady,
+      accepted,
+      loading,
+      error,
+      onResults,
+      update,
+      refresh,
+    ],
   );
   return <RepoRunsContext.Provider value={value}>{children}</RepoRunsContext.Provider>;
 }

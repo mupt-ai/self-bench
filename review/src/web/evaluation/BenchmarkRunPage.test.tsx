@@ -3,6 +3,7 @@ import { Window } from "happy-dom";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter, Outlet, Route, Routes } from "react-router";
+import { RepoRunsProvider } from "./RepoRuns";
 import { RunPage } from "./RunPage";
 import { restoreRunDraft } from "./run-draft";
 import { BenchmarkScope } from "./useEvaluationScope";
@@ -61,6 +62,7 @@ test("a benchmark's Run page is a repository's: it picks tasks and asks for a ju
           { id: "sandbox", name: "E2B", kind: "e2b", auth: "api-key", createdAt: "" },
         ],
       });
+    if (endpoint === url) return Response.json({ runs: [] });
     throw new Error(`Unexpected request: ${endpoint}`);
   }) as typeof globalThis.fetch);
   const root = createRoot(container);
@@ -74,7 +76,9 @@ test("a benchmark's Run page is a repository's: it picks tasks and asks for a ju
                 path="/benchmarks/:owner/:name/run"
                 element={
                   <BenchmarkScope>
-                    <RunPage />
+                    <RepoRunsProvider org="team" url={url}>
+                      <RunPage />
+                    </RepoRunsProvider>
                   </BenchmarkScope>
                 }
               />
