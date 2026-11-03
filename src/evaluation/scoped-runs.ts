@@ -51,3 +51,15 @@ export async function scopedRun(
   }
   return undefined;
 }
+
+/** The scope a run of the scope's list lives in: its own, or a source's; undefined if neither. */
+export async function runScope(
+  store: ArtifactStore,
+  scope: EvaluationScope,
+  dataset: Pick<EvaluationDataset, "sources">,
+  id: string,
+): Promise<EvaluationScope | undefined> {
+  for (const candidate of [scope, ...(dataset.sources ?? []).map((source) => source.scope)])
+    if (await getEvaluation(store, candidate, id)) return candidate;
+  return undefined;
+}

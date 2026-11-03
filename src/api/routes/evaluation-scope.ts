@@ -23,7 +23,7 @@ import type { EvaluationDataset } from "../../evaluation/dataset.js";
 import { evaluationTaskKey } from "../../evaluation/models.js";
 import { listRuns } from "../../evaluation/run-list.js";
 import { sameScope } from "../../evaluation/scope.js";
-import { scopedRun, scopedRuns } from "../../evaluation/scoped-runs.js";
+import { runScope, scopedRun, scopedRuns } from "../../evaluation/scoped-runs.js";
 import { evaluationPrefix, getEvaluation, live } from "../../evaluation/store.js";
 import { managedHarborEnvironment, managedOffer } from "../../generation/billing/managed.js";
 import { track } from "../../lib/telemetry/posthog.js";
@@ -95,7 +95,8 @@ export async function handleScopedEvaluations(
   }
   if (section && !SECTIONS.has(section) && !id && action === "explain" && methods) {
     await explainTrial(options, request, url, response, {
-      scope,
+      // A group's member run is explained where it lives, in its repository.
+      scope: (await runScope(artifacts, scope, dataset, section)) ?? scope,
       orgId,
       evaluationId: section,
       user,
