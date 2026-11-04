@@ -195,3 +195,16 @@ test("harnesses of one model on different credentials stay separate entries", ()
     ],
   );
 });
+
+test("a request names its tasks by key alone, as the server takes them", () => {
+  const work = missingWork(
+    [run("sol", "codex", { t1: "completed" })],
+    tasks.map((task) => ({ ...task, difficulty: "hard", repository: "vercel/next.js" })),
+    credentials,
+    newId,
+  );
+  expect(work?.selections[0]?.tasks).toEqual([
+    { runId: "gen", taskId: "t2" },
+    { runId: "gen", taskId: "t3" },
+  ]);
+});
