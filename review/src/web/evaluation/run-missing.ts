@@ -131,7 +131,10 @@ export function missingWork(
         models: entries.slice(index * MODELS_PER_COMPARISON, (index + 1) * MODELS_PER_COMPARISON),
         sandbox: sandboxId === "managed-sandbox" ? "managed" : (kind ?? newest?.sandbox ?? ""),
         sandboxCredentialId: sandboxId,
-        tasks: tasks.filter((task) => missing.has(evaluationTaskKey(task.runId, task.taskId))),
+        // Only the key: the server takes nothing else, such as a group task's repository.
+        tasks: tasks
+          .filter((task) => missing.has(evaluationTaskKey(task.runId, task.taskId)))
+          .map(({ runId, taskId }) => ({ runId, taskId })),
         ...(judgeCredentialId ? { judgeCredentialId } : {}),
         skipCompleted: true,
       }),
