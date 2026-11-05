@@ -103,6 +103,16 @@ async function waitFor(predicate: () => boolean) {
   expect(predicate()).toBe(true);
 }
 
+test("an imported ChatGPT sign-in shows the sandbox limit it gets when left blank", async () => {
+  const limit = () =>
+    container.querySelector<HTMLInputElement>('input[aria-label="Max Concurrent Sandboxes"]')
+      ?.placeholder;
+  await click("Import auth.json");
+  expect(limit()).toBe("50");
+  await click("API Key");
+  expect(limit()).toBe("No Limit");
+});
+
 test("restarting after a polling error does not revive the cancelled attempt", async () => {
   const restart = deferred<Response>();
   let starts = 0;

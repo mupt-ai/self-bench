@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, count, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { createSecretBox } from "../api/auth/crypto.js";
+import { CHATGPT_SIGN_IN_MAX_SANDBOXES } from "../contracts/config/execution-limits.js";
 import { modelIdPattern } from "../contracts/models.js";
 import { gatewayIds } from "../gateways/index.js";
 import type { Database } from "./client.js";
@@ -220,7 +221,9 @@ export function createCredentialStore(db: Database, key: string) {
           kind: parsed.kind,
           auth: parsed.auth,
           endpoint,
-          maxSandboxes: parsed.maxSandboxes,
+          maxSandboxes:
+            parsed.maxSandboxes ??
+            (parsed.auth === "codex-login" ? CHATGPT_SIGN_IN_MAX_SANDBOXES : undefined),
           maxBuilds: parsed.maxBuilds,
           ...(parsed.models?.length ? { models: parsed.models } : {}),
           secret: seal(id, secret),

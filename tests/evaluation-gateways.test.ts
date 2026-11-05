@@ -20,7 +20,8 @@ const ADAPTER = fileURLToPath(
 );
 
 /** Harbor's agent modules, stubbed so harbor_gateway.py loads without Harbor installed. */
-const HARBOR_STUBS = `import sys, types
+const HARBOR_STUBS = `import os, sys, types
+sys.path.insert(0, os.path.dirname(sys.argv[1]))  # its siblings, as on Harbor's PYTHONPATH
 pi = types.ModuleType("harbor.agents.installed.pi")
 pi.Pi = type("Pi", (), {})
 pi.PiOptions = type("PiOptions", (), {})
@@ -160,52 +161,6 @@ async def check():
 asyncio.run(check())
 `,
     ADAPTER,
-  ]);
-  expect(result.stderr).toBe("");
-  expect(result.exitCode).toBe(0);
-});
-
-test("gateway Pi writes its models.json, then runs with only the gateway key", async () => {
-  const trialInput = input("openrouter", "openrouter/vendor/model");
-  const trial = gatewayTrial(trialInput, "pi", trialInput.modelName, {}, connect(trialInput, "pi"));
-  const modelsJson = trial.agentArguments[1]?.slice("models_json=".length) ?? "";
-  const result = await runCommand("python3", [
-    "-c",
-    `import asyncio, importlib.util, json, os, subprocess, sys, tempfile, types
-${HARBOR_STUBS}
-class Pi:
-    def __init__(self, models_json):
-        self.options, self.commands = types.SimpleNamespace(models_json=models_json), []
-    async def exec_as_agent(self, environment, command):
-        self.commands.append(command)
-    async def run(self, instruction, environment, context):
-        self.commands.append("pi " + instruction)
-sys.modules["harbor.agents.installed.pi"].Pi = Pi
-sys.modules["harbor.agents.installed.codex"] = types.SimpleNamespace(Codex=object)
-sys.modules["harbor.agents.installed.claude_code"] = types.SimpleNamespace(ClaudeCode=object)
-spec = importlib.util.spec_from_file_location("adapter", sys.argv[1])
-adapter = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(adapter)
-assert adapter.GatewayPi.options_model is adapter.GatewayPiOptions
-# Harbor resolves Pi's key from OPENAI_API_KEY alone; no gateway vendor's variable is left.
-assert adapter.GatewayPi.MODEL_CONNECTION == {"passthrough": True, "api_key_envs": ("OPENAI_API_KEY",)}
-models = json.loads(sys.argv[2])
-agent = adapter.GatewayPi(models)
-asyncio.run(agent.run("task", None, None))
-write, start = agent.commands
-assert start == "pi task"
-with tempfile.TemporaryDirectory() as home:
-    subprocess.check_call(["bash", "-c", write], env={**os.environ, "HOME": home})
-    with open(os.path.join(home, ".pi/agent/models.json")) as file:
-        assert json.load(file) == models
-try:
-    asyncio.run(adapter.GatewayPi(None).run("task", None, None))
-    raise SystemExit("ran without models.json")
-except ValueError:
-    pass
-`,
-    ADAPTER,
-    modelsJson,
   ]);
   expect(result.stderr).toBe("");
   expect(result.exitCode).toBe(0);

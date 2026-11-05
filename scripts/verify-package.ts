@@ -72,6 +72,7 @@ try {
     "dist/maintenance/backfill-timeouts.js",
     "dist/maintenance/compact-task-bundles.js",
     "dist/maintenance/records-migration.js",
+    "dist/harnesses/harbor/runtime/harbor_agents.py",
     "dist/harnesses/harbor/runtime/harbor_gateway.py",
     "dist/harnesses/harbor/runtime/harbor_dari.py",
     "dist/harnesses/harbor/runtime/dari_capture.cjs",
@@ -115,6 +116,7 @@ try {
     }
   }
   for (const asset of [
+    "harbor_agents.py",
     "harbor_gateway.py",
     "harbor_dari.py",
     "harbor_muse.py",

@@ -8,6 +8,7 @@ from harbor.agents.installed.claude_code import ClaudeCode
 from harbor.agents.installed.codex import Codex
 from harbor.agents.installed.pi import Pi, PiOptions
 from harbor.agents.model_connection import ModelConnectionSpec
+from harbor_agents import EndsPiOptions, RetriesInstall
 
 
 class SkipsSystemNode:
@@ -27,7 +28,7 @@ class SkipsSystemNode:
 OPENAI_MODELS = "dari/model/openai/"
 
 
-class GatewayCodex(SkipsSystemNode, Codex):
+class GatewayCodex(RetriesInstall, SkipsSystemNode, Codex):
     def _build_effective_config(self, openai_base_url=None):
         # Codex tries the Responses API over a WebSocket first, which the gateway (and a custom
         # endpoint) need not serve: give it a provider that speaks HTTPS only. Codex also asks
@@ -64,7 +65,7 @@ class GatewayCodex(SkipsSystemNode, Codex):
         return await super().exec_as_agent(environment, command=command, **kwargs)
 
 
-class SelfBenchClaudeCode(SkipsSystemNode, ClaudeCode):
+class SelfBenchClaudeCode(RetriesInstall, SkipsSystemNode, ClaudeCode):
     async def install(self, environment):
         # Modal starts Python images with HOME's .cache/uv created as root, so a non-root agent
         # cannot create the .cache/claude the native installer writes to.
@@ -86,7 +87,7 @@ class GatewayPiOptions(PiOptions):
     models_json: dict[str, Any] | None = None
 
 
-class GatewayPi(Pi):
+class GatewayPi(RetriesInstall, EndsPiOptions, Pi):
     # The runner names the model `selfbench/dari/model/...`, a provider Harbor does not know, so
     # Harbor writes no models.json of its own and passes Pi only the gateway key.
     MODEL_CONNECTION = ModelConnectionSpec(passthrough=True, api_key_envs=("OPENAI_API_KEY",))
