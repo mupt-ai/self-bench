@@ -22,7 +22,13 @@ export function BenchmarkList({
         </li>
       ))}
       <li>
-        <AddBenchmarkCard added={benchmarks.map((benchmark) => benchmark.name)} onAdd={onAdd} />
+        {/* A failed box can be added again, which retries it; only the others are taken. */}
+        <AddBenchmarkCard
+          added={benchmarks.flatMap((benchmark) =>
+            benchmark.status === "failed" ? [] : [benchmark.name],
+          )}
+          onAdd={onAdd}
+        />
       </li>
     </ul>
   );
