@@ -65,6 +65,7 @@ module=types.ModuleType('harbor.environments.vercel'); module.VercelSandboxEnvir
 module.environment=types.SimpleNamespace()
 sys.modules['harbor']=types.ModuleType('harbor'); sys.modules['harbor.environments']=types.ModuleType('harbor.environments')
 sys.modules['harbor.environments.vercel']=module
+sys.modules['harbor.models.task.config']=types.SimpleNamespace(NetworkMode=None)
 from selfbench_vercel import PullAuthenticatedBuilder
 class Sandbox:
  destroyed=False
@@ -83,7 +84,8 @@ async def check():
  assert rules[0].match.path==('exact','/v2/')
  assert rules[1].match.path==('prefix','/v2/task-1/')
  assert rules[1].match.method==('GET','HEAD')
- assert not hasattr(sandbox.policy['allow']['*'][0],'transform')
+ # Every other host stays reachable outright: no rules, so no credential and no matcher.
+ assert sandbox.policy['allow']['*']==()
  sandbox.fail=True
  try: await builder.create_sandbox(); assert False
  except RuntimeError: pass

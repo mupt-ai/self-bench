@@ -47,6 +47,35 @@ test("Meta Pi reports its OpenAI-compatible model identity and keeps reference p
   });
 });
 
+test("gateway Pi reports Harbor's custom endpoint and the gateway's model id", () => {
+  const run = initialEvaluation(
+    {
+      ...evaluationInput(),
+      model: "anthropic/claude-sonnet-5",
+      modelName: "openrouter/anthropic/claude-sonnet-5",
+      pricing,
+      credentials: {
+        modelCredentialId: "openrouter-key",
+        sandboxCredentialId: "sandbox",
+        provider: "openrouter",
+        auth: "api-key",
+      },
+    },
+    "Test",
+  );
+  const event = {
+    type: "message_end",
+    message: {
+      role: "assistant",
+      provider: "harbor-endpoint",
+      model: "dari/model/openrouter/anthropic/claude-sonnet-5",
+      usage: { input: 100, output: 50, cacheRead: 0, cacheWrite: 0 },
+    },
+  };
+  const files = new Map([["solver/trial/agent/pi.txt", JSON.stringify(event)]]);
+  expect(trialCost(run, "pi", files, {}).modelVerified).toBe(true);
+});
+
 test("Pi dollar totals cannot invent pricing for unknown models", () => {
   const run = initialEvaluation(evaluationInput(), "Test");
   const event = {

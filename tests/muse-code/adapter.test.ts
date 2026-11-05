@@ -13,15 +13,14 @@ const adapter = fileURLToPath(
   new URL("../../src/harnesses/harbor/runtime/harbor_muse.py", import.meta.url),
 );
 
-/** Harbor's modules, as far as the adapter uses them, so the test needs no Harbor install. */
+/**
+ * Harbor's modules, as far as reading a session log uses them, so the test needs no Harbor install.
+ * How the adapter runs Muse is checked against the installed Harbor (harbor-contract.test.ts).
+ */
 const STUBS = `import asyncio, importlib.util, json, os, sys, types, typing
 from pathlib import Path
 sys.modules["pydantic"] = types.SimpleNamespace(Field=lambda **kwargs: None)
 sys.modules["harbor.agents.options"] = types.SimpleNamespace(Cli=lambda *args, **kwargs: None)
-sys.modules["harbor.models.trial.paths"] = types.SimpleNamespace(
-    EnvironmentPaths=types.SimpleNamespace(agent_dir=Path("/logs/agent")))
-sys.modules["harbor.agents.installed.base"] = types.SimpleNamespace(
-    with_prompt_template=lambda fn: fn)
 muse = types.ModuleType("harbor.agents.installed.muse_code")
 class MuseCode:
     def __init__(self, env, logs_dir=None):
@@ -32,16 +31,6 @@ class MuseCode:
         return "muse-code"
     def version(self):
         return "1.4.6"
-    def build_cli_flags(self):
-        return "--reasoning-effort high"
-    def _build_run_command(self, instruction):
-        return "muse exec " + self.build_cli_flags() + " " + instruction
-    async def _upload_agent_owned_file(self, environment, source, target):
-        self.calls.append(("upload", str(source), target))
-    async def exec_as_agent(self, environment, command, env=None):
-        self.calls.append(("exec", command, env))
-    async def run(self, instruction, environment, context):
-        self.calls.append(("harbor run", instruction))
 muse.MuseCode, muse.MuseCodeOptions = MuseCode, type("MuseCodeOptions", (), {})
 sys.modules[muse.__name__] = muse
 spec = importlib.util.spec_from_file_location("harbor_muse", sys.argv[1])
@@ -51,30 +40,6 @@ spec.loader.exec_module(adapter)
 
 const python = (script: string, ...args: string[]) =>
   runCommand("python3", ["-c", STUBS + script, adapter, ...args]);
-
-test("Muse Code signs in from its own auth.json, never Meta's API key, with contributor mode and web tools off", async () => {
-  const result = await python(`
-async def check():
-    agent = adapter.SelfBenchMuseCode({"MUSE_AUTH_JSON_PATH": "/host/muse-auth.json"})
-    # Harbor's own options stop short of max, which Muse Spark 1.3 and Muse Wonder take.
-    levels, _ = typing.get_args(typing.get_args(adapter.SelfBenchMuseCodeOptions.__annotations__["reasoning_effort"])[0])
-    assert typing.get_args(levels) == ("none", "minimal", "low", "medium", "high", "xhigh", "max")
-    assert agent.build_cli_flags() == "--reasoning-effort high --contributor-mode off --disable-web-tools"
-    await agent.run("solve it", None, None)
-    upload, install, run, copy = agent.calls
-    assert upload == ("upload", "/host/muse-auth.json", "/tmp/selfbench-muse-auth.json")
-    assert install[1].endswith('mv /tmp/selfbench-muse-auth.json "$dir/auth.json" && chmod 600 "$dir/auth.json"')
-    assert run[1].startswith("muse exec ") and run[1].endswith("--disable-web-tools solve it")
-    assert run[2] == {"MUSE_NO_AUTO_UPDATE": "1"}
-    assert "/logs/agent/sessions" in copy[1]
-    keyed = adapter.SelfBenchMuseCode({"META_API_KEY": "key"})
-    await keyed.run("solve it", None, None)
-    assert keyed.calls == [("harbor run", "solve it")]
-asyncio.run(check())
-`);
-  expect(result.stderr).toBe("");
-  expect(result.exitCode).toBe(0);
-});
 
 /** A Muse session log as Muse Code writes it, records wrapped in a transaction included. */
 function sessionLog(): string {

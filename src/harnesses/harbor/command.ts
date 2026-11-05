@@ -6,7 +6,7 @@ import type { HarborEnvironment } from "../../contracts/config/providers.js";
 import { projectRoot } from "../../lib/project-paths.js";
 
 /** Process policy for generation gates, not provider lifetimes; solver trials use trialTimeouts. */
-export const HARBOR_VERSION = "0.23.0";
+export const HARBOR_VERSION = "0.25.0";
 
 export const HARBOR_PROCESS_TIMEOUT_MS = {
   gate: 3 * 60 * 60 * 1000,

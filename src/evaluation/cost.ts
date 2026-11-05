@@ -47,8 +47,10 @@ export function trialCost(
     | undefined;
 
   if (harness === "pi") {
-    // Pi reports its provider: the gateway's, or Harbor's custom endpoint on trials before it.
+    // Pi reports its provider: Harbor's custom endpoint at the gateway, the provider SelfBench
+    // named the gateway before Harbor 0.25, or Harbor's custom endpoint on trials before either.
     measurement = measurePiCost(run, files, result, [
+      `harbor-endpoint/${request}`,
       `selfbench/${request}`,
       `harbor-endpoint/${model}`,
       `openai/${model}`,

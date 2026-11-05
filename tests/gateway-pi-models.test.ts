@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { piGatewayModels } from "../src/evaluation/gateway-trial.js";
+import { piModelDetails } from "../src/evaluation/gateway-trial.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";
 import { gatewayModelPrice, listedModelConfig, refreshGateway } from "../src/gateways/catalog.js";
 import { gatewayIds, piModels, setGatewayListing } from "../src/gateways/index.js";
@@ -90,20 +90,11 @@ test("Pi is told how Vercel AI Gateway takes each model, from the gateway's cata
     modelName: name,
     credentials: { provider: "vercel-ai-gateway" },
   } as EvaluationInput;
-  expect(piGatewayModels(trial, { openAiBase: "https://gateway/v1" })).toMatchObject({
-    providers: {
-      selfbench: {
-        models: [
-          {
-            id: `dari/model/${name}`,
-            name: "Mistral Large 4",
-            input: ["text", "image"],
-            contextWindow: 524288,
-            maxTokens: 262144,
-          },
-        ],
-      },
-    },
+  expect(piModelDetails(trial)).toEqual({
+    name: "Mistral Large 4",
+    input: ["text", "image"],
+    contextWindow: 524288,
+    maxTokens: 262144,
   });
   // The gateway itself serves a model Pi's catalog lacks as the catalog describes it, and leaves
   // one Pi lists (as Mistral Large 4), and every model of a provider that is no gateway, to Pi.

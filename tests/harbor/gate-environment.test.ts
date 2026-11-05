@@ -7,7 +7,7 @@ import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { withExecutionEnvironment } from "../../src/contracts/config/execution-environment.js";
 import type { AuthoredTask } from "../../src/contracts/index.js";
 import { harborRun, runHarborGates } from "../../src/generation/pipeline/harbor-gates.js";
-import { harborPythonPath } from "../../src/harnesses/harbor/command.js";
+import { HARBOR_VERSION, harborPythonPath } from "../../src/harnesses/harbor/command.js";
 import { runCommand } from "../../src/lib/process.js";
 
 test("generation gates run smoke as the agent, then the oracle, on the packaged E2B adapter", async () => {
@@ -20,7 +20,7 @@ test("generation gates run smoke as the agent, then the oracle, on the packaged 
 const fs = require('node:fs');
 const path = require('node:path');
 const args = process.argv.slice(2);
-if (args[0] === '--version') { console.log('0.23.0'); process.exit(0); }
+if (args[0] === '--version') { console.log('${HARBOR_VERSION}'); process.exit(0); }
 fs.writeFileSync(${JSON.stringify(join(root, "capture.json"))}, JSON.stringify({args, pythonPath: process.env.PYTHONPATH, key: process.env.E2B_API_KEY}));
 const directory = path.join(args[args.indexOf('--jobs-dir')+1], args[args.indexOf('--job-name')+1]);
 fs.mkdirSync(directory, {recursive:true});
@@ -80,7 +80,7 @@ test("a gate refuses a bundle that asks for the worker's credentials, without re
     const marker = join(root, "trial-started");
     await writeFile(
       executable,
-      `#!${process.execPath}\nif(process.argv[2]==='--version'){console.log('0.23.0')}else{require('node:fs').writeFileSync(${JSON.stringify(marker)},'started')}\n`,
+      `#!${process.execPath}\nif(process.argv[2]==='--version'){console.log('${HARBOR_VERSION}')}else{require('node:fs').writeFileSync(${JSON.stringify(marker)},'started')}\n`,
     );
     await chmod(executable, 0o700);
     // biome-ignore lint/suspicious/noTemplateCurlyInString: exercises Harbor's host interpolation.
@@ -109,7 +109,7 @@ test("smoke that fails under the agent's conditions stops the gates with advice 
 const fs = require('node:fs');
 const path = require('node:path');
 const args = process.argv.slice(2);
-if (args[0] === '--version') { console.log('0.23.0'); process.exit(0); }
+if (args[0] === '--version') { console.log('${HARBOR_VERSION}'); process.exit(0); }
 const trial = path.join(args[args.indexOf('--jobs-dir')+1], args[args.indexOf('--job-name')+1], 'trial');
 fs.mkdirSync(trial, {recursive:true});
 fs.writeFileSync(path.join(trial, '..', 'result.json'), '{}');
