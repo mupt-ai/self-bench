@@ -61,27 +61,24 @@ describe("a real trial's path through the gateway", () => {
       expectedCost: 8 * 2e-6 + 3 * 10e-6,
     },
     {
-      name: "Pi on an OpenRouter key (models.json, Chat Completions)",
+      name: "Pi on an OpenRouter key (Harbor's custom endpoint, Chat Completions)",
       harness: "pi",
       credential: "openrouter",
-      send: (env, trial) => {
-        const argument = trial.agentArguments.find((arg) => arg.startsWith("models_json="));
-        const provider = JSON.parse((argument ?? "").slice("models_json=".length)).providers
-          .selfbench;
-        expect(provider.apiKey).toBe("$OPENAI_API_KEY");
-        return fetch(`${provider.baseUrl}/chat/completions`, {
+      // Harbor writes Pi's models.json at OPENAI_BASE_URL, keyed by OPENAI_API_KEY, with the
+      // model id after `openai/` (tests/harbor/harbor-contract.test.ts).
+      send: (env, trial) =>
+        fetch(`${env.OPENAI_BASE_URL}/chat/completions`, {
           method: "POST",
           headers: {
             authorization: `Bearer ${env.OPENAI_API_KEY}`,
             "content-type": "application/json",
           },
           body: JSON.stringify({
-            model: trial.model.replace(/^selfbench\//, ""),
+            model: trial.model.replace(/^openai\//, ""),
             stream: true,
             messages: [{ role: "user", content: "hello" }],
           }),
-        });
-      },
+        }),
       upstreamPath: "/api/v1/chat/completions",
       upstreamKey: (call) => call.authorization,
       // OpenRouter's own reported charge.

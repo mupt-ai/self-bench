@@ -1,72 +1,71 @@
 """Run Harbor's Muse Code on a Meta sign-in, at every effort Muse takes, and turn its session log
 into Harbor's trajectory and token totals."""
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Annotated, Literal
 from pydantic import Field
-from harbor.agents.installed.base import with_prompt_template
 from harbor.agents.installed.muse_code import MuseCode, MuseCodeOptions
 from harbor.agents.options import Cli
-from harbor.models.trial.paths import EnvironmentPaths
+
+# Stands in for META_API_KEY on a signed-in trial, so Harbor's run proceeds; never sent to Muse.
+SIGNED_IN = "selfbench-muse-sign-in"
 
 
 class SelfBenchMuseCodeOptions(MuseCodeOptions):
-    # Harbor lists Muse's efforts without max, which Muse Spark 1.3 and Muse Wonder accept.
+    # Harbor lists Muse's efforts without none and max, which Muse Spark 1.3 and Muse Wonder accept.
     reasoning_effort: Annotated[
-        Literal["none", "minimal", "low", "medium", "high", "xhigh", "max"] | None,
+        Literal["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"] | None,
         Cli("--reasoning-effort", fallback="MUSE_CODE_REASONING_EFFORT"),
     ] = Field(default=None, description="Model reasoning effort.")
+    # Contributor mode would let Meta train on the benchmark's tasks.
+    contributor_mode: Annotated[Literal["on", "off"] | None, Cli("--contributor-mode")] = Field(
+        default="off", description="Whether Meta may train on the session."
+    )
+    # The sandbox's network allows only Meta's API, and Meta's own search would reach past it.
+    disable_web_tools: Annotated[bool, Cli("--disable-web-tools")] = Field(
+        default=True, description="Turn off Muse's web tools."
+    )
 
 
 class SelfBenchMuseCode(MuseCode):
     """Harbor's Muse Code, signed in from MUSE_AUTH_JSON_PATH when it names a Muse auth.json."""
 
     options_model = SelfBenchMuseCodeOptions
-    _AUTH_UPLOAD = "/tmp/selfbench-muse-auth.json"
 
-    def build_cli_flags(self):
-        # Contributor mode would let Meta train on the benchmark's tasks. Web tools are off: the
-        # sandbox's network allows only Meta's API, and Meta's own search would reach past it.
-        return " ".join(
-            filter(None, [super().build_cli_flags(), "--contributor-mode off", "--disable-web-tools"])
+    @classmethod
+    def check_model_credentials(cls, connection, *, kwargs, env, explicit_env=None):
+        # A signed-in trial has no META_API_KEY: Muse mints its key from the sign-in.
+        if env.get("MUSE_AUTH_JSON_PATH"):
+            return
+        super().check_model_credentials(
+            connection, kwargs=kwargs, env=env, explicit_env=explicit_env
         )
+
+    @property
+    def model_connection(self):
+        connection = super().model_connection
+        if self._get_env("MUSE_AUTH_JSON_PATH") and not connection.api_key:
+            return replace(connection, api_key=SIGNED_IN)
+        return connection
 
     async def run(self, instruction, environment, context):
         auth = self._get_env("MUSE_AUTH_JSON_PATH")
-        if not auth:
-            return await super().run(instruction, environment, context)
-        # Muse Code's own credential file, holding the sign-in's token; at startup Muse mints its
-        # subscription key from it and writes the key back into the file.
-        await self._upload_agent_owned_file(environment, Path(auth), self._AUTH_UPLOAD)
-        await self.exec_as_agent(
-            environment,
-            command=(
-                'dir="${XDG_CONFIG_HOME:-$HOME/.config}/muse"; mkdir -p "$dir" && '
-                f'mv {self._AUTH_UPLOAD} "$dir/auth.json" && chmod 600 "$dir/auth.json"'
-            ),
-        )
-        await self._run_signed_in(instruction, environment, context)
+        if auth:
+            # Muse Code's own credential file, holding the sign-in's token, where Harbor's run
+            # points XDG_CONFIG_HOME; at startup Muse mints its subscription key from it and
+            # writes the key back into the file.
+            muse = f"{self._config_home}/muse"
+            await self.exec_as_agent(environment, command=f"mkdir -p {muse}")
+            await self._upload_agent_owned_file(environment, Path(auth), f"{muse}/auth.json")
+            await self.exec_as_agent(environment, command=f"chmod 600 {muse}/auth.json")
+        return await super().run(instruction, environment, context)
 
-    @with_prompt_template
-    async def _run_signed_in(self, instruction, environment, context):
-        # Harbor's run, less its META_API_KEY requirement: a key in the environment would take
-        # priority over the sign-in.
-        sessions = (EnvironmentPaths.agent_dir / "sessions").as_posix()
-        try:
-            await self.exec_as_agent(
-                environment,
-                command=self._build_run_command(instruction),
-                env={"MUSE_NO_AUTO_UPDATE": "1"},
-            )
-        finally:
-            await self.exec_as_agent(
-                environment,
-                command=(
-                    f"mkdir -p {sessions} && "
-                    'cp -R "${XDG_DATA_HOME:-$HOME/.local/share}"/muse/sessions/. '
-                    f"{sessions}/ 2>/dev/null || true"
-                ),
-            )
+    async def exec_as_agent(self, environment, command, env=None, **kwargs):
+        # A key in the environment would take priority over the sign-in.
+        if env and env.get("META_API_KEY") == SIGNED_IN:
+            env = {name: value for name, value in env.items() if name != "META_API_KEY"}
+        return await super().exec_as_agent(environment, command, env=env, **kwargs)
 
     def populate_context_post_run(self, context):
         logs = sorted((self.logs_dir / "sessions").glob("**/session.jsonl"))

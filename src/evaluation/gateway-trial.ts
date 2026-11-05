@@ -82,9 +82,6 @@ export function pinnedThinking(
   return harness === "claude-code" || !level || level === "default" ? undefined : level;
 }
 
-/** Pi's provider name for the gateway, in the models.json the trial writes for it. */
-const PI_GATEWAY_PROVIDER = "selfbench";
-
 /** Variables any model key or endpoint could travel under; a gateway trial's agent gets none. */
 const MODEL_VARIABLES = [
   "OPENAI_API_KEY",
@@ -172,29 +169,31 @@ function gatewayRouted(
       extraAllowedHosts,
     };
   }
-  if (harness === "pi") {
-    // Pi reaches the gateway through a provider written to its models.json (piGatewayModels).
-    child.OPENAI_API_KEY = key;
-    return {
-      model: `${PI_GATEWAY_PROVIDER}/${requestModel}`,
-      agent: "harbor_gateway:GatewayPi",
-      agentArguments: [
-        "--agent-kwarg",
-        `models_json=${JSON.stringify(piGatewayModels(input, connection))}`,
-      ],
-      child,
-      extraAllowedHosts,
-    };
-  }
   Object.assign(child, {
     OPENAI_API_KEY: key,
     OPENAI_BASE_URL: connection.openAiBase,
     OPENAI_API_BASE: connection.openAiBase,
   });
+  // Harbor reads `openai/` as the provider and sends the rest, the gateway's model id, as given.
+  const model = `openai/${requestModel}`;
+  if (harness === "pi") {
+    // Pi reaches the gateway as Harbor's custom endpoint, whose models.json entry GatewayPi
+    // completes with the model's details.
+    return {
+      model,
+      agent: "harbor_gateway:GatewayPi",
+      agentArguments: [
+        "--agent-kwarg",
+        "model_api=openai-completions",
+        "--agent-kwarg",
+        `model_details=${JSON.stringify(piModelDetails(input))}`,
+      ],
+      child,
+      extraAllowedHosts,
+    };
+  }
   return {
-    // Harbor's OpenAI-compatible adapters keep only the last segment of a model name; Codex's
-    // GatewayCodex restores the full id, and the others take `openai/` as their provider.
-    model: `openai/${requestModel}`,
+    model,
     agent: harness === "codex" ? "harbor_gateway:GatewayCodex" : harness,
     agentArguments: harness === "codex" ? thinkingArguments(harness, input.thinking) : [],
     child,
@@ -203,37 +202,18 @@ function gatewayRouted(
 }
 
 /**
- * Pi's models.json for a gateway trial: one provider at the gateway's Chat Completions endpoint,
- * keyed by OPENAI_API_KEY, with the one model the key serves. Pi sends no thinking level (the
- * gateway pins it), but takes its context window and output limit from the model catalog's entry
- * for the model, so it compacts and caps replies as it would directly.
+ * What Pi's models.json says of a gateway trial's model beyond its id, from the model catalog's
+ * entry for it: Pi sends no thinking level (the gateway pins it), but takes its context window and
+ * output limit from here, so it compacts and caps replies as it would directly.
  */
-export function piGatewayModels(
-  input: Pick<EvaluationInput, "credentials" | "modelName">,
-  connection: Pick<GatewayConnection, "openAiBase">,
-): object {
+export function piModelDetails(input: Pick<EvaluationInput, "credentials" | "modelName">): object {
   const known = catalogEntry(gatewayModelId(input));
+  if (!known) return {};
   return {
-    providers: {
-      [PI_GATEWAY_PROVIDER]: {
-        baseUrl: connection.openAiBase,
-        api: "openai-completions",
-        apiKey: "$OPENAI_API_KEY",
-        models: [
-          {
-            id: gatewayRequestModel(input),
-            ...(known
-              ? {
-                  name: known.name,
-                  input: known.input_modalities.includes("image") ? ["text", "image"] : ["text"],
-                  ...(known.context_window ? { contextWindow: known.context_window } : {}),
-                  ...(known.max_output_tokens ? { maxTokens: known.max_output_tokens } : {}),
-                }
-              : {}),
-          },
-        ],
-      },
-    },
+    name: known.name,
+    input: known.input_modalities.includes("image") ? ["text", "image"] : ["text"],
+    ...(known.context_window ? { contextWindow: known.context_window } : {}),
+    ...(known.max_output_tokens ? { maxTokens: known.max_output_tokens } : {}),
   };
 }
 

@@ -1,13 +1,10 @@
-"""Harbor agents for trials on SelfBench's model gateway: Codex over HTTPS with the gateway's full
-model id, Pi with a provider at the gateway, and Codex and Claude Code installs that work on any
-task image."""
-import json
+"""Harbor agents for trials on SelfBench's model gateway: Codex over HTTPS only, Pi with the
+gateway's model details, and Codex and Claude Code installs that work on any task image."""
 import shlex
 from typing import Any
 from harbor.agents.installed.claude_code import ClaudeCode
 from harbor.agents.installed.codex import Codex
 from harbor.agents.installed.pi import Pi, PiOptions
-from harbor.agents.model_connection import ModelConnectionSpec
 from harbor_agents import EndsPiOptions, RetriesInstall
 
 
@@ -15,10 +12,9 @@ class SkipsSystemNode:
     async def ensure_system_dependencies(self, environment, dependencies):
         # Codex and Claude Code use the system's Node and npm only for their Alpine npm install;
         # elsewhere they install through nvm or a native installer that needs curl and bash.
-        # Harbor 0.23 installs every listed package once one command is missing, and Debian's npm
-        # conflicts with an image's NodeSource Node ("held broken packages"), so Codex never ran on
-        # DeepSWE images that lack only rg. Skipping them also spares images without Node an
-        # apt-get run, which fails on expired snapshot mirrors and can outlast the setup time.
+        # Harbor would apt-get Debian's Node and npm onto an image without them, a run that fails
+        # on expired snapshot mirrors and can outlast the setup time, and Debian's npm conflicts
+        # with an image's NodeSource Node ("held broken packages").
         if await self._get_system_package_manager(environment) != "apk":
             dependencies = tuple(name for name in dependencies if name not in ("nodejs", "npm"))
         await super().ensure_system_dependencies(environment, dependencies)
@@ -53,15 +49,8 @@ class GatewayCodex(RetriesInstall, SkipsSystemNode, Codex):
         return config
 
     async def exec_as_agent(self, environment, command, **kwargs):
+        # An image may set NVM_DIR elsewhere, where Harbor's install did not put Node or Codex.
         command = 'export NVM_DIR="$HOME/.nvm"; ' + command
-        if "codex exec " in command:
-            # Harbor's adapter keeps only the model name's last segment, but the gateway serves
-            # `dari/model/<provider>/<model>` (the runner passes it as `openai/dari/model/...`).
-            model = self.model_name.removeprefix("openai/")
-            original = f"--model {self.model_name.split('/')[-1]} "
-            if command.count(original) != 1:
-                raise ValueError("Harbor Codex command changed; cannot preserve gateway model ID")
-            command = command.replace(original, f"--model {shlex.quote(model)} ", 1)
         return await super().exec_as_agent(environment, command=command, **kwargs)
 
 
@@ -83,26 +72,22 @@ class SelfBenchClaudeCode(RetriesInstall, SkipsSystemNode, ClaudeCode):
 
 
 class GatewayPiOptions(PiOptions):
-    # Pi's models.json: a provider at the gateway serving the trial's one model (piGatewayModels).
-    models_json: dict[str, Any] | None = None
+    # What the gateway knows of the trial's model (piModelDetails): its name, context window,
+    # largest output and whether it reads images, which Harbor's models.json leaves out.
+    model_details: dict[str, Any] | None = None
 
 
 class GatewayPi(RetriesInstall, EndsPiOptions, Pi):
-    # The runner names the model `selfbench/dari/model/...`, a provider Harbor does not know, so
-    # Harbor writes no models.json of its own and passes Pi only the gateway key.
-    MODEL_CONNECTION = ModelConnectionSpec(passthrough=True, api_key_envs=("OPENAI_API_KEY",))
+    """Pi on the gateway as Harbor's custom endpoint (OPENAI_BASE_URL with model_api), whose
+    models.json entry also gets the model's details, so Pi sizes its context and output to it."""
+
     options_model = GatewayPiOptions
 
-    async def run(self, instruction, environment, context):
-        if not self.options.models_json:
-            raise ValueError("GatewayPi needs the gateway's models.json")
-        # Pi reads models.json from its own directory, which Harbor leaves at its default.
-        models = shlex.quote(json.dumps(self.options.models_json))
-        await self.exec_as_agent(
-            environment,
-            command=(
-                'mkdir -p "$HOME/.pi/agent" && '
-                f'printf %s {models} > "$HOME/.pi/agent/models.json"'
-            ),
-        )
-        await super().run(instruction, environment, context)
+    def _build_custom_models_json(self, access, model_id):
+        models = super()._build_custom_models_json(access, model_id)
+        if models is None:
+            raise ValueError("GatewayPi needs the gateway as Pi's custom endpoint")
+        for provider in models["providers"].values():
+            for model in provider["models"]:
+                model.update(self.options.model_details or {})
+        return models

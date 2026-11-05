@@ -7,7 +7,7 @@ import {
   allowedHosts,
   gatewayModelId,
   gatewayTrial,
-  piGatewayModels,
+  piModelDetails,
   pinnedThinking,
   trialRoute,
 } from "../src/evaluation/gateway-trial.js";
@@ -76,31 +76,14 @@ test("gateway Pi takes the model's context window and output limit from the mode
   const known = getBuiltinModels("anthropic").find((model) => model.contextWindow > 128_000);
   if (!known) throw new Error("Missing Pi catalog fixture");
   const trialInput = input("anthropic", `anthropic/${known.id}`);
-  const connection = { openAiBase: "https://gateway/v1" };
-  expect(piGatewayModels(trialInput, connection)).toEqual({
-    providers: {
-      selfbench: {
-        baseUrl: "https://gateway/v1",
-        api: "openai-completions",
-        apiKey: "$OPENAI_API_KEY",
-        models: [
-          {
-            id: `dari/model/anthropic/${known.id}`,
-            name: known.name,
-            input: known.input,
-            contextWindow: known.contextWindow,
-            maxTokens: known.maxTokens,
-          },
-        ],
-      },
-    },
+  expect(piModelDetails(trialInput)).toEqual({
+    name: known.name,
+    input: known.input,
+    contextWindow: known.contextWindow,
+    maxTokens: known.maxTokens,
   });
   // A model no catalog describes takes Pi's defaults.
-  const custom = piGatewayModels(input("custom", "openai/acme-coder"), connection);
-  expect(custom).toMatchObject({
-    providers: { selfbench: { models: [{ id: "dari/model/custom/acme-coder" }] } },
-  });
-  expect(JSON.stringify(custom)).not.toContain("contextWindow");
+  expect(piModelDetails(input("custom", "openai/acme-coder"))).toEqual({});
 });
 
 test("gateways and Meta keys offer every harness they speak; OpenAI and Anthropic keys their protocol's", () => {

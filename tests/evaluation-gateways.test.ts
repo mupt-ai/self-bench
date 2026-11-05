@@ -26,7 +26,6 @@ pi = types.ModuleType("harbor.agents.installed.pi")
 pi.Pi = type("Pi", (), {})
 pi.PiOptions = type("PiOptions", (), {})
 sys.modules[pi.__name__] = pi
-sys.modules["harbor.agents.model_connection"] = types.SimpleNamespace(ModelConnectionSpec=lambda **kwargs: kwargs)
 `;
 
 function input(provider: string, modelName: string, thinking?: string): EvaluationInput {
@@ -48,7 +47,7 @@ function connect(trialInput: EvaluationInput, harness: Harness) {
   });
 }
 
-test("Codex keeps the gateway's full model id, speaks HTTPS to it, and sends what it serves", async () => {
+test("Codex speaks HTTPS to the gateway and sends only what it serves", async () => {
   expect(
     solverArguments(
       "task",
@@ -79,14 +78,7 @@ async def check():
     assert output == "/root/.nvm"
     assert options == {"timeout_sec": 30}
     gateway = adapter.GatewayCodex()
-    # Harbor's Codex keeps only the last segment; the gateway serves dari/model/<provider>/<model>.
     gateway.model_name = "openai/dari/model/openrouter/anthropic/claude-sonnet-5"
-    command, _ = await gateway.exec_as_agent(None, "codex exec --model claude-sonnet-5 --json")
-    assert "--model dari/model/openrouter/anthropic/claude-sonnet-5 " in command, command
-    assert command.startswith('export NVM_DIR="$HOME/.nvm"; ')
-    gateway.model_name = "openai/dari/routing"
-    command, _ = await gateway.exec_as_agent(None, "codex exec --model routing --json")
-    assert "--model dari/routing " in command
     config = gateway._build_effective_config("https://gateway.example/v1")
     assert "openai_base_url" not in config
     assert config["model_reasoning_summary"] == "none" and config["web_search"] == "disabled"  # the gateway refuses both (web search off OpenAI's own models)
@@ -215,16 +207,15 @@ for (const [provider, modelName] of gatewayKinds) {
           ANTHROPIC_BASE_URL: "https://api.selfbench.test/gateway",
         });
       } else if (harness === "pi") {
-        expect(trial.model).toBe(`selfbench/${request}`);
-        expect(trial.agent).toBe("harbor_gateway:GatewayPi");
-        expect(Object.fromEntries(keyed)).toEqual({ OPENAI_API_KEY: connection.key });
-        const models = JSON.parse(trial.agentArguments[1]?.slice("models_json=".length) ?? "");
-        expect(models.providers.selfbench).toMatchObject({
-          baseUrl: "https://api.selfbench.test/gateway/v1",
-          api: "openai-completions",
-          apiKey: "$OPENAI_API_KEY",
-          models: [{ id: request }],
+        expect(trial).toMatchObject({
+          model: `openai/${request}`,
+          agent: "harbor_gateway:GatewayPi",
         });
+        expect(trial.agentArguments.slice(0, 2)).toEqual([
+          "--agent-kwarg",
+          "model_api=openai-completions",
+        ]);
+        expect(trial.agentArguments[3]).toStartWith("model_details=");
         // The key itself is read from the environment, never written to the file.
         expect(trial.agentArguments.join(" ")).not.toContain(connection.key);
       } else {
@@ -234,6 +225,8 @@ for (const [provider, modelName] of gatewayKinds) {
         expect(trial.agentArguments).toEqual(
           harness === "codex" ? ["--agent-kwarg", "reasoning_effort=high"] : [],
         );
+      }
+      if (harness !== "claude-code") {
         expect(Object.fromEntries(keyed)).toEqual({
           OPENAI_API_KEY: connection.key,
           OPENAI_BASE_URL: "https://api.selfbench.test/gateway/v1",

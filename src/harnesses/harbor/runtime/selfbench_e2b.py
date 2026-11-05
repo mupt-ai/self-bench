@@ -314,7 +314,9 @@ class SelfBenchE2BEnvironment(E2BEnvironment):
             template = template.set_user(config["User"])
         if config.get("WorkingDir"):
             template = template.set_workdir(config["WorkingDir"])
-        resources = {"cpu_count": self._effective_cpus, "memory_mb": self._effective_memory_mb}
+        # Harbor reads a task's cpus as a number, which E2B takes whole.
+        cpus = None if self._effective_cpus is None else int(self._effective_cpus)
+        resources = {"cpu_count": cpus, "memory_mb": self._effective_memory_mb}
         await AsyncTemplate.build(
             template=template,
             alias=self._template_name,

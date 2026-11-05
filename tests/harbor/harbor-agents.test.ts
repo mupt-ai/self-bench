@@ -26,13 +26,18 @@ async function packedRuntime(): Promise<string> {
 const HARBOR = `import asyncio, json, os, shlex, subprocess, sys, tempfile, types
 sys.path.insert(0, sys.argv[1])
 class Pi:
-    def __init__(self, failures=0, models_json=None):
+    def __init__(self, failures=0, model_details=None):
         self.commands, self.failures, self.installs = [], failures, 0
-        self.options = types.SimpleNamespace(models_json=models_json)
+        self.options = types.SimpleNamespace(model_details=model_details)
+    def _build_custom_models_json(self, access, model_id):
+        # Harbor's custom endpoint entry, when the trial names one (OPENAI_BASE_URL).
+        if access is None:
+            return None
+        return {"providers": {"harbor-endpoint": {"baseUrl": access, "models": [{"id": model_id}]}}}
     def render_instruction(self, instruction):
         return instruction
     async def run(self, instruction, environment, context):
-        # Harbor 0.23's command (harbor/agents/installed/pi.py).
+        # Harbor's command (harbor/agents/installed/pi.py).
         await self.exec_as_agent(environment, command=(
             ". ~/.nvm/nvm.sh; pi --print --mode json --session-dir /logs/agent/pi/sessions "
             f"--provider p --model m {shlex.quote(self.render_instruction(instruction))} "
@@ -46,7 +51,6 @@ class Pi:
 sys.modules["harbor.agents.installed.pi"] = types.SimpleNamespace(Pi=Pi, PiOptions=object)
 sys.modules["harbor.agents.installed.codex"] = types.SimpleNamespace(Codex=object)
 sys.modules["harbor.agents.installed.claude_code"] = types.SimpleNamespace(ClaudeCode=object)
-sys.modules["harbor.agents.model_connection"] = types.SimpleNamespace(ModelConnectionSpec=lambda **kwargs: kwargs)
 INSTRUCTION = "- Update the \`display\` style property to accept \\"grid\\".\\n- It's done when tests pass."
 def prompt(command):
     """Pi's arguments in a Harbor run command."""
@@ -75,24 +79,23 @@ assert agent.commands[-1] == "echo " + shlex.quote(INSTRUCTION)
 `);
 });
 
-test("gateway Pi writes its models.json, then runs with only the gateway key", async () => {
+test("gateway Pi adds the model's details to Harbor's models.json for the gateway", async () => {
   await python(`
 import harbor_gateway as adapter
 assert adapter.GatewayPi.options_model is adapter.GatewayPiOptions
-# Harbor resolves Pi's key from OPENAI_API_KEY alone; no gateway vendor's variable is left.
-assert adapter.GatewayPi.MODEL_CONNECTION == {"passthrough": True, "api_key_envs": ("OPENAI_API_KEY",)}
-models = {"providers": {"selfbench": {"baseUrl": "https://gateway.example/v1", "models": [{"id": "m"}]}}}
-agent = adapter.GatewayPi(models_json=models)
+details = {"name": "GPT-6 Sol", "input": ["text", "image"], "contextWindow": 272000, "maxTokens": 128000}
+agent = adapter.GatewayPi(model_details=details)
+models = agent._build_custom_models_json("https://gateway.example/v1", "dari/model/openai/gpt-6-sol")
+assert models == {"providers": {"harbor-endpoint": {"baseUrl": "https://gateway.example/v1",
+    "models": [{"id": "dari/model/openai/gpt-6-sol", **details}]}}}, models
+# A model no catalog describes keeps Harbor's entry.
+assert adapter.GatewayPi()._build_custom_models_json("u", "m")["providers"]["harbor-endpoint"]["models"] == [{"id": "m"}]
 asyncio.run(agent.run(INSTRUCTION, None, None))
-write, start = agent.commands
-assert prompt(start)[-2:] == ["--", INSTRUCTION], start
-with tempfile.TemporaryDirectory() as home:
-    subprocess.check_call(["bash", "-c", write], env={**os.environ, "HOME": home})
-    with open(os.path.join(home, ".pi/agent/models.json")) as file:
-        assert json.load(file) == models
+assert prompt(agent.commands[-1])[-2:] == ["--", INSTRUCTION], agent.commands
+# Without the gateway as its endpoint, Pi would call a provider directly: refuse instead.
 try:
-    asyncio.run(adapter.GatewayPi().run("task", None, None))
-    raise SystemExit("ran without models.json")
+    agent._build_custom_models_json(None, "m")
+    raise SystemExit("ran without the gateway")
 except ValueError:
     pass
 `);
