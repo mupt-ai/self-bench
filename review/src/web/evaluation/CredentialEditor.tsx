@@ -1,5 +1,6 @@
 import { CircleAlert } from "lucide-react";
 import React from "react";
+import { CHATGPT_SIGN_IN_MAX_SANDBOXES } from "../../../../src/contracts/config/execution-limits";
 import type { CredentialDraft, CredentialInfo } from "../../../../src/db/credentials";
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
 import { Button, fieldStyles, Input, Select } from "../ui";
@@ -236,6 +237,7 @@ export function CredentialEditor({
               <CredentialLimitFields
                 kind={draft.kind}
                 limits={draft}
+                fallback={draft.auth === "codex-login" ? CHATGPT_SIGN_IN_MAX_SANDBOXES : undefined}
                 onChange={(limits) => setDraft({ ...draft, ...limits })}
               />
               <CredentialSecret

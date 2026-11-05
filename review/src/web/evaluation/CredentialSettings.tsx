@@ -6,16 +6,20 @@ import { Button, fieldStyles, Input } from "../ui";
 import { isSandbox } from "./credential-presentation";
 
 /**
- * A credential's optional limit on sandboxes using it at once; blank means none. A model
- * credential's limit counts the sandboxes whose agent calls it.
+ * A credential's optional limit on sandboxes using it at once; blank means none, or `fallback` for
+ * a new credential that has a default. A model credential's limit counts the sandboxes whose agent
+ * calls it.
  */
 function SandboxLimitField({
   sandbox,
   value,
+  fallback,
   onChange,
 }: {
   sandbox: boolean;
   value: number | undefined;
+  /** What a new credential gets when this is left blank (a ChatGPT sign-in's default). */
+  fallback: number | undefined;
   onChange(value: number | undefined): void;
 }) {
   return (
@@ -27,7 +31,7 @@ function SandboxLimitField({
             sandbox
               ? "Generation and evaluations share this credential's sandbox limit. Use your plan's limit, such as 20 on E2B Hobby."
               : "Evaluation trials and generation sandboxes calling this credential share this limit. Lower it if the provider rate-limits you."
-          } Leave blank for no limit. A new limit leaves started work running.`}
+          } Leave blank for ${fallback ? `${fallback}, which you can change later` : "no limit"}. A new limit leaves started work running.`}
         />
       </span>
       <Input
@@ -38,7 +42,7 @@ function SandboxLimitField({
         min={1}
         max={1000}
         step={1}
-        placeholder="No Limit"
+        placeholder={fallback ? String(fallback) : "No Limit"}
         value={value ?? ""}
         onChange={(event) =>
           onChange(event.target.value === "" ? undefined : Number(event.target.value))
@@ -128,10 +132,13 @@ type Limits = { maxSandboxes?: number | undefined; maxBuilds?: number | undefine
 export function CredentialLimitFields({
   kind,
   limits,
+  fallback,
   onChange,
 }: {
   kind: CredentialInfo["kind"];
   limits: Limits;
+  /** A new credential's sandbox limit when the field is left blank; editing has none. */
+  fallback?: number | undefined;
   onChange(limits: Limits): void;
 }) {
   return (
@@ -139,6 +146,7 @@ export function CredentialLimitFields({
       <SandboxLimitField
         sandbox={isSandbox(kind)}
         value={limits.maxSandboxes}
+        fallback={fallback}
         onChange={(maxSandboxes) => onChange({ ...limits, maxSandboxes })}
       />
       {kind === "e2b" && (

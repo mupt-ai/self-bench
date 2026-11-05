@@ -2,9 +2,10 @@
 import shlex
 from pathlib import Path
 from harbor.agents.installed.pi import Pi
+from harbor_agents import EndsPiOptions, RetriesInstall
 
 
-class DariPi(Pi):
+class DariPi(RetriesInstall, EndsPiOptions, Pi):
     async def exec_as_agent(self, environment, command, **kwargs):
         marker = "pi --print --mode json "
         if marker in command:
