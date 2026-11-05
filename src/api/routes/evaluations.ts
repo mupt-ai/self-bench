@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ArtifactStore } from "../../artifacts/index.js";
+import type { RegistryDataset } from "../../contracts/harbor-registry.js";
 import type { BenchmarkStore } from "../../db/benchmarks.js";
 import type { GroupStore } from "../../db/groups.js";
 import type { ReleaseStore } from "../../db/releases.js";
@@ -52,6 +53,8 @@ export interface EvaluationRoutesOptions {
   registryCommand?: typeof runCommand;
   /** The org's benchmarks (Harbor registry datasets); without them, no benchmark routes. */
   benchmarks?: BenchmarkStore;
+  /** Harbor registry's public datasets, which the add box searches; without it, none are listed. */
+  registryCatalog?: () => Promise<RegistryDataset[]>;
   /** The org's repository groups; without them, no group routes. */
   groups?: GroupStore;
   /** Group releases, which deleting a group withdraws, and who is told the pages it changed. */
