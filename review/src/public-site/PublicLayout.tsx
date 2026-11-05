@@ -154,12 +154,12 @@ export function PublicLayout() {
               href="https://github.com/mupt-ai/self-bench"
               target="_blank"
               rel="noreferrer"
-              aria-label="GitHub"
               className="hit relative inline-flex items-center hover:text-foreground"
             >
               <svg viewBox="0 0 16 16" className="size-4" fill="currentColor" aria-hidden="true">
                 <path d={GITHUB_MARK} />
               </svg>
+              <span className="sr-only">GitHub</span>
             </a>
           </span>
         </div>
