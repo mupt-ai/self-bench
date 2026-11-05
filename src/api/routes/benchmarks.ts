@@ -14,6 +14,8 @@ import { openOrgScope, type Reply, unfinishedRuns } from "./org-scope.js";
 const NAME = "[A-Za-z0-9][A-Za-z0-9._-]{0,98}";
 /** `/api/orgs/<org>/benchmarks`, or one benchmark (`<org>/<name>`) and what follows it. */
 const route = new RegExp(`^/api/orgs/([A-Za-z0-9_.-]+)/benchmarks(?:/(${NAME}/${NAME})(/.*)?)?$`);
+/** `/api/orgs/<org>/benchmarks/registry`: Harbor registry's public datasets, for the add box. */
+const registryRoute = /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/benchmarks\/registry$/;
 
 const addSchema = z.strictObject({ reference: z.string() });
 
@@ -40,7 +42,8 @@ export async function benchmarkRoutes(
   response: ServerResponse,
   user: User,
 ): Promise<boolean> {
-  const match = route.exec(url.pathname);
+  const listing = registryRoute.exec(url.pathname);
+  const match = listing ?? route.exec(url.pathname);
   if (!match?.[1]) return false;
   const [, login, name, rest = ""] = match;
   const store = options.benchmarks;
@@ -48,6 +51,7 @@ export async function benchmarkRoutes(
   if ("sent" in opened || !store) return true;
   const { tenant, send } = opened;
   const context: Context = { options, store, tenant, user, request, url };
+  if (listing) return send(await registryListing(context));
   if (!name) return send(await collection(context));
 
   const benchmark = await store.find(tenant.id, name);
@@ -75,6 +79,17 @@ export async function benchmarkRoutes(
     properties: { benchmark: benchmark.name },
   });
   return true;
+}
+
+/** Harbor registry's public datasets, which the add box searches as the visitor types. */
+async function registryListing({ options, request }: Context): Promise<Reply> {
+  if (request.method !== "GET") return METHOD_NOT_ALLOWED;
+  if (!options.registryCatalog) return [404, { error: "Harbor's registry is not listed here" }];
+  try {
+    return [200, { datasets: await options.registryCatalog() }];
+  } catch {
+    return [502, { error: "Harbor's registry could not be reached" }];
+  }
 }
 
 /** The org's benchmarks: listed, or one more added. */

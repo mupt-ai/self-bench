@@ -6,6 +6,18 @@
 export const REGISTRY_REFERENCE =
   /^([A-Za-z0-9][A-Za-z0-9._-]{0,98})\/([A-Za-z0-9][A-Za-z0-9._-]{0,98})(?:@([A-Za-z0-9][A-Za-z0-9._:-]{0,99}))?$/;
 
+/** Enough for the largest registry datasets, such as SWE-bench Verified's 500 tasks. */
+export const MAX_REGISTRY_TASKS = 500;
+
+/** A public dataset in Harbor's registry, as the add box searches them. */
+export interface RegistryDataset {
+  /** `org/name` */
+  name: string;
+  description?: string;
+  /** Tasks in its latest version. */
+  tasks: number;
+}
+
 /** The reference with its ref spelled out. */
 export function registryReference(value: string): string {
   const match = REGISTRY_REFERENCE.exec(value);
