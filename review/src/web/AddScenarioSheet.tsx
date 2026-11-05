@@ -15,18 +15,49 @@ import { addScenario, type ScenarioInput } from "./task-start-api";
 import { Button, controlStyles, fieldStyles, Input, Notice, Select } from "./ui";
 import { useGenerationSettings } from "./useGenerationSettings";
 
+/** Where the agent starts: the repository at a commit, or files the author writes. */
+export type ScenarioStart = "repository" | "workspace";
+
 export interface AddScenarioSheetProps {
   org: SiteOrg;
   fullName: string;
+  start: ScenarioStart;
   onClose: () => void;
   onComplete: () => void;
 }
 
+const COPY = {
+  repository: {
+    heading: "Add Scenario",
+    about:
+      "Describe a change to make in this repository, ideally one an agent got wrong. The agent starts from the repository at the commit you choose; the author writes the instruction, a reference implementation, and hidden tests.",
+    titlePlaceholder: "Personalised Dashboard on Cache Components",
+    scenarioPlaceholder:
+      "For example: our team dashboard awaits all its data at the top of the page, so it blocks for two seconds. Enable Cache Components and make it load fast, without leaking one member's data to another.",
+  },
+  workspace: {
+    heading: "Add Workspace Scenario",
+    about:
+      "Describe a situation an agent should handle, ideally one it got wrong. Nothing is read from the repository: the author builds the files the agent starts with, the instruction, and hidden tests that check the outcome.",
+    titlePlaceholder: "Traded to a New Team",
+    scenarioPlaceholder:
+      "For example: my rec league schedule is a spreadsheet that says I'm on team 6. Last week an email said I was traded to team 3. Asked when my next game is, my agent answered from the spreadsheet.",
+  },
+} as const;
+
 /**
- * A described scenario becomes one task: the pipeline writes the workspace the agent starts in,
- * the instruction, and the hidden tests, and verifies them as it does a PR's.
+ * A described scenario becomes one task, verified as a PR's is. A repository scenario starts the
+ * agent from the repository at a commit; a workspace scenario's author writes the files it starts
+ * with.
  */
-export function AddScenarioSheet({ org, fullName, onClose, onComplete }: AddScenarioSheetProps) {
+export function AddScenarioSheet({
+  org,
+  fullName,
+  start,
+  onClose,
+  onComplete,
+}: AddScenarioSheetProps) {
+  const copy = COPY[start];
   const [step, setStep] = React.useState<1 | 2>(1);
   const {
     settings,
@@ -37,6 +68,7 @@ export function AddScenarioSheet({ org, fullName, onClose, onComplete }: AddScen
     reload,
   } = useGenerationSettings(org.login, fullName);
   const [title, setTitle] = React.useState("");
+  const [commit, setCommit] = React.useState("");
   const [scenario, setScenario] = React.useState("");
   const [difficulty, setDifficulty] = React.useState<ScenarioInput["difficulty"]>("medium");
   const [files, setFiles] = React.useState<File[]>([]);
@@ -58,7 +90,14 @@ export function AddScenarioSheet({ org, fullName, onClose, onComplete }: AddScen
       await addScenario(
         org.login,
         fullName,
-        { title: title.trim(), scenario: scenario.trim(), difficulty, attachments },
+        {
+          title: title.trim(),
+          scenario: scenario.trim(),
+          difficulty,
+          attachments,
+          // GitHub resolves HEAD to the default branch's latest commit.
+          ...(start === "repository" ? { commit: commit.trim() || "HEAD" } : {}),
+        },
         settings,
       );
       onComplete();
@@ -78,7 +117,7 @@ export function AddScenarioSheet({ org, fullName, onClose, onComplete }: AddScen
     >
       <section className="flex min-w-0 flex-col" aria-labelledby="add-scenario-title">
         <DialogHeader
-          title="Add Scenario"
+          title={copy.heading}
           titleId="add-scenario-title"
           description={<span className="font-mono">{fullName}</span>}
           onClose={onClose}
@@ -89,29 +128,52 @@ export function AddScenarioSheet({ org, fullName, onClose, onComplete }: AddScen
         <div className="px-4 pb-6 sm:px-6">
           {step === 1 ? (
             <div className="grid gap-4">
-              <p className="text-sm leading-6 text-muted-foreground">
-                Describe a situation an agent should handle, ideally one it got wrong. The author
-                builds the files the agent starts with, the instruction, and hidden tests that check
-                the outcome.
-              </p>
-              <label htmlFor="scenario-title" className={fieldStyles}>
-                Title
-                <Input
-                  id="scenario-title"
-                  maxLength={MAX_SCENARIO_TITLE_LENGTH}
-                  placeholder="Traded to a New Team"
-                  value={title}
-                  disabled={busy}
-                  onChange={(event) => setTitle(event.target.value)}
-                />
-              </label>
+              <div
+                className={cn(
+                  "grid gap-4",
+                  start === "repository" && "sm:grid-cols-[minmax(0,1fr)_16rem]",
+                )}
+              >
+                <label htmlFor="scenario-title" className={fieldStyles}>
+                  Title
+                  <Input
+                    id="scenario-title"
+                    maxLength={MAX_SCENARIO_TITLE_LENGTH}
+                    placeholder={copy.titlePlaceholder}
+                    value={title}
+                    disabled={busy}
+                    onChange={(event) => setTitle(event.target.value)}
+                  />
+                </label>
+                {start === "repository" && (
+                  <label htmlFor="scenario-commit" className={fieldStyles}>
+                    <span className="flex items-center gap-1.5">
+                      Commit
+                      <InfoTooltip label="A commit SHA or branch the agent starts from. Leave it blank for the default branch's latest commit. The task is pinned to the commit it resolves to." />
+                    </span>
+                    <Input
+                      id="scenario-commit"
+                      aria-label="Commit"
+                      className="font-mono"
+                      placeholder="Default Branch"
+                      value={commit}
+                      disabled={busy}
+                      onChange={(event) => setCommit(event.target.value)}
+                    />
+                  </label>
+                )}
+              </div>
               <label htmlFor="scenario-text" className={fieldStyles}>
-                Scenario
+                <span className="flex items-center gap-1.5">
+                  Scenario
+                  <InfoTooltip label={copy.about} />
+                </span>
                 <textarea
                   id="scenario-text"
+                  aria-label="Scenario"
                   rows={9}
                   maxLength={MAX_SCENARIO_LENGTH}
-                  placeholder="For example: my rec league schedule is a spreadsheet that says I'm on team 6. Last week an email said I was traded to team 3. Asked when my next game is, my agent answered from the spreadsheet."
+                  placeholder={copy.scenarioPlaceholder}
                   className={cn(controlStyles, "h-auto resize-y py-2")}
                   value={scenario}
                   disabled={busy}
@@ -138,11 +200,12 @@ export function AddScenarioSheet({ org, fullName, onClose, onComplete }: AddScen
                   <span className="flex items-center gap-1.5">
                     Attachments
                     <InfoTooltip
-                      label={`Optional real files from the situation, such as the spreadsheet or the emails: up to ${MAX_ATTACHMENTS} files and ${MAX_ATTACHMENT_BYTES / 1024 / 1024} MB. Details the scenario doesn't depend on are replaced with fictional ones.`}
+                      label={`Optional real files from the situation, such as a log, a design, or the emails: up to ${MAX_ATTACHMENTS} files and ${MAX_ATTACHMENT_BYTES / 1024 / 1024} MB. Details the scenario doesn't depend on are replaced with fictional ones.`}
                     />
                   </span>
                   <Input
                     id="scenario-files"
+                    aria-label="Attachments"
                     type="file"
                     multiple
                     disabled={busy}

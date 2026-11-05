@@ -19,6 +19,7 @@ import { finishAgent, startAgent } from "./agent.js";
 import { artifactFile, readAsset } from "./helpers.js";
 import { renderPrompt } from "./prompts.js";
 import type { SandboxCallback } from "./sandbox-job.js";
+import { taskSourceEnvironment } from "./task-source.js";
 import { renderVerifyReport } from "./verify-report.js";
 
 export interface AuthoringTurnInput {
@@ -106,10 +107,9 @@ export async function startAuthoringTurn(
     prefix: `${turnPrefix(input)}/attempt-${attempt}`,
     record: { stage: "authoring", round, turn, attempt },
     ...(input.session ? { resume: input.session } : {}),
-    workspace:
-      candidate.kind === "scenario"
-        ? { kind: "scenario" }
-        : { kind: "clone", commit: candidate.baseCommit },
+    workspace: candidate.baseCommit
+      ? { kind: "clone", commit: candidate.baseCommit }
+      : { kind: "scenario" },
     ...(setup ? { setup } : {}),
     extension: "/work/authoring.js",
     tools: "read,bash,grep,find,ls,verify,submit_task",
@@ -134,9 +134,7 @@ export async function startAuthoringTurn(
     delivers: HAND_OFFS.map(({ bundle }) => [bundle]),
     environment: {
       SELFBENCH_DELIVERABLE: "/work/task",
-      ...(candidate.kind === "scenario"
-        ? { SELFBENCH_TASK_SOURCE: "scenario" }
-        : { SELFBENCH_BASE_COMMIT: candidate.baseCommit }),
+      ...taskSourceEnvironment(candidate),
       SELFBENCH_DIFFICULTY: candidate.difficulty,
       SELFBENCH_SUBMISSION: SUBMISSION,
       SELFBENCH_VERIFY_REQUEST: VERIFY_REQUEST,
@@ -201,9 +199,15 @@ export function authoringPrompt(
   feedback?: string,
   maintainerFeedback?: string,
 ): string {
-  const scenario = candidate.kind === "scenario";
+  // A workspace scenario's author writes the files; a PR's or repository scenario's clones them.
+  const workspace = candidate.kind === "scenario" && !candidate.baseCommit;
+  const howToWork = workspace
+    ? "scenario-how-to-work"
+    : candidate.kind === "scenario"
+      ? "repository-scenario-how-to-work"
+      : "how-to-work";
   const shared = {
-    howToWork: renderPrompt(scenario ? "scenario-how-to-work" : "how-to-work", {
+    howToWork: renderPrompt(howToWork, {
       verifyBudget: AUTHOR_VERIFY_BUDGET,
       round,
       rounds: MAX_AUTHORING_ROUNDS,
@@ -216,7 +220,7 @@ export function authoringPrompt(
       reason: feedback
         ? "The reviewer requested revisions. The report below describes your latest tested draft, not a failed check."
         : "Your previous submission did not pass verification. Read the report below and address its failures.",
-      fresh: scenario
+      fresh: workspace
         ? "This is a fresh sandbox: /work/task holds your last submitted draft, workspace/ included."
         : "This is a fresh sandbox: the repository was re-cloned and /work/task holds your last submitted draft.",
       report: report.trim(),
@@ -226,6 +230,20 @@ export function authoringPrompt(
   const maintainer = maintainerFeedback
     ? renderPrompt("maintainer-feedback", { feedback: maintainerFeedback.trim() })
     : "";
+  if (candidate.kind === "scenario" && candidate.baseCommit) {
+    return renderPrompt("repository-scenario-authoring", {
+      ...shared,
+      title: candidate.title,
+      difficulty: candidate.difficulty,
+      baseCommit: candidate.baseCommit,
+      request: candidate.request,
+      attachments: candidate.attachments
+        ? "The requester attached files; they are in /work/attachments. Use them as context for the change, such as a design, a log, or an example; don't commit them to the repository unless the scenario asks for that."
+        : "The requester attached no files.",
+      limits,
+      maintainer,
+    });
+  }
   if (candidate.kind === "scenario") {
     return renderPrompt("scenario-authoring", {
       ...shared,

@@ -71,6 +71,31 @@ test("an API key starts a scenario task with its attachments, and no GitHub read
   expect(provenance.messages).toEqual([{ role: "user", content: SCENARIO.scenario }]);
 });
 
+test("a repository scenario starts from the commit its branch resolves to", async () => {
+  const { site, key, started } = await boot();
+  const post = (commit: string) =>
+    site.request(`${REPO}/tasks/from-scenario`, {
+      method: "POST",
+      headers: key,
+      body: JSON.stringify({ ...SCENARIO, commit }),
+    });
+  const unknown = await post("no-such-branch");
+  expect(unknown.status).toBe(422);
+  expect((await unknown.json()).error).toContain("no-such-branch");
+  expect(started).toHaveLength(0);
+
+  expect((await post("HEAD")).status).toBe(201);
+  const head = "c".repeat(40);
+  expect(started).toHaveLength(1);
+  const input = started[0]?.input;
+  expect(input?.candidate).toMatchObject({ kind: "scenario", baseCommit: head });
+  // The run clones the resolved commit, so a later push to the branch changes nothing.
+  expect(input?.run.repository).toEqual({
+    url: "https://github.com/Mupt-AI/self-bench",
+    commit: head,
+  });
+});
+
 test("a scenario must be described, and its attachments plainly named and unique", async () => {
   const { site, key, started } = await boot();
   const post = (body: object) =>

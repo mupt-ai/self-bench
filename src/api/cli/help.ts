@@ -11,7 +11,8 @@ Usage:
   self-bench grant revoke GRANT_ID
 
   self-bench scenario create --repo OWNER/NAME --title TITLE
-      (--scenario TEXT | --scenario-file FILE) [--attach FILE ...] [--difficulty easy|medium|hard]
+      (--scenario TEXT | --scenario-file FILE) [--commit SHA|BRANCH] [--attach FILE ...]
+      [--difficulty easy|medium|hard]
   self-bench tasks --repo OWNER/NAME
   self-bench task show RUN_ID TASK_ID --repo OWNER/NAME
   self-bench task pull RUN_ID TASK_ID [DIRECTORY] --repo OWNER/NAME
@@ -28,6 +29,10 @@ when it isn't the repository's owner. scenario create and task revise start a ge
 --model, --verifier-model, --reasoning, --model-credential, --sandbox, --sandbox-credential,
 --harbor, and --harbor-credential (by default managed models and sandbox, as in the app), or by
 --generation with the settings as JSON or @FILE.
+
+scenario create --commit starts the agent from the repository at that commit (a branch resolves to
+its head); the author writes the change's reference implementation and hidden tests against it.
+Without --commit, the author writes the files the agent starts with.
 
 task pull writes the task's files (instruction.md, Dockerfile, the patches, scripts, and a
 scenario's workspace/) into DIRECTORY. task revise starts a revision from the task's last draft,

@@ -10,6 +10,8 @@ import {
   startTaskFromScenario,
 } from "../../generation/tasks/scenario-start.js";
 import { generationProperties, track } from "../../lib/telemetry/posthog.js";
+import { CommitNotFoundError, resolveCommit } from "../../third_party/github/commit.js";
+import { GitHubOAuthError } from "../../third_party/github/oauth.js";
 import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
 import { requestedGeneration } from "./generation-request.js";
@@ -20,10 +22,11 @@ const route =
   /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/tasks\/from-scenario$/;
 
 /**
- * POST …/tasks/from-scenario {title, scenario, difficulty?, attachments?, generation}: a person's
- * description of a situation an agent should handle becomes one task, built by its own workflow
- * as a PR from Add PRs is. Its author writes the workspace the agent starts in; nothing is read
- * from GitHub, so an API key works as well as a browser session.
+ * POST …/tasks/from-scenario {title, scenario, difficulty?, attachments?, commit?, generation}: a
+ * person's description of a change or situation an agent should handle becomes one task, built by
+ * its own workflow as a PR from Add PRs is. With `commit`, the agent starts from the repository at
+ * that commit (resolved with the person's GitHub token, which the run keeps to clone it). Without
+ * it, the author writes the workspace and nothing is read from GitHub.
  */
 export async function scenarioRoute(
   options: PullRequestRoutesOptions,
@@ -72,6 +75,25 @@ export async function scenarioRoute(
     return true;
   }
   const { generation } = requested;
+  let token: string | undefined;
+  let baseCommit: string | undefined;
+  if (body.commit) {
+    token = await options.users.gitHubToken(user.githubId);
+    if (!token) throw new GitHubOAuthError("no GitHub token stored for this user", 401);
+    try {
+      baseCommit = await resolveCommit(
+        options.auth,
+        token,
+        repo.fullName,
+        body.commit,
+        options.fetchImpl,
+      );
+    } catch (error) {
+      if (!(error instanceof CommitNotFoundError)) throw error;
+      sendJson(response, error.status, { error: error.message });
+      return true;
+    }
+  }
   const candidateId = scenarioCandidateId(body.title);
   const row = await tasks.reserveStarted({
     repoId: repo.id,
@@ -80,6 +102,7 @@ export async function scenarioRoute(
     taskId: candidateId,
     title: body.title,
     difficulty: body.difficulty,
+    ...(baseCommit ? { baseCommit } : {}),
     stage: "authoring",
     startedBy: user.id,
   });
@@ -91,9 +114,10 @@ export async function scenarioRoute(
     scenario: body.scenario,
     difficulty: body.difficulty,
     attachments: body.attachments,
+    ...(baseCommit ? { baseCommit } : {}),
   });
   if (generation && options.vault)
-    await saveGenerationRecords(options.vault.records, row.runId, generation, undefined);
+    await saveGenerationRecords(options.vault.records, row.runId, generation, token);
   await startTaskFromScenario({
     config: options.config,
     start: options.start,
@@ -105,7 +129,10 @@ export async function scenarioRoute(
   track(
     user,
     "scenario task started",
-    generation ? generationProperties(generation.settings) : {},
+    {
+      ...(generation ? generationProperties(generation.settings) : {}),
+      start: baseCommit ? "repository" : "workspace",
+    },
     tenant,
   );
   sendJson(response, 201, { task: taskItem(row) });

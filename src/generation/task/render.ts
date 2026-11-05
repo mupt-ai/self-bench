@@ -3,7 +3,8 @@ import { COMPILER_REVISION, HARBOR_SCHEMA_VERSION } from "./constants.js";
 
 /**
  * A compiled task besides its files: its candidate's identity, and its tier (audit.ts). A pull
- * request's task names its base commit and PR; a scenario's, the workspace commit its snapshot is.
+ * request's task names its base commit and PR; a workspace scenario's, the workspace commit its
+ * snapshot is; a repository scenario's, the repository commit it starts from.
  */
 export type TaskIdentity = {
   readonly taskId: string;
@@ -11,8 +12,32 @@ export type TaskIdentity = {
   readonly repo: string;
 } & (
   | { readonly baseCommit: string; readonly sourcePr: number }
-  | { readonly scenario: { readonly title: string; readonly workspaceCommit: string } }
+  | {
+      readonly scenario: { readonly title: string } & (
+        | { readonly workspaceCommit: string }
+        | { readonly baseCommit: string }
+      );
+    }
 );
+
+/**
+ * A scenario's metadata. A workspace scenario's `source` is "scenario", which public downloads
+ * read to pack its small workspace (task-archive.ts); a repository scenario's snapshot is a whole
+ * repository, packed like a PR task's.
+ */
+function scenarioMetadata(scenario: Extract<TaskIdentity, { scenario: unknown }>["scenario"]) {
+  return "workspaceCommit" in scenario
+    ? {
+        source: "scenario",
+        scenario_title: scenario.title,
+        workspace_commit: scenario.workspaceCommit,
+      }
+    : {
+        source: "repository_scenario",
+        scenario_title: scenario.title,
+        base_commit: scenario.baseCommit,
+      };
+}
 
 /** Every task's limits; an author fits its Dockerfile and tests to them. */
 export const TASK_LIMITS = {
@@ -37,11 +62,7 @@ export function taskToml(task: TaskIdentity): string {
     difficulty: task.difficulty,
     repo: task.repo,
     ...("scenario" in task
-      ? {
-          source: "scenario",
-          scenario_title: task.scenario.title,
-          workspace_commit: task.scenario.workspaceCommit,
-        }
+      ? scenarioMetadata(task.scenario)
       : { base_commit: task.baseCommit, source_pr: task.sourcePr }),
     compiler_revision: COMPILER_REVISION,
   };
