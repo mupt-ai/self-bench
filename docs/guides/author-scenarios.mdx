@@ -4,24 +4,31 @@ description: "Turn a situation an agent got wrong into a verified task, from the
 icon: "notebook-pen"
 ---
 
-A scenario task starts from a description instead of a merged PR. You describe a situation an agent should handle, ideally one it got wrong, and attach any real files from it. The authoring agent writes the files the evaluated agent starts with, the instruction, hidden tests that check the outcome, and a reference outcome. The same gates and independent review that check PR tasks check scenario tasks.
+A scenario task starts from a description instead of a merged PR. There are two kinds:
 
-For example: *"My rec league schedule is a spreadsheet that says I'm on team 6. Last week an email said I was traded to team 3. Asked when my next game is, my agent answered from the spreadsheet."* The author builds a workspace with the spreadsheet, a mailbox holding the trade among unrelated mail, and an instruction such as "When is my next game? Write `/app/answer.json`". The tests pass only for team 3's next game.
+- A **repository scenario** starts the evaluated agent from your repository at a commit you choose. You describe a change to make there, ideally one an agent got wrong, and the authoring agent writes the instruction, a reference implementation, and hidden tests against that commit, as it does for a PR.
+- A **workspace scenario** reads nothing from the repository. You describe a situation, attach any real files from it, and the authoring agent writes the files the evaluated agent starts with, the instruction, hidden tests that check the outcome, and a reference outcome.
+
+The same gates and independent review that check PR tasks check both.
+
+For example, a repository scenario: *"Our team dashboard awaits all its data at the top of the page, so it blocks for two seconds. Enable Cache Components and make it load fast, without leaking one member's data to another."* The agent starts from the repository at the chosen commit, and the tests check the build, what each member sees, and what the first response contains.
+
+A workspace scenario: *"My rec league schedule is a spreadsheet that says I'm on team 6. Last week an email said I was traded to team 3. Asked when my next game is, my agent answered from the spreadsheet."* The author builds a workspace with the spreadsheet, a mailbox holding the trade among unrelated mail, and an instruction such as "When is my next game? Write `/app/answer.json`". The tests pass only for team 3's next game.
 
 ## What a Scenario Task Is
 
-| | PR task | Scenario task |
-| --- | --- | --- |
-| Starting files (`/app`) | The repository at the PR's base commit | The `workspace/` the author writes |
-| Reference solution | The PR's implementation | The outcome a careful agent leaves, such as an answer file |
-| Difficulty | From the size of the change | The tier you choose |
-| Graded by | Hidden tests | Hidden tests |
+| | PR task | Repository scenario | Workspace scenario |
+| --- | --- | --- | --- |
+| Starting files (`/app`) | The repository at the PR's base commit | The repository at the commit you choose | The `workspace/` the author writes |
+| Reference solution | The PR's implementation | The author's implementation | The outcome a careful agent leaves, such as an answer file |
+| Difficulty | From the size of the change | The tier you choose | The tier you choose |
+| Graded by | Hidden tests | Hidden tests | Hidden tests |
 
-Scenario tasks belong to a connected repository like any other task, so you approve them, evaluate them, and release them the same way. Nothing is read from the repository or GitHub. The tests read only what the agent leaves in `/app`, so a good scenario names an output the tests can check: a file to write, or files to change.
+Scenario tasks belong to a connected repository like any other task, so you approve them, evaluate them, and release them the same way. A repository scenario's commit is resolved with your GitHub sign-in when you start it, and the task stays pinned to that commit. A workspace scenario reads nothing from the repository or GitHub, and its tests read only what the agent leaves in `/app`, so a good one names an output the tests can check: a file to write, or files to change.
 
 ## From the App
 
-On a repository, choose **Add Scenario**. Give it a title and a description, choose a difficulty, attach any files (up to 20 files and 20 MB in all), then configure generation as for **Add PRs**. The task appears in the dataset in progress.
+On a repository, choose **Add Scenario** for a repository scenario: give it a title, a commit or branch (blank for the default branch's latest commit), and a description. Choose **Add Workspace Scenario** for a workspace scenario. Either way, choose a difficulty, attach any files (up to 20 files and 20 MB in all), then configure generation as for **Add PRs**. The task appears in the dataset in progress.
 
 ## From the CLI or API
 
@@ -37,6 +44,8 @@ self-bench scenario create --repo mupt-ai/self-bench \
   --attach schedule.xlsx --attach trade.eml \
   --difficulty medium
 ```
+
+Add `--commit SHA` (or a branch, or `HEAD` for the default branch) for a repository scenario.
 
 `--org` names the workspace when it isn't the repository's owner. Generation defaults to managed models and sandbox, as in the app; `--model`, `--reasoning`, `--model-credential`, `--sandbox`, and `--sandbox-credential` change it, or `--generation @settings.json` gives the full settings. See [Create a Scenario Task](/api-reference/create-scenario) for the HTTP request.
 

@@ -1,4 +1,4 @@
-import { GitBranch, LockKeyhole, NotebookPen, Plus } from "lucide-react";
+import { FolderPlus, GitBranch, LockKeyhole, NotebookPen, Plus } from "lucide-react";
 import React from "react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router";
 import { type ConnectedRepo, fetchConnectedRepos, fetchTasks, type TaskItem } from "../api";
@@ -179,6 +179,17 @@ function RepoTasksPage() {
           >
             <NotebookPen aria-hidden="true" />
             Add Scenario
+          </Link>
+          <Link
+            className={buttonStyles.secondary}
+            to={`/repos/${fullName}/add-workspace-scenario`}
+            onClick={(event) => {
+              if (deleting) event.preventDefault();
+            }}
+            aria-disabled={deleting}
+          >
+            <FolderPlus aria-hidden="true" />
+            Add Workspace Scenario
           </Link>
         </div>
       </PageHeader>

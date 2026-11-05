@@ -1,7 +1,7 @@
 ---
 title: "Create a Scenario Task"
 api: "POST https://app.selfbench.dev/api/orgs/{org}/repos/{owner}/{name}/tasks/from-scenario"
-description: "Generate one task from a described scenario and its files."
+description: "Generate one task from a described scenario, starting from the repository at a commit or from files the author writes."
 icon: "notebook-pen"
 ---
 
@@ -10,7 +10,8 @@ icon: "notebook-pen"
 <ParamField path="name" type="string" required>Repository name.</ParamField>
 <ParamField header="Authorization" type="string" required>`Bearer` plus a `write` API key.</ParamField>
 <ParamField body="title" type="string" required>Up to 120 characters.</ParamField>
-<ParamField body="scenario" type="string" required>The situation the agent should handle; up to 20,000 characters.</ParamField>
+<ParamField body="scenario" type="string" required>The change or situation the agent should handle; up to 20,000 characters.</ParamField>
+<ParamField body="commit" type="string">For a repository scenario: a commit SHA or a branch (`HEAD` for the default branch) the agent starts from. The task is pinned to the commit it resolves to, read with your GitHub sign-in; an unknown one returns `422`. Without it, the author writes the files the agent starts with (a workspace scenario) and nothing is read from GitHub.</ParamField>
 <ParamField body="difficulty" type="string">`easy`, `medium` (default), or `hard`.</ParamField>
 <ParamField body="attachments" type="object[]">Up to 20 files, 20 MB in all, each `{ "name": "schedule.xlsx", "content": "<base64>" }`. Names are plain file names.</ParamField>
 <ParamField body="generation" type="object">Model, reasoning, sandbox, and credential choices, as for [Create a Batch](/api-reference/create-batch). Required when credential storage is configured.</ParamField>
@@ -45,4 +46,4 @@ curl -X POST https://app.selfbench.dev/api/orgs/mupt-ai/repos/mupt-ai/self-bench
 
 Returns `201`. Follow the task with `GET …/tasks/{runId}/{taskId}`.
 
-To revise a task, `POST …/tasks/{runId}/{taskId}/feedback` with `{ "feedback": "…", "generation": { … } }`. `GET …/tasks/{runId}/{taskId}/draft` downloads the task's files as a `.tar.gz` (instruction, Dockerfile, patches, scripts, and a scenario's `workspace/`); send an edited copy (up to 22 MB compressed) back base64-encoded as `draft` in the feedback request, and the revision starts from it. See [Author Scenarios](/guides/author-scenarios).
+To revise a task, `POST …/tasks/{runId}/{taskId}/feedback` with `{ "feedback": "…", "generation": { … } }`. `GET …/tasks/{runId}/{taskId}/draft` downloads the task's files as a `.tar.gz` (instruction, Dockerfile, patches, scripts, and a workspace scenario's `workspace/`); send an edited copy (up to 22 MB compressed) back base64-encoded as `draft` in the feedback request, and the revision starts from it. See [Author Scenarios](/guides/author-scenarios).

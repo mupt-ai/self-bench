@@ -2,17 +2,19 @@ import { Package } from "lucide-react";
 import { formatAgo } from "../api";
 import { ScopeCard } from "../ScopeCard";
 import { AddBenchmarkCard } from "./AddBenchmarkCard";
-import type { Benchmark } from "./api";
+import type { Benchmark, RegistryDataset } from "./api";
 
 /** The org's benchmarks as boxes, like its repositories, with a box to add another. */
 export function BenchmarkList({
   benchmarks,
   onAdd,
   onRemove,
+  loadRegistry,
 }: {
   benchmarks: Benchmark[];
   onAdd(reference: string): Promise<void>;
   onRemove(benchmark: Benchmark): void;
+  loadRegistry?: () => Promise<RegistryDataset[]>;
 }) {
   return (
     <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -28,6 +30,7 @@ export function BenchmarkList({
             benchmark.status === "failed" ? [] : [benchmark.name],
           )}
           onAdd={onAdd}
+          {...(loadRegistry ? { loadRegistry } : {})}
         />
       </li>
     </ul>

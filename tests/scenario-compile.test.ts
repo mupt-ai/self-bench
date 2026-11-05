@@ -129,6 +129,86 @@ test("a scenario without a usable workspace is the author's to fix", async () =>
   expect(errors).toEqual([expect.stringContaining("workspace/.git must not exist")]);
 });
 
+/** A repository at one commit, for a repository scenario to start from. */
+async function repositoryAt(files: Record<string, string>) {
+  const root = await mkdtemp(join(tmpdir(), "selfbench-scenario-repo-"));
+  roots.push(root);
+  for (const [name, contents] of Object.entries(files)) {
+    await mkdir(dirname(join(root, name)), { recursive: true });
+    await writeFile(join(root, name), contents);
+  }
+  const git = (...args: string[]) => runCommand("git", ["-C", root, ...args]);
+  await git("init", "-q");
+  await git("add", "-A");
+  await git("-c", "user.name=a", "-c", "user.email=a@a", "commit", "-qm", "base");
+  return { root, commit: (await git("rev-parse", "HEAD")).stdout.trim() };
+}
+
+const repositoryFiles = { "app/page.tsx": "export default function Page() {}\n" };
+const repositoryScenarioFiles = Object.fromEntries(
+  Object.entries(scenarioFiles).filter(([path]) => !path.startsWith("workspace/")),
+);
+
+test("a repository scenario compiles over its commit, at the requested tier", async () => {
+  const repository = await repositoryAt(repositoryFiles);
+  const cloned: string[] = [];
+  const result = await compileSubmission(
+    {
+      repositoryUrl: "https://github.com/example/repo",
+      directory: await draft(repositoryScenarioFiles),
+      taskId: "dashboard",
+      candidate: { ...scenario, title: "Dashboard", baseCommit: repository.commit },
+    },
+    {
+      ...services,
+      cloneRepository: async (_url, commit, destination) => {
+        cloned.push(commit);
+        await runCommand("git", ["clone", "-q", repository.root, destination]);
+        await runCommand("git", ["-C", destination, "checkout", "-q", commit]);
+      },
+    },
+  );
+  // Its three-line gold is below a PR's easiest tier, and it has no workspace/: neither blocks it.
+  expect(result).toMatchObject({ compileErrors: [], auditBlockers: [] });
+  expect(cloned).toEqual([repository.commit]);
+  const output = await mkdtemp(join(tmpdir(), "selfbench-scenario-out-"));
+  roots.push(output);
+  await writeFile(join(output, "bundle.tar.gz"), result.bundle ?? new Uint8Array());
+  await runCommand("tar", ["-xzf", join(output, "bundle.tar.gz"), "-C", output]);
+  const task = join(output, "harbor-task");
+  const listing = (await runCommand("tar", ["-tzf", join(task, "environment/repo.tar.gz")])).stdout
+    .split("\n")
+    .filter((path) => path && !path.endsWith("/"));
+  expect(listing).toEqual(Object.keys(repositoryFiles));
+  const toml = await readFile(join(task, "task.toml"), "utf8");
+  // Public downloads pack only a workspace scenario's snapshot as one (task-archive.ts).
+  expect(toml).toContain('source = "repository_scenario"');
+  expect(toml).toContain(`base_commit = "${repository.commit}"`);
+  expect(toml).toContain('difficulty = "medium"');
+  expect(toml).not.toContain("workspace_commit");
+});
+
+test("the static check holds a repository scenario to its requested tier, not a PR's", async () => {
+  const repository = await repositoryAt(repositoryFiles);
+  const program = join(import.meta.dir, "../src/sandbox/programs/check.ts");
+  const directory = await draft(repositoryScenarioFiles);
+  const check = async (...flags: string[]) =>
+    JSON.parse(
+      (
+        await runCommand(process.execPath, [
+          program,
+          directory,
+          "medium",
+          repository.root,
+          repository.commit,
+          ...flags,
+        ])
+      ).stdout,
+    ) as { ok: boolean; errors: string[] };
+  expect(await check("--scenario-audit")).toEqual({ ok: true, errors: [] });
+  expect((await check()).errors.join("\n")).toContain("even easy needs at least 20");
+});
+
 test("the static check proves both patches against the workspace", async () => {
   const program = join(import.meta.dir, "../src/sandbox/programs/check.ts");
   const check = async (files: Record<string, string>) =>

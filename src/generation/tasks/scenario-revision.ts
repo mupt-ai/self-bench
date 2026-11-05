@@ -15,8 +15,8 @@ import type { WorkflowStarter } from "./start.js";
 
 /**
  * A scenario task's revision: a new task of the same scenario, in a run of its own, that keeps the
- * original's candidate, title, tier, and attachments, and starts from `stage`'s draft with the
- * person's feedback.
+ * original's candidate, title, tier, attachments, and for a repository scenario its commit, and
+ * starts from `stage`'s draft with the person's feedback.
  */
 export async function reviseScenario(options: {
   readonly config: SelfBenchConfig;
@@ -30,10 +30,13 @@ export async function reviseScenario(options: {
   readonly revision: { readonly from: number; readonly feedback: string };
   readonly stage: (runId: string) => Promise<AuthoredTaskDraft>;
   readonly generation?: GenerationReference;
+  /** The person's GitHub token, which a repository scenario's run keeps to clone its commit. */
+  readonly token?: string;
 }): Promise<TaskRecord> {
   const { artifacts, task, repository } = options;
   const title = task.title ?? task.taskId;
   const scenario = await originalScenario(artifacts, task);
+  const baseCommit = task.baseCommit;
   const row = await options.tasks.reserveStarted({
     repoId: repository.id,
     runId: scenarioRunId(repository.fullName),
@@ -41,6 +44,7 @@ export async function reviseScenario(options: {
     taskId: task.taskId,
     title,
     difficulty: task.difficulty,
+    ...(baseCommit ? { baseCommit } : {}),
     stage: "authoring",
     startedBy: options.startedBy,
     revision: options.revision,
@@ -54,9 +58,15 @@ export async function reviseScenario(options: {
     scenario,
     difficulty: task.difficulty,
     attachments: attachments ? { ...attachments, contentType: "application/gzip" } : undefined,
+    ...(baseCommit ? { baseCommit } : {}),
   });
   if (options.generation && options.vault)
-    await saveGenerationRecords(options.vault.records, row.runId, options.generation, undefined);
+    await saveGenerationRecords(
+      options.vault.records,
+      row.runId,
+      options.generation,
+      baseCommit ? options.token : undefined,
+    );
   await startTaskFromScenario({
     config: options.config,
     start: options.start,

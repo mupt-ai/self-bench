@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileDigest } from "../artifacts/common.js";
 import type { ArtifactStore } from "../artifacts/index.js";
+import { MAX_REGISTRY_TASKS } from "../contracts/harbor-registry.js";
 import { runnable } from "../db/task-record.js";
 import type { TaskStore } from "../db/tasks.js";
 import { assertHarborVersion, HARBOR_PROCESS_TIMEOUT_MS } from "../harnesses/harbor/command.js";
@@ -12,9 +13,6 @@ import { runCommand } from "../lib/process.js";
 import { evaluationTaskKey } from "./models.js";
 import { assertEvaluationBundleSize } from "./task-bundle.js";
 import type { EvaluationInput } from "./types.js";
-
-/** Enough for the largest registry datasets, such as SWE-bench Verified's 500 tasks. */
-const MAX_REGISTRY_TASKS = 500;
 
 type EvaluationTask = EvaluationInput["tasks"][number];
 

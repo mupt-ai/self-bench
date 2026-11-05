@@ -1,5 +1,8 @@
+import type { RegistryDataset } from "../../../../src/contracts/harbor-registry";
 import type { TaskFiles } from "../../types";
 import { requestJson } from "../api";
+
+export type { RegistryDataset };
 
 /** A Harbor registry dataset the org added (src/db/benchmarks.ts), with how many runs it has. */
 export interface Benchmark {
@@ -21,6 +24,12 @@ function benchmarksPath(org: string): string {
 
 export async function fetchBenchmarks(org: string): Promise<Benchmark[]> {
   return (await requestJson<{ benchmarks: Benchmark[] }>(benchmarksPath(org))).benchmarks;
+}
+
+/** Harbor registry's public datasets, which the add box searches. */
+export async function fetchRegistryDatasets(org: string): Promise<RegistryDataset[]> {
+  return (await requestJson<{ datasets: RegistryDataset[] }>(`${benchmarksPath(org)}/registry`))
+    .datasets;
 }
 
 /** Adds `reference` (`org/name@ref`); a worker then downloads and checks every task. */

@@ -1,6 +1,11 @@
-/** Lowercased words of `text`, split at spaces and the punctuation names and ids use. */
+/**
+ * Lowercased words of `text` with accents removed, split at spaces and the punctuation names
+ * and ids use. "Café" and "cafe" are the same word, as they are in a native search field.
+ */
 function searchWords(text: string): string[] {
   return text
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
     .toLowerCase()
     .split(/[\s·()/.:_-]+/)
     .filter(Boolean);

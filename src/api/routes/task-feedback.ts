@@ -123,6 +123,8 @@ export async function taskFeedbackRoute(
   const revision = { from: task.id, feedback: body.feedback };
   let row: TaskRecord;
   if (scenario) {
+    // A repository scenario's run clones its commit with the person's token, as a PR's does.
+    const token = task.baseCommit ? await options.users.gitHubToken(user.githubId) : undefined;
     row = await reviseScenario({
       ...options,
       repository: repo,
@@ -131,6 +133,7 @@ export async function taskFeedbackRoute(
       revision,
       stage,
       ...(generation ? { generation } : {}),
+      ...(token ? { token } : {}),
     });
   } else {
     const started = await revisePullRequest(options, repo, task, user, revision, stage, generation);

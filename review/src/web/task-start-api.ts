@@ -21,6 +21,8 @@ export interface ScenarioInput {
   difficulty: "easy" | "medium" | "hard";
   /** Each file's name and base64 contents. */
   attachments: { name: string; content: string }[];
+  /** A repository scenario's starting commit or branch; a workspace scenario has none. */
+  commit?: string;
 }
 
 /** A described scenario becomes one task, as a PR does from Add PRs. */

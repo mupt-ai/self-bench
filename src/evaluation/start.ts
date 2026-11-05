@@ -4,6 +4,7 @@ import {
   WorkflowIdReusePolicy,
   WorkflowNotFoundError,
 } from "@temporalio/common";
+import { productionRegistryCatalog } from "../harnesses/harbor/registry-catalog.js";
 import type { BenchmarkAddInput } from "./benchmark-add.js";
 import type { StopEvaluation } from "./cancel.js";
 import type { ModelSummaryRequest } from "./model-summary.js";
@@ -184,7 +185,7 @@ export function evaluationStopper(client: Client): StopEvaluation {
  * Starts freezing a benchmark's tasks on a worker, one workflow per box at a time. Adding a box
  * that failed starts it again under the same ID.
  */
-export function benchmarkAdder(
+function benchmarkAdder(
   client: Client,
   fallbackQueue: string,
   env: NodeJS.ProcessEnv = process.env,
@@ -201,5 +202,13 @@ export function benchmarkAdder(
     } catch (error) {
       if (!(error instanceof WorkflowExecutionAlreadyStartedError)) throw error;
     }
+  };
+}
+
+/** The benchmark routes' dependencies: the add starter and Harbor's registry listing. */
+export function benchmarkWiring(client: Client, fallbackQueue: string, env = process.env) {
+  return {
+    addBenchmark: benchmarkAdder(client, fallbackQueue, env),
+    registryCatalog: productionRegistryCatalog(env),
   };
 }

@@ -58,16 +58,21 @@ export async function compileTask(
   callback: SandboxCallback,
 ): Promise<SandboxJobOutcome> {
   const { run, candidate } = input;
-  const scenario = candidate.kind === "scenario";
-  // A scenario's snapshot is its workspace, so its compile clones nothing.
+  // A workspace scenario's snapshot is its workspace, so its compile clones nothing.
+  const workspace = candidate.kind === "scenario" && !candidate.baseCommit;
   const [program, token, source] = await Promise.all([
     readAsset("dist/sandbox-compiler.bundle.js"),
-    scenario ? undefined : githubToken(),
+    workspace ? undefined : githubToken(),
     artifactFile(store, input.task.sourceBundle, "/work/source-task.tar.gz"),
   ]);
   const compiled: CompileCandidate =
     candidate.kind === "scenario"
-      ? { kind: "scenario", title: candidate.title, difficulty: candidate.difficulty }
+      ? {
+          kind: "scenario",
+          title: candidate.title,
+          difficulty: candidate.difficulty,
+          ...(candidate.baseCommit ? { baseCommit: candidate.baseCommit } : {}),
+        }
       : {
           sourcePr: candidate.sourcePr,
           baseCommit: candidate.baseCommit,
