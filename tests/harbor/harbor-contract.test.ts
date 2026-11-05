@@ -103,7 +103,9 @@ function argv(command: string, name: string): string[] {
   return words;
 }
 
-const harbor = test.skipIf(!available);
+// Each test starts Harbor in Python, which imports it from source; a cold start in CI takes seconds.
+const harbor = (name: string, check: () => Promise<void>) =>
+  test.skipIf(!available)(name, check, 60_000);
 
 harbor(
   "Codex on the gateway asks for the gateway's model id over HTTPS with the trial key",
