@@ -15,6 +15,9 @@ export function benchmarkRefusal(value: string, added: readonly string[]): strin
   return undefined;
 }
 
+/** Long enough for a tapped result's click to arrive after the input loses focus. */
+const BLUR_CLOSE_MS = 150;
+
 type Registry =
   | { status: "loading" }
   | { status: "ok"; datasets: RegistryDataset[] }
@@ -45,6 +48,10 @@ export function AddBenchmarkCard({
   const [active, setActive] = React.useState(0);
   const listId = React.useId();
   const list = React.useRef<HTMLDivElement>(null);
+  // Leaving the box closes the list a moment later, not at once: on iOS the input loses focus
+  // before a tapped result's click arrives, and closing at once would remove the result first.
+  const closing = React.useRef<number>(undefined);
+  React.useEffect(() => () => window.clearTimeout(closing.current), []);
 
   React.useEffect(() => {
     if (!open || !loadRegistry) return;
@@ -134,8 +141,13 @@ export function AddBenchmarkCard({
             disabled={busy}
             aria-invalid={error ? true : undefined}
             aria-describedby={error ? "benchmark-error" : busy ? "benchmark-help" : undefined}
-            onFocus={() => setListOpen(true)}
-            onBlur={() => setListOpen(false)}
+            onFocus={() => {
+              window.clearTimeout(closing.current);
+              setListOpen(true);
+            }}
+            onBlur={() => {
+              closing.current = window.setTimeout(() => setListOpen(false), BLUR_CLOSE_MS);
+            }}
             onChange={(event) => {
               setValue(event.target.value);
               setError("");
@@ -153,7 +165,9 @@ export function AddBenchmarkCard({
               const step = ({ ArrowDown: 1, ArrowUp: -1 } as Record<string, number>)[event.key];
               if (step) {
                 setListOpen(true);
-                setActive((index) => Math.min(Math.max(index + step, 0), shown.length - 1));
+                // Never below the first result, even with none yet: once the registry loads,
+                // the first result is highlighted and Enter picks it.
+                setActive((index) => Math.max(Math.min(index + step, shown.length - 1), 0));
                 event.preventDefault();
               } else if (event.key === "Enter" && showList && shown[active]) {
                 // Enter picks the highlighted result; with the list closed, it adds what is typed.
