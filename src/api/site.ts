@@ -17,6 +17,7 @@ import { createUsageStore } from "../db/usage.js";
 import { createUserStore } from "../db/users.js";
 import { createVault, type Vault } from "../db/vault.js";
 import {
+  benchmarkAdder,
   evaluationStarter,
   evaluationStopper,
   failureExplainer,
@@ -192,6 +193,7 @@ export async function openSite(
       explain: failureExplainer(client, config.temporal.taskQueue),
       audit: taskAuditor(client, config.temporal.taskQueue),
       summarize: modelSummarizer(client, config.temporal.taskQueue),
+      addBenchmark: benchmarkAdder(client, config.temporal.taskQueue),
       githubApiUrl: auth.githubApiUrl,
     }),
     github: createGitHubRepoRoutes({ config: auth, users }),

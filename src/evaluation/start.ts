@@ -4,6 +4,7 @@ import {
   WorkflowIdReusePolicy,
   WorkflowNotFoundError,
 } from "@temporalio/common";
+import type { BenchmarkAddInput } from "./benchmark-add.js";
 import type { StopEvaluation } from "./cancel.js";
 import type { ModelSummaryRequest } from "./model-summary.js";
 import { type EvaluationScope, scopeKey } from "./scope.js";
@@ -175,6 +176,30 @@ export function evaluationStopper(client: Client): StopEvaluation {
       await client.workflow.getHandle(evaluationWorkflowId(scope, id)).cancel();
     } catch (error) {
       if (!(error instanceof WorkflowNotFoundError)) throw error;
+    }
+  };
+}
+
+/**
+ * Starts freezing a benchmark's tasks on a worker, one workflow per box at a time. Adding a box
+ * that failed starts it again under the same ID.
+ */
+export function benchmarkAdder(
+  client: Client,
+  fallbackQueue: string,
+  env: NodeJS.ProcessEnv = process.env,
+) {
+  return async (input: BenchmarkAddInput): Promise<void> => {
+    try {
+      await client.workflow.start("selfBenchBenchmarkAddWorkflow", {
+        workflowId: `benchmark-add/${input.id}`,
+        taskQueue: env.SELFBENCH_EVAL_TASK_QUEUE ?? fallbackQueue,
+        args: [input],
+        workflowExecutionTimeout: "2 hours",
+        workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
+      });
+    } catch (error) {
+      if (!(error instanceof WorkflowExecutionAlreadyStartedError)) throw error;
     }
   };
 }

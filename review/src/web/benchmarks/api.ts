@@ -10,6 +10,9 @@ export interface Benchmark {
   tasks: number;
   runs: number;
   addedAt: string;
+  /** A worker downloads and checks its tasks after it is added; `failed` says why in `error`. */
+  status: "adding" | "ready" | "failed";
+  error?: string;
 }
 
 function benchmarksPath(org: string): string {
@@ -20,7 +23,7 @@ export async function fetchBenchmarks(org: string): Promise<Benchmark[]> {
   return (await requestJson<{ benchmarks: Benchmark[] }>(benchmarksPath(org))).benchmarks;
 }
 
-/** Adds `reference` (`org/name@ref`); the server downloads and checks every task first. */
+/** Adds `reference` (`org/name@ref`); a worker then downloads and checks every task. */
 export async function addBenchmark(org: string, reference: string): Promise<Benchmark> {
   const body = await requestJson<{ benchmark: Omit<Benchmark, "runs"> }>(benchmarksPath(org), {
     method: "POST",

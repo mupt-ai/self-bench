@@ -29,10 +29,12 @@ export function ScopeCard({
   stats,
   removeLabel,
   onRemove,
+  notice,
 }: {
   /** `owner/name`, as the box is titled. */
   name: string;
-  to: string;
+  /** Where the box opens; a box with nothing to open yet (still being added) has none. */
+  to?: string;
   icon: ReactNode;
   /** The line under the title, as its parts. */
   details: readonly ReactNode[];
@@ -40,16 +42,20 @@ export function ScopeCard({
   /** The menu's one item, such as Disconnect or Remove. */
   removeLabel: string;
   onRemove(): void;
+  /** Why the box can't be used, such as an add that failed, shown under its details. */
+  notice?: ReactNode;
 }) {
   const trigger = useRef<HTMLButtonElement>(null);
   const pendingRemove = useRef(false);
   return (
     <article className="panel group relative flex h-full min-h-40 flex-col transition-[border-color,box-shadow] hover:border-foreground/30 hover:shadow-[0_2px_4px_rgb(0_0_0/0.06),0_10px_24px_-8px_rgb(0_0_0/0.14)] has-[a:focus-visible]:border-foreground/40">
-      <Link
-        aria-label={`Open ${name}`}
-        className="absolute inset-0 z-0 focus-visible:outline-none!"
-        to={to}
-      />
+      {to && (
+        <Link
+          aria-label={`Open ${name}`}
+          className="absolute inset-0 z-0 focus-visible:outline-none!"
+          to={to}
+        />
+      )}
       <header className="pointer-events-none relative z-10 flex items-center gap-2.5 px-4 pt-4">
         {icon}
         <h2 className="min-w-0 flex-1 truncate font-mono text-sm font-medium">{name}</h2>
@@ -100,6 +106,11 @@ export function ScopeCard({
           </span>
         ))}
       </p>
+      {notice && (
+        <p role="alert" className="relative z-10 mt-2 line-clamp-3 px-4 text-xs text-destructive">
+          {notice}
+        </p>
+      )}
       <dl className="pointer-events-none relative z-10 mt-auto grid grid-cols-3 border-t border-border">
         {stats.map((stat) => (
           <Stat key={stat.label} {...stat} />

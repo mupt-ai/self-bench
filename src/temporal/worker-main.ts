@@ -4,6 +4,7 @@ import { createArtifactStore } from "../artifacts/index.js";
 import { loadWorkerConfig } from "../contracts/config/index.js";
 import { workerProcessSettings } from "../contracts/config/worker.js";
 import { createBatchStore } from "../db/batches.js";
+import { createBenchmarkStore } from "../db/benchmarks.js";
 import { openDatabase } from "../db/client.js";
 import { createRunSummaryStore } from "../db/evaluation-summaries.js";
 import { createRunStore } from "../db/runs.js";
@@ -11,6 +12,7 @@ import { createTaskStore } from "../db/tasks.js";
 import { createUsageStore } from "../db/usage.js";
 import { createVault } from "../db/vault.js";
 import { createEvaluationActivities } from "../evaluation/activities.js";
+import { createBenchmarkAddActivities } from "../evaluation/benchmark-add-activities.js";
 import { keepRunSummaries } from "../evaluation/store.js";
 import { createGatewayUsageStore } from "../gateway/usage-store.js";
 import { keepGatewaysFresh } from "../gateways/catalog.js";
@@ -93,6 +95,11 @@ const { runSolverTrial, prepareTaskImages, ...evaluation } = createEvaluationAct
     ? { api: sandboxApi, usage: createGatewayUsageStore(database.db) }
     : undefined,
 );
+// Adding a registry dataset: the freeze on the Harbor queue, the box's record on this one.
+const { freezeBenchmarkTasks, ...benchmarkRecords } = createBenchmarkAddActivities({
+  artifacts,
+  ...(database ? { store: createBenchmarkStore(database.db) } : {}),
+});
 // A rejected or deleted task's images go; the reconcile needs the task rows.
 const builder = taskImageBuilder(config.taskImages);
 // Rebuilding a task's images runs its gates again, with the credentials that checked it.
@@ -124,6 +131,7 @@ const workers = await Promise.all([
             ...evaluation,
             ...batches,
             ...taskImages,
+            ...benchmarkRecords,
           },
           maxConcurrentActivityTaskExecutions: config.activityConcurrency,
           interceptors: {
@@ -143,6 +151,7 @@ const workers = await Promise.all([
             verifyCompiled,
             runSolverTrial,
             prepareTaskImages,
+            freezeBenchmarkTasks,
             ...rebuilds,
           },
           maxConcurrentActivityTaskExecutions: harborConcurrency,

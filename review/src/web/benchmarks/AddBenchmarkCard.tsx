@@ -22,8 +22,8 @@ export function benchmarkRefusal(value: string, added: readonly string[]): strin
 }
 
 /**
- * The box that adds a Harbor registry dataset. Adding downloads and checks each task, which takes
- * a few seconds for a large dataset, so the box says so while it waits.
+ * The box that adds a Harbor registry dataset. Adding only starts it: the dataset's own box then
+ * shows a worker downloading and checking each task.
  */
 export function AddBenchmarkCard({
   added,
@@ -100,7 +100,7 @@ export function AddBenchmarkCard({
       ) : (
         busy && (
           <p id="benchmark-help" className="text-xs text-muted-foreground">
-            Downloading and checking each task…
+            Starting…
           </p>
         )
       )}

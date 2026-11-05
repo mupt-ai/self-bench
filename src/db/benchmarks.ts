@@ -15,6 +15,9 @@ export interface Benchmark {
   ref: string;
   tasks: number;
   addedAt: string;
+  /** Whether a worker is still downloading and checking its tasks, or why it couldn't. */
+  status: "adding" | "ready" | "failed";
+  error?: string;
 }
 
 export function createBenchmarkStore(db: Database) {
@@ -27,6 +30,8 @@ export function createBenchmarkStore(db: Database) {
     ref: row.ref,
     tasks: row.tasks,
     addedAt: row.addedAt.toISOString(),
+    status: row.status,
+    ...(row.error ? { error: row.error } : {}),
   });
   return {
     /** The org's benchmarks in the order they were added, with how many runs each has. */
@@ -55,23 +60,51 @@ export function createBenchmarkStore(db: Database) {
         .where(eq(benchmarks.id, id));
       return (row?.taskList as FrozenTask[] | undefined) ?? [];
     },
-    /** Adds the dataset, or returns the org's benchmark of the same name unchanged. */
-    async add(input: {
+    /**
+     * Starts adding the dataset: a new box, or a failed one tried again at `ref`. Returns the
+     * org's benchmark of the same name, and whether a worker should now freeze its tasks.
+     */
+    async start(input: {
       orgId: number;
       name: string;
       ref: string;
-      taskList: FrozenTask[];
       addedBy: number;
-    }): Promise<{ benchmark: Benchmark; added: boolean }> {
+    }): Promise<{ benchmark: Benchmark; started: boolean }> {
       const [row] = await db
         .insert(benchmarks)
-        .values({ ...input, tasks: input.taskList.length })
+        .values({ ...input, tasks: 0, taskList: [], status: "adding" })
         .onConflictDoNothing()
         .returning(columns);
-      if (row) return { benchmark: benchmark(row), added: true };
+      if (row) return { benchmark: benchmark(row), started: true };
+      const [retried] = await db
+        .update(benchmarks)
+        .set({ ref: input.ref, status: "adding", error: null, addedBy: input.addedBy })
+        .where(
+          and(
+            eq(benchmarks.orgId, input.orgId),
+            eq(benchmarks.name, input.name),
+            eq(benchmarks.status, "failed"),
+          ),
+        )
+        .returning(columns);
+      if (retried) return { benchmark: benchmark(retried), started: true };
       const existing = await this.find(input.orgId, input.name);
       if (!existing) throw new Error("Benchmark could not be saved");
-      return { benchmark: existing, added: false };
+      return { benchmark: existing, started: false };
+    },
+    /** Its tasks, frozen by a worker; a box removed or settled meanwhile is left as it is. */
+    async finish(id: number, taskList: FrozenTask[]): Promise<void> {
+      await db
+        .update(benchmarks)
+        .set({ status: "ready", taskList, tasks: taskList.length, error: null })
+        .where(and(eq(benchmarks.id, id), eq(benchmarks.status, "adding")));
+    },
+    /** Why its tasks couldn't be frozen, shown on its box. */
+    async fail(id: number, error: string): Promise<void> {
+      await db
+        .update(benchmarks)
+        .set({ status: "failed", error })
+        .where(and(eq(benchmarks.id, id), eq(benchmarks.status, "adding")));
     },
     /** Removes the benchmark and its run summaries; its records stay in the bucket. */
     async remove(orgId: number, name: string): Promise<boolean> {

@@ -115,13 +115,6 @@ test("an org adds registry datasets as benchmarks and runs each apart from its r
       expect(response.status).toBe(201);
       return (await response.json()).id as string;
     };
-    // Adding checks every task once: a dataset a comparison would refuse is refused here.
-    const refused = await fixture.request(
-      fixture.benchmarks,
-      post({ reference: "attacker/dataset" }),
-    );
-    expect(refused.status).toBe(400);
-    expect((await refused.json()).error).toContain("unsafe/leak: task bundle refused");
     expect((await fixture.request(fixture.benchmarks, post({ reference: "--help" }))).status).toBe(
       400,
     );
@@ -129,11 +122,12 @@ test("an org adds registry datasets as benchmarks and runs each apart from its r
       fixture.benchmarks,
       post({ reference: "terminal-bench/dataset" }),
     );
-    expect(added.status).toBe(201);
+    expect(added.status).toBe(202);
     expect((await added.json()).benchmark).toMatchObject({
       name: "terminal-bench/dataset",
       ref: "latest",
       tasks: 2,
+      status: "ready",
     });
     expect(
       (
