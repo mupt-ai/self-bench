@@ -1,6 +1,7 @@
 import { type ComponentType, lazy, Suspense, useEffect, useRef } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { Lockup } from "../web/Lockup";
+import { GITHUB_MARK } from "./components/Avatar";
 import { OutLink } from "./components/OutLink";
 import { CursorAura } from "./effects/CursorAura";
 import { notePath } from "./effects/history-transitions";
@@ -149,7 +150,17 @@ export function PublicLayout() {
           <span>selfbench.dev</span>
           <span className="flex gap-4">
             <OutLink href="https://dari.dev">dari.dev</OutLink>
-            <OutLink href="https://github.com/mupt-ai/self-bench">GitHub</OutLink>
+            <a
+              href="https://github.com/mupt-ai/self-bench"
+              target="_blank"
+              rel="noreferrer"
+              className="hit relative inline-flex items-center hover:text-foreground"
+            >
+              <svg viewBox="0 0 16 16" className="size-4" fill="currentColor" aria-hidden="true">
+                <path d={GITHUB_MARK} />
+              </svg>
+              <span className="sr-only">GitHub</span>
+            </a>
           </span>
         </div>
       </footer>
