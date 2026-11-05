@@ -38,9 +38,12 @@ export const MAX_ATTACHMENTS = 20;
 export const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 
 /**
- * A person's description of a situation an agent should handle, with any files they attached.
- * No repository change stands behind it: the author writes the workspace itself (the files the
- * agent finds in /app), and the hidden tests grade what the agent leaves there.
+ * A person's description of a change or situation an agent should handle, with any files they
+ * attached. No merged change stands behind it. With `baseCommit` (a repository scenario), the
+ * agent starts from the repository at that commit and the author writes the reference
+ * implementation and hidden tests against it, as for a PR. Without it (a workspace scenario), the
+ * author writes the workspace itself (the files the agent finds in /app), and the hidden tests
+ * grade what the agent leaves there.
  */
 const scenarioCandidateSchema = z.object({
   kind: z.literal("scenario"),
@@ -51,6 +54,8 @@ const scenarioCandidateSchema = z.object({
   provenance: artifactRefSchema,
   /** The requester's files as one tarball, unpacked for the author at /work/attachments. */
   attachments: artifactRefSchema.optional(),
+  /** The repository commit a repository scenario starts from. */
+  baseCommit: commitSchema.optional(),
 });
 
 export type ScenarioCandidate = z.infer<typeof scenarioCandidateSchema>;

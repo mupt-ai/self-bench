@@ -46,6 +46,12 @@ function roundPrefix({ run, candidate, round }: ReviewRoundInput): string {
   return `runs/${run.runId}/review/${candidate.candidateId}/round-${round}`;
 }
 
+/** A PR's brief, a workspace scenario's, or a repository scenario's, which reviews code as a PR's does. */
+function reviewPrompt(candidate: Candidate): string {
+  if (candidate.kind !== "scenario") return "review";
+  return candidate.baseCommit ? "repository-scenario-review" : "scenario-review";
+}
+
 /**
  * A fresh, read-only reviewer judges one green task: accept, suggest changes, or reject. The
  * sandbox reports back through the callback API; `finishReviewRound` reads the verdict. A
@@ -78,7 +84,7 @@ export async function startReviewRound(
     workspace: { kind: "task" },
     extension: "/work/reviewer.js",
     tools: "read,grep,find,ls,accept_task,submit_suggestions,reject_task",
-    prompt: renderPrompt(candidate.kind === "scenario" ? "scenario-review" : "review", {
+    prompt: renderPrompt(reviewPrompt(candidate), {
       taskId: task.taskId,
       request: candidate.request.trim(),
       report: renderVerifyReport(report).trim(),

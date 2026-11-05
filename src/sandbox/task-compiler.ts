@@ -39,7 +39,7 @@ export type CompileCandidate =
   | (Pick<PullRequestCandidate, "sourcePr" | "baseCommit" | "difficulty"> & {
       readonly kind?: "pull_request";
     })
-  | Pick<ScenarioCandidate, "kind" | "title" | "difficulty">;
+  | Pick<ScenarioCandidate, "kind" | "title" | "difficulty" | "baseCommit">;
 
 export interface SubmissionCompileInput {
   readonly repositoryUrl: string;
@@ -60,9 +60,9 @@ export interface SubmissionCompileResult {
 
 /**
  * Trusted compiler: checks a submission, pins its base images, and renders it as a Harbor task
- * over the repository cloned at the candidate's base commit, or over a scenario's workspace. What
- * the author must fix comes back as errors; a clone or registry that fails throws, for the caller
- * to retry.
+ * over the repository cloned at the candidate's base commit (a PR's or a repository scenario's),
+ * or over a workspace scenario's workspace. What the author must fix comes back as errors; a clone
+ * or registry that fails throws, for the caller to retry.
  */
 export async function compileSubmission(
   input: SubmissionCompileInput,
@@ -70,6 +70,7 @@ export async function compileSubmission(
 ): Promise<SubmissionCompileResult> {
   const { candidate } = input;
   const scenario = candidate.kind === "scenario";
+  const workspaceScenario = scenario && !candidate.baseCommit;
   const submission = await readSubmission(input.directory);
   const check = checkSubmission(
     submission,
@@ -77,7 +78,10 @@ export async function compileSubmission(
     scenario ? "scenario" : "pull_request",
   );
   const workspace = join(input.directory, WORKSPACE_DIRECTORY);
-  const errors = [...check.errors, ...(scenario ? await workspaceProblems(workspace) : [])];
+  const errors = [
+    ...check.errors,
+    ...(workspaceScenario ? await workspaceProblems(workspace) : []),
+  ];
   if (errors.length > 0) return { compileErrors: errors, auditBlockers: [] };
   const signal = input.signal ? { signal: input.signal } : {};
   const pinned = await pinBaseImages(submission.Dockerfile, { ...services.registry, ...signal });
@@ -91,7 +95,9 @@ export async function compileSubmission(
       const repository = join(root, "repository");
       let task: TaskIdentity;
       let commit: string;
-      if (candidate.kind === "scenario") {
+      const baseCommit = candidate.baseCommit;
+      if (!baseCommit) {
+        if (candidate.kind !== "scenario") throw new Error("a pull request needs a base commit");
         const workspaceCommit = await workspaceRepository(workspace, repository, input.signal);
         commit = workspaceCommit;
         task = {
@@ -101,22 +107,17 @@ export async function compileSubmission(
           scenario: { title: candidate.title, workspaceCommit },
         };
       } else {
-        commit = candidate.baseCommit;
+        commit = baseCommit;
         task = {
           taskId: input.taskId,
           difficulty: check.difficulty,
           repo,
-          baseCommit: candidate.baseCommit,
-          sourcePr: candidate.sourcePr,
+          ...(candidate.kind === "scenario"
+            ? { scenario: { title: candidate.title, baseCommit } }
+            : { baseCommit, sourcePr: candidate.sourcePr }),
         };
         await services
-          .cloneRepository(
-            input.repositoryUrl,
-            candidate.baseCommit,
-            repository,
-            input.token,
-            input.signal,
-          )
+          .cloneRepository(input.repositoryUrl, baseCommit, repository, input.token, input.signal)
           .catch((error: unknown) => {
             throw new TaskCompilerInfrastructureError("failed to materialize source repository", {
               cause: error,

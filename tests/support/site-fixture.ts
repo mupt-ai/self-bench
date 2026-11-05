@@ -68,8 +68,16 @@ export function fakeGitHub(options: FakeGitHubOptions = {}): {
       const found = options.pullRequests?.[Number(pull[1])];
       return found ? Response.json(found) : new Response("", { status: 404 });
     }
-    if (/\/repos\/[^/]+\/[^/]+\/commits\/[0-9a-f]{40}$/.test(url)) {
-      return Response.json({ parents: [{ sha: "b".repeat(40) }] });
+    const commit = /\/repos\/[^/]+\/[^/]+\/commits\/([0-9a-f]{40})$/.exec(url);
+    if (commit?.[1]) {
+      return Response.json({ sha: commit[1], parents: [{ sha: "b".repeat(40) }] });
+    }
+    // Every other ref but the default branch's HEAD is unknown.
+    if (/\/repos\/[^/]+\/[^/]+\/commits\/HEAD$/.test(url)) {
+      return Response.json({ sha: "c".repeat(40), parents: [{ sha: "b".repeat(40) }] });
+    }
+    if (/\/repos\/[^/]+\/[^/]+\/commits\/[^/]+$/.test(url)) {
+      return new Response("", { status: 404 });
     }
     const one = /\/repos\/([^/?]+\/[^/?]+)$/.exec(url);
     if (one?.[1]) {

@@ -25,7 +25,10 @@ const GENERATION = {
 
 type Values = Record<string, string | boolean | string[] | undefined>;
 
-/** `scenario create`: one described scenario becomes one task. */
+/**
+ * `scenario create`: one described scenario becomes one task. With --commit, the agent starts from
+ * the repository at that commit or branch; without it, the author writes the workspace.
+ */
 export async function scenarioCommand(args: string[]): Promise<void> {
   const [action, ...rest] = args;
   if (action !== "create") throw new Error("usage: self-bench scenario create --repo OWNER/NAME …");
@@ -39,6 +42,7 @@ export async function scenarioCommand(args: string[]): Promise<void> {
       "scenario-file": { type: "string" },
       difficulty: { type: "string" },
       attach: { type: "string", multiple: true },
+      commit: { type: "string" },
     },
     strict: true,
   });
@@ -56,6 +60,7 @@ export async function scenarioCommand(args: string[]): Promise<void> {
     title: values.title,
     scenario,
     ...(values.difficulty ? { difficulty: values.difficulty } : {}),
+    ...(values.commit ? { commit: values.commit } : {}),
     attachments,
     ...(await generation(values, repository)),
   });

@@ -49,6 +49,15 @@ export const scenarioRequestSchema = z
           MAX_ATTACHMENT_BYTES,
         `attachments may total at most ${MAX_ATTACHMENT_BYTES / 1024 / 1024} MB`,
       ),
+    /**
+     * For a repository scenario: the commit the agent starts from, as a SHA or a branch the API
+     * resolves to one. Without it, the author writes the workspace.
+     */
+    commit: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$/, "commit must be a SHA or a branch name")
+      .optional(),
     generation: z.unknown().optional(),
   })
   .strict();
@@ -85,10 +94,17 @@ export async function stageScenario(options: {
   readonly difficulty: ScenarioCandidate["difficulty"];
   /** Files to pack, or a tarball already packed (a revision reuses its original's). */
   readonly attachments: ScenarioRequest["attachments"] | ArtifactRef | undefined;
+  /** A repository scenario's resolved commit. */
+  readonly baseCommit?: string;
 }): Promise<{ readonly candidate: ScenarioCandidate; readonly runProvenance: ArtifactRef }> {
-  const { artifacts, runId, candidateId, title, scenario } = options;
+  const { artifacts, runId, candidateId, title, scenario, baseCommit } = options;
   const keys = scenarioKeys(runId, candidateId);
-  const source = { sourceType: "scenario", title, content: scenario };
+  const source = {
+    sourceType: "scenario",
+    title,
+    content: scenario,
+    ...(baseCommit ? { baseCommit } : {}),
+  };
   const runProvenance = await artifacts.put(
     keys.run,
     Buffer.from(`${JSON.stringify(source)}\n`),
@@ -116,6 +132,7 @@ export async function stageScenario(options: {
       request: scenario,
       provenance,
       ...(attachments ? { attachments } : {}),
+      ...(baseCommit ? { baseCommit } : {}),
     },
     runProvenance,
   };
@@ -135,8 +152,12 @@ export async function startTaskFromScenario(options: {
   const { config, candidate, runId } = options;
   const run = buildRunRequest(config, {
     runId,
-    // A scenario never clones its repository; the run names it only to own the task.
-    repository: { url: `https://github.com/${options.repository.fullName}`, commit: NO_COMMIT },
+    // A repository scenario clones its commit; a workspace scenario clones nothing, and the run
+    // names its repository only to own the task.
+    repository: {
+      url: `https://github.com/${options.repository.fullName}`,
+      commit: candidate.baseCommit ?? NO_COMMIT,
+    },
     provenance: options.runProvenance,
     candidateCounts: {
       easy: candidate.difficulty === "easy" ? 1 : 0,

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import type { ScenarioCandidate } from "../../src/contracts/index.js";
 import { agentScript } from "../../src/generation/pipeline/agent.js";
 import { authoringPrompt, verifyResultPrompt } from "../../src/generation/pipeline/authoring.js";
+import { taskSourceEnvironment } from "../../src/generation/pipeline/task-source.js";
 import { redReport } from "../support/workflow-fixture.js";
 
 test("the turn after a verify carries the report and the next step", () => {
@@ -34,6 +35,23 @@ test("a scenario's author is briefed on the scenario, not a pull request", () =>
   const revision = authoringPrompt(scenario, 2, "report", "Use the venue too.");
   expect(revision).toContain("workspace/ included");
   expect(revision).not.toContain("re-cloned");
+});
+
+test("a repository scenario's author builds on the repository at its commit", () => {
+  const commit = "c".repeat(40);
+  const repository = { ...scenario, baseCommit: commit };
+  const brief = authoringPrompt(repository, 1);
+  expect(brief).toContain("# Build One Eval Task from a Scenario in This Repository");
+  expect(brief).toContain(`Base commit: ${commit}`);
+  expect(brief).toContain(scenario.request);
+  expect(brief).not.toContain("workspace/");
+  expect(authoringPrompt(repository, 2, "report")).toContain("re-cloned");
+  // Its static check applies the patches to that commit, under a scenario's audit.
+  expect(taskSourceEnvironment(repository)).toEqual({
+    SELFBENCH_TASK_SOURCE: "repository_scenario",
+    SELFBENCH_BASE_COMMIT: commit,
+  });
+  expect(taskSourceEnvironment(scenario)).toEqual({ SELFBENCH_TASK_SOURCE: "scenario" });
 });
 
 test("a scenario's author starts in /work/task with no repository to clone", () => {
