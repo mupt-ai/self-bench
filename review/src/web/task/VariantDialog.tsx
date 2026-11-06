@@ -16,17 +16,6 @@ import { FileFields, PackageFields } from "./VariantFields";
 type PackageRow = VariantInput["packages"][number];
 type FileRow = VariantInput["files"][number];
 
-/** Next.js's managed block, as `next dev` writes it, pointing agents at the installed docs. */
-const NEXT_DOCS_BLOCK = `
-<!-- BEGIN:nextjs-agent-rules -->
-
-## This is NOT the Next.js you know
-
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in \`node_modules/next/dist/docs/\` (resolved from this file's directory; in monorepos the \`next\` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
-
-<!-- END:nextjs-agent-rules -->
-`;
-
 /**
  * A variant of an accepted task: the same instruction, hidden tests, and reference solution, with
  * only its environment changed, such as a framework build from a pull request or an AGENTS.md
@@ -65,13 +54,6 @@ function VariantDialog({
     packages.every((row) => row.name.trim() && row.spec.trim()) &&
     files.every((row) => row.path.trim()) &&
     packages.length + files.length > 0;
-
-  const pointAtNextDocs = () =>
-    setFiles((current) => [
-      ...current,
-      { path: "AGENTS.md", mode: "append", content: NEXT_DOCS_BLOCK },
-      { path: "CLAUDE.md", mode: "append", content: NEXT_DOCS_BLOCK },
-    ]);
 
   const submit = async () => {
     if (busy || !filled || !valid) return;
@@ -118,21 +100,21 @@ function VariantDialog({
           busy={busy}
         />
         <GenerationSteps step={step} firstStep="Change Environment" />
-        <DialogBody>
+        <DialogBody className="pt-3 sm:pt-4">
           {step === 1 ? (
-            <div className="grid gap-5">
+            <div className="grid gap-4">
               <label htmlFor="variant-label" className={fieldStyles}>
                 <span className="flex items-center gap-1.5">
-                  Label
-                  <InfoTooltip label="Names the change, such as the docs or framework build it tests. The variant keeps this task's instruction, hidden tests, and reference solution; only its environment changes." />
+                  Variant Name
+                  <InfoTooltip label="What this variant changes, so it is easy to tell apart in the task list, such as Docs Before PR 100191. The instruction, hidden tests, and reference solution stay the same." />
                 </span>
                 <Input
                   id="variant-label"
-                  aria-label="Label"
+                  aria-label="Variant Name"
                   autoComplete="off"
                   data-1p-ignore
                   maxLength={MAX_VARIANT_LABEL_LENGTH}
-                  placeholder="Next.js PR 100191 Docs"
+                  placeholder="Docs Before PR 100191"
                   value={label}
                   disabled={busy}
                   onChange={(event) => setLabel(event.target.value)}
@@ -140,12 +122,7 @@ function VariantDialog({
               </label>
 
               <PackageFields rows={packages} onChange={setPackages} disabled={busy} />
-              <FileFields
-                rows={files}
-                onChange={setFiles}
-                disabled={busy}
-                onPointAtNextDocs={pointAtNextDocs}
-              />
+              <FileFields rows={files} onChange={setFiles} disabled={busy} />
             </div>
           ) : optionsError ? (
             <Notice>

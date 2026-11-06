@@ -21,10 +21,10 @@ export function PackageFields({
   disabled: boolean;
 }) {
   return (
-    <fieldset className="grid gap-2" aria-label="Packages">
-      <legend className="mb-2 flex items-center gap-1.5 text-sm font-medium">
-        Packages
-        <InfoTooltip label="Installed over the task's own with its package manager (npm, pnpm, Yarn, or Bun, from its lockfile). Use a version, a tag, or a tarball URL, such as a Next.js build from vercel-packages.vercel.app. Directory is the workspace under /app; leave it blank for the root." />
+    <fieldset className="grid gap-2" aria-label="Swap Packages">
+      <legend className="flex items-center gap-1.5 text-sm font-medium">
+        Swap Packages
+        <InfoTooltip label="Replaces a package the task already installs with another version or build, such as a tarball URL, using the repository's package manager. Directory is the folder under /app that holds its package.json; leave it blank for the root." />
       </legend>
       {rows.map((row, index) => (
         <div
@@ -86,18 +86,16 @@ export function FileFields({
   rows,
   onChange,
   disabled,
-  onPointAtNextDocs,
 }: {
   rows: FileRow[];
   onChange: (rows: FileRow[]) => void;
   disabled: boolean;
-  onPointAtNextDocs: () => void;
 }) {
   return (
-    <fieldset className="grid gap-2" aria-label="Files">
-      <legend className="mb-2 flex items-center gap-1.5 text-sm font-medium">
-        Files
-        <InfoTooltip label="Written into /app before the agent starts, so they are part of its starting files and never its diff. Append adds to an existing file, such as the repository's own AGENTS.md." />
+    <fieldset className="grid gap-2" aria-label="Add or Edit Files">
+      <legend className="flex items-center gap-1.5 text-sm font-medium">
+        Add or Edit Files
+        <InfoTooltip label="Written into /app before the agent starts, so the agent sees them as part of its files. Append adds to the end of a file that exists, such as AGENTS.md; Replace overwrites it." />
       </legend>
       {rows.map((row, index) => (
         <div
@@ -153,9 +151,6 @@ export function FileFields({
         >
           <Plus aria-hidden="true" />
           Add File
-        </Button>
-        <Button size="small" variant="ghost" disabled={disabled} onClick={onPointAtNextDocs}>
-          Point Agents at Next.js Docs
         </Button>
       </div>
     </fieldset>
