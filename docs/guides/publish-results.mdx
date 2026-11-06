@@ -15,6 +15,8 @@ Two choices in the release flow publish more than the aggregates:
 
 Review both before publishing if your benchmark tasks or their transcripts should remain private. Anyone can read the released aggregates through the [Public Results API](/api-reference/overview).
 
+From the terminal, `self-bench release preview --repo OWNER/NAME` shows what a release would publish, and `self-bench release publish` releases exactly that preview. See [CLI Commands](/cli/commands#publish).
+
 ## Repository Groups
 
 A repository group evaluates several connected repositories together, as if they were one. Create one under **Repository Groups** in the sidebar, then use its tabs as you would a repository's: **Dataset** lists every member's approved tasks, **Run** starts evaluations on them, and **Results** compares models over all of them.

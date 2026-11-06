@@ -4,8 +4,12 @@ import { resolve } from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
+import { readConfig } from "./config.js";
 
-type Method = "GET" | "POST" | "PUT" | "DELETE";
+type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+
+/** The hosted app; SELFBENCH_API_URL points elsewhere, such as a self-hosted or local deployment. */
+const DEFAULT_API_URL = "https://app.selfbench.dev";
 
 export async function passthrough(method: Method, path: string, json?: unknown): Promise<void> {
   console.log(JSON.stringify(await requestJson(path, method, json), null, 2));
@@ -75,18 +79,24 @@ export async function requestBytes(path: string): Promise<Uint8Array> {
   return bytes;
 }
 
+/** SELFBENCH_API_URL, else the deployment `login` signed in to, else the hosted app. */
+export function apiOrigin(): string {
+  return process.env.SELFBENCH_API_URL || readConfig().apiUrl || DEFAULT_API_URL;
+}
+
 function apiUrl(path: string): URL {
-  return new URL(path, process.env.SELFBENCH_API_URL ?? "http://127.0.0.1:8080");
+  return new URL(path, apiOrigin());
 }
 
 /**
- * A personal API key (SELFBENCH_API_KEY, `sbk_…`) acts as its owner, which the /api routes need;
+ * A personal API key (SELFBENCH_API_KEY, else the one `login` saved) acts as its owner, which the /api routes need;
  * the operator's SELFBENCH_API_TOKEN is preferred on /v1, where registry grants need it. Either
  * goes as the bearer token.
  */
 function authHeaders(path: string): Headers {
   const headers = new Headers();
-  const { SELFBENCH_API_KEY: key, SELFBENCH_API_TOKEN: operator } = process.env;
+  const { SELFBENCH_API_TOKEN: operator } = process.env;
+  const key = process.env.SELFBENCH_API_KEY || readConfig().apiKey;
   const token = path.startsWith("/api/") ? key || operator : operator || key;
   if (token) headers.set("authorization", `Bearer ${token}`);
   return headers;

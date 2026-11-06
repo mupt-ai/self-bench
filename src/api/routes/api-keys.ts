@@ -30,7 +30,7 @@ export interface ApiKeyRoutes {
 
 /**
  * Personal API keys. Listing works from any session; minting and revoking require a browser
- * session, so a leaked key cannot be used to issue further keys.
+ * session, so a leaked key cannot be used to issue further keys. A key may revoke itself.
  */
 export function createApiKeyRoutes(options: ApiKeyRoutesOptions): ApiKeyRoutes {
   const { keys } = options;
@@ -46,7 +46,9 @@ export function createApiKeyRoutes(options: ApiKeyRoutesOptions): ApiKeyRoutes {
       }
       const mutation = (list && request.method === "POST") || (item && request.method === "DELETE");
       if (!mutation) return false;
-      if (user.apiKey) {
+      // A key may revoke itself (`self-bench logout`), but never mint or revoke another.
+      const selfRevoke = item && user.apiKey?.id === Number(item[1]);
+      if (user.apiKey && !selfRevoke) {
         sendJson(response, 403, { error: "API keys are managed from a signed-in browser session" });
         return true;
       }

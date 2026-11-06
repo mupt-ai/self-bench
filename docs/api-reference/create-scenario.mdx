@@ -44,8 +44,4 @@ curl -X POST https://app.selfbench.dev/api/orgs/mupt-ai/repos/evals/data-import-
 ```
 </ResponseExample>
 
-Returns `201`. Follow the task with `GET …/tasks/{runId}/{taskId}`.
-
-Create an eval with `POST /api/orgs/{org}/evals` and `{ "name": "Data Import Bugs" }`; it answers `201` with its repository row (`evals/data-import-bugs`), or `409` if the name is taken.
-
-To revise a task, `POST …/tasks/{runId}/{taskId}/feedback` with `{ "feedback": "…", "generation": { … } }`. `GET …/tasks/{runId}/{taskId}/draft` downloads the task's files as a `.tar.gz` (instruction, Dockerfile, patches, scripts, and a workspace scenario's `workspace/`); send an edited copy (up to 22 MB compressed) back base64-encoded as `draft` in the feedback request, and the revision starts from it. See [Author Scenarios](/guides/author-scenarios).
+Returns `201`. Follow the task with `GET …/tasks/{runId}/{taskId}`, and [review or revise it](/api-reference/tasks) like any other. Create an eval for workspace scenarios with `POST /api/orgs/{org}/evals` (see [Repositories and Evals](/api-reference/repositories)). See [Author Scenarios](/guides/author-scenarios) for how to write a good one.

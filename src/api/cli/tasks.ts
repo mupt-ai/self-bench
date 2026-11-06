@@ -1,29 +1,34 @@
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
-import { parseArgs } from "node:util";
 import { WORKSPACE_DIRECTORY } from "../../generation/task/scenario-workspace.js";
 import { SUBMISSION_FILES } from "../../generation/task/submission.js";
 import { extractRegularArchive } from "../../lib/archive.js";
 import { runCommand } from "../../lib/process.js";
-import { passthrough, requestBytes, requestJson } from "./api-client.js";
+import { requestBytes, requestJson } from "./api-client.js";
+import {
+  flag,
+  list,
+  parse,
+  positional,
+  repositoryPath,
+  taskPath,
+  textOption,
+  type Values,
+} from "./args.js";
+import { GENERATION, generation } from "./generation.js";
+import { print, table } from "./output.js";
+import { taskEvaluationCommand } from "./task-evaluation.js";
 
-/** Flags every task command takes: the repository, and its org when that isn't the owner. */
-const REPOSITORY = { repo: { type: "string" }, org: { type: "string" } } as const;
-/** How the generation runs; omitted flags take the app's defaults (managed models and sandbox). */
-const GENERATION = {
-  model: { type: "string" },
-  "verifier-model": { type: "string" },
-  reasoning: { type: "string" },
-  "model-credential": { type: "string" },
-  sandbox: { type: "string" },
-  "sandbox-credential": { type: "string" },
-  harbor: { type: "string" },
-  "harbor-credential": { type: "string" },
-  generation: { type: "string" },
+const TASK_FLAGS = {
+  ...GENERATION,
+  note: { type: "string" },
+  feedback: { type: "string" },
+  "feedback-file": { type: "string" },
+  draft: { type: "string" },
+  pr: { type: "string" },
+  state: { type: "string" },
 } as const;
-
-type Values = Record<string, string | boolean | string[] | undefined>;
 
 /**
  * `scenario create`: one described scenario becomes one task. With --commit, the agent starts from
@@ -32,152 +37,125 @@ type Values = Record<string, string | boolean | string[] | undefined>;
 export async function scenarioCommand(args: string[]): Promise<void> {
   const [action, ...rest] = args;
   if (action !== "create") throw new Error("usage: self-bench scenario create --repo OWNER/NAME …");
-  const { values } = parseArgs({
-    args: rest,
-    options: {
-      ...REPOSITORY,
-      ...GENERATION,
-      title: { type: "string" },
-      scenario: { type: "string" },
-      "scenario-file": { type: "string" },
-      difficulty: { type: "string" },
-      attach: { type: "string", multiple: true },
-      commit: { type: "string" },
-    },
-    strict: true,
+  const { values } = parse(rest, {
+    ...GENERATION,
+    title: { type: "string" },
+    scenario: { type: "string" },
+    "scenario-file": { type: "string" },
+    difficulty: { type: "string" },
+    attach: { type: "string", multiple: true },
+    commit: { type: "string" },
   });
   const scenario = await textOption(values, "scenario");
-  if (!values.title || !scenario)
+  const title = flag(values, "title");
+  if (!title || !scenario)
     throw new Error("scenario create needs --title and --scenario or --scenario-file");
   const attachments = await Promise.all(
-    (values.attach ?? []).map(async (path) => ({
+    list(values, "attach").map(async (path) => ({
       name: basename(path),
       content: (await readFile(path)).toString("base64"),
     })),
   );
   const repository = repositoryPath(values);
-  await passthrough("POST", `${repository}/tasks/from-scenario`, {
-    title: values.title,
+  const difficulty = flag(values, "difficulty");
+  const commit = flag(values, "commit");
+  const reply = await requestJson(`${repository}/tasks/from-scenario`, "POST", {
+    title,
     scenario,
-    ...(values.difficulty ? { difficulty: values.difficulty } : {}),
-    ...(values.commit ? { commit: values.commit } : {}),
+    ...(difficulty ? { difficulty } : {}),
+    ...(commit ? { commit } : {}),
     attachments,
     ...(await generation(values, repository)),
   });
+  print(values, reply, () => taskLine(reply.task as Task));
 }
 
-/** `tasks`: a repository's tasks; `task show|pull|revise|approve|reject|unreview|cancel|delete`. */
-export async function taskCommand(args: string[], list: boolean): Promise<void> {
-  const [action, ...rest] = list ? ["list", ...args] : args;
-  const { values, positionals } = parseArgs({
-    args: rest,
-    options: {
-      ...REPOSITORY,
-      ...GENERATION,
-      note: { type: "string" },
-      feedback: { type: "string" },
-      "feedback-file": { type: "string" },
-      draft: { type: "string" },
-    },
-    allowPositionals: true,
-    strict: true,
-  });
-  const tasks = `${repositoryPath(values)}/tasks`;
-  if (action === "list") return await passthrough("GET", tasks);
-  const [runId, taskId, directory] = positionals;
-  if (!runId || !taskId) throw new Error(`usage: self-bench task ${action} RUN_ID TASK_ID …`);
-  const task = `${tasks}/${encodeURIComponent(runId)}/${encodeURIComponent(taskId)}`;
+interface Task {
+  runId: string;
+  taskId: string;
+  state: string;
+  difficulty: string;
+  title?: string;
+  sourcePr?: number;
+  reasonSummary?: string;
+  review?: { decision: string; note?: string };
+}
+
+const taskLine = (task: Task) => `Started ${task.runId}/${task.taskId} (${task.state}).`;
+
+/** `tasks`: a repository's tasks; `task <action> RUN_ID TASK_ID`. */
+export async function taskCommand(args: string[], listing: boolean): Promise<void> {
+  const [action, ...rest] = listing ? ["list", ...args] : args;
+  if (action === "results" || action === "explain" || action === "audit")
+    return await taskEvaluationCommand(action, rest);
+  const { values, positionals } = parse(rest, TASK_FLAGS);
+  const repository = repositoryPath(values);
+  if (action === "list") return await listTasks(values, repository);
+  if (action === "add-pr") {
+    const pr = flag(values, "pr") ?? positionals[0];
+    if (!pr) throw new Error("task add-pr needs --pr NUMBER or a pull request URL");
+    const reply = await requestJson(`${repository}/tasks/from-pr`, "POST", {
+      pr,
+      ...(await generation(values, repository)),
+    });
+    return print(values, reply, () => taskLine(reply.task as Task));
+  }
+  const runId = positional(positionals, 0, "RUN_ID");
+  const taskId = positional(positionals, 1, "TASK_ID");
+  const task = taskPath(repository, runId, taskId);
   switch (action) {
     case "show":
-      return await passthrough("GET", task);
+      return print(values, await requestJson(task));
     case "pull":
-      return await pullDraft(`${task}/draft`, directory ?? taskId);
+      return await pullDraft(values, `${task}/draft`, positionals[2] ?? taskId);
     case "revise": {
       const feedback = await textOption(values, "feedback");
       if (!feedback) throw new Error("task revise needs --feedback or --feedback-file");
-      return await passthrough("POST", `${task}/feedback`, {
+      const draft = flag(values, "draft");
+      const reply = await requestJson(`${task}/feedback`, "POST", {
         feedback,
-        ...(await generation(values, repositoryPath(values))),
-        ...(typeof values.draft === "string" ? { draft: await packDraft(values.draft) } : {}),
+        ...(await generation(values, repository)),
+        ...(draft ? { draft: await packDraft(draft) } : {}),
       });
+      return print(values, reply, () => taskLine(reply.task as Task));
     }
     case "approve":
-    case "reject":
-      return await passthrough("PUT", `${task}/review`, {
+    case "reject": {
+      const note = flag(values, "note");
+      const reply = await requestJson(`${task}/review`, "PUT", {
         decision: action,
-        ...(values.note ? { note: values.note } : {}),
+        ...(note ? { note } : {}),
       });
+      return print(values, reply, () => `${runId}/${taskId}: ${(reply.task as Task).state}`);
+    }
     case "unreview":
-      return await passthrough("DELETE", `${task}/review`);
+      return print(values, await requestJson(`${task}/review`, "DELETE"));
     case "cancel":
-      return await passthrough("POST", `${task}/cancel`);
+      return print(values, await requestJson(`${task}/cancel`, "POST"));
     case "delete":
-      return await passthrough("DELETE", task);
+      return print(values, await requestJson(task, "DELETE"));
     default:
       throw new Error(`unknown task command: ${action ?? ""}`);
   }
 }
 
-function repositoryPath(values: Values): string {
-  const repo = typeof values.repo === "string" ? values.repo : "";
-  const [owner, name, extra] = repo.split("/");
-  if (!owner || !name || extra !== undefined) throw new Error("--repo OWNER/NAME is required");
-  const org = typeof values.org === "string" ? values.org : owner;
-  return `/api/orgs/${encodeURIComponent(org)}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
-}
-
-/** `--NAME TEXT`, or `--NAME-file PATH` read as UTF-8. */
-async function textOption(values: Values, name: string): Promise<string | undefined> {
-  const file = values[`${name}-file`];
-  if (typeof file === "string") return await readFile(file, "utf8");
-  const text = values[name];
-  return typeof text === "string" ? text : undefined;
-}
-
-/**
- * `{generation}` from `--generation JSON` or `--generation @FILE`, else from the flags. A
- * deployment that stores no credentials takes no settings, which generation-options says.
- */
-async function generation(
-  values: Values,
-  repository: string,
-): Promise<{ generation?: Record<string, unknown> }> {
-  if (typeof values.generation === "string") {
-    const text = values.generation.startsWith("@")
-      ? await readFile(values.generation.slice(1), "utf8")
-      : values.generation;
-    return { generation: JSON.parse(text) as Record<string, unknown> };
-  }
-  const offered = await requestJson(`${repository}/generation-options`);
-  return offered.available === false ? {} : { generation: generationFromFlags(values) };
-}
-
-/** The settings the flags describe; omitted ones take the app's defaults. */
-export function generationFromFlags(values: Values): Record<string, unknown> {
-  const flag = (name: string) => {
-    const value = values[name];
-    return typeof value === "string" ? value : undefined;
-  };
-  const model = flag("model") ?? "gpt-6.1-sol";
-  const modelCredential = flag("model-credential");
-  const optional = {
-    sandboxCredentialId: flag("sandbox-credential"),
-    harborEnvironment: flag("harbor"),
-    harborCredentialId: flag("harbor-credential"),
-  };
-  return {
-    authorModel: model,
-    verifierModel: flag("verifier-model") ?? model,
-    reasoning: flag("reasoning") ?? "high",
-    modelAccess: modelCredential ? "credential" : "managed",
-    ...(modelCredential ? { modelCredentialId: modelCredential } : {}),
-    sandbox: flag("sandbox") ?? "managed",
-    ...Object.fromEntries(Object.entries(optional).filter(([, value]) => value !== undefined)),
-  };
+async function listTasks(values: Values, repository: string): Promise<void> {
+  const reply = await requestJson(`${repository}/tasks`);
+  const state = flag(values, "state");
+  const tasks = (reply.tasks as Task[]).filter((task) => !state || task.state === state);
+  print(values, { tasks }, () =>
+    table(tasks, [
+      ["TASK", (task) => `${task.runId}/${task.taskId}`],
+      ["STATE", (task) => task.state],
+      ["DIFFICULTY", (task) => task.difficulty],
+      ["SOURCE", (task) => task.title ?? (task.sourcePr ? `PR #${task.sourcePr}` : "")],
+      ["NOTE", (task) => task.review?.note ?? task.reasonSummary],
+    ]),
+  );
 }
 
 /** Downloads the task's draft and unpacks it into a new or empty directory. */
-async function pullDraft(path: string, directory: string): Promise<void> {
+async function pullDraft(values: Values, path: string, directory: string): Promise<void> {
   const destination = resolve(directory);
   await mkdir(destination, { recursive: true });
   if ((await readdir(destination)).length > 0)
@@ -190,7 +168,7 @@ async function pullDraft(path: string, directory: string): Promise<void> {
   } finally {
     await rm(scratch, { recursive: true, force: true });
   }
-  console.log(JSON.stringify({ draft: destination }, null, 2));
+  print(values, { draft: destination }, () => `Pulled into ${destination}`);
 }
 
 /** The author's files in `directory` (as `pull` left them) as a base64 tar.gz. */

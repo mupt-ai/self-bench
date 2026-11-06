@@ -96,7 +96,8 @@ For frontend work, `bun run dev:site` runs the API and Vite with hot reload (sec
 
 ## Documentation
 
-- [Mintlify docs](docs/): guides, public results API, and workspace API (`cd docs && npm ci && npm run dev`)
+- [Mintlify docs](docs/): guides, the CLI, and the API (`cd docs && npm ci && npm run dev`)
+- [CLI](docs/cli/overview.mdx) · [CLI Commands](docs/cli/commands.mdx)
 - [How it works](docs/concepts/task-generation.mdx): the pipeline and what makes a task valid
 - [Public Results API](docs/api-reference/overview.mdx) · [Workspace API](docs/api-reference/workspace.mdx)
 - [Infrastructure](infra/README.md)

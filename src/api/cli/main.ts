@@ -1,75 +1,87 @@
-import { parseArgs } from "node:util";
 import { fail } from "../../lib/util.js";
 import { download, passthrough } from "./api-client.js";
+import { readConfig } from "./config.js";
+import { credentialCommand } from "./credentials.js";
+import {
+  catalogCommand,
+  compareCommand,
+  comparisonCommand,
+  evaluationRunCommand,
+  resultsCommand,
+  summariesCommand,
+} from "./evaluations.js";
+import { groupCommand } from "./groups.js";
 import { printHelp } from "./help.js";
+import { loginCommand, logoutCommand, orgCommand } from "./login.js";
+import { grantCommand } from "./operator.js";
+import { benchmarkCommand, releaseCommand } from "./releases.js";
 import { scenarioCommand, taskCommand } from "./tasks.js";
+import { interactive } from "./tui.js";
 import { requiredArgument } from "./values.js";
+import {
+  batchCommand,
+  evalCommand,
+  generateCommand,
+  prsCommand,
+  repoCommand,
+  whoamiCommand,
+} from "./workspace.js";
+
+type Command = (args: string[]) => Promise<void>;
+
+/** Each command, by name; plurals list, singulars act on one. */
+const COMMANDS: Record<string, Command> = {
+  login: loginCommand,
+  logout: logoutCommand,
+  org: orgCommand,
+  whoami: whoamiCommand,
+  credentials: (args) => credentialCommand(args, true),
+  credential: (args) => credentialCommand(args, false),
+  repos: (args) => repoCommand(args, true),
+  repo: (args) => repoCommand(args, false),
+  eval: evalCommand,
+  prs: prsCommand,
+  generate: generateCommand,
+  batches: (args) => batchCommand(args, true),
+  batch: (args) => batchCommand(args, false),
+  scenario: scenarioCommand,
+  tasks: (args) => taskCommand(args, true),
+  task: (args) => taskCommand(args, false),
+  catalog: catalogCommand,
+  compare: compareCommand,
+  comparisons: (args) => comparisonCommand(args, true),
+  comparison: (args) => comparisonCommand(args, false),
+  runs: (args) => evaluationRunCommand(args, true),
+  run: (args) => evaluationRunCommand(args, false),
+  results: resultsCommand,
+  summaries: summariesCommand,
+  releases: (args) => releaseCommand(args, true),
+  release: (args) => releaseCommand(args, false),
+  benchmarks: (args) => benchmarkCommand(args, true),
+  benchmark: (args) => benchmarkCommand(args, false),
+  groups: (args) => groupCommand(args, true),
+  group: (args) => groupCommand(args, false),
+  // Operator commands, on the deployment's own token.
+  status: (args) => passthrough("GET", `/v1/runs/${requiredArgument(args, "run ID")}`),
+  cancel: (args) => passthrough("POST", `/v1/runs/${requiredArgument(args, "run ID")}/cancel`),
+  list: () => passthrough("GET", "/v1/runs"),
+  download: (args) =>
+    download(requiredArgument(args, "run ID"), args[1] ?? fail("output path is required")),
+  grant: grantCommand,
+};
 
 export async function runCli(args: string[]): Promise<void> {
   const [command, ...rest] = args;
-  switch (command) {
-    case "status":
-      await passthrough("GET", `/v1/runs/${requiredArgument(rest, "run ID")}`);
-      break;
-    case "cancel":
-      await passthrough("POST", `/v1/runs/${requiredArgument(rest, "run ID")}/cancel`);
-      break;
-    case "list":
-      await passthrough("GET", "/v1/runs");
-      break;
-    case "download":
-      await download(requiredArgument(rest, "run ID"), rest[1] ?? fail("output path is required"));
-      break;
-    case "grant":
-      await grantCommand(rest);
-      break;
-    case "scenario":
-      await scenarioCommand(rest);
-      break;
-    case "tasks":
-      await taskCommand(rest, true);
-      break;
-    case "task":
-      await taskCommand(rest, false);
-      break;
-    case "help":
-    case "--help":
-    case "-h":
-    case undefined:
-      printHelp();
-      break;
-    default:
-      throw new Error(`unknown command: ${command}`);
-  }
+  if (command === "help" || command === "--help" || command === "-h") return printHelp();
+  // Bare `self-bench` signs in first, as `dari` does, then shows what it can do.
+  if (command === undefined) return await welcome();
+  const run = COMMANDS[command];
+  if (!run) throw new Error(`unknown command: ${command} (see self-bench help)`);
+  await run(rest);
 }
 
-/** `grant create|list|revoke`: customers' pull grants for tasks' images (registry-grants.ts). */
-async function grantCommand(args: string[]): Promise<void> {
-  const [action, ...rest] = args;
-  if (action === "list") return await passthrough("GET", "/v1/registry-grants");
-  if (action === "revoke")
-    return await passthrough(
-      "POST",
-      `/v1/registry-grants/${encodeURIComponent(requiredArgument(rest, "grant ID"))}/revoke`,
-    );
-  if (action !== "create") throw new Error("usage: self-bench grant create|list|revoke");
-  const { values } = parseArgs({
-    args: rest,
-    options: {
-      label: { type: "string" },
-      task: { type: "string", multiple: true },
-      days: { type: "string" },
-      "with-verifier": { type: "boolean", default: false },
-    },
-    strict: true,
-  });
-  const taskIds = (values.task ?? []).map(Number);
-  if (!values.label || taskIds.length === 0 || taskIds.some((id) => !Number.isSafeInteger(id)))
-    throw new Error("grant create needs --label and at least one numeric --task");
-  await passthrough("POST", "/v1/registry-grants", {
-    label: values.label,
-    taskIds,
-    withVerifier: values["with-verifier"],
-    ...(values.days ? { days: Number(values.days) } : {}),
-  });
+async function welcome(): Promise<void> {
+  if (!process.env.SELFBENCH_API_KEY && !readConfig().apiKey && interactive())
+    await loginCommand([]);
+  printHelp();
 }

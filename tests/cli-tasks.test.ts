@@ -2,8 +2,8 @@ import { afterEach, expect, spyOn, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { generationFromFlags } from "../src/api/cli/generation.js";
 import { runCli } from "../src/api/cli/main.js";
-import { generationFromFlags } from "../src/api/cli/tasks.js";
 import type { ScenarioCandidate } from "../src/contracts/index.js";
 import { createTaskStore } from "../src/db/tasks.js";
 import { mint } from "./support/api-keys.js";
@@ -13,6 +13,8 @@ import { gzippedTar, tarEntries } from "./support/tar.js";
 
 let server: AuthServer | undefined;
 const roots: string[] = [];
+// A developer's own `self-bench login` must not leak into these tests.
+process.env.XDG_CONFIG_HOME = "/nonexistent/selfbench-test-config";
 const environment = { ...process.env };
 afterEach(async () => {
   await server?.stop();

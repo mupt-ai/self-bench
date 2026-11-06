@@ -33,6 +33,8 @@ To evaluate Jev through Dari, create a separate Dari router with Jev as its sele
 
 ## Read Results
 
-Open **Results** to compare accuracy and model API cost per task. Inspect a trial to read its transcript, scores, and artifacts. The Pareto frontier highlights settings that are not beaten on both accuracy and cost.
+Open **Results** to compare accuracy and model API cost per task, and inspect a trial to read its transcript, scores, and artifacts. [Inspect Results](/guides/inspect-results) covers failure explanations, task audits, and model summaries.
+
+From the terminal, `self-bench compare --repo OWNER/NAME --model ID` starts a comparison and `self-bench results` reads it. See [CLI Commands](/cli/commands#evaluate).
 
 To share aggregate results for a public repository, [publish a release](/guides/publish-results). Per-task results stay private unless you choose to publish them with the release.
