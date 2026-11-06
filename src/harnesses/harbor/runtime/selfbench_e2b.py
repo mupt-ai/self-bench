@@ -87,6 +87,10 @@ REGISTRY_WAIT_SECS = 2
 PLAN_LIMIT = re.compile(r"Timeout cannot be greater than (\d+) hours?")
 MEMORY_LIMIT = re.compile(r"Memory can't be higher than (\d+) MiB")
 IMAGE_ENV = "/etc/profile.d/selfbench-image-env.sh"
+# Set for an evaluation's trials, whose templates its image preparation built (or failed to):
+# a failed build fails the trial, as every trial building it again would cancel each other's
+# builds ("build was cancelled") and fail anyway.
+PREPARED = "SELFBENCH_E2B_TEMPLATES_PREPARED"
 # Keeps templates built without IMAGE_ENV from being reused.
 TEMPLATE_SUFFIX = "__env"
 DOCKER_HUB = "registry-1.docker.io"
@@ -161,6 +165,10 @@ class SelfBenchE2BEnvironment(E2BEnvironment):
         try:
             await self._when_free(f"template build {self._template_name}", self._build_template)
         except BuildException as error:
+            # A build requested while this one ran (another evaluation's) cancelled it, and is
+            # the one to wait for.
+            if str(error) == "build was cancelled" and await self._template_ready():
+                return
             # BuildException carries no status_code; the message leads with the status.
             limit = MEMORY_LIMIT.search(str(error))
             if not str(error).startswith("400:") or not limit:
@@ -259,11 +267,12 @@ class SelfBenchE2BEnvironment(E2BEnvironment):
         while build is not None:
             info = BuildInfo(template_id=name, build_id=build, name=name, alias=name, tags=[TAG])
             try:
-                status = (await AsyncTemplate.get_build_status(info)).status
+                response = await AsyncTemplate.get_build_status(info)
+                status = response.status
             except BuildException as error:
                 if str(error) != f"400: Build '{build}' not found":
                     raise
-                status = None
+                response, status = None, None
             if status == TemplateBuildStatus.READY:
                 return True
             if status is None or status == TemplateBuildStatus.ERROR:
@@ -271,6 +280,8 @@ class SelfBenchE2BEnvironment(E2BEnvironment):
                 # build is the one to wait for; building again would cancel it.
                 current = await self._default_build()
                 if current is None or current == build:
+                    if status == TemplateBuildStatus.ERROR and os.environ.get(PREPARED) == "1":
+                        raise BuildException(failed_build(name, response))
                     self.logger.warning(
                         f"Template {name} build {build} did not finish; building it again"
                     )
@@ -322,6 +333,16 @@ class SelfBenchE2BEnvironment(E2BEnvironment):
             alias=self._template_name,
             **{key: value for key, value in resources.items() if value is not None},
         )
+
+
+def failed_build(name: str, response) -> str:
+    """Why a template's build failed, as E2B reports it."""
+    reason = getattr(response, "reason", None)
+    lines = [getattr(entry, "message", str(entry)) for entry in getattr(reason, "log_entries", None) or []]
+    detail = "\n".join([getattr(reason, "message", None) or "", *lines[-20:]]).strip()
+    return f"E2B could not make the task's image into template {name}" + (
+        f": {detail}" if detail else ""
+    )
 
 
 def mib(amount: int) -> str:

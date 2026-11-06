@@ -14,9 +14,10 @@ instead of building it again (and parallel trials of one task never build it sid
   Data limit exceeded"), and Modal reports every failed build alike, so a build is tried again,
   waiting longer each time, before the task's trials are left to build it themselves.
 - E2B: the template Harbor names after the environment's content hash is built unless its last
-  build is ready (selfbench_e2b.py), as the trial's environment checks it.
+  build is ready (selfbench_e2b.py), as the trial's environment checks it. A build E2B ends in
+  error is reported, not raised: the task's trials fail with it instead of building it again.
 
-Prints one line per image: `<role> <built|exists|skipped> [image]`.
+Prints one line per image: `<role> <built|exists|skipped> [image]`, or `<role> failed <why>`.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from __future__ import annotations
 import asyncio
 import os
 import random
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -84,10 +86,20 @@ async def _e2b(task: Task, context: Path, config, scratch: Path) -> str:
         trial_paths=TrialPaths(scratch),
         task_env_config=config,
     )
+    from e2b import BuildException
+
+    name = environment._template_name
     if await environment._does_template_exist():
-        return f"exists {environment._template_name}"
-    await environment._create_template()
-    return f"built {environment._template_name}"
+        return f"exists {name}"
+    try:
+        await environment._create_template()
+    except BuildException as error:
+        # E2B's own outage may pass; the trials then build the template themselves.
+        if re.match(r"5\d\d:", str(error)):
+            raise
+        why = " ".join(str(error).split())
+        return f"failed E2B could not make it into template {name}: {why}"
+    return f"built {name}"
 
 
 async def main(path: str, backend: str) -> None:

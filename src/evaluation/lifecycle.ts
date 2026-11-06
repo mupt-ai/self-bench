@@ -32,17 +32,21 @@ export async function startEvaluation(
   return run.trials.length;
 }
 
-/** Fails a trial whose activity ended without recording an outcome (a lost or timed-out worker). */
+/**
+ * Fails a trial whose activity ended without recording an outcome (a lost or timed-out worker), or
+ * that could not start because its images could not be built (`error`).
+ */
 export async function failTrial(
   store: ArtifactStore,
   input: EvaluationInput,
   index: number,
+  error: string = INTERRUPTED,
 ): Promise<void> {
   await updateEvaluation(store, input, input.id, (run) => {
     const trial = run.trials[index];
     if (!trial || (trial.status !== "queued" && trial.status !== "running")) return false;
     trial.status = "failed";
-    trial.error = INTERRUPTED;
+    trial.error = error;
     trial.finishedAt = new Date().toISOString();
   });
 }

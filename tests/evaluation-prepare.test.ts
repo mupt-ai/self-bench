@@ -2,12 +2,14 @@ import { afterEach, expect, test } from "bun:test";
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ActivityFailure, ApplicationFailure, RetryState } from "@temporalio/common";
 import { CancelledFailure } from "@temporalio/workflow";
 import { LocalArtifactStore } from "../src/artifacts/index.js";
 import { prepareTaskImages } from "../src/evaluation/prepare.js";
+import { TASK_IMAGES_FAILED, taskImagesFailed } from "../src/evaluation/refusal.js";
 import { trialInput } from "../src/evaluation/trial-input.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";
-import { taskImagesReady } from "../src/evaluation/workflow.js";
+import { runTrial, taskImagesReady } from "../src/evaluation/workflow.js";
 import { HARBOR_VERSION, harborPythonPath } from "../src/harnesses/harbor/command.js";
 import { runCommand } from "../src/lib/process.js";
 import { credentialedInput, evaluationInput } from "./support/evaluation-fixture.js";
@@ -78,6 +80,34 @@ test("a cancelled build stops the task's trials, and backends without a shared i
   await docker(0);
 });
 
+test("an image the provider could not build fails the task's trials with why, before they start", async () => {
+  const why = "The verifier image: E2B could not make it into template t__env: provisioning failed";
+  const ready = taskImagesReady(twoTasks("e2b"), {
+    prepareTaskImages: async () => {
+      // As Temporal hands the workflow an activity's non-retryable failure.
+      throw new ActivityFailure(
+        "failed",
+        "prepareTaskImages",
+        "1",
+        RetryState.NON_RETRYABLE_FAILURE,
+        "w",
+        taskImagesFailed(why),
+      );
+    },
+  });
+  const failure = await ready(0).catch((error: unknown) => error);
+  expect(failure).toBeInstanceOf(ApplicationFailure);
+  expect((failure as ApplicationFailure).type).toBe(TASK_IMAGES_FAILED);
+  const failed: [number, string | undefined][] = [];
+  await runTrial(
+    twoTasks("e2b"),
+    0,
+    { runSolverTrial: () => ready(0) },
+    { failSolverTrial: async (_input, index, error) => void failed.push([index, error]) },
+  );
+  expect(failed).toEqual([[0, why]]);
+});
+
 test("the build runs on Harbor's own Python with the evaluation's sandbox", async () => {
   const root = await temporary();
   const bin = join(root, "bin");
@@ -128,4 +158,26 @@ test("the build runs on Harbor's own Python with the evaluation's sandbox", asyn
   expect(build?.args.slice(2)).toEqual(["modal"]);
   expect(build?.env?.MODAL_TOKEN_SECRET).toBe("modal-secret");
   expect(build?.env?.PYTHONPATH).toBe(harborPythonPath());
+
+  // An image E2B could not make a template of fails the build, with why.
+  const failing: typeof runCommand = async (name, args, options) => {
+    const answer = await command(name, args, options);
+    if (args[0] === "--version") return answer;
+    return { ...answer, stdout: "agent exists a__env\nverifier failed E2B could not make it\n" };
+  };
+  const refused = await prepareTaskImages(store, trialInput(input, 0), {
+    command: failing,
+    vault,
+    env: {
+      PATH: bin,
+      SELFBENCH_MANAGED_OFFERING: "true",
+      SELFBENCH_MANAGED_MODAL_TOKEN_ID: "m",
+      SELFBENCH_MANAGED_MODAL_TOKEN_SECRET: "s",
+    },
+  }).catch((error: unknown) => error);
+  expect(refused).toMatchObject({
+    type: TASK_IMAGES_FAILED,
+    nonRetryable: true,
+    message: "The verifier image: E2B could not make it",
+  });
 });

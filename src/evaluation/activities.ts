@@ -22,7 +22,7 @@ export interface EvaluationActivities {
   explainSolverTrial(trial: FailedTrial): Promise<void>;
   auditSolverTask(request: TaskAuditRequest): Promise<void>;
   summarizeSolverModels(request: ModelSummaryRequest): Promise<void>;
-  failSolverTrial(input: EvaluationInput, index: number): Promise<void>;
+  failSolverTrial(input: EvaluationInput, index: number, error?: string): Promise<void>;
   finishSolverEvaluation(input: EvaluationInput): Promise<void>;
   failSolverEvaluation(input: EvaluationInput): Promise<void>;
 }
@@ -110,7 +110,7 @@ export function createEvaluationActivities(
         redact: (text) => redactOutput(text, environmentSecrets(process.env)),
         signal: Context.current().cancellationSignal,
       }),
-    failSolverTrial: (input, index) => failTrial(store, input, index),
+    failSolverTrial: (input, index, error) => failTrial(store, input, index, error),
     finishSolverEvaluation: (input) => finishEvaluation(store, input),
     failSolverEvaluation: (input) =>
       failEvaluation(

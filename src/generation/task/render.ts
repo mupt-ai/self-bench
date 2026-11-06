@@ -1,5 +1,6 @@
 import type { Difficulty } from "../../contracts/index.js";
 import { COMPILER_REVISION, HARBOR_SCHEMA_VERSION } from "./constants.js";
+import { LIVE_APT_SOURCES } from "./live-apt.js";
 
 /**
  * A compiled task besides its files: its candidate's identity, and its tier (audit.ts). A pull
@@ -155,14 +156,16 @@ WORKDIR /app
 }
 
 /**
- * The author's Dockerfile, then the snapshot it unpacked into /app committed as the base, which
- * the setup it ran leaves as uncommitted changes. Both images share this.
+ * The author's Dockerfile, with apt back on its live mirrors (LIVE_APT_SOURCES), then the snapshot
+ * it unpacked into /app committed as the base, which the setup it ran leaves as uncommitted
+ * changes. Both images share this.
  */
 function baseDockerfile(authored: string): string {
   const fail = (problem: string) => `{ echo ${JSON.stringify(problem)} >&2; exit 1; }`;
   return `${authored.trimEnd()}
 USER root
 ENTRYPOINT []
+RUN ${LIVE_APT_SOURCES}
 COPY repo.tar.gz /tmp/selfbench-repo.tar.gz
 RUN for tool in bash git pkill runuser tar useradd; do \\
       command -v "$tool" >/dev/null || ${fail("SelfBench needs $tool in the image")}; \\

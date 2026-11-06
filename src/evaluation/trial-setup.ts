@@ -144,6 +144,7 @@ export async function setUpTrial(
   const pull = await startFromTaskImages(taskPath, task.images, run.sandbox, {
     env: options.env,
     ...(options.snapshotLink ? { callback: options.snapshotLink } : {}),
+    ...(options.setupSignal ? { signal: options.setupSignal } : {}),
   });
   if (pull.SELFBENCH_REGISTRY_PASSWORD) secrets.push(pull.SELFBENCH_REGISTRY_PASSWORD);
   return {
@@ -154,7 +155,13 @@ export async function setUpTrial(
     modelAuth: execution.auth,
     // A gateway trial's cost is what the gateway recorded for its calls (runner.ts).
     ...(gatewayed ? { gatewayOrgId: execution.credential.orgId } : {}),
-    child: { ...judged.child, ...pull },
+    child: {
+      ...judged.child,
+      ...pull,
+      // Its evaluation built the task's E2B templates first (prepareTaskImages); one that failed
+      // fails the trial rather than being built again by each of the task's trials at once.
+      ...(run.sandbox === "e2b" ? { SELFBENCH_E2B_TEMPLATES_PREPARED: "1" } : {}),
+    },
     verifierEnv: judged.verifierEnv,
     guard: prepared.guard,
   };

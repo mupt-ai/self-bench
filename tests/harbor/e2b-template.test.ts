@@ -26,6 +26,9 @@ templates = {f"{name}__env": value for name, value in {
     # Its build fails once another waiter has started b8 under the same name.
     "moved": ("b7", TemplateBuildStatus.ERROR),
 }.items()}
+# Why E2B says a build failed.
+reasons = {"failed__env": types.SimpleNamespace(message="error waiting for provisioning sandbox", log_entries=[
+    types.SimpleNamespace(message="E: Release file for https://snapshot.debian.org/... is expired")])}
 # A build another trial started: it is still running when first asked, then ends as given.
 later = {"building__env": TemplateBuildStatus.READY, "waiting__env": TemplateBuildStatus.ERROR}
 class AsyncTemplate:
@@ -46,7 +49,7 @@ class AsyncTemplate:
         if info.template_id == "unrelated-error__env": raise BuildException("401: Unauthorized")
         if info.template_id in later:
             templates[info.template_id] = (build, later.pop(info.template_id))
-        return types.SimpleNamespace(status=status)
+        return types.SimpleNamespace(status=status, reason=reasons.get(info.template_id))
 e2b.AsyncTemplate, e2b.BuildException, e2b.BuildInfo, e2b.TemplateBuildStatus = AsyncTemplate, BuildException, BuildInfo, TemplateBuildStatus
 class E2BEnvironment:
     def __init__(self, name):
@@ -70,6 +73,18 @@ async def check():
         assert str(error) == "401: Unauthorized", error
     else:
         raise AssertionError("unrelated E2B errors must propagate")
+    # In a trial, whose evaluation built its templates first, a failed build fails the trial with
+    # E2B's reason: every trial building it again would cancel the others' builds.
+    module.os.environ["SELFBENCH_E2B_TEMPLATES_PREPARED"] = "1"
+    try:
+        await module.SelfBenchE2BEnvironment("failed")._does_template_exist()
+    except BuildException as error:
+        assert str(error).startswith("E2B could not make the task's image into template failed__env: error waiting for provisioning sandbox"), error
+        assert str(error).endswith("is expired"), error
+    else:
+        raise AssertionError("a prepared trial must not build a failed template again")
+    # A build E2B has no record of is still built again.
+    assert await module.SelfBenchE2BEnvironment("missing-build")._does_template_exist() is False
 asyncio.run(check())
 `,
     ENVIRONMENT,
@@ -153,6 +168,39 @@ async def check():
     assert "support@e2b.dev" in str(refused) and str(refused.__cause__) == capped, refused
     # Any other failed build is E2B's own.
     assert str(await refusal(setup)) == setup
+asyncio.run(check())
+`,
+    ENVIRONMENT,
+  ]);
+  expect(result.stderr).toBe("");
+  expect(result.exitCode).toBe(0);
+});
+
+test("a template build another build cancelled waits for that build", async () => {
+  const result = await runCommand("python3", [
+    "-c",
+    `${STUBS}import asyncio, logging, pathlib
+class BuildException(Exception): pass
+e2b.BuildException = BuildException
+${BUILDER}async def cancelled(template, alias, **resources): raise BuildException("build was cancelled")
+AsyncTemplate.build = cancelled
+module = load()
+async def dockerfile_env(path): return {}
+module.dockerfile_env = dockerfile_env
+async def check():
+    environment = module.SelfBenchE2BEnvironment()
+    async def ready(): return True
+    environment._template_ready = ready
+    await environment._create_template()
+    # Without a later build that finished, the cancellation is the failure.
+    async def not_ready(): return False
+    environment._template_ready = not_ready
+    try:
+        await environment._create_template()
+    except BuildException as error:
+        assert str(error) == "build was cancelled", error
+    else:
+        raise AssertionError("a cancelled build with nothing to wait for must fail")
 asyncio.run(check())
 `,
     ENVIRONMENT,

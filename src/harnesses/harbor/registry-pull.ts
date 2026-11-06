@@ -4,6 +4,7 @@ import { parse, stringify } from "smol-toml";
 import type { HarborEnvironment } from "../../contracts/config/providers.js";
 import { isArtifactRegistry } from "../../contracts/config/task-images.js";
 import type { TaskImages } from "../../contracts/index.js";
+import { withLiveApt } from "../../generation/images/live-apt.js";
 import { isRecord } from "../../lib/util.js";
 import {
   proxiedImage,
@@ -86,7 +87,7 @@ async function applyTaskImages(taskDirectory: string, images: TaskImages): Promi
 
 /**
  * Starts a checked task (a trial, its image preparation, or a generation check) from the task's
- * images instead of its Dockerfiles. Docker pulls them straight from the repository, with the
+ * images instead of its Dockerfiles; on E2B, ones with apt on its live mirrors (withLiveApt). Docker pulls them straight from the repository, with the
  * host's own registry login. Every other provider pulls through the API's registry endpoint with a
  * grant for exactly these two images (the only credential that leaves), which needs the repository
  * in Artifact Registry and the sandbox callback's origin and secret. Returns the variables the
@@ -96,11 +97,23 @@ export async function startFromTaskImages(
   taskDirectory: string,
   images: TaskImages | undefined,
   environment: HarborEnvironment,
-  serving: { readonly env: NodeJS.ProcessEnv; readonly callback?: { url: string; secret: string } },
+  serving: {
+    readonly env: NodeJS.ProcessEnv;
+    readonly callback?: { url: string; secret: string };
+    readonly signal?: AbortSignal;
+  },
 ): Promise<Readonly<Record<string, string>>> {
-  if (!images) return {};
+  // E2B installs its own packages into an image with the image's apt.
+  const pulled = await withLiveApt(
+    taskDirectory,
+    images,
+    environment,
+    serving.env,
+    serving.signal ? { signal: serving.signal } : {},
+  );
+  if (!pulled) return {};
   if (environment === "docker") {
-    await applyTaskImages(taskDirectory, images);
+    await applyTaskImages(taskDirectory, pulled);
     return {};
   }
   const repository = serving.env.SELFBENCH_TASK_IMAGE_REPOSITORY;
@@ -109,7 +122,7 @@ export async function startFromTaskImages(
     throw new Error(
       `${environment} pulls task images through the API, which needs an Artifact Registry SELFBENCH_TASK_IMAGE_REPOSITORY and the sandbox callback`,
     );
-  const pull = taskImagePull(images, {
+  const pull = taskImagePull(pulled, {
     repository,
     origin: callback.url,
     secret: callback.secret,
