@@ -185,10 +185,13 @@ function VariantDialog({
   );
 }
 
-/** Opens the variant dialog for an accepted task. */
+/**
+ * Opens the variant dialog for a task that passed its checks, approved or still awaiting review,
+ * as the server allows: a variant is compared with it, not reviewed in its place.
+ */
 export function CreateVariantButton(props: { org: string; fullName: string; task: TaskItem }) {
   const [open, setOpen] = React.useState(false);
-  if (props.task.state !== "accepted") return null;
+  if (props.task.pipelineStatus !== "accepted" || props.task.state === "rejected") return null;
   return (
     <>
       <Button size="small" onClick={() => setOpen(true)}>
