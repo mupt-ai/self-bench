@@ -207,8 +207,18 @@ function benchmarkAdder(
 
 /** The benchmark routes' dependencies: the add starter and Harbor's registry listing. */
 export function benchmarkWiring(client: Client, fallbackQueue: string, env = process.env) {
+  const workflowId = (id: number) => `benchmark-add/${id}`;
   return {
     addBenchmark: benchmarkAdder(client, fallbackQueue, env),
+    async addRunning(id: number): Promise<boolean> {
+      try {
+        const { status } = await client.workflow.getHandle(workflowId(id)).describe();
+        return status.name === "RUNNING";
+      } catch (error) {
+        if (error instanceof WorkflowNotFoundError) return false;
+        throw error;
+      }
+    },
     registryCatalog: productionRegistryCatalog(env),
   };
 }

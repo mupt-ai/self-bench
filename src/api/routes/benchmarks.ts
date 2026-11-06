@@ -126,6 +126,10 @@ async function add({ options, store, tenant, user, request }: Context): Promise<
   if (!match) return [400, { error: "Enter a Harbor registry dataset as org/name@ref" }];
   if (!options.addBenchmark) return [503, { error: "Datasets can't be added here" }];
   const [name, ref] = [`${match[1]}/${match[2]}`, match[3] ?? "latest"];
+  // A box whose worker is still adding it is left alone; one `adding` with no worker is restarted.
+  const existing = await store.find(tenant.id, name);
+  if (existing?.status === "adding" && (await options.addRunning?.(existing.id)))
+    return [200, { benchmark: existing }];
   const { benchmark, started } = await store.start({
     orgId: tenant.id,
     name,

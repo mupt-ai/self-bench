@@ -54,6 +54,8 @@ export interface EvaluationRoutesOptions {
    * without it, datasets can't be added.
    */
   addBenchmark?: (input: BenchmarkAddInput) => Promise<void>;
+  /** Whether a box's add workflow is running now; a box `adding` with none running is restarted. */
+  addRunning?: (id: number) => Promise<boolean>;
   /** The org's benchmarks (Harbor registry datasets); without them, no benchmark routes. */
   benchmarks?: BenchmarkStore;
   /** Harbor registry's public datasets, which the add box searches; without it, none are listed. */

@@ -1,4 +1,4 @@
-import { and, asc, count, eq, getTableColumns } from "drizzle-orm";
+import { and, asc, count, eq, getTableColumns, inArray } from "drizzle-orm";
 import type { EvaluationInput } from "../evaluation/types.js";
 import type { Database } from "./client.js";
 import { benchmarkSummaries, benchmarks } from "./schema.js";
@@ -61,7 +61,7 @@ export function createBenchmarkStore(db: Database) {
       return (row?.taskList as FrozenTask[] | undefined) ?? [];
     },
     /**
-     * Starts adding the dataset: a new box, or a failed one tried again at `ref`. Returns the
+     * Starts adding the dataset: a new box, or a failed or stranded one tried again at `ref`. Returns the
      * org's benchmark of the same name, and whether a worker should now freeze its tasks.
      */
     async start(input: {
@@ -83,7 +83,8 @@ export function createBenchmarkStore(db: Database) {
           and(
             eq(benchmarks.orgId, input.orgId),
             eq(benchmarks.name, input.name),
-            eq(benchmarks.status, "failed"),
+            // A box still `adding` has no running worker (the caller checked), so it was stranded.
+            inArray(benchmarks.status, ["failed", "adding"]),
           ),
         )
         .returning(columns);

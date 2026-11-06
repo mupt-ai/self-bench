@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { benchmarks } from "../src/db/evaluation-schema.js";
 import { addBenchmarkWith } from "../src/evaluation/benchmark-add.js";
 import { runCommand } from "../src/lib/process.js";
 import { evaluationServer } from "./support/evaluation-fixture.js";
@@ -74,4 +75,35 @@ test("a failed freeze settles the box with the dataset's own reason, not Tempora
     { id: 7, name: "attacker/dataset", ref: "latest" },
   );
   expect(settled).toEqual([["fail", 7, "unsafe/leak: task bundle refused: task.toml sets env"]]);
+});
+
+test("a box left adding with no worker running is added again, not refused", async () => {
+  const hello = publishedTask("hello-world/hello-world", {}, "1".repeat(64));
+  const harbor = fakeHarbor({ "stranded/dataset@latest": [hello] }, runCommand);
+  const fixture = await evaluationServer(memoryVault(), { registryCommand: harbor.command });
+  const post = (body: unknown) => ({ method: "POST", body: JSON.stringify(body) });
+  try {
+    // A worker that died mid-add leaves its box `adding` with nothing to finish it.
+    await fixture.db.insert(benchmarks).values({
+      orgId: fixture.repo.orgId,
+      name: "stranded/dataset",
+      ref: "latest",
+      tasks: 0,
+      taskList: [],
+      addedBy: fixture.user.id,
+      status: "adding",
+    });
+    const again = await fixture.request(
+      fixture.benchmarks,
+      post({ reference: "stranded/dataset" }),
+    );
+    expect(again.status).toBe(202);
+    expect((await (await fixture.request(fixture.benchmarks)).json()).benchmarks[0]).toMatchObject({
+      name: "stranded/dataset",
+      status: "ready",
+      tasks: 1,
+    });
+  } finally {
+    await fixture.close();
+  }
 });
