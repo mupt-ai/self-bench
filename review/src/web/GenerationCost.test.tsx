@@ -49,8 +49,8 @@ test("active tasks always expose cancellation and cancelled tasks confirm it", (
       onRequested={() => {}}
     />,
   );
-  expect(active).toContain("Current Cost:");
-  expect(active).toContain(">Unknown</span>");
+  // The cost sits beside the task's state (TaskCost), so the controls hold only the cancel action.
+  expect(active).not.toContain("Current Cost:");
   expect(active).toContain("Cancel Generation");
   expect(active).not.toContain('disabled=""');
 
