@@ -124,8 +124,18 @@ harbor(
     expect(config).toContain('base_url = "https://api.selfbench.test/gateway/v1"');
     expect(config).toContain("supports_websockets = false");
     expect(config).toContain('model_reasoning_summary = "none"');
+    // GPT-6 Sol reads images, so Codex keeps its image tool.
+    expect(config).not.toContain("view_image");
   },
 );
+
+harbor("Codex on a custom endpoint is not offered the image tool", async () => {
+  // A router may have no model that reads images, and refuses a conversation holding one.
+  const { recorded, start } = await run(input("custom", "openai/shift-1"), "codex");
+  expect(argv(start("codex exec").command, "codex")).toContain("dari/model/custom/shift-1");
+  const config = recorded.files["/installed-agent/codex-home/config.toml"] ?? "";
+  expect(config).toMatch(/\[features\]\s*\nview_image = false/);
+});
 
 harbor(
   "Pi on the gateway reads the instruction as its prompt and the model's details",
