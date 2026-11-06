@@ -70,7 +70,7 @@ export async function loginCommand(args: string[]): Promise<void> {
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   const port = typeof address === "object" && address ? address.port : 0;
-  const loginUrl = `${origin}/auth/cli?${new URLSearchParams({
+  const loginUrl = `${new URL("/auth/cli", origin)}?${new URLSearchParams({
     callback: `http://127.0.0.1:${port}/callback`,
     state,
     challenge: createHash("sha256").update(verifier).digest("base64url"),

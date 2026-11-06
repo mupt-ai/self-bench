@@ -59,21 +59,40 @@ async function explain(values: Values, task: { runId: string; taskId: string }):
       ...(chosen ? { explanation: chosen } : {}),
     });
   if (values.wait !== true) return;
+  const stateOf = async (failure: (typeof failures)[number]) => {
+    const query = new URLSearchParams({ ...task, harness: failure.harness });
+    return await requestJson(`${pathOf(failure.evaluationId)}?${query}`);
+  };
   await waitFor("failure explanations", async () => {
-    const states = await Promise.all(
-      failures.map(async (failure) => {
-        const query = new URLSearchParams({ ...task, harness: failure.harness });
-        return await requestJson(`${pathOf(failure.evaluationId)}?${query}`);
-      }),
-    );
+    const states = await Promise.all(failures.map(stateOf));
     return states.some((state) => state.running === true) ? undefined : true;
   });
+  // Every job has stopped; one that left no explanation failed, and says why.
+  const [after] = (await results(values, task)).taskResults;
+  const explained = new Set(
+    (after?.results ?? [])
+      .filter((result) => result.failureSummary)
+      .map((result) => result.evaluationId + result.harness),
+  );
+  const missing = failures.filter(
+    (failure) => !explained.has(failure.evaluationId + failure.harness),
+  );
+  if (missing.length === 0) return;
+  const reasons = await Promise.all(
+    missing.map(async (failure) => String((await stateOf(failure)).reason ?? "no reason given")),
+  );
+  throw new Error(
+    `${missing.length} explanation(s) gave no answer: ${[...new Set(reasons)].join("; ")}`,
+  );
 }
 
 /** Starts a fairness audit of the task, and with `--wait`, waits for its verdict. */
 async function audit(values: Values, task: { runId: string; taskId: string }): Promise<void> {
   const chosen = selection(values);
-  if (!chosen) return;
+  if (!chosen)
+    throw new Error(
+      "task audit needs --model and --credential (task results shows the last audit)",
+    );
   const path = `${scopePath(values)}/evaluations/audit`;
   await requestJson(path, "POST", { ...task, audit: chosen });
   if (values.wait !== true) return;

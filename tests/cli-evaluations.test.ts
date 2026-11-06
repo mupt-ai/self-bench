@@ -172,3 +172,33 @@ test("task explain asks for each unexplained failure, then shows the task's resu
   ]);
   expect(printed).toEqual(report);
 });
+
+test("task audit refuses to run without a model, and a failed explanation surfaces its reason", async () => {
+  await expect(cli(["task", "audit", "batch-1", "t-1", "--repo", "acme/app"], {})).rejects.toThrow(
+    "--model and --credential",
+  );
+  const report = {
+    tasks: 1,
+    configurations: [],
+    taskResults: [
+      {
+        runId: "batch-1",
+        taskId: "t-1",
+        scored: 1,
+        passed: 0,
+        results: [{ configuration: "b", passed: false, evaluationId: "e-2", harness: "codex" }],
+      },
+    ],
+  };
+  await expect(
+    cli(["task", "explain", "batch-1", "t-1", "--repo", "acme/app", "--wait"], {
+      [`GET ${repo}/evaluations/results?runId=batch-1&taskId=t-1`]: report,
+      [`POST ${repo}/evaluations/e-2/explain`]: {},
+      [`GET ${repo}/evaluations/e-2/explain?runId=batch-1&taskId=t-1&harness=codex`]: {
+        available: false,
+        running: false,
+        reason: "Its last explanation just ended without one.",
+      },
+    }),
+  ).rejects.toThrow("gave no answer: Its last explanation just ended without one.");
+});
