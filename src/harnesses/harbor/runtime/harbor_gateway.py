@@ -3,7 +3,7 @@ gateway's model details, and Codex and Claude Code installs that work on any tas
 import shlex
 from typing import Any
 from harbor.agents.installed.claude_code import ClaudeCode
-from harbor.agents.installed.codex import Codex
+from harbor.agents.installed.codex import Codex, CodexOptions
 from harbor.agents.installed.pi import Pi, PiOptions
 from harbor_agents import EndsPiOptions, RetriesInstall
 
@@ -24,7 +24,16 @@ class SkipsSystemNode:
 OPENAI_MODELS = "dari/model/openai/"
 
 
+class GatewayCodexOptions(CodexOptions):
+    # Whether the trial's model reads images (acceptsImages). Codex offers its view_image tool to
+    # every model, and a model that views a screenshot puts an image in the conversation, which an
+    # endpoint without an image model refuses, failing the trial.
+    view_image: bool = True
+
+
 class GatewayCodex(RetriesInstall, SkipsSystemNode, Codex):
+    options_model = GatewayCodexOptions
+
     def _build_effective_config(self, openai_base_url=None):
         # Codex tries the Responses API over a WebSocket first, which the gateway (and a custom
         # endpoint) need not serve: give it a provider that speaks HTTPS only. Codex also asks
@@ -38,6 +47,8 @@ class GatewayCodex(RetriesInstall, SkipsSystemNode, Codex):
             model = (getattr(self, "model_name", None) or "").removeprefix("openai/")
             if not model.startswith(OPENAI_MODELS):
                 config["web_search"] = "disabled"
+            if not self.options.view_image:
+                config.setdefault("features", {})["view_image"] = False
             config["model_provider"] = "gateway"
             config.setdefault("model_providers", {})["gateway"] = {
                 "name": "Gateway",
