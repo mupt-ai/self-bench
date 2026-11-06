@@ -81,3 +81,52 @@ asyncio.run(check())
   expect(result.stderr).toBe("");
   expect(result.exitCode).toBe(0);
 });
+
+test("E2B prepare reports a template E2B could not build, and raises E2B's own outage", async () => {
+  const result = await runCommand(
+    "python3",
+    [
+      "-I",
+      "-c",
+      `import asyncio, importlib.util, pathlib, sys, types
+class BuildException(Exception): pass
+e2b = types.ModuleType("e2b"); e2b.BuildException = BuildException
+failure = None
+class Environment:
+    def __init__(self, **kwargs): self._template_name = "task__abc__env"
+    async def _does_template_exist(self): return False
+    async def _create_template(self):
+        if failure: raise BuildException(failure)
+adapter = types.ModuleType("selfbench_e2b"); adapter.SelfBenchE2BEnvironment = Environment
+stubs = {"e2b": e2b, "selfbench_e2b": adapter}
+for name in ["harbor", "harbor.models", "harbor.models.task", "harbor.models.task.task", "harbor.models.trial", "harbor.models.trial.paths"]:
+    stubs[name] = types.ModuleType(name)
+stubs["harbor.models.task.task"].Task = object
+stubs["harbor.models.trial.paths"].TrialPaths = lambda path: path
+sys.modules.update(stubs)
+spec = importlib.util.spec_from_file_location("selfbench_prepare", sys.argv[1])
+module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+task = types.SimpleNamespace(short_name="task")
+async def check():
+    global failure
+    scratch = pathlib.Path("/tmp")
+    assert await module._e2b(task, scratch, None, scratch) == "built task__abc__env"
+    failure = "error waiting for provisioning sandbox: exit status: 1;\\n E: Release file is expired"
+    outcome = await module._e2b(task, scratch, None, scratch)
+    assert outcome == "failed E2B could not make it into template task__abc__env: error waiting for provisioning sandbox: exit status: 1; E: Release file is expired", outcome
+    failure = "503: Service Unavailable"
+    try:
+        await module._e2b(task, scratch, None, scratch)
+    except BuildException:
+        pass
+    else:
+        raise AssertionError("E2B's own outage must leave the build to the trials")
+asyncio.run(check())
+`,
+      PREPARE,
+    ],
+    { env: { PATH: process.env.PATH ?? "" } },
+  );
+  expect(result.stderr).toBe("");
+  expect(result.exitCode).toBe(0);
+});

@@ -76,6 +76,23 @@ export async function discardCandidateImages(
   return removed;
 }
 
+/** The digest `image` (by name) is tagged `tag` at; undefined when no version has the tag. */
+export async function taggedDigest(
+  image: string,
+  tag: string,
+  access: RegistryAccess = GOOGLE,
+): Promise<string | undefined> {
+  const response = await access.fetch(packageUrl(image, `/tags/${encodeURIComponent(tag)}`), {
+    headers: { authorization: `Bearer ${await access.token()}` },
+  });
+  if (response.status === 404) return undefined;
+  if (!response.ok)
+    throw new Error(`Artifact Registry answered ${response.status} reading a task image tag`);
+  const version = ((await response.json()) as { version?: string }).version ?? "";
+  const digest = version.slice(version.lastIndexOf("/") + 1);
+  return /^sha256:[0-9a-f]{64}$/.test(digest) ? digest : undefined;
+}
+
 /** The digests of every version of one image; none when the registry never had it. */
 async function versions(image: string, access: RegistryAccess): Promise<string[]> {
   const digests: string[] = [];

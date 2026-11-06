@@ -1,4 +1,8 @@
-import { WorkflowExecutionAlreadyStartedError } from "@temporalio/common";
+import {
+  ActivityFailure,
+  ApplicationFailure,
+  WorkflowExecutionAlreadyStartedError,
+} from "@temporalio/common";
 import {
   CancellationScope,
   ChildWorkflowCancellationType,
@@ -20,6 +24,7 @@ import {
   type BenchmarkAddInput,
 } from "./benchmark-add.js";
 import type { ModelSummaryRequest } from "./model-summary.js";
+import { TASK_IMAGES_FAILED } from "./refusal.js";
 import { scopeOf } from "./scope.js";
 import type { TaskAuditRequest } from "./task-audit.js";
 import { preparesTaskImages, trialInput } from "./trial-input.js";
@@ -94,8 +99,9 @@ export async function selfBenchEvaluationRunWorkflow(input: EvaluationInput): Pr
 
 /**
  * Waits, per trial, for its task's images: the first trial of each task builds them once
- * (prepareTaskImages) and the task's other trials wait on that build. A failed build only means
- * the trials build as they did before, so it never fails a trial.
+ * (prepareTaskImages) and the task's other trials wait on that build. An image the provider could
+ * not build (TASK_IMAGES_FAILED) fails each of the task's trials before it starts; any other
+ * failure only means the trials build as they did before.
  */
 export function taskImagesReady(
   input: EvaluationInput,
@@ -111,6 +117,8 @@ export function taskImagesReady(
         () => undefined,
         (error) => {
           if (isCancellation(error)) throw error;
+          const cause = error instanceof ActivityFailure ? error.cause : undefined;
+          if (cause instanceof ApplicationFailure && cause.type === TASK_IMAGES_FAILED) throw cause;
         },
       );
       builds.set(task, build);
@@ -208,7 +216,12 @@ export async function runTrial(
     await harbor.runSolverTrial(input, index);
   } catch (error) {
     if (isCancellation(error)) throw error;
-    await records.failSolverTrial(input, index);
+    // A trial whose images could not be built fails with why, before it ran.
+    const unbuilt =
+      error instanceof ApplicationFailure && error.type === TASK_IMAGES_FAILED
+        ? error.message
+        : undefined;
+    await records.failSolverTrial(input, index, unbuilt);
   }
 }
 

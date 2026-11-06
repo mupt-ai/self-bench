@@ -17,6 +17,7 @@ import {
 } from "../harnesses/harbor/task-safety.js";
 import { runCommand } from "../lib/process.js";
 import { credentialExecution } from "./execution.js";
+import { taskImagesFailed } from "./refusal.js";
 import type { RunnerOptions } from "./runner.js";
 import { unpackTrialTask } from "./task-bundle.js";
 import { preparesTaskImages } from "./trial-input.js";
@@ -80,7 +81,13 @@ export async function prepareTaskImages(
         ...(options.signal ? { signal: options.signal } : {}),
       },
     );
-    return result.stdout.trim();
+    const outcome = result.stdout.trim();
+    // A template E2B could not build fails the task's trials, before any of them spends.
+    const failed = outcome
+      .split("\n")
+      .flatMap((line) => /^(agent|verifier) failed (.*)$/.exec(line)?.slice(1) ?? []);
+    if (failed.length) throw taskImagesFailed(`The ${failed[0]} image: ${failed[1]}`);
+    return outcome;
   } finally {
     await rm(root, { recursive: true, force: true });
   }
