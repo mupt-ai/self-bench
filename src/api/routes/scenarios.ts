@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { EVAL_OWNER } from "../../contracts/evals.js";
 import type { User } from "../../db/users.js";
 import { saveGenerationRecords } from "../../generation/settings/credentials.js";
 import {
@@ -25,8 +26,9 @@ const route =
  * POST …/tasks/from-scenario {title, scenario, difficulty?, attachments?, commit?, generation}: a
  * person's description of a change or situation an agent should handle becomes one task, built by
  * its own workflow as a PR from Add PRs is. With `commit`, the agent starts from the repository at
- * that commit (resolved with the person's GitHub token, which the run keeps to clone it). Without
- * it, the author writes the workspace and nothing is read from GitHub.
+ * that commit (resolved with the person's GitHub token, which the run keeps to clone it); a
+ * GitHub repository's scenario needs one. An eval's scenario has none: the author writes the
+ * workspace and nothing is read from GitHub.
  */
 export async function scenarioRoute(
   options: PullRequestRoutesOptions,
@@ -65,6 +67,18 @@ export async function scenarioRoute(
     return true;
   }
   const body = parsed.data;
+  // A GitHub repository's scenario starts from the repository at a commit; a scenario with no
+  // repository behind it is a workspace scenario, which belongs to an eval.
+  if (repo.kind === "eval" && body.commit) {
+    sendJson(response, 400, { error: "An eval has no repository; leave out commit." });
+    return true;
+  }
+  if (repo.kind === "github" && !body.commit) {
+    sendJson(response, 400, {
+      error: `Name the commit the agent starts from. A scenario with no repository behind it belongs to an eval (${EVAL_OWNER}/<name>).`,
+    });
+    return true;
+  }
   const requested = await requestedGeneration(
     options,
     { orgId: tenant.id, repoId: repo.id },

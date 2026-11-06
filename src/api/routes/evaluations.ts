@@ -4,7 +4,7 @@ import type { RegistryDataset } from "../../contracts/harbor-registry.js";
 import type { BenchmarkStore } from "../../db/benchmarks.js";
 import type { GroupStore } from "../../db/groups.js";
 import type { ReleaseStore } from "../../db/releases.js";
-import type { ConnectedRepo, RepoStore } from "../../db/repos.js";
+import { type ConnectedRepo, isGitHubRepo, type RepoStore } from "../../db/repos.js";
 import type { TaskStore } from "../../db/tasks.js";
 import type { User, UserStore } from "../../db/users.js";
 import type { Vault } from "../../db/vault.js";
@@ -75,7 +75,8 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
    * turned private since. Anything GitHub does not confirm counts as private.
    */
   const privateNow = async (repo: ConnectedRepo, user: User): Promise<boolean> => {
-    if (repo.private || !options.githubApiUrl) return true;
+    // An eval has no GitHub repository, and is always private.
+    if (repo.private || !options.githubApiUrl || !isGitHubRepo(repo)) return true;
     const token = await users.gitHubToken(user.githubId).catch(() => undefined);
     if (!token) return true;
     const github = await lookupRepositoryById(

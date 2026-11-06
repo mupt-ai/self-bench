@@ -2,7 +2,7 @@ import type { ArtifactStore } from "../../artifacts/index.js";
 import type { Database } from "../../db/client.js";
 import type { GroupStore, RepositoryGroup } from "../../db/groups.js";
 import type { ReleaseStore } from "../../db/releases.js";
-import type { ConnectedRepo, RepoStore } from "../../db/repos.js";
+import { type GitHubRepo, isGitHubRepo, type RepoStore } from "../../db/repos.js";
 import type { UserStore } from "../../db/users.js";
 import { canonicalJson, sha256 } from "../../lib/hash.js";
 import { track } from "../../lib/telemetry/posthog.js";
@@ -34,7 +34,7 @@ export interface GroupReleaseRoutesOptions {
 /** A group with its connected members and which member (GitHub id) each task belongs to. */
 interface Subject {
   group: RepositoryGroup;
-  members: ConnectedRepo[];
+  members: GitHubRepo[];
   owner: Map<string, number>;
   tasks: ReleaseTask[];
 }
@@ -50,7 +50,7 @@ export function createGroupReleaseRoutes(options: GroupReleaseRoutesOptions) {
 
   /** Each member as GitHub reports it now, or why the group cannot be released. */
   const publicMembers = async (
-    members: readonly ConnectedRepo[],
+    members: readonly GitHubRepo[],
     token: string,
   ): Promise<{ repositories: GroupMember["repository"][] } | { reply: Reply }> => {
     const repositories: GroupMember["repository"][] = [];
@@ -87,7 +87,7 @@ export function createGroupReleaseRoutes(options: GroupReleaseRoutesOptions) {
     async find(tenant, slug) {
       const group = await options.groups.find(tenant.id, slug);
       if (!group) return undefined;
-      const connected = await options.repos.list(tenant.id);
+      const connected = (await options.repos.list(tenant.id)).filter(isGitHubRepo);
       const members = group.repositoryIds.flatMap(
         (id) => connected.find((repo) => repo.githubId === id) ?? [],
       );

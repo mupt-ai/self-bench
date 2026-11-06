@@ -12,10 +12,19 @@ afterEach(async () => {
   server = undefined;
 });
 
+/** Workspace scenarios belong to an eval: an org's own collection, with no repository behind it. */
+const EVAL = "/api/orgs/mupt-ai/repos/evals/data-import-bugs";
+
 async function boot() {
   const result = await prFixture({});
   server = result.site;
   const { secret } = await mint(result.site, result.headers, { name: "CLI" });
+  const created = await result.site.request("/api/orgs/mupt-ai/evals", {
+    method: "POST",
+    headers: result.headers,
+    body: JSON.stringify({ name: "Data Import Bugs" }),
+  });
+  if (created.status !== 201) throw new Error(`eval not created: ${created.status}`);
   return { ...result, key: { authorization: `Bearer ${secret}` } };
 }
 
@@ -32,7 +41,7 @@ const SCENARIO = {
 test("an API key starts a scenario task with its attachments, and no GitHub read", async () => {
   const { site, key, started, artifacts, hub } = await boot();
   const before = hub.calls.length;
-  const response = await site.request(`${REPO}/tasks/from-scenario`, {
+  const response = await site.request(`${EVAL}/tasks/from-scenario`, {
     method: "POST",
     headers: key,
     body: JSON.stringify(SCENARIO),
@@ -47,7 +56,7 @@ test("an API key starts a scenario task with its attachments, and no GitHub read
     state: "in_progress",
   });
   expect(task.sourcePr).toBeUndefined();
-  expect(task.runId).toStartWith("scn-mupt-ai-self-bench-");
+  expect(task.runId).toStartWith("scn-evals-data-import-bugs-");
   expect(hub.calls.slice(before)).toEqual([]);
 
   expect(started).toHaveLength(1);
@@ -96,10 +105,52 @@ test("a repository scenario starts from the commit its branch resolves to", asyn
   });
 });
 
+test("a workspace scenario belongs to an eval, and a repository's scenario to a commit", async () => {
+  const { site, headers, key, started } = await boot();
+  const post = (path: string, body: object) =>
+    site.request(`${path}/tasks/from-scenario`, {
+      method: "POST",
+      headers: key,
+      body: JSON.stringify({ ...SCENARIO, ...body }),
+    });
+  const workspaceOnRepo = await post(REPO, {});
+  expect(workspaceOnRepo.status).toBe(400);
+  expect((await workspaceOnRepo.json()).error).toContain("belongs to an eval");
+  expect((await post(EVAL, { commit: "HEAD" })).status).toBe(400);
+  // An eval has no pull requests to add.
+  const pr = await site.request(`${EVAL}/tasks/from-pr`, {
+    method: "POST",
+    headers: key,
+    body: JSON.stringify({ pr: "1" }),
+  });
+  expect(pr.status).toBe(409);
+  expect(started).toHaveLength(0);
+
+  const again = await site.request("/api/orgs/mupt-ai/evals", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ name: "data import bugs" }),
+  });
+  expect(again.status).toBe(409);
+  const reserved = await site.request("/api/orgs/mupt-ai/repos", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ fullName: "evals/anything" }),
+  });
+  expect(reserved.status).toBe(400);
+  const listed = (await (await site.request("/api/orgs/mupt-ai/repos", { headers })).json()) as {
+    repos: { kind: string; fullName: string }[];
+  };
+  expect(listed.repos.map(({ kind, fullName }) => `${kind} ${fullName}`).sort()).toEqual([
+    "eval evals/data-import-bugs",
+    "github Mupt-AI/self-bench",
+  ]);
+});
+
 test("a scenario must be described, and its attachments plainly named and unique", async () => {
   const { site, key, started } = await boot();
   const post = (body: object) =>
-    site.request(`${REPO}/tasks/from-scenario`, {
+    site.request(`${EVAL}/tasks/from-scenario`, {
       method: "POST",
       headers: key,
       body: JSON.stringify({ ...SCENARIO, ...body }),
@@ -116,13 +167,13 @@ test("a scenario must be described, and its attachments plainly named and unique
 
 test("a person edits a scenario task's draft and revises it with the edit", async () => {
   const { site, key, started, artifacts } = await boot();
-  const created = await site.request(`${REPO}/tasks/from-scenario`, {
+  const created = await site.request(`${EVAL}/tasks/from-scenario`, {
     method: "POST",
     headers: key,
     body: JSON.stringify(SCENARIO),
   });
   const original = (await created.json()).task as { runId: string; taskId: string };
-  const path = `${REPO}/tasks/${original.runId}/${original.taskId}`;
+  const path = `${EVAL}/tasks/${original.runId}/${original.taskId}`;
   expect((await site.request(`${path}/draft`, { headers: key })).status).toBe(404);
 
   const candidate = started[0]?.input.candidate as ScenarioCandidate;

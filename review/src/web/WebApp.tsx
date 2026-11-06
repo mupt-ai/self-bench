@@ -21,6 +21,7 @@ import { GroupsPage } from "./groups/GroupsPage";
 import { SiteSkeleton } from "./LoadingSkeleton";
 import { AddPrPage } from "./pages/AddPrPage";
 import { AddScenarioPage } from "./pages/AddScenarioPage";
+import { EvalsPage } from "./pages/EvalsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RepoPage } from "./pages/RepoPage";
 import { RepoSettingsPage } from "./pages/RepoSettingsPage";
@@ -92,6 +93,7 @@ export function WebApp() {
                   {session.status === "signed-in" && session.managedOffering && (
                     <Route path="settings/billing" element={<BillingPage />} />
                   )}
+                  <Route path="evals" element={<EvalsPage />} />
                   <Route path="groups" element={<GroupsPage />} />
                   <Route path="groups/:slug" element={<GroupLayout />}>
                     <Route index element={<GroupDatasetPage />} />

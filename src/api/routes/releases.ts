@@ -2,7 +2,7 @@ import type { ArtifactStore } from "../../artifacts/index.js";
 import { buildCommit } from "../../contracts/config/build-metadata.js";
 import type { Database } from "../../db/client.js";
 import type { ReleaseLine, ReleaseStore } from "../../db/releases.js";
-import type { ConnectedRepo, RepoStore } from "../../db/repos.js";
+import { type GitHubRepo, isGitHubRepo, type RepoStore } from "../../db/repos.js";
 import type { UserStore } from "../../db/users.js";
 import { catalogVersion } from "../../evaluation/catalog.js";
 import { readModelSummaries } from "../../evaluation/model-summary.js";
@@ -52,14 +52,18 @@ export interface PublicChange {
  */
 export function createReleaseRoutes(options: ReleaseRoutesOptions) {
   const fetchImpl = options.fetchImpl ?? fetch;
-  const line = (repo: ConnectedRepo): ReleaseLine => ({
+  const line = (repo: GitHubRepo): ReleaseLine => ({
     orgId: repo.orgId,
     githubRepoId: repo.githubId,
   });
-  const kind: LineKind<ConnectedRepo> = {
+  const kind: LineKind<GitHubRepo> = {
     route,
     notFound: "Repository is not connected here",
-    find: (tenant, fullName) => options.repos.find(tenant.id, fullName),
+    // An eval has no repository on GitHub, so it is never released to selbench.dev.
+    find: async (tenant, fullName) => {
+      const repo = await options.repos.find(tenant.id, fullName);
+      return repo && isGitHubRepo(repo) ? repo : undefined;
+    },
     lineOf: (_tenant, repo) => line(repo),
     async gather(tenant, repo, rows) {
       const [inputs, { report }] = await Promise.all([

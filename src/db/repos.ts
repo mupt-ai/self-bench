@@ -1,12 +1,18 @@
 import { and, desc, eq, sql } from "drizzle-orm";
+import { EVAL_OWNER } from "../contracts/evals.js";
 import type { Database } from "./client.js";
 import { repos, users } from "./schema.js";
 
-/** A repository connected to a tenant. */
+/**
+ * A repository connected to a tenant, or an eval (kind "eval"): an org's own collection of
+ * workspace scenarios, with no GitHub repository and so no GitHub id (contracts/evals.ts).
+ */
 export interface ConnectedRepo {
   readonly id: number;
   readonly orgId: number;
-  readonly githubId: number;
+  readonly kind: "github" | "eval";
+  /** Null for an eval. */
+  readonly githubId: number | null;
   readonly fullName: string;
   readonly defaultBranch: string;
   readonly private: boolean;
@@ -16,6 +22,13 @@ export interface ConnectedRepo {
   readonly agentMinutes: number;
   readonly connectedBy: { readonly id: number; readonly login: string };
   readonly connectedAt: string;
+}
+
+/** A connected GitHub repository, which has a GitHub id. */
+export type GitHubRepo = ConnectedRepo & { readonly kind: "github"; readonly githubId: number };
+
+export function isGitHubRepo(repo: ConnectedRepo): repo is GitHubRepo {
+  return repo.kind === "github" && repo.githubId !== null;
 }
 
 interface ConnectRepoInput {
@@ -33,6 +46,12 @@ export interface RepoStore {
   find(orgId: number, fullName: string): Promise<ConnectedRepo | undefined>;
   /** Connects a repo, or refreshes the existing row when the GitHub id is already connected. */
   connect(input: ConnectRepoInput): Promise<ConnectedRepo>;
+  /** Creates an eval named `evals/<slug>`; undefined when the org already has one by that name. */
+  createEval(input: {
+    readonly orgId: number;
+    readonly slug: string;
+    readonly createdBy: number;
+  }): Promise<ConnectedRepo | undefined>;
   /** True when a row was removed. */
   disconnect(orgId: number, fullName: string): Promise<boolean>;
   /** Undefined when the repo is not connected to this tenant. */
@@ -84,6 +103,24 @@ export function createRepoStore(db: Database, options: { now?: () => Date } = {}
       if (!row) throw new Error("repo connect returned no row");
       return one(row.id);
     },
+    async createEval(input) {
+      const [row] = await db
+        .insert(repos)
+        .values({
+          orgId: input.orgId,
+          kind: "eval",
+          githubId: null,
+          fullName: `${EVAL_OWNER}/${input.slug}`,
+          defaultBranch: "",
+          // An eval is never released to selbench.dev, which shows only public repositories.
+          private: true,
+          connectedBy: input.createdBy,
+          connectedAt: now(),
+        })
+        .onConflictDoNothing()
+        .returning({ id: repos.id });
+      return row ? one(row.id) : undefined;
+    },
     async disconnect(orgId, fullName) {
       const rows = await db
         .delete(repos)
@@ -106,6 +143,7 @@ function repoFrom(row: { repo: typeof repos.$inferSelect; login: string }): Conn
   return {
     id: row.repo.id,
     orgId: row.repo.orgId,
+    kind: row.repo.kind,
     githubId: row.repo.githubId,
     fullName: row.repo.fullName,
     defaultBranch: row.repo.defaultBranch,

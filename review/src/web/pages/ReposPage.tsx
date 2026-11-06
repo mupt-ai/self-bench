@@ -37,7 +37,8 @@ export function ReposPage() {
     fetchConnectedRepos(org.login).then(
       (found) => {
         if (cancelled) return;
-        setRepos({ status: "ok", repos: found });
+        // Evals have their own page.
+        setRepos({ status: "ok", repos: found.filter((repo) => repo.kind !== "eval") });
         fetchTaskCounts(org.login).then(
           (counts) =>
             !cancelled &&

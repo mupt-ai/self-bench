@@ -7,28 +7,29 @@ icon: "notebook-pen"
 A scenario task starts from a description instead of a merged PR. There are two kinds:
 
 - A **repository scenario** starts the evaluated agent from your repository at a commit you choose. You describe a change to make there, ideally one an agent got wrong, and the authoring agent writes the instruction, a reference implementation, and hidden tests against that commit, as it does for a PR.
-- A **workspace scenario** reads nothing from the repository. You describe a situation, attach any real files from it, and the authoring agent writes the files the evaluated agent starts with, the instruction, hidden tests that check the outcome, and a reference outcome.
+- A **workspace scenario** has no repository behind it, so it belongs to an **eval**: a collection of your own tasks under **Evals** in the app, with its own dataset, Run, and Results. You describe a task, attach any real files from it, and the authoring agent writes the files the evaluated agent starts with, the instruction, hidden tests that check the outcome, and a reference outcome.
 
 The same gates and independent review that check PR tasks check both.
 
 For example, a repository scenario: *"Our team dashboard awaits all its data at the top of the page, so it blocks for two seconds. Enable Cache Components and make it load fast, without leaking one member's data to another."* The agent starts from the repository at the chosen commit, and the tests check the build, what each member sees, and what the first response contains.
 
-A workspace scenario: *"My rec league schedule is a spreadsheet that says I'm on team 6. Last week an email said I was traded to team 3. Asked when my next game is, my agent answered from the spreadsheet."* The author builds a workspace with the spreadsheet, a mailbox holding the trade among unrelated mail, and an instruction such as "When is my next game? Write `/app/answer.json`". The tests pass only for team 3's next game.
+A workspace scenario: *"Our CSV import silently drops any row whose fields contain a quoted comma, like \"Smith, Jane\". Attached are the export that loses rows and the stack trace. Asked to fix it, my agent split each line on commas."* The author builds a small project with the importer, the export, and its tests, and an instruction such as "The import loses rows from this export. Fix it so every row imports." The hidden tests import the full export, quoted fields included, and check every row arrives intact.
 
 ## What a Scenario Task Is
 
 | | PR task | Repository scenario | Workspace scenario |
 | --- | --- | --- | --- |
+| Belongs to | A connected repository | A connected repository | An eval |
 | Starting files (`/app`) | The repository at the PR's base commit | The repository at the commit you choose | The `workspace/` the author writes |
 | Reference solution | The PR's implementation | The author's implementation | The outcome a careful agent leaves, such as an answer file |
 | Difficulty | From the size of the change | The tier you choose | The tier you choose |
 | Graded by | Hidden tests | Hidden tests | Hidden tests |
 
-Scenario tasks belong to a connected repository like any other task, so you approve them, evaluate them, and release them the same way. A repository scenario's commit is resolved with your GitHub sign-in when you start it, and the task stays pinned to that commit. A workspace scenario reads nothing from the repository or GitHub, and its tests read only what the agent leaves in `/app`, so a good one names an output the tests can check: a file to write, or files to change.
+You approve, evaluate, and run scenario tasks like any other task. A repository scenario's commit is resolved with your GitHub sign-in when you start it, and the task stays pinned to that commit; it can be released with its repository. A workspace scenario reads nothing from GitHub, and its tests read only what the agent leaves in `/app`, so a good one names an output the tests can check: a file to write, or files to change. Evals are private: they are never released to selbench.dev.
 
 ## From the App
 
-On a repository, choose **Add Scenario** for a repository scenario: give it a title, a commit or branch (blank for the default branch's latest commit), and a description. Choose **Add Workspace Scenario** for a workspace scenario. Either way, choose a difficulty, attach any files (up to 20 files and 20 MB in all), then configure generation as for **Add PRs**. The task appears in the dataset in progress.
+On a repository, choose **Add Scenario**: give it a title, a commit or branch (blank for the default branch's latest commit), and a description. For a workspace scenario, open **Evals**, choose **New Eval** (or an existing one), then **Add Workspace Scenario**. Either way, choose a difficulty, attach any files (up to 20 files and 20 MB in all), then configure generation as for **Add PRs**. The task appears in the dataset in progress.
 
 ## From the CLI or API
 
@@ -38,14 +39,19 @@ The `self-bench` CLI and the [Workspace API](/api-reference/workspace) act as th
 export SELFBENCH_API_URL=https://app.selfbench.dev
 export SELFBENCH_API_KEY=sbk_…
 
-self-bench scenario create --repo mupt-ai/self-bench \
-  --title "Traded to a New Team" \
+# A repository scenario, starting from a commit (or a branch, or HEAD for the default branch)
+self-bench scenario create --repo mupt-ai/self-bench --commit HEAD \
+  --title "Personalised Dashboard on Cache Components" \
   --scenario-file scenario.md \
-  --attach schedule.xlsx --attach trade.eml \
+  --difficulty hard
+
+# A workspace scenario, in an eval created under Evals in the app
+self-bench scenario create --repo evals/data-import-bugs \
+  --title "CSV Import Drops Quoted Rows" \
+  --scenario-file scenario.md \
+  --attach export.csv --attach trace.txt \
   --difficulty medium
 ```
-
-Add `--commit SHA` (or a branch, or `HEAD` for the default branch) for a repository scenario.
 
 `--org` names the workspace when it isn't the repository's owner. Generation defaults to managed models and sandbox, as in the app; `--model`, `--reasoning`, `--model-credential`, `--sandbox`, and `--sandbox-credential` change it, or `--generation @settings.json` gives the full settings. See [Create a Scenario Task](/api-reference/create-scenario) for the HTTP request.
 
@@ -70,4 +76,4 @@ The agent keeps your edits, fixes what the checks report, and submits. `task app
 - **Name the mistake.** Say what the agent did wrong and what a careful person would do instead. The task is built to reward exactly that.
 - **Say where the truth was.** "A later email superseded the spreadsheet" tells the author what the workspace needs.
 - **Attach the real files** where you can. The author keeps the details the scenario depends on and replaces the rest with fictional ones.
-- **Make variants.** One scenario is one data point. Separate tasks for a trade, a rescheduled game, and two emails that contradict each other measure the capability better than one.
+- **Make variants.** One scenario is one data point. Separate tasks for quoted commas, embedded newlines, and a byte-order mark in the same importer measure the capability better than one.

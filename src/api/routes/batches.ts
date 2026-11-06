@@ -70,6 +70,10 @@ export function createBatchRoutes(options: BatchRoutesOptions): BatchRoutes {
         return true;
       }
       const runId = match[4];
+      if (!runId && request.method === "POST" && repo.kind === "eval") {
+        sendJson(response, 409, { error: "An eval has no pull requests to batch." });
+        return true;
+      }
       if (!runId && request.method === "POST") {
         let body: unknown;
         try {

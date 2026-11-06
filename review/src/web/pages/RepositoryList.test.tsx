@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router";
 import { RepositoryList } from "./RepositoryList";
 
 const repo = {
+  kind: "github" as const,
   fullName: "example/repo",
   defaultBranch: "main",
   private: false,
