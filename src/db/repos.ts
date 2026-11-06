@@ -104,6 +104,9 @@ export function createRepoStore(db: Database, options: { now?: () => Date } = {}
       return one(row.id);
     },
     async createEval(input) {
+      // Lookups go by name across both kinds, so no row of either kind may already hold it.
+      const [taken] = await select().where(byName(input.orgId, `${EVAL_OWNER}/${input.slug}`));
+      if (taken) return undefined;
       const [row] = await db
         .insert(repos)
         .values({

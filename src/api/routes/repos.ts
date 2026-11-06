@@ -103,6 +103,11 @@ export function createConnectedRepoRoutes(
           sendJson(response, 404, { error: "repository not found or not readable" });
           return true;
         }
+        // GitHub's own name decides, since the request may differ in case or follow a rename.
+        if (isEvalName(found.fullName)) {
+          sendJson(response, 400, { error: `${EVAL_OWNER} is reserved for evals` });
+          return true;
+        }
         // An org may connect anything public, but only its own private repositories.
         const owner = found.fullName.split("/")[0] ?? "";
         if (
