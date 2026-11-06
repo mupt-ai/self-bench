@@ -22,6 +22,8 @@ import { TaskGenerationControls } from "../task/TaskGenerationControls";
 import { TaskSkeleton } from "../task/TaskSkeleton";
 import { TaskView } from "../task/TaskView";
 import { taskTitle } from "../task/task-title";
+import { taskTechnicalDetails } from "../task/technical-details";
+import { CreateVariantButton } from "../task/VariantDialog";
 import { Breadcrumbs, Button, Notice, PageFrame } from "../ui";
 
 /** Keyed by the route, so a new task never inherits the previous task's state or controls. */
@@ -195,6 +197,7 @@ function TaskPageContent() {
             fullName={fullName}
             onRequested={() => void refresh()}
           />
+          <CreateVariantButton task={task} org={org.login} fullName={fullName} />
           {task.state !== "in_progress" &&
             task.state !== "failed" &&
             task.state !== "cancelled" && (
@@ -279,21 +282,4 @@ function QueueNav({
       </Button>
     </nav>
   );
-}
-
-function taskTechnicalDetails(
-  reason: string | undefined,
-  summary: string | undefined,
-): string | undefined {
-  if (!reason) return undefined;
-  const normalizedReason = reason.trim();
-  if (!summary) return normalizedReason || undefined;
-
-  const normalizedSummary = summary.trim();
-  if (normalizedReason === normalizedSummary) return undefined;
-  if (normalizedReason.startsWith(normalizedSummary)) {
-    const remainder = normalizedReason.slice(normalizedSummary.length).trim();
-    return remainder || undefined;
-  }
-  return normalizedReason || undefined;
 }

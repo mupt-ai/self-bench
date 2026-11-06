@@ -45,6 +45,8 @@ export interface TaskListItem {
   readonly cost?: GenerationCost;
   readonly revisedFrom?: TaskRecord["revisedFrom"];
   readonly feedback?: string;
+  /** A variant's label: the environment change it made to the task it revises. */
+  readonly variant?: string;
 }
 
 export interface TaskRoutesOptions {
@@ -232,6 +234,7 @@ export function taskItem(task: TaskRecord, cost?: GenerationCost): TaskListItem 
     ...(cost ? { cost } : {}),
     ...(task.revisedFrom ? { revisedFrom: task.revisedFrom } : {}),
     ...(task.feedback ? { feedback: task.feedback } : {}),
+    ...(task.variant ? { variant: task.variant } : {}),
   };
 }
 

@@ -71,6 +71,17 @@ self-bench task revise RUN_ID TASK_ID --repo mupt-ai/self-bench \
 
 The agent keeps your edits, fixes what the checks report, and submits. `task approve`, `task reject`, `task cancel`, and `task delete` do the rest of the review from the CLI.
 
+## Create a Variant
+
+A variant tests whether a change to a task's environment changes how agents do: a framework build from a pull request, docs, or an `AGENTS.md` that points agents at them. On an accepted task, choose **Create Variant**, give it a label, and list the changes:
+
+- **Packages** are installed over the task's own with its package manager (npm, pnpm, Yarn, or Bun, from its lockfile). A version, a tag, or a tarball URL works, such as a Next.js build from `vercel-packages.vercel.app`. **Directory** is the workspace under `/app` for a monorepo.
+- **Files** are written into `/app` before the agent starts, appended to or replacing what is there. **Point Agents at Next.js Docs** adds Next.js's managed block to `AGENTS.md` and `CLAUDE.md`.
+
+The variant keeps the task's instruction, hidden tests, and reference solution byte for byte; only its Dockerfile gains these steps, before SelfBench commits the agent's starting files. No author runs: the variant is checked once and accepted if every check passes, or rejected with the report. Run the task and its variant with the same models, several times each, and compare their pass rates and tokens.
+
+The API is `POST …/tasks/{runId}/{taskId}/variants` with `{ "variant": { "label": "…", "packages": [{ "name": "next", "spec": "<version or URL>", "directory": "apps/web" }], "files": [{ "path": "AGENTS.md", "mode": "append", "content": "…" }] }, "generation": { … } }`.
+
 ## Write a Good Scenario
 
 - **Name the mistake.** Say what the agent did wrong and what a careful person would do instead. The task is built to reward exactly that.

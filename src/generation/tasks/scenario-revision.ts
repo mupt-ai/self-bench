@@ -27,7 +27,12 @@ export async function reviseScenario(options: {
   readonly repository: { readonly id: number; readonly fullName: string };
   readonly task: TaskRecord;
   readonly startedBy: number;
-  readonly revision: { readonly from: number; readonly feedback: string };
+  /** With `variant`, a variant (variant.ts): its draft is only checked, never re-authored. */
+  readonly revision: {
+    readonly from: number;
+    readonly feedback: string;
+    readonly variant?: string;
+  };
   readonly stage: (runId: string) => Promise<AuthoredTaskDraft>;
   readonly generation?: GenerationReference;
   /** The person's GitHub token, which a repository scenario's run keeps to clone its commit. */
@@ -47,7 +52,8 @@ export async function reviseScenario(options: {
     ...(baseCommit ? { baseCommit } : {}),
     stage: "authoring",
     startedBy: options.startedBy,
-    revision: options.revision,
+    revision: { from: options.revision.from, feedback: options.revision.feedback },
+    ...(options.revision.variant ? { variant: options.revision.variant } : {}),
   });
   const attachments = await artifacts.stat(scenarioKeys(task.runId, task.candidateId).attachments);
   const staged = await stageScenario({
@@ -74,7 +80,11 @@ export async function reviseScenario(options: {
     runId: row.runId,
     ...staged,
     ...(options.generation ? { generation: options.generation } : {}),
-    revision: { draft: await options.stage(row.runId), feedback: options.revision.feedback },
+    revision: {
+      draft: await options.stage(row.runId),
+      feedback: options.revision.feedback,
+      ...(options.revision.variant ? { verifyOnly: true } : {}),
+    },
   });
   return row;
 }

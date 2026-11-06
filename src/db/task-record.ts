@@ -42,6 +42,7 @@ export function taskFrom(row: {
     ...(task.startedAt ? { startedAt: task.startedAt.toISOString() } : {}),
     ...(row.origin ? { revisedFrom: row.origin } : {}),
     ...(task.feedback ? { feedback: task.feedback } : {}),
+    ...(task.variant ? { variant: task.variant } : {}),
   };
 }
 
