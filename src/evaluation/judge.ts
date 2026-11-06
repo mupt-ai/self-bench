@@ -45,8 +45,8 @@ export function judgeCredentialRefusal(
 /**
  * Gives a published task's `env` tables their host variables for one trial, from `judge` (the
  * gateway's variables for the trial key) and nothing else. A judge variable only `verifier.env`
- * reads goes to the verifier directly (--verifier-env, as `${SELFBENCH_JUDGE_…}` so the key stays
- * out of the command line); one the sandbox reads is set in Harbor's environment. A gateway solver
+ * reads goes to the verifier directly (--verifier-env, under the task's own `env` key, which is the
+ * one Harbor matches, as `${SELFBENCH_JUDGE_…}` so the key stays out of the command line); one the sandbox reads is set in Harbor's environment. A gateway solver
  * holds the same key and address there; only Dari's router, called directly, holds its own, which
  * a sandbox-read judge variable cannot replace. Any other variable must be unset, so its default
  * applies. Returns the refusal when the trial can't run.
@@ -58,7 +58,7 @@ export function judgeTrial(
 ): { child: NodeJS.ProcessEnv; verifierEnv: string[] } | { refusal: string } {
   const next = { ...child };
   const verifierEnv = new Set<string>();
-  for (const { name, verifierOnly, required, fallback } of variables) {
+  for (const { name, key, verifierOnly, required, fallback } of variables) {
     const value = JUDGE_VARIABLES.has(name) ? judge[name] : undefined;
     if (value === undefined) {
       if (required && JUDGE_VARIABLES.has(name))
@@ -66,13 +66,13 @@ export function judgeTrial(
       // Not the judge's: it takes its default, never the worker's value (such as the solver's own
       // key under the same name). The verifier's is set to it outright; the sandbox's can't be.
       if (child[name] === undefined) continue;
-      if (verifierOnly && fallback !== undefined) verifierEnv.add(`${name}=${fallback}`);
+      if (verifierOnly && fallback !== undefined) verifierEnv.add(`${key}=${fallback}`);
       else return { refusal: `The task reads ${name} from the worker` };
       continue;
     }
     if (verifierOnly) {
       next[`SELFBENCH_JUDGE_${name}`] = value;
-      verifierEnv.add(`${name}=\${SELFBENCH_JUDGE_${name}}`);
+      verifierEnv.add(`${key}=\${SELFBENCH_JUDGE_${name}}`);
     } else if (child[name] !== undefined && child[name] !== value)
       return {
         refusal: `The task's sandbox reads ${name}, which the model being tested also uses: a judge in the sandbox cannot share it`,
