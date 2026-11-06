@@ -81,7 +81,14 @@ export function createBenchmarkStore(db: Database) {
       if (row) return { benchmark: benchmark(row), started: true };
       const [retried] = await db
         .update(benchmarks)
-        .set({ ref: input.ref, status: "adding", error: null, addedBy: input.addedBy })
+        // Each attempt starts its own clock: a stranded box's staleness counts from this retry.
+        .set({
+          ref: input.ref,
+          status: "adding",
+          error: null,
+          addedBy: input.addedBy,
+          addedAt: new Date(),
+        })
         .where(
           and(
             eq(benchmarks.orgId, input.orgId),
