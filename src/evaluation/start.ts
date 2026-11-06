@@ -4,6 +4,8 @@ import {
   WorkflowIdReusePolicy,
   WorkflowNotFoundError,
 } from "@temporalio/common";
+import { productionRegistryCatalog } from "../harnesses/harbor/registry-catalog.js";
+import type { BenchmarkAddInput } from "./benchmark-add.js";
 import type { StopEvaluation } from "./cancel.js";
 import type { ModelSummaryRequest } from "./model-summary.js";
 import { type EvaluationScope, scopeKey } from "./scope.js";
@@ -176,5 +178,47 @@ export function evaluationStopper(client: Client): StopEvaluation {
     } catch (error) {
       if (!(error instanceof WorkflowNotFoundError)) throw error;
     }
+  };
+}
+
+/**
+ * Starts freezing a benchmark's tasks on a worker, one workflow per box at a time. Adding a box
+ * that failed starts it again under the same ID.
+ */
+function benchmarkAdder(
+  client: Client,
+  fallbackQueue: string,
+  env: NodeJS.ProcessEnv = process.env,
+) {
+  return async (input: BenchmarkAddInput): Promise<void> => {
+    try {
+      await client.workflow.start("selfBenchBenchmarkAddWorkflow", {
+        workflowId: `benchmark-add/${input.id}`,
+        taskQueue: env.SELFBENCH_EVAL_TASK_QUEUE ?? fallbackQueue,
+        args: [input],
+        workflowExecutionTimeout: "2 hours",
+        workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
+      });
+    } catch (error) {
+      if (!(error instanceof WorkflowExecutionAlreadyStartedError)) throw error;
+    }
+  };
+}
+
+/** The benchmark routes' dependencies: the add starter and Harbor's registry listing. */
+export function benchmarkWiring(client: Client, fallbackQueue: string, env = process.env) {
+  const workflowId = (id: number) => `benchmark-add/${id}`;
+  return {
+    addBenchmark: benchmarkAdder(client, fallbackQueue, env),
+    async addRunning(id: number): Promise<boolean> {
+      try {
+        const { status } = await client.workflow.getHandle(workflowId(id)).describe();
+        return status.name === "RUNNING";
+      } catch (error) {
+        if (error instanceof WorkflowNotFoundError) return false;
+        throw error;
+      }
+    },
+    registryCatalog: productionRegistryCatalog(env),
   };
 }

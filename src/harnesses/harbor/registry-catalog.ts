@@ -92,3 +92,8 @@ export function registryCatalog(
     }
   };
 }
+
+/** The catalog production serves: Harbor's listing, cached, read with this process's environment. */
+export function productionRegistryCatalog(env: NodeJS.ProcessEnv = process.env) {
+  return registryCatalog(() => fetchRegistryDatasets(env));
+}

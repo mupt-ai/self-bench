@@ -4,7 +4,6 @@ import { REGISTRY_REFERENCE } from "../../contracts/harbor-registry.js";
 import type { Benchmark, BenchmarkStore } from "../../db/benchmarks.js";
 import type { User } from "../../db/users.js";
 import { benchmarkDataset } from "../../evaluation/dataset.js";
-import { freezeRegistryTasks } from "../../evaluation/frozen-tasks.js";
 import { expandBundle } from "../../generation/runs/bundle.js";
 import { readBody } from "../http.js";
 import { EVALUATIONS_PATH, handleScopedEvaluations } from "./evaluation-scope.js";
@@ -18,6 +17,9 @@ const route = new RegExp(`^/api/orgs/([A-Za-z0-9_.-]+)/benchmarks(?:/(${NAME}/${
 const registryRoute = /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/benchmarks\/registry$/;
 
 const addSchema = z.strictObject({ reference: z.string() });
+
+/** How long a box may stay `adding` before a worker is presumed lost and the add may restart it. */
+const STRANDED_AFTER_MS = 10 * 60_000;
 
 const METHOD_NOT_ALLOWED: Reply = [405, { error: "Method not allowed" }];
 
@@ -58,6 +60,17 @@ export async function benchmarkRoutes(
   if (!benchmark) return send([404, { error: "Benchmark not found" }]);
   const evaluations = EVALUATIONS_PATH.exec(rest);
   if (!evaluations) return send(await member(context, benchmark, rest));
+  // Its tasks exist once a worker has frozen them; until then there is nothing to run.
+  if (benchmark.status !== "ready")
+    return send([
+      409,
+      {
+        error:
+          benchmark.status === "adding"
+            ? "This dataset is still being added"
+            : "This dataset couldn't be added",
+      },
+    ]);
   const [, section, id, action] = evaluations;
   await handleScopedEvaluations(options, {
     request,
@@ -101,9 +114,10 @@ async function collection(context: Context): Promise<Reply> {
 }
 
 /**
- * Adds a dataset, `org/name@ref` (`latest` when left out). Every task is downloaded, checked, and
- * frozen first, so a dataset a comparison would refuse is refused here, and its Dataset tab shows
- * exactly what was checked.
+ * Adds a dataset, `org/name@ref` (`latest` when left out). The box is saved as `adding` and a
+ * worker downloads, checks, and freezes every task (selfBenchBenchmarkAddWorkflow), so the API
+ * never downloads a task; a dataset a comparison would refuse fails its box with the reason.
+ * Adding a failed box again tries again.
  */
 async function add({ options, store, tenant, user, request }: Context): Promise<Reply> {
   let body: unknown;
@@ -113,21 +127,31 @@ async function add({ options, store, tenant, user, request }: Context): Promise<
   const parsed = addSchema.safeParse(body);
   const match = parsed.success && REGISTRY_REFERENCE.exec(parsed.data.reference);
   if (!match) return [400, { error: "Enter a Harbor registry dataset as org/name@ref" }];
+  if (!options.addBenchmark) return [503, { error: "Datasets can't be added here" }];
   const [name, ref] = [`${match[1]}/${match[2]}`, match[3] ?? "latest"];
+  // A box being added is left alone. One still `adding` long after its worker should have
+  // finished, with no workflow running, was stranded, and is restarted.
   const existing = await store.find(tenant.id, name);
-  if (existing) return [200, { benchmark: existing }];
-  try {
-    const taskList = await freezeRegistryTasks(
-      options.artifacts,
-      [`${name}@${ref}`],
-      options.env ?? process.env,
-      options.registryCommand,
-    );
-    const saved = await store.add({ orgId: tenant.id, name, ref, taskList, addedBy: user.id });
-    return [saved.added ? 201 : 200, { benchmark: saved.benchmark }];
-  } catch (error) {
-    return [400, { error: error instanceof Error ? error.message : "Dataset could not be added" }];
+  const strandedBefore = new Date(Date.now() - STRANDED_AFTER_MS);
+  if (existing?.status === "adding") {
+    if (new Date(existing.addedAt) >= strandedBefore) return [200, { benchmark: existing }];
+    if (await options.addRunning?.(existing.id)) return [200, { benchmark: existing }];
   }
+  const { benchmark, started } = await store.start({
+    orgId: tenant.id,
+    name,
+    ref,
+    addedBy: user.id,
+    strandedBefore,
+  });
+  if (!started) return [200, { benchmark }];
+  try {
+    await options.addBenchmark({ id: benchmark.id, name, ref });
+  } catch {
+    await store.fail(benchmark.id, "Adding could not start; try again");
+    return [503, { error: "Adding could not start; try again" }];
+  }
+  return [202, { benchmark: (await store.find(tenant.id, name)) ?? benchmark }];
 }
 
 /** One benchmark, its removal, its tasks, and a task's files. */

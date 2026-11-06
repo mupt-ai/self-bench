@@ -35,8 +35,8 @@ export const evaluationSummaries = pgTable(
 
 /**
  * A Harbor registry dataset an org added to run models on, apart from any repository: a box on the
- * Benchmarks page, with its own runs and results. Each comparison downloads and freezes `name` at
- * `ref` when it starts.
+ * Benchmarks page, with its own runs and results. A worker downloads, checks and freezes `name` at
+ * `ref` when it is added, and every comparison runs those frozen tasks.
  */
 export const benchmarks = pgTable(
   "benchmarks",
@@ -53,6 +53,14 @@ export const benchmarks = pgTable(
     tasks: integer("tasks").notNull(),
     /** Those tasks, frozen when added (FrozenTask[]), for the Dataset tab and its task pages. */
     taskList: jsonb("task_list").notNull(),
+    /**
+     * `adding` while a worker downloads and checks its tasks (selfBenchBenchmarkAddWorkflow),
+     * then `ready`, or `failed` with `error` saying why.
+     */
+    status: text("status", { enum: ["adding", "ready", "failed"] })
+      .notNull()
+      .default("ready"),
+    error: text("error"),
     addedBy: bigint("added_by", { mode: "number" })
       .notNull()
       .references(() => users.id),

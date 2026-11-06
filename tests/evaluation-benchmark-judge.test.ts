@@ -30,7 +30,7 @@ test("a benchmark graded by an LLM judge runs with the judge credential the user
       return (await response.json()).id as string;
     };
     expect((await fixture.request(fixture.benchmarks, post({ reference: "law/lab" }))).status).toBe(
-      201,
+      202,
     );
     // The Run page learns the tasks to pick from and which judge variables they read.
     const options = await (

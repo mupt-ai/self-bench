@@ -8,6 +8,7 @@ import { type ConnectedRepo, isGitHubRepo, type RepoStore } from "../../db/repos
 import type { TaskStore } from "../../db/tasks.js";
 import type { User, UserStore } from "../../db/users.js";
 import type { Vault } from "../../db/vault.js";
+import type { BenchmarkAddInput } from "../../evaluation/benchmark-add.js";
 import type { StopEvaluation } from "../../evaluation/cancel.js";
 import { repositoryDataset } from "../../evaluation/dataset.js";
 import type { FailureExplainer, ModelSummarizer, TaskAuditor } from "../../evaluation/start.js";
@@ -15,7 +16,6 @@ import type { EvaluationInput } from "../../evaluation/types.js";
 import type { ClaudeLogins } from "../../harnesses/claude-code/login.js";
 import type { CodexLogins } from "../../harnesses/codex/login.js";
 import type { MuseLogins } from "../../harnesses/muse-code/login.js";
-import type { runCommand } from "../../lib/process.js";
 import { lookupRepositoryById } from "../../public/release-sources.js";
 import { tenantFor } from "../auth/tenant.js";
 import { sendJson } from "../http.js";
@@ -49,8 +49,13 @@ export interface EvaluationRoutesOptions {
   fetch?: typeof fetch;
   /** Where GitHub's API is, to confirm a repository is still public before explaining failures. */
   githubApiUrl?: string;
-  /** Runs Harbor to download a benchmark's registry tasks (freezeRegistryTasks). */
-  registryCommand?: typeof runCommand;
+  /**
+   * Starts freezing a benchmark's registry tasks on a worker (selfBenchBenchmarkAddWorkflow);
+   * without it, datasets can't be added.
+   */
+  addBenchmark?: (input: BenchmarkAddInput) => Promise<void>;
+  /** Whether a box's add workflow is running now; a box `adding` with none running is restarted. */
+  addRunning?: (id: number) => Promise<boolean>;
   /** The org's benchmarks (Harbor registry datasets); without them, no benchmark routes. */
   benchmarks?: BenchmarkStore;
   /** Harbor registry's public datasets, which the add box searches; without it, none are listed. */

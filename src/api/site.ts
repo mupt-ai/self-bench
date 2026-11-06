@@ -17,6 +17,7 @@ import { createUsageStore } from "../db/usage.js";
 import { createUserStore } from "../db/users.js";
 import { createVault, type Vault } from "../db/vault.js";
 import {
+  benchmarkWiring,
   evaluationStarter,
   evaluationStopper,
   failureExplainer,
@@ -37,7 +38,6 @@ import {
   taskReviewChanged,
 } from "../generation/tasks/task-images-workflow.js";
 import { temporalStarter, temporalTaskWorkflows } from "../generation/tasks/workflow-client.js";
-import { fetchRegistryDatasets, registryCatalog } from "../harnesses/harbor/registry-catalog.js";
 import { projectRoot } from "../lib/project-paths.js";
 import { releasedTrials } from "../public/release-sources.js";
 import type { AuthConfig } from "./auth/config.js";
@@ -182,7 +182,6 @@ export async function openSite(
           }
         : {}),
       benchmarks: createBenchmarkStore(database.db),
-      registryCatalog: registryCatalog(() => fetchRegistryDatasets(process.env)),
       groups,
       groupReleases: { store: releases, changed: publicChanged },
       tasks,
@@ -194,6 +193,7 @@ export async function openSite(
       explain: failureExplainer(client, config.temporal.taskQueue),
       audit: taskAuditor(client, config.temporal.taskQueue),
       summarize: modelSummarizer(client, config.temporal.taskQueue),
+      ...benchmarkWiring(client, config.temporal.taskQueue),
       githubApiUrl: auth.githubApiUrl,
     }),
     github: createGitHubRepoRoutes({ config: auth, users }),

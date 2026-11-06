@@ -26,8 +26,8 @@ type Registry =
 /**
  * The box that adds a Harbor registry dataset. Typing searches Harbor's registry as you type, and
  * picking a result fills the box; anything else of the form org/name@ref can still be entered.
- * Adding downloads and checks each task, which takes a few seconds for a large dataset, so the
- * box says so while it waits.
+ * Adding only starts it: the dataset's own box then shows a worker downloading and checking each
+ * task.
  */
 export function AddBenchmarkCard({
   added,
@@ -244,7 +244,7 @@ export function AddBenchmarkCard({
       ) : (
         busy && (
           <p id="benchmark-help" className="text-xs text-muted-foreground">
-            Downloading and checking each task…
+            Starting…
           </p>
         )
       )}

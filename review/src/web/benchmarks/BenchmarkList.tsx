@@ -24,8 +24,11 @@ export function BenchmarkList({
         </li>
       ))}
       <li>
+        {/* A failed box can be added again, which retries it; only the others are taken. */}
         <AddBenchmarkCard
-          added={benchmarks.map((benchmark) => benchmark.name)}
+          added={benchmarks.flatMap((benchmark) =>
+            benchmark.status === "failed" ? [] : [benchmark.name],
+          )}
           onAdd={onAdd}
           {...(loadRegistry ? { loadRegistry } : {})}
         />
@@ -41,17 +44,29 @@ function BenchmarkCard({
   benchmark: Benchmark;
   onRemove(benchmark: Benchmark): void;
 }) {
+  const ready = benchmark.status === "ready";
   return (
     <ScopeCard
       name={benchmark.name}
-      to={`/benchmarks/${benchmark.name}`}
+      {...(ready ? { to: `/benchmarks/${benchmark.name}` } : {})}
       icon={<Package className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />}
-      details={["Harbor Registry", `Added ${formatAgo(benchmark.addedAt)}`]}
+      details={[
+        "Harbor Registry",
+        benchmark.status === "adding"
+          ? "Downloading and checking tasks…"
+          : benchmark.status === "failed"
+            ? "Couldn't be added"
+            : `Added ${formatAgo(benchmark.addedAt)}`,
+      ]}
       stats={[
-        { label: "Tasks", value: benchmark.tasks },
+        // Unknown until a worker has checked them; the box shows them loading meanwhile.
+        { label: "Tasks", ...(ready ? { value: benchmark.tasks } : {}) },
         { label: "Runs", value: benchmark.runs },
         { label: "Version", value: benchmark.ref },
       ]}
+      {...(benchmark.status === "failed"
+        ? { notice: benchmark.error ?? "Dataset could not be added" }
+        : {})}
       removeLabel="Remove"
       onRemove={() => onRemove(benchmark)}
     />

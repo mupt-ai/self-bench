@@ -192,13 +192,28 @@ function gatewayRouted(
       extraAllowedHosts,
     };
   }
-  return {
-    model,
-    agent: harness === "codex" ? "harbor_gateway:GatewayCodex" : harness,
-    agentArguments: harness === "codex" ? thinkingArguments(harness, input.thinking) : [],
-    child,
-    extraAllowedHosts,
-  };
+  if (harness === "codex") {
+    return {
+      model,
+      agent: "harbor_gateway:GatewayCodex",
+      agentArguments: [
+        ...thinkingArguments(harness, input.thinking),
+        // An endpoint without an image model refuses a conversation holding a viewed image.
+        ...(acceptsImages(input) ? [] : ["--agent-kwarg", "view_image=false"]),
+      ],
+      child,
+      extraAllowedHosts,
+    };
+  }
+  return { model, agent: harness, agentArguments: [], child, extraAllowedHosts };
+}
+
+/**
+ * Whether the trial's model reads images, as the model catalog lists it. A custom endpoint's
+ * models are unknown, so it is taken not to: a router may have no model that does.
+ */
+export function acceptsImages(input: Pick<EvaluationInput, "credentials" | "modelName">) {
+  return catalogEntry(gatewayModelId(input))?.input_modalities.includes("image") === true;
 }
 
 /**
@@ -211,7 +226,7 @@ export function piModelDetails(input: Pick<EvaluationInput, "credentials" | "mod
   if (!known) return {};
   return {
     name: known.name,
-    input: known.input_modalities.includes("image") ? ["text", "image"] : ["text"],
+    input: acceptsImages(input) ? ["text", "image"] : ["text"],
     ...(known.context_window ? { contextWindow: known.context_window } : {}),
     ...(known.max_output_tokens ? { maxTokens: known.max_output_tokens } : {}),
   };

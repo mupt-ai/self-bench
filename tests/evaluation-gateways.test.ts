@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import {
+  acceptsImages,
   gatewayModelId,
   gatewayTrial,
   pinnedThinking,
@@ -66,7 +67,7 @@ class Codex:
         return {"openai_base_url": openai_base_url} if openai_base_url else {}
     async def exec_as_agent(self, environment, command, **kwargs):
         return command, kwargs
-module.Codex = Codex
+module.Codex, module.CodexOptions = Codex, object
 sys.modules[module.__name__] = module
 sys.modules["harbor.agents.installed.claude_code"] = types.SimpleNamespace(ClaudeCode=object)
 spec = importlib.util.spec_from_file_location("adapter", sys.argv[1])
@@ -78,8 +79,13 @@ async def check():
     assert output == "/root/.nvm"
     assert options == {"timeout_sec": 30}
     gateway = adapter.GatewayCodex()
+    gateway.options = types.SimpleNamespace(view_image=True)
     gateway.model_name = "openai/dari/model/openrouter/anthropic/claude-sonnet-5"
     config = gateway._build_effective_config("https://gateway.example/v1")
+    assert "features" not in config
+    gateway.options.view_image = False  # a model that reads no images is not offered the tool
+    assert gateway._build_effective_config("https://gateway.example/v1")["features"] == {"view_image": False}
+    gateway.options.view_image = True
     assert "openai_base_url" not in config
     assert config["model_reasoning_summary"] == "none" and config["web_search"] == "disabled"  # the gateway refuses both (web search off OpenAI's own models)
     for model, search in (("openai/gpt-6-sol", None), ("openrouter/openai/gpt-6-sol", "disabled"), ("meta/muse-spark-1.3", "disabled"), ("custom/acme", "disabled")):
@@ -126,7 +132,7 @@ class ClaudeCode:
         self.ensured = dependencies
 module.ClaudeCode = ClaudeCode
 sys.modules[module.__name__] = module
-sys.modules["harbor.agents.installed.codex"] = types.SimpleNamespace(Codex=ClaudeCode)
+sys.modules["harbor.agents.installed.codex"] = types.SimpleNamespace(Codex=ClaudeCode, CodexOptions=object)
 spec = importlib.util.spec_from_file_location("adapter", sys.argv[1])
 adapter = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(adapter)
@@ -223,7 +229,14 @@ for (const [provider, modelName] of gatewayKinds) {
         expect(trial.agent).toBe(harness === "codex" ? "harbor_gateway:GatewayCodex" : harness);
         // The gateway pins the level; Mini-SWE-Agent and Terminus 2 send none ("none" is refused).
         expect(trial.agentArguments).toEqual(
-          harness === "codex" ? ["--agent-kwarg", "reasoning_effort=high"] : [],
+          harness !== "codex"
+            ? []
+            : [
+                "--agent-kwarg",
+                "reasoning_effort=high",
+                // Codex's image tool only for a model the catalog lists as reading images.
+                ...(acceptsImages(trialInput) ? [] : ["--agent-kwarg", "view_image=false"]),
+              ],
         );
       }
       if (harness !== "claude-code") {

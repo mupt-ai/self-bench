@@ -14,6 +14,11 @@ import { MAX_PENDING_TRIAL_WORKFLOWS } from "../contracts/config/execution-limit
 import { harbor, record, task } from "../temporal/activity-options.js";
 import { whenSandboxFree } from "../temporal/sandbox-capacity.js";
 import type { EvaluationActivities } from "./activities.js";
+import {
+  addBenchmarkWith,
+  type BenchmarkAddActivities,
+  type BenchmarkAddInput,
+} from "./benchmark-add.js";
 import type { ModelSummaryRequest } from "./model-summary.js";
 import { scopeOf } from "./scope.js";
 import type { TaskAuditRequest } from "./task-audit.js";
@@ -153,6 +158,30 @@ export async function selfBenchSolverTrialWorkflow(
  */
 export async function selfBenchFailedTrialWorkflow(trial: FailedTrial): Promise<void> {
   await (trial.explanation ? asked : explaining).explainSolverTrial(trial);
+}
+
+/**
+ * Adds a Harbor registry dataset as a benchmark (benchmark-add.ts). The freeze runs on a Harbor
+ * worker: downloading a large dataset takes minutes, and a refused task fails it at once.
+ */
+export async function selfBenchBenchmarkAddWorkflow(input: BenchmarkAddInput): Promise<void> {
+  const freezing = proxyActivities<BenchmarkAddActivities>(
+    harbor({
+      timeout: "30 minutes",
+      attempts: 2,
+      final: ["UnsafeHarborTaskError"],
+      heartbeat: "2 minutes",
+    }),
+  );
+  const settling = proxyActivities<BenchmarkAddActivities>(record());
+  await addBenchmarkWith(
+    {
+      freezeBenchmarkTasks: freezing.freezeBenchmarkTasks,
+      finishBenchmark: settling.finishBenchmark,
+      failBenchmark: settling.failBenchmark,
+    },
+    input,
+  );
 }
 
 /** Audits whether a task is fair from its failed attempts (task-audit.ts), on the app's request. */

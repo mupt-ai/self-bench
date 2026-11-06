@@ -4,10 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createSessionSigner, SESSION_COOKIE } from "../../src/api/auth/session.js";
 import { createSiteAuth } from "../../src/api/routes/auth.js";
-import {
-  createEvaluationRoutes,
-  type EvaluationRoutesOptions,
-} from "../../src/api/routes/evaluations.js";
+import { createEvaluationRoutes } from "../../src/api/routes/evaluations.js";
 import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import { apiKeyDenies, createApiKeyStore } from "../../src/db/api-keys.js";
 import { createBenchmarkStore } from "../../src/db/benchmarks.js";
@@ -20,6 +17,7 @@ import { scopeKey, scopeOf } from "../../src/evaluation/scope.js";
 import { keepRunSummaries } from "../../src/evaluation/store.js";
 import type { TaskAuditRequest } from "../../src/evaluation/task-audit.js";
 import type { EvaluationInput, FailedTrial } from "../../src/evaluation/types.js";
+import { type FixtureRoutes, inlineBenchmarkAdder } from "./benchmark-adder.js";
 import { testAuthConfig, testDatabase } from "./site-fixture.js";
 import { seedTasks } from "./task-rows.js";
 
@@ -86,7 +84,7 @@ export function evaluationInput(): EvaluationInput {
  */
 export async function evaluationServer(
   vault?: Vault,
-  logins: Partial<EvaluationRoutesOptions> = {},
+  { registryCommand, ...logins }: FixtureRoutes = {},
   env: NodeJS.ProcessEnv = evaluationEnv,
   github?: { private: boolean },
 ) {
@@ -162,6 +160,7 @@ export async function evaluationServer(
   let failStart = false;
   const apiKeys = createApiKeyStore(database.db);
   const benchmarks = createBenchmarkStore(database.db);
+
   const auth = createSiteAuth({
     config: testAuthConfig,
     users,
@@ -197,6 +196,7 @@ export async function evaluationServer(
         tasks,
         artifacts,
         publicUrl,
+        addBenchmark: inlineBenchmarkAdder({ artifacts, benchmarks, env, registryCommand }),
         ...logins,
         env,
         githubApiUrl: testAuthConfig.githubApiUrl,

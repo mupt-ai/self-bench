@@ -1,5 +1,5 @@
 {
-  "id": "ed677bee-7c5e-4143-95bd-5db3d7a7bba1",
+  "id": "9c6e26ab-bf5d-4492-ac11-38ec7e0fadc4",
   "prevId": "9612f625-9361-48e9-9f57-ab1413c2d183",
   "version": "7",
   "dialect": "postgresql",
@@ -763,18 +763,11 @@
           "primaryKey": false,
           "notNull": true
         },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'github'"
-        },
         "github_id": {
           "name": "github_id",
           "type": "bigint",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "full_name": {
           "name": "full_name",
@@ -859,28 +852,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "repos_org_eval_name": {
-          "name": "repos_org_eval_name",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "lower(\"full_name\")",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"repos\".\"kind\" = 'eval'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -914,12 +885,7 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "repos_kind_identity": {
-          "name": "repos_kind_identity",
-          "value": "(\"repos\".\"kind\" = 'github' and \"repos\".\"github_id\" is not null) or (\"repos\".\"kind\" = 'eval' and \"repos\".\"github_id\" is null)"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.tasks": {
@@ -2252,6 +2218,19 @@
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'ready'"
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "added_by": {
           "name": "added_by",
