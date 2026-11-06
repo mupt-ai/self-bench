@@ -85,6 +85,13 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
         sendJson(response, 404, { error: "repository is not connected here" });
         return true;
       }
+      // An eval has no GitHub repository, so no pull requests; it still has generation options.
+      if (!configuring && repo.kind === "eval") {
+        sendJson(response, 409, {
+          error: "An eval has no pull requests; add workspace scenarios.",
+        });
+        return true;
+      }
       if (listing) {
         const rawPage = url.searchParams.get("page") ?? "1";
         const page = Number(rawPage);

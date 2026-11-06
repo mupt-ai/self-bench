@@ -30,9 +30,10 @@ when it isn't the repository's owner. scenario create and task revise start a ge
 --harbor, and --harbor-credential (by default managed models and sandbox, as in the app), or by
 --generation with the settings as JSON or @FILE.
 
-scenario create --commit starts the agent from the repository at that commit (a branch resolves to
-its head); the author writes the change's reference implementation and hidden tests against it.
-Without --commit, the author writes the files the agent starts with.
+scenario create on a repository needs --commit: the agent starts from the repository at that commit
+(a branch resolves to its head), and the author writes the change's reference implementation and
+hidden tests against it. A workspace scenario, whose author writes the files the agent starts with,
+belongs to an eval: create one under Evals in the app and pass --repo evals/NAME, with no --commit.
 
 task pull writes the task's files (instruction.md, Dockerfile, the patches, scripts, and a
 scenario's workspace/) into DIRECTORY. task revise starts a revision from the task's last draft,

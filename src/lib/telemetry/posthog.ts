@@ -14,6 +14,7 @@ interface Actor {
 type ServerEvent =
   | "user signed in"
   | "repo connected"
+  | "eval created"
   | "batch started"
   | "pull request task started"
   | "scenario task started"

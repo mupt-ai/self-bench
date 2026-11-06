@@ -1,6 +1,7 @@
-import { FolderPlus, GitBranch, LockKeyhole, NotebookPen, Plus } from "lucide-react";
+import { GitBranch, LockKeyhole, NotebookPen, Plus } from "lucide-react";
 import React from "react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router";
+import { isEvalName } from "../../../../src/contracts/evals";
 import { type ConnectedRepo, fetchConnectedRepos, fetchTasks, type TaskItem } from "../api";
 import { useBatches } from "../batches/BatchProvider";
 import { useOrg } from "../SiteLayout";
@@ -22,6 +23,8 @@ function RepoTasksPage() {
   const { org } = useOrg();
   const { owner = "", name = "" } = useParams();
   const fullName = `${owner}/${name}`;
+  // An eval has no GitHub repository: its tasks are workspace scenarios.
+  const evalScope = isEvalName(fullName);
   useDocumentTitle(`Dataset · ${fullName} · SelfBench`);
   const [repo, setRepo] = React.useState<ConnectedRepo | null | undefined>(undefined);
   const [tasks, setTasks] = React.useState<TaskItem[] | null>(null);
@@ -129,7 +132,15 @@ function RepoTasksPage() {
     return (
       <PageContent>
         <p className="mb-4 text-base text-destructive">
-          {fullName} is not connected in {org.login}. <Link to="/">Back to Repositories</Link>
+          {evalScope ? (
+            <>
+              {fullName} is not an eval in {org.login}. <Link to="/evals">Back to Evals</Link>
+            </>
+          ) : (
+            <>
+              {fullName} is not connected in {org.login}. <Link to="/">Back to Repositories</Link>
+            </>
+          )}
         </p>
       </PageContent>
     );
@@ -141,7 +152,8 @@ function RepoTasksPage() {
         title="Dataset"
         className="max-sm:flex-col max-sm:items-start"
         description={
-          repo && (
+          repo &&
+          !evalScope && (
             <span className="inline-flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
               <span className="inline-flex items-center gap-1.5">
                 <GitBranch className="size-3.5" aria-hidden="true" />
@@ -158,39 +170,44 @@ function RepoTasksPage() {
         }
       >
         <div className="flex flex-wrap items-center gap-2">
-          <Link
-            className={buttonStyles.primary}
-            to={`/repos/${fullName}/add-prs`}
-            onClick={(event) => {
-              if (deleting) event.preventDefault();
-            }}
-            aria-disabled={deleting}
-          >
-            <Plus aria-hidden="true" />
-            Add PRs
-          </Link>
-          <Link
-            className={buttonStyles.secondary}
-            to={`/repos/${fullName}/add-scenario`}
-            onClick={(event) => {
-              if (deleting) event.preventDefault();
-            }}
-            aria-disabled={deleting}
-          >
-            <NotebookPen aria-hidden="true" />
-            Add Scenario
-          </Link>
-          <Link
-            className={buttonStyles.secondary}
-            to={`/repos/${fullName}/add-workspace-scenario`}
-            onClick={(event) => {
-              if (deleting) event.preventDefault();
-            }}
-            aria-disabled={deleting}
-          >
-            <FolderPlus aria-hidden="true" />
-            Add Workspace Scenario
-          </Link>
+          {evalScope ? (
+            <Link
+              className={buttonStyles.primary}
+              to={`/repos/${fullName}/add-workspace-scenario`}
+              onClick={(event) => {
+                if (deleting) event.preventDefault();
+              }}
+              aria-disabled={deleting}
+            >
+              <Plus aria-hidden="true" />
+              Add Workspace Scenario
+            </Link>
+          ) : (
+            <>
+              <Link
+                className={buttonStyles.primary}
+                to={`/repos/${fullName}/add-prs`}
+                onClick={(event) => {
+                  if (deleting) event.preventDefault();
+                }}
+                aria-disabled={deleting}
+              >
+                <Plus aria-hidden="true" />
+                Add PRs
+              </Link>
+              <Link
+                className={buttonStyles.secondary}
+                to={`/repos/${fullName}/add-scenario`}
+                onClick={(event) => {
+                  if (deleting) event.preventDefault();
+                }}
+                aria-disabled={deleting}
+              >
+                <NotebookPen aria-hidden="true" />
+                Add Scenario
+              </Link>
+            </>
+          )}
         </div>
       </PageHeader>
       {error && tasks !== null && <Notice className="mb-4">{error}</Notice>}

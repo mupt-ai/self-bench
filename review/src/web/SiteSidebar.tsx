@@ -1,6 +1,7 @@
 import {
   BookOpen,
   CreditCard,
+  FlaskConical,
   FolderGit2,
   Gauge,
   KeyRound,
@@ -12,6 +13,7 @@ import {
 } from "lucide-react";
 import React from "react";
 import { Link, useLocation } from "react-router";
+import { EVAL_OWNER } from "../../../src/contracts/evals";
 import { Lockup } from "./Lockup";
 import {
   SidebarContent,
@@ -65,7 +67,15 @@ function sectionsOf(billing: boolean): { label: string; items: NavItem[] }[] {
           label: "Repositories",
           to: "/",
           icon: FolderGit2,
-          active: (path) => path === "/" || path.startsWith("/repos/"),
+          active: (path) =>
+            path === "/" ||
+            (path.startsWith("/repos/") && !path.startsWith(`/repos/${EVAL_OWNER}/`)),
+        },
+        {
+          label: "Evals",
+          to: "/evals",
+          icon: FlaskConical,
+          active: (path) => path.startsWith("/evals") || path.startsWith(`/repos/${EVAL_OWNER}/`),
         },
         {
           label: "Repository Groups",

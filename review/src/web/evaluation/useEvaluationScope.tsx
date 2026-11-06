@@ -1,5 +1,6 @@
 import React from "react";
 import { useParams } from "react-router";
+import { isEvalName } from "../../../../src/contracts/evals";
 import { groupsUrl } from "../groups/api";
 import { useOrg } from "../SiteLayout";
 import { benchmarkUrl, evaluationUrl } from "./api";
@@ -64,6 +65,9 @@ export function useEvaluationScope(): EvaluationScope {
         url: evaluationUrl(org.login, full),
         pages: `/repos/${full}`,
         label: full,
-        parent: { label: "Repositories", to: "/" },
+        // An eval's pages are a repository's, but it is listed under Evals.
+        parent: isEvalName(full)
+          ? { label: "Evals", to: "/evals" }
+          : { label: "Repositories", to: "/" },
       };
 }

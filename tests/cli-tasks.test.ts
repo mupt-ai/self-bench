@@ -48,7 +48,13 @@ test("the CLI creates a scenario, pulls its draft, and revises it from an edited
   const files = await directory();
   await writeFile(join(files, "scenario.md"), "An email traded me to team 3.");
   await writeFile(join(files, "schedule.csv"), "team,date\n6,Mon\n");
-  const repo = ["--repo", "Mupt-AI/self-bench", "--org", "mupt-ai"];
+  // A workspace scenario belongs to an eval, which the CLI names like a repository.
+  await fixture.site.request("/api/orgs/mupt-ai/evals", {
+    method: "POST",
+    headers: fixture.headers,
+    body: JSON.stringify({ name: "Data Import Bugs" }),
+  });
+  const repo = ["--repo", "evals/data-import-bugs", "--org", "mupt-ai"];
 
   const created = await cli([
     "scenario",

@@ -38,10 +38,10 @@ const COPY = {
   workspace: {
     heading: "Add Workspace Scenario",
     about:
-      "Describe a situation an agent should handle, ideally one it got wrong. Nothing is read from the repository: the author builds the files the agent starts with, the instruction, and hidden tests that check the outcome.",
-    titlePlaceholder: "Traded to a New Team",
+      "Describe a task an agent should handle, ideally one it got wrong, with any real files from it. The author builds the files the agent starts with, the instruction, and hidden tests that check the outcome.",
+    titlePlaceholder: "CSV Import Drops Quoted Rows",
     scenarioPlaceholder:
-      "For example: my rec league schedule is a spreadsheet that says I'm on team 6. Last week an email said I was traded to team 3. Asked when my next game is, my agent answered from the spreadsheet.",
+      'For example: our CSV import silently drops any row whose fields contain a quoted comma, like "Smith, Jane". Attached are the export that loses rows and the stack trace. Asked to fix it, my agent split each line on commas. Fix the parser so every row imports.',
   },
 } as const;
 

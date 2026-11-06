@@ -19,8 +19,12 @@ export interface RepoDetail {
   since: string;
 }
 
-/** A repository connected to the org; tasks accumulate under it. */
+/**
+ * A repository connected to the org, or an eval (kind "eval", named `evals/<slug>`): the org's own
+ * collection of workspace scenarios. Tasks accumulate under either.
+ */
 export interface ConnectedRepo {
+  kind: "github" | "eval";
   fullName: string;
   defaultBranch: string;
   private: boolean;

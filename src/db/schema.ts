@@ -103,7 +103,11 @@ export const orgMembers = pgTable(
   ],
 );
 
-/** A repository connected to a tenant; tasks accumulate under it as pull requests merge. */
+/**
+ * A repository connected to a tenant; tasks accumulate under it as pull requests merge. An eval
+ * (`kind` "eval") is an org's own collection of workspace scenarios with no GitHub repository
+ * behind it: it has no GitHub id, and its full name is `evals/<slug>` (EVAL_OWNER).
+ */
 export const repos = pgTable(
   "repos",
   {
@@ -111,7 +115,10 @@ export const repos = pgTable(
     orgId: bigint("org_id", { mode: "number" })
       .notNull()
       .references(() => orgs.id, { onDelete: "cascade" }),
-    githubId: bigint("github_id", { mode: "number" }).notNull(),
+    kind: text("kind", { enum: ["github", "eval"] })
+      .notNull()
+      .default("github"),
+    githubId: bigint("github_id", { mode: "number" }),
     fullName: text("full_name").notNull(),
     defaultBranch: text("default_branch").notNull(),
     private: boolean("private").notNull().default(false),
@@ -127,6 +134,13 @@ export const repos = pgTable(
   (table) => [
     index("repos_org_id").on(table.orgId),
     uniqueIndex("repos_org_github_id").on(table.orgId, table.githubId),
+    uniqueIndex("repos_org_eval_name")
+      .on(table.orgId, sql`lower(${table.fullName})`)
+      .where(sql`${table.kind} = 'eval'`),
+    check(
+      "repos_kind_identity",
+      sql`(${table.kind} = 'github' and ${table.githubId} is not null) or (${table.kind} = 'eval' and ${table.githubId} is null)`,
+    ),
   ],
 );
 

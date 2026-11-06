@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import React from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
+import { isEvalName } from "../../../../src/contracts/evals";
 import { fetchTask, type TaskItem } from "../api";
 import { pageGutter } from "../layout";
 import { useOrg } from "../SiteLayout";
@@ -128,7 +129,9 @@ function TaskPageContent() {
         <div className="min-w-0">
           <Breadcrumbs
             items={[
-              { label: "Repositories", to: "/" },
+              isEvalName(fullName)
+                ? { label: "Evals", to: "/evals" }
+                : { label: "Repositories", to: "/" },
               {
                 label: fullName,
                 to: queue?.backLabel === "Dataset" ? queue.back : `/repos/${fullName}`,

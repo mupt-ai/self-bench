@@ -204,4 +204,32 @@ describe("postgres repo store", () => {
     expect(await store.disconnect(org.id, "MUPT-AI/B")).toBe(false);
     expect((await store.list(org.id)).map((repo) => repo.fullName)).toEqual(["Mupt-AI/a-renamed"]);
   });
+
+  test("never creates an eval over a name a repository of either kind holds", async () => {
+    const users = createUserStore(database.db, { secret: testAuthConfig.sessionSecret });
+    const user = await users.upsert({
+      githubId: 2,
+      login: "evals-owner",
+      token: "t",
+      scopes: "",
+      orgs: [{ githubId: 20, login: "Evals-Org", role: "admin" }],
+    });
+    const org = (await users.orgsFor(user.id)).find((candidate) => candidate.kind === "org");
+    if (!org) throw new Error("org missing");
+    const store = createRepoStore(database.db);
+    // A GitHub repository connected under the reserved owner before evals existed.
+    await store.connect({
+      orgId: org.id,
+      githubId: 200,
+      fullName: "Evals/data-import-bugs",
+      defaultBranch: "main",
+      private: false,
+      connectedBy: user.id,
+    });
+    const eval_ = { orgId: org.id, createdBy: user.id };
+    expect(await store.createEval({ ...eval_, slug: "data-import-bugs" })).toBeUndefined();
+    const created = await store.createEval({ ...eval_, slug: "csv-import" });
+    expect(created).toMatchObject({ kind: "eval", githubId: null, fullName: "evals/csv-import" });
+    expect(await store.createEval({ ...eval_, slug: "csv-import" })).toBeUndefined();
+  });
 });
