@@ -1,6 +1,7 @@
 /** The worker's workflow bundle: every workflow type this deployment registers. */
 
 export {
+  selfBenchBenchmarkAddWorkflow,
   selfBenchEvaluationRunWorkflow,
   selfBenchFailedTrialWorkflow,
   selfBenchModelSummaryWorkflow,
