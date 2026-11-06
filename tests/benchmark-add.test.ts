@@ -77,7 +77,7 @@ test("a failed freeze settles the box with the dataset's own reason, not Tempora
   expect(settled).toEqual([["fail", 7, "unsafe/leak: task bundle refused: task.toml sets env"]]);
 });
 
-test("a box left adding with no worker running is added again, not refused", async () => {
+test("a box left adding with no worker running is added again once it is stale, not refused", async () => {
   const hello = publishedTask("hello-world/hello-world", {}, "1".repeat(64));
   const harbor = fakeHarbor({ "stranded/dataset@latest": [hello] }, runCommand);
   const fixture = await evaluationServer(memoryVault(), { registryCommand: harbor.command });
@@ -92,6 +92,7 @@ test("a box left adding with no worker running is added again, not refused", asy
       taskList: [],
       addedBy: fixture.user.id,
       status: "adding",
+      addedAt: new Date(Date.now() - 60 * 60_000),
     });
     const again = await fixture.request(
       fixture.benchmarks,

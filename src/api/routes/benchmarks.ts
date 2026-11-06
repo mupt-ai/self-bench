@@ -18,6 +18,9 @@ const registryRoute = /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/benchmarks\/registry$/;
 
 const addSchema = z.strictObject({ reference: z.string() });
 
+/** How long a box may stay `adding` before a worker is presumed lost and the add may restart it. */
+const STRANDED_AFTER_MS = 10 * 60_000;
+
 const METHOD_NOT_ALLOWED: Reply = [405, { error: "Method not allowed" }];
 
 interface Context {
@@ -126,15 +129,20 @@ async function add({ options, store, tenant, user, request }: Context): Promise<
   if (!match) return [400, { error: "Enter a Harbor registry dataset as org/name@ref" }];
   if (!options.addBenchmark) return [503, { error: "Datasets can't be added here" }];
   const [name, ref] = [`${match[1]}/${match[2]}`, match[3] ?? "latest"];
-  // A box whose worker is still adding it is left alone; one `adding` with no worker is restarted.
+  // A box being added is left alone. One still `adding` long after its worker should have
+  // finished, with no workflow running, was stranded, and is restarted.
   const existing = await store.find(tenant.id, name);
-  if (existing?.status === "adding" && (await options.addRunning?.(existing.id)))
-    return [200, { benchmark: existing }];
+  const strandedBefore = new Date(Date.now() - STRANDED_AFTER_MS);
+  if (existing?.status === "adding") {
+    if (new Date(existing.addedAt) >= strandedBefore) return [200, { benchmark: existing }];
+    if (await options.addRunning?.(existing.id)) return [200, { benchmark: existing }];
+  }
   const { benchmark, started } = await store.start({
     orgId: tenant.id,
     name,
     ref,
     addedBy: user.id,
+    strandedBefore,
   });
   if (!started) return [200, { benchmark }];
   try {

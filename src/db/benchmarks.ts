@@ -1,4 +1,4 @@
-import { and, asc, count, eq, getTableColumns, inArray } from "drizzle-orm";
+import { and, asc, count, eq, getTableColumns, lt, or } from "drizzle-orm";
 import type { EvaluationInput } from "../evaluation/types.js";
 import type { Database } from "./client.js";
 import { benchmarkSummaries, benchmarks } from "./schema.js";
@@ -69,10 +69,13 @@ export function createBenchmarkStore(db: Database) {
       name: string;
       ref: string;
       addedBy: number;
+      /** A box still `adding` since before this instant has no worker, and may be restarted. */
+      strandedBefore: Date;
     }): Promise<{ benchmark: Benchmark; started: boolean }> {
+      const { strandedBefore: _, ...row_ } = input;
       const [row] = await db
         .insert(benchmarks)
-        .values({ ...input, tasks: 0, taskList: [], status: "adding" })
+        .values({ ...row_, tasks: 0, taskList: [], status: "adding" })
         .onConflictDoNothing()
         .returning(columns);
       if (row) return { benchmark: benchmark(row), started: true };
@@ -83,8 +86,10 @@ export function createBenchmarkStore(db: Database) {
           and(
             eq(benchmarks.orgId, input.orgId),
             eq(benchmarks.name, input.name),
-            // A box still `adding` has no running worker (the caller checked), so it was stranded.
-            inArray(benchmarks.status, ["failed", "adding"]),
+            or(
+              eq(benchmarks.status, "failed"),
+              and(eq(benchmarks.status, "adding"), lt(benchmarks.addedAt, input.strandedBefore)),
+            ),
           ),
         )
         .returning(columns);
