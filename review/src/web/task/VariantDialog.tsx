@@ -3,7 +3,7 @@ import React from "react";
 import { useNavigate } from "react-router";
 import { MAX_VARIANT_LABEL_LENGTH } from "../../../../src/contracts/variants";
 import type { TaskItem } from "../api";
-import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
+import { Dialog, DialogFooter, DialogHeader } from "../Dialog";
 import { GenerationFields } from "../GenerationFields";
 import { GenerationSteps } from "../GenerationSteps";
 import { InfoTooltip } from "../primitives/tooltip";
@@ -100,9 +100,10 @@ function VariantDialog({
           busy={busy}
         />
         <GenerationSteps step={step} firstStep="Change Environment" />
-        <DialogBody className="pt-3 sm:pt-4">
+        {/* The steps row keeps its own bottom margin, so the body pads only its sides and bottom. */}
+        <div className="grid gap-4 px-4 pb-6 sm:px-6">
           {step === 1 ? (
-            <div className="grid gap-4">
+            <div className="grid gap-6">
               <label htmlFor="variant-label" className={fieldStyles}>
                 <span className="flex items-center gap-1.5">
                   Variant Name
@@ -141,7 +142,7 @@ function VariantDialog({
             />
           )}
           {error && <Notice>{error}</Notice>}
-        </DialogBody>
+        </div>
         <DialogFooter className="sticky bottom-0 justify-end">
           <div className="flex gap-3">
             {step === 2 && (

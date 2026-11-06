@@ -22,7 +22,7 @@ export function PackageFields({
 }) {
   return (
     <fieldset className="grid gap-2" aria-label="Swap Packages">
-      <legend className="flex items-center gap-1.5 text-sm font-medium">
+      <legend className="mb-2 flex items-center gap-1.5 text-sm font-medium">
         Swap Packages
         <InfoTooltip label="Replaces a package the task already installs with another version or build, such as a tarball URL, using the repository's package manager. Directory is the folder under /app that holds its package.json; leave it blank for the root." />
       </legend>
@@ -30,41 +30,43 @@ export function PackageFields({
         <div
           // biome-ignore lint/suspicious/noArrayIndexKey: rows have no identity besides their place
           key={index}
-          className="grid gap-2 sm:grid-cols-[10rem_minmax(0,1fr)_9rem_auto]"
+          className="grid gap-2 border border-border p-3"
         >
-          <Input
-            aria-label="Package"
-            placeholder="next"
-            className="font-mono"
-            value={row.name}
-            disabled={disabled}
-            onChange={(event) => onChange(update(rows, index, { name: event.target.value }))}
-          />
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+            <Input
+              aria-label="Package"
+              placeholder="Package, e.g. next"
+              className="font-mono"
+              value={row.name}
+              disabled={disabled}
+              onChange={(event) => onChange(update(rows, index, { name: event.target.value }))}
+            />
+            <Input
+              aria-label="Directory"
+              placeholder="Directory, e.g. apps/web"
+              className="font-mono"
+              value={row.directory}
+              disabled={disabled}
+              onChange={(event) => onChange(update(rows, index, { directory: event.target.value }))}
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Remove Package"
+              disabled={disabled}
+              onClick={() => onChange(rows.filter((_, at) => at !== index))}
+            >
+              <Trash2 aria-hidden="true" />
+            </Button>
+          </div>
           <Input
             aria-label="Version or URL"
-            placeholder="Version or Tarball URL"
+            placeholder="Version, tag, or tarball URL"
             className="font-mono"
             value={row.spec}
             disabled={disabled}
             onChange={(event) => onChange(update(rows, index, { spec: event.target.value }))}
           />
-          <Input
-            aria-label="Directory"
-            placeholder="apps/web"
-            className="font-mono"
-            value={row.directory}
-            disabled={disabled}
-            onChange={(event) => onChange(update(rows, index, { directory: event.target.value }))}
-          />
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Remove Package"
-            disabled={disabled}
-            onClick={() => onChange(rows.filter((_, at) => at !== index))}
-          >
-            <Trash2 aria-hidden="true" />
-          </Button>
         </div>
       ))}
       <div>
@@ -93,7 +95,7 @@ export function FileFields({
 }) {
   return (
     <fieldset className="grid gap-2" aria-label="Add or Edit Files">
-      <legend className="flex items-center gap-1.5 text-sm font-medium">
+      <legend className="mb-2 flex items-center gap-1.5 text-sm font-medium">
         Add or Edit Files
         <InfoTooltip label="Written into /app before the agent starts, so the agent sees them as part of its files. Append adds to the end of a file that exists, such as AGENTS.md; Replace overwrites it." />
       </legend>
@@ -106,7 +108,7 @@ export function FileFields({
           <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_auto]">
             <Input
               aria-label="Path"
-              placeholder="AGENTS.md"
+              placeholder="Path, e.g. AGENTS.md"
               className="font-mono"
               value={row.path}
               disabled={disabled}
