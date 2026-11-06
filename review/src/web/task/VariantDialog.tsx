@@ -1,3 +1,4 @@
+import { CopyPlus } from "lucide-react";
 import React from "react";
 import { useNavigate } from "react-router";
 import { MAX_VARIANT_LABEL_LENGTH } from "../../../../src/contracts/variants";
@@ -194,7 +195,8 @@ export function CreateVariantButton(props: { org: string; fullName: string; task
   if (props.task.pipelineStatus !== "accepted" || props.task.state === "rejected") return null;
   return (
     <>
-      <Button size="small" onClick={() => setOpen(true)}>
+      <Button variant="ghost" onClick={() => setOpen(true)}>
+        <CopyPlus aria-hidden="true" />
         Create Variant
       </Button>
       {open && <VariantDialog {...props} onClose={() => setOpen(false)} />}

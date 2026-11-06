@@ -18,7 +18,7 @@ import {
   taskPath,
 } from "../task/review-queue";
 import { prefetchTaskFiles, rowFor, siteTaskSource } from "../task/site-source";
-import { TaskGenerationControls } from "../task/TaskGenerationControls";
+import { TaskCost, TaskGenerationControls } from "../task/TaskGenerationControls";
 import { TaskSkeleton } from "../task/TaskSkeleton";
 import { TaskView } from "../task/TaskView";
 import { taskTitle } from "../task/task-title";
@@ -161,8 +161,9 @@ function TaskPageContent() {
               title
             )}
           </h1>
-          <div className="mt-1">
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
             <LiveTaskState task={task} org={org.login} fullName={fullName} />
+            <TaskCost task={task} />
           </div>
           {error && (
             <Notice tone="info" className="mt-3">
@@ -197,18 +198,20 @@ function TaskPageContent() {
             fullName={fullName}
             onRequested={() => void refresh()}
           />
-          <CreateVariantButton task={task} org={org.login} fullName={fullName} />
-          {task.state !== "in_progress" &&
-            task.state !== "failed" &&
-            task.state !== "cancelled" && (
-              <ReviewBar
-                org={org.login}
-                fullName={fullName}
-                task={task}
-                onReview={onReview}
-                onDecided={onDecided}
-              />
-            )}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <CreateVariantButton task={task} org={org.login} fullName={fullName} />
+            {task.state !== "in_progress" &&
+              task.state !== "failed" &&
+              task.state !== "cancelled" && (
+                <ReviewBar
+                  org={org.login}
+                  fullName={fullName}
+                  task={task}
+                  onReview={onReview}
+                  onDecided={onDecided}
+                />
+              )}
+          </div>
         </div>
       </header>
       <TaskView
