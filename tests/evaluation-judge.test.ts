@@ -20,6 +20,16 @@ const harvey = {
     },
   },
 };
+// scale-ai/swe-atlas-qna: the judge's variables fill keys of the task's own names.
+const sweAtlas = {
+  verifier: {
+    env: {
+      EVAL_API_KEY: `\${OPENAI_API_KEY}`,
+      EVAL_BASE_URL: `\${OPENAI_API_BASE}`,
+      EVAL_MODEL: `\${EVAL_MODEL:-anthropic/claude-opus-4-5-20251101}`,
+    },
+  },
+};
 const tau3 = {
   environment: {
     env: {
@@ -33,8 +43,14 @@ const tau3 = {
 
 test("a published task may read judge variables, literal values, and defaulted variables", () => {
   expect(hostVariables(harvey)).toEqual([
-    { name: "ANTHROPIC_API_KEY", verifierOnly: true, required: true },
-    { name: "JUDGE_CONCURRENCY", verifierOnly: true, required: false, fallback: "8" },
+    { name: "ANTHROPIC_API_KEY", key: "ANTHROPIC_API_KEY", verifierOnly: true, required: true },
+    {
+      name: "JUDGE_CONCURRENCY",
+      key: "JUDGE_CONCURRENCY",
+      verifierOnly: true,
+      required: false,
+      fallback: "8",
+    },
   ]);
   expect(judgeNeeds(harvey)).toEqual({
     variables: ["ANTHROPIC_API_KEY"],
@@ -129,6 +145,22 @@ test("a trial gives the judge its key without touching the solver's own", () => 
   });
   expect(judgeTrial(hostVariables(harvey), {}, {})).toEqual({
     refusal: "The task's judge needs ANTHROPIC_API_KEY: select a judge credential",
+  });
+});
+
+test("a judge variable reaches the verifier under the task's own key, with the task's judge model", () => {
+  const judge = judgeEnvironment(connection);
+  const graded = judgeTrial(hostVariables(sweAtlas), { PATH: "/usr/bin" }, judge);
+  if ("refusal" in graded) throw new Error(graded.refusal);
+  // Harbor matches --verifier-env by the task's key; EVAL_MODEL keeps the task's default.
+  expect(graded.verifierEnv).toEqual([
+    `EVAL_API_KEY=\${SELFBENCH_JUDGE_OPENAI_API_KEY}`,
+    `EVAL_BASE_URL=\${SELFBENCH_JUDGE_OPENAI_API_BASE}`,
+  ]);
+  expect(graded.child).toEqual({
+    PATH: "/usr/bin",
+    SELFBENCH_JUDGE_OPENAI_API_KEY: "trial-key",
+    SELFBENCH_JUDGE_OPENAI_API_BASE: connection.openAiBase,
   });
 });
 

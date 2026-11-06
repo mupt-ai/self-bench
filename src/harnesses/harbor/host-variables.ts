@@ -21,6 +21,8 @@ const TEMPLATE = /^\$\{([^}:]+)(?::-(.*))?\}$/s;
 /** One host variable a task's `env` table reads, where, and whether it has a default. */
 export interface HostVariable {
   name: string;
+  /** The `env` key it fills (`EVAL_BASE_URL = "${OPENAI_API_BASE}"`), which --verifier-env sets. */
+  key: string;
   /** `verifier.env`, which a run can set directly (--verifier-env); others read the host's. */
   verifierOnly: boolean;
   required: boolean;
@@ -37,11 +39,12 @@ export function hostVariables(config: Record<string, unknown>): HostVariable[] {
     for (const [key, child] of Object.entries(value)) {
       const at = path ? `${path}.${key}` : key;
       if (key === "env" && isRecord(child))
-        for (const text of Object.values(child)) {
+        for (const [envKey, text] of Object.entries(child)) {
           const match = typeof text === "string" ? TEMPLATE.exec(text) : null;
           if (match?.[1])
             found.push({
               name: match[1],
+              key: envKey,
               verifierOnly: at === "verifier.env",
               required: match[2] === undefined,
               ...(match[2] !== undefined ? { fallback: match[2] } : {}),
