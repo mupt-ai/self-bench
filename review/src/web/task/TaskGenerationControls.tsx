@@ -64,13 +64,12 @@ export function TaskGenerationControls({
   );
 }
 
-/** A task's generation cost beside its state; nothing when it is not known yet. */
+/** A task's generation cost beside its state; a dash until a cost is known. */
 export function TaskCost({ task }: { task: TaskItem }) {
   const value = costLabel(task.cost);
-  if (value === "Unknown") return null;
   return (
     <span className="text-xs text-muted-foreground">
-      Cost <span className="tabular-nums text-foreground">{value}</span>
+      Cost <span className="tabular-nums text-foreground">{value === "Unknown" ? "—" : value}</span>
     </span>
   );
 }
