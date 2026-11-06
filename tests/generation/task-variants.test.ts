@@ -65,7 +65,7 @@ async function taskWithDraft(accepted: boolean) {
       headers: key,
       body: JSON.stringify({ variant }),
     });
-  return { ...fixture, task, variants };
+  return { ...fixture, task, key, variants };
 }
 
 const NEXT_BUILD = "https://vercel-packages.vercel.app/next/commits/d76ff78c/next";
@@ -109,7 +109,7 @@ test("a variant needs an accepted task and refuses values that could escape the 
   expect((await rejected.variants(VARIANT)).status).toBe(409);
   await server?.stop();
 
-  const { variants, started } = await taskWithDraft(true);
+  const { variants, started, task, key } = await taskWithDraft(true);
   const before = started.length;
   const unsafe = [
     { ...VARIANT, packages: [{ name: "next; rm -rf /", spec: "16.4.3", directory: "" }] },
@@ -119,5 +119,11 @@ test("a variant needs an accepted task and refuses values that could escape the 
     { label: "Nothing", packages: [], files: [] },
   ];
   for (const variant of unsafe) expect((await variants(variant)).status).toBe(400);
+  const malformed = await server?.request(`${EVAL}/tasks/${task.runId}/${task.taskId}/variants`, {
+    method: "POST",
+    headers: key,
+    body: "{not json",
+  });
+  expect(await malformed?.json()).toEqual({ error: "Send the variant as JSON." });
   expect(started.length).toBe(before);
 });

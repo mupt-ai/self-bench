@@ -98,7 +98,9 @@ export async function taskFeedbackRoute(
     } else body = bodySchema.parse(raw);
   } catch {
     sendJson(response, 400, {
-      error: `Write your feedback, in at most ${MAX_FEEDBACK_LENGTH.toLocaleString("en-US")} characters.`,
+      error: variantRequest
+        ? "Send the variant as JSON."
+        : `Write your feedback, in at most ${MAX_FEEDBACK_LENGTH.toLocaleString("en-US")} characters.`,
     });
     return true;
   }
