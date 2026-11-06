@@ -71,6 +71,7 @@ export async function prepareTaskImages(
     const pull = await startFromTaskImages(taskPath, task.images, input.sandbox, {
       env: options.env ?? process.env,
       ...(options.snapshotLink ? { callback: options.snapshotLink } : {}),
+      ...(options.signal ? { signal: options.signal } : {}),
     });
     const result = await command(
       await harborPython(child),

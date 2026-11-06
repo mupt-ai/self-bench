@@ -144,6 +144,7 @@ export async function setUpTrial(
   const pull = await startFromTaskImages(taskPath, task.images, run.sandbox, {
     env: options.env,
     ...(options.snapshotLink ? { callback: options.snapshotLink } : {}),
+    ...(options.setupSignal ? { signal: options.setupSignal } : {}),
   });
   if (pull.SELFBENCH_REGISTRY_PASSWORD) secrets.push(pull.SELFBENCH_REGISTRY_PASSWORD);
   return {

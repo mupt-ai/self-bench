@@ -97,10 +97,20 @@ export async function startFromTaskImages(
   taskDirectory: string,
   images: TaskImages | undefined,
   environment: HarborEnvironment,
-  serving: { readonly env: NodeJS.ProcessEnv; readonly callback?: { url: string; secret: string } },
+  serving: {
+    readonly env: NodeJS.ProcessEnv;
+    readonly callback?: { url: string; secret: string };
+    readonly signal?: AbortSignal;
+  },
 ): Promise<Readonly<Record<string, string>>> {
   // E2B installs its own packages into an image with the image's apt.
-  const pulled = await withLiveApt(taskDirectory, images, environment, serving.env);
+  const pulled = await withLiveApt(
+    taskDirectory,
+    images,
+    environment,
+    serving.env,
+    serving.signal ? { signal: serving.signal } : {},
+  );
   if (!pulled) return {};
   if (environment === "docker") {
     await applyTaskImages(taskDirectory, pulled);

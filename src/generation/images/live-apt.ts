@@ -9,12 +9,17 @@ import { IMAGE_CONTEXTS } from "./contexts.js";
 import { type RegistryAccess, taggedDigest } from "./registry.js";
 
 const DOCKER = "gcr.io/cloud-builders/docker";
-/** Pulling a large task image and pushing its one new layer. */
-const BUILD_TIMEOUT = "1800s";
+/**
+ * Pulling a large task image and pushing its one new layer. An evaluation's image preparation
+ * (90 minutes) builds both images side by side before its hour for the E2B templates.
+ */
+const BUILD_TIMEOUT = "1200s";
 
 interface LiveAptDeps {
   readonly cloud?: CloudBuildApi;
   readonly registry?: RegistryAccess;
+  /** Cancels the builds (and Cloud Build's) with the activity that started them. */
+  readonly signal?: AbortSignal;
 }
 
 /**
@@ -36,17 +41,23 @@ export async function withLiveApt(
   if (config?.builder?.kind !== "cloud-build") return images;
   const builder = config.builder;
   const live = { ...images };
-  for (const { role, context } of IMAGE_CONTEXTS) {
-    const dockerfile = await readFile(join(taskDirectory, context, "Dockerfile"), "utf8").catch(
-      () => "",
-    );
-    // Tasks compiled since restore the mirrors in their own images.
-    if (!pinsAptSnapshot(dockerfile) || dockerfile.includes(LIVE_APT_SOURCES)) continue;
-    live[role] = await liveAptImage(images[role], {
-      cloud: deps.cloud ?? googleCloudBuild(builder),
-      ...(deps.registry ? { registry: deps.registry } : {}),
-    });
-  }
+  await Promise.all(
+    IMAGE_CONTEXTS.map(async ({ role, context }) => {
+      const dockerfile = await readFile(join(taskDirectory, context, "Dockerfile"), "utf8").catch(
+        () => "",
+      );
+      // Tasks compiled since restore the mirrors in their own images.
+      if (!pinsAptSnapshot(dockerfile) || dockerfile.includes(LIVE_APT_SOURCES)) return;
+      live[role] = await liveAptImage(
+        images[role],
+        {
+          cloud: deps.cloud ?? googleCloudBuild(builder),
+          ...(deps.registry ? { registry: deps.registry } : {}),
+        },
+        deps.signal,
+      );
+    }),
+  );
   return live;
 }
 

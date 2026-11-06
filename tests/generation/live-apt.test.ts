@@ -44,6 +44,7 @@ async function taskWith(agent: string, verifier: string): Promise<string> {
 /** Artifact Registry with the tags in `tagged`, and Cloud Build that records and answers builds. */
 function fakes(tagged: Record<string, string> = {}, status = "SUCCESS") {
   const builds: Record<string, unknown>[] = [];
+  const signals: AbortSignal[] = [];
   const registry: RegistryAccess = {
     token: async () => "token",
     fetch: async (input) => {
@@ -57,8 +58,9 @@ function fakes(tagged: Record<string, string> = {}, status = "SUCCESS") {
     },
   };
   const cloud: CloudBuildApi = {
-    async run(build) {
+    async run(build, signal) {
       builds.push(build);
+      signals.push(signal);
       return {
         id: "build-1",
         status,
@@ -67,13 +69,20 @@ function fakes(tagged: Record<string, string> = {}, status = "SUCCESS") {
     },
     log: async () => "",
   };
-  return { registry, cloud, builds };
+  return { registry, cloud, builds, signals };
 }
 
 test("an E2B task whose Dockerfile pins apt to a snapshot gets an image with apt on its live mirrors", async () => {
   const directory = await taskWith(PINNED, "FROM node:22-bookworm\n");
-  const { registry, cloud, builds } = fakes();
-  const live = await withLiveApt(directory, images, "e2b", env, { cloud, registry });
+  const { registry, cloud, builds, signals } = fakes();
+  const stop = new AbortController();
+  const live = await withLiveApt(directory, images, "e2b", env, {
+    cloud,
+    registry,
+    signal: stop.signal,
+  });
+  // Cancelling the activity that asked for it cancels the build.
+  expect(signals).toEqual([stop.signal]);
   expect(live).toEqual({
     agent: `${REPOSITORY}/batch-1/task-1/agent-live-apt@${BUILT}`,
     verifier: images.verifier,
