@@ -1,48 +1,86 @@
 export function printHelp(): void {
-  console.log(`SelfBench command-line access to the API.
+  console.log(`self-bench: build, review, run, and publish evals from the terminal.
 
-Usage:
-  self-bench status RUN_ID
-  self-bench cancel RUN_ID
-  self-bench list
-  self-bench download RUN_ID OUTPUT.tar.gz
+Setup
+  self-bench login                   sign in through your browser; saves a key and workspace
+  self-bench org [use [NAME]]        show or change the workspace commands use
+  self-bench whoami                  the signed-in account, workspaces, and key scope
+  self-bench logout                  revoke the saved key and forget it
+
+  In CI, set SELFBENCH_API_KEY (Settings → API Keys) instead of logging in. SELFBENCH_ORG and
+  --org override the workspace; SELFBENCH_API_URL or login --api-url point at another deployment.
+
+Credentials (workspace admins)
+  self-bench credentials                             saved keys and sign-ins, with their IDs
+  self-bench credential add                          pick a provider, then paste a key or sign in
+  self-bench credential add --kind KIND (--value-env VAR | --value-stdin) [--name NAME]
+      [--token-id ID] [--team-id ID --project-id ID] [--endpoint URL]
+  self-bench credential add --sign-in chatgpt|claude|meta [--name NAME]
+  self-bench credential rename ID NAME | credential remove ID
+
+Build
+  self-bench repos                                   connected repositories and evals
+  self-bench repo connect|show|disconnect OWNER/NAME
+  self-bench repo set OWNER/NAME --agent-minutes N  how long agents get per task
+  self-bench eval create NAME                        a workspace eval (then --repo evals/NAME)
+  self-bench prs --repo R [--page N]                 merged pull requests
+  self-bench generate --repo R --easy N --medium N --hard N [--focus TEXT]
+  self-bench task add-pr --repo R --pr NUMBER|URL
+  self-bench scenario create --repo R --title TITLE (--scenario TEXT | --scenario-file FILE)
+      [--commit SHA|BRANCH] [--attach FILE ...] [--difficulty easy|medium|hard]
+  self-bench batches --repo R | batch show|cancel RUN_ID --repo R
+
+  generate, task add-pr, scenario create, and task revise take --model, --verifier-model,
+  --reasoning, --model-credential, --sandbox, --sandbox-credential, --harbor,
+  --harbor-credential, or --generation JSON|@FILE (default: managed models and sandbox).
+
+Review
+  self-bench tasks --repo R [--state needs_review|accepted|rejected|in_progress|failed]
+  self-bench task show|pull RUN_ID TASK_ID [DIR] --repo R
+  self-bench task approve|reject RUN_ID TASK_ID --repo R [--note TEXT]
+  self-bench task revise RUN_ID TASK_ID --repo R (--feedback TEXT | --feedback-file FILE)
+      [--draft DIR]
+  self-bench task unreview|cancel|delete RUN_ID TASK_ID --repo R
+
+Evaluate
+  self-bench catalog --repo R                        models evaluations can use
+  self-bench compare --repo R --model ID [--model ID ...] [--harness pi|codex|claude-code|...]
+      [--thinking LEVEL] [--credential ID] [--sandbox managed|e2b|modal|daytona]
+      [--sandbox-credential ID] [--task RUN_ID/TASK_ID ...] [--skip-completed]
+      [--judge-credential ID] | --selection JSON|@FILE
+  self-bench comparisons --repo R | comparison show|resume|cancel ID --repo R
+  self-bench runs --repo R | run show|cancel|delete EVALUATION_ID --repo R
+
+Inspect
+  self-bench results --repo R                        pass rate and cost per configuration
+  self-bench task results RUN_ID TASK_ID --repo R    every configuration on one task, with
+                                                     failure explanations and fairness
+  self-bench task explain RUN_ID TASK_ID --repo R [--config KEY] [--model M --credential ID]
+      [--wait]                                       explain why its failures failed
+  self-bench task audit RUN_ID TASK_ID --repo R --model M --credential ID [--wait]
+                                                     judge whether the task is fair
+  self-bench summaries --repo R                      the latest Model Summaries report
+  self-bench summaries create --repo R --model M --credential ID [--config KEY ...] [--wait]
+
+Publish (public repositories, to selfbench.dev)
+  self-bench release preview --repo R                what a release would publish
+  self-bench release publish --repo R [--setting KEY ... | --all-settings]
+      [--publish-tasks] [--publish-trials] [--publish-summaries]
+  self-bench releases --repo R | release withdraw RELEASE_ID --repo R
+
+Benchmarks and groups
+  self-bench benchmarks | benchmark add|show|tasks|remove ORG/NAME[@REF]   Harbor datasets
+  self-bench groups | group show|delete SLUG
+  self-bench group create|update SLUG --name NAME --member OWNER/NAME [--member ...]
+  Evaluate, Inspect, and release commands take --benchmark ORG/NAME or --group SLUG for --repo
+  (benchmarks are never released).
+
+Every command takes --org and --json. Lists print tables on a terminal and JSON when piped.
+
+Operator (SELFBENCH_API_TOKEN, the deployment's token)
+  self-bench status|cancel RUN_ID | list | download RUN_ID OUT.tar.gz
   self-bench grant create --label NAME --task ID [--task ID ...] [--days N] [--with-verifier]
-  self-bench grant list
-  self-bench grant revoke GRANT_ID
+  self-bench grant list | grant revoke GRANT_ID
 
-  self-bench scenario create --repo OWNER/NAME --title TITLE
-      (--scenario TEXT | --scenario-file FILE) [--commit SHA|BRANCH] [--attach FILE ...]
-      [--difficulty easy|medium|hard]
-  self-bench tasks --repo OWNER/NAME
-  self-bench task show RUN_ID TASK_ID --repo OWNER/NAME
-  self-bench task pull RUN_ID TASK_ID [DIRECTORY] --repo OWNER/NAME
-  self-bench task revise RUN_ID TASK_ID --repo OWNER/NAME
-      (--feedback TEXT | --feedback-file FILE) [--draft DIRECTORY]
-  self-bench task approve|reject RUN_ID TASK_ID --repo OWNER/NAME [--note TEXT]
-  self-bench task unreview|cancel|delete RUN_ID TASK_ID --repo OWNER/NAME
-
-Commands call SELFBENCH_API_URL (default http://127.0.0.1:8080).
-
-scenario and task act as the owner of a personal API key: create one under API Keys, then set
-SELFBENCH_API_KEY (a write key, except for tasks and task show|pull). --org names the workspace
-when it isn't the repository's owner. scenario create and task revise start a generation, set by
---model, --verifier-model, --reasoning, --model-credential, --sandbox, --sandbox-credential,
---harbor, and --harbor-credential (by default managed models and sandbox, as in the app), or by
---generation with the settings as JSON or @FILE.
-
-scenario create on a repository needs --commit: the agent starts from the repository at that commit
-(a branch resolves to its head), and the author writes the change's reference implementation and
-hidden tests against it. A workspace scenario, whose author writes the files the agent starts with,
-belongs to an eval: create one under Evals in the app and pass --repo evals/NAME, with no --commit.
-
-task pull writes the task's files (instruction.md, Dockerfile, the patches, scripts, and a
-scenario's workspace/) into DIRECTORY. task revise starts a revision from the task's last draft,
-or from DIRECTORY with --draft, and its agent addresses the feedback, keeps your edits, and
-verifies the result. The original task and its evaluations stay as they are.
-
-status, cancel, list, download, and grant use SELFBENCH_API_TOKEN, the operator's token.
-download verifies the export's SHA-256 before keeping the file. grant issues a customer a
-registry login for accepted tasks' images (agent images only unless --with-verifier, since the
-verifier images hold the tests). It prints the password once, and expires after --days
-(default 30). revoke takes effect on the next pull.`);
+Docs: https://docs.selfbench.dev/cli/overview`);
 }

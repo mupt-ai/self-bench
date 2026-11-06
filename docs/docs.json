@@ -17,18 +17,94 @@
       {
         "tab": "Guides",
         "groups": [
-          { "group": "Get Started", "pages": ["index", "quickstart"] },
-          { "group": "Use SelfBench", "pages": ["guides/generate-tasks", "guides/author-scenarios", "guides/run-evaluations", "guides/publish-results"] },
-          { "group": "Concepts", "pages": ["concepts/task-generation", "concepts/self-hosting"] }
+          {
+            "group": "Get Started",
+            "pages": [
+              "index",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Use SelfBench",
+            "pages": [
+              "guides/generate-tasks",
+              "guides/author-scenarios",
+              "guides/run-evaluations",
+              "guides/inspect-results",
+              "guides/publish-results"
+            ]
+          },
+          {
+            "group": "Concepts",
+            "pages": [
+              "concepts/task-generation",
+              "concepts/self-hosting"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "CLI",
+        "groups": [
+          {
+            "group": "CLI",
+            "pages": [
+              "cli/overview",
+              "cli/commands"
+            ]
+          }
         ]
       },
       {
         "tab": "API Reference",
         "groups": [
-          { "group": "Public Results", "pages": ["api-reference/overview", "api-reference/list-results", "api-reference/repository-results"] },
-          { "group": "Workspace API", "pages": ["api-reference/workspace", "api-reference/api-keys", "api-reference/list-tasks", "api-reference/create-batch", "api-reference/create-scenario", "api-reference/create-comparison", "api-reference/create-benchmark", "api-reference/publish-release"] }
+          {
+            "group": "Workspace API",
+            "pages": [
+              "api-reference/workspace",
+              "api-reference/api-keys",
+              "api-reference/repositories"
+            ]
+          },
+          {
+            "group": "Build and Review",
+            "pages": [
+              "api-reference/create-batch",
+              "api-reference/create-scenario",
+              "api-reference/tasks"
+            ]
+          },
+          {
+            "group": "Evaluate and Inspect",
+            "pages": [
+              "api-reference/create-comparison",
+              "api-reference/results",
+              "api-reference/failure-analysis",
+              "api-reference/create-benchmark"
+            ]
+          },
+          {
+            "group": "Publish",
+            "pages": [
+              "api-reference/publish-release"
+            ]
+          },
+          {
+            "group": "Public Results",
+            "pages": [
+              "api-reference/overview",
+              "api-reference/list-results",
+              "api-reference/repository-results"
+            ]
+          }
         ]
       }
     ]
-  }
+  },
+  "redirects": [
+    {
+      "source": "/api-reference/list-tasks",
+      "destination": "/api-reference/tasks"
+    }
+  ]
 }

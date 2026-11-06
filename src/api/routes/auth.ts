@@ -12,6 +12,7 @@ import {
   validateGitHubIdentity,
 } from "../../third_party/github/oauth.js";
 import { createOrgGate, OrgAccessError } from "../auth/allowed-orgs.js";
+import { createCliLogin } from "../auth/cli-login.js";
 import type { AuthConfig } from "../auth/config.js";
 import { clearCookie, parseCookies, sendRedirect, setCookie } from "../auth/cookies.js";
 import { constantTimeEqual, randomToken } from "../auth/crypto.js";
@@ -19,6 +20,8 @@ import { createSessionSigner, SESSION_COOKIE, SESSION_TTL_SECONDS } from "../aut
 import { bearerMatches, sendJson } from "../http.js";
 
 export const OAUTH_STATE_COOKIE = "selfbench_oauth_state";
+/** Where a sign-in started from a page that needs one returns: only the CLI's approval page. */
+const OAUTH_NEXT_COOKIE = "selfbench_oauth_next";
 const STATE_TTL_SECONDS = 10 * 60;
 /**
  * How long a passed identity check is trusted. Pages poll the API every few seconds, and asking
@@ -97,8 +100,14 @@ export function createSiteAuth(options: SiteAuthOptions): SiteAuth {
     return users.findByGitHubId(claims.githubId);
   };
 
-  const startSignIn = (response: ServerResponse): void => {
+  const startSignIn = (response: ServerResponse, next: string | null): void => {
     const state = randomToken();
+    if (next?.startsWith("/auth/cli?"))
+      setCookie(response, OAUTH_NEXT_COOKIE, next, {
+        maxAgeSeconds: STATE_TTL_SECONDS,
+        secure,
+        path: "/auth",
+      });
     setCookie(response, OAUTH_STATE_COOKIE, state, {
       maxAgeSeconds: STATE_TTL_SECONDS,
       secure,
@@ -112,7 +121,12 @@ export function createSiteAuth(options: SiteAuthOptions): SiteAuth {
     url: URL,
     response: ServerResponse,
   ): Promise<void> => {
-    const expected = parseCookies(request)[OAUTH_STATE_COOKIE];
+    const cookies = parseCookies(request);
+    const expected = cookies[OAUTH_STATE_COOKIE];
+    const next = cookies[OAUTH_NEXT_COOKIE]?.startsWith("/auth/cli?")
+      ? cookies[OAUTH_NEXT_COOKIE]
+      : "/";
+    clearCookie(response, OAUTH_NEXT_COOKIE, { secure, path: "/auth" });
     const state = url.searchParams.get("state") ?? "";
     const code = url.searchParams.get("code") ?? "";
     clearCookie(response, OAUTH_STATE_COOKIE, { secure, path: "/auth" });
@@ -149,21 +163,34 @@ export function createSiteAuth(options: SiteAuthOptions): SiteAuth {
       maxAgeSeconds: SESSION_TTL_SECONDS,
       secure,
     });
-    sendRedirect(response, "/");
+    sendRedirect(response, next);
   };
+
+  const cliLogin = createCliLogin({
+    config,
+    users,
+    ...(options.apiKeys ? { apiKeys: options.apiKeys } : {}),
+    now,
+    // Only a browser session approves a CLI; an API key can't mint another key.
+    sessionUser: async (request) => {
+      if (presentedApiKey(request.headers) !== undefined) return undefined;
+      return await authenticate(request);
+    },
+  });
 
   return {
     authenticate,
     async handle(request, url, response) {
       const method = request.method ?? "GET";
       if (method === "GET" && url.pathname === "/auth/github") {
-        startSignIn(response);
+        startSignIn(response, url.searchParams.get("next"));
         return true;
       }
       if (method === "GET" && url.pathname === "/auth/github/callback") {
         await finishSignIn(request, url, response);
         return true;
       }
+      if (await cliLogin.handle(request, url, response)) return true;
       if (method === "POST" && url.pathname === "/auth/logout") {
         clearCookie(response, SESSION_COOKIE, { secure });
         sendJson(response, 200, { ok: true });

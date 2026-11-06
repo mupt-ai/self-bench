@@ -32,17 +32,26 @@ import { auditTaskRoute } from "./audit-task.js";
 import type { EvaluationRoutesOptions } from "./evaluations.js";
 import { explainTrial } from "./explain-trial.js";
 import { modelSummariesRoute } from "./model-summaries.js";
+import { resultsRoute } from "./results.js";
 
 /** EVALUATIONS_PATH's named sections, which are never a run's id. */
-const SECTIONS = new Set(["options", "catalog", "comparisons", "audit", "summaries", "exports"]);
+const SECTIONS = new Set([
+  "options",
+  "catalog",
+  "comparisons",
+  "audit",
+  "summaries",
+  "results",
+  "exports",
+]);
 
 /**
  * What follows a repository or benchmark for its evaluations: the catalog, the tasks to pick from,
- * comparisons, task audits, model summaries, customer exports (a repository's only), and runs with
+ * comparisons, task audits, model summaries, results, customer exports (a repository's only), and runs with
  * their artifacts and actions.
  */
 export const EVALUATIONS_PATH =
-  /^\/evaluations(?:\/(options|catalog|comparisons|audit|summaries|exports|[a-f0-9-]{36}))?(?:\/(artifacts|[a-f0-9-]{36}))?(?:\/(resume|cancel|delete|explain|download|revoke))?$/;
+  /^\/evaluations(?:\/(options|catalog|comparisons|audit|summaries|results|exports|[a-f0-9-]{36}))?(?:\/(artifacts|[a-f0-9-]{36}))?(?:\/(resume|cancel|delete|explain|download|revoke))?$/;
 
 /** A request under a repository's evaluations or a benchmark's. */
 export interface ScopedRequest {
@@ -226,7 +235,9 @@ export async function handleScopedEvaluations(
     sendJson(response, 405, { error: "Method not allowed" });
     return;
   }
-  if (section === "catalog") {
+  if (section === "results") {
+    await resultsRoute(artifacts, url, response, scope, dataset);
+  } else if (section === "catalog") {
     sendJson(response, 200, {
       version: catalogVersion,
       models: evaluationCatalog().map(withReferencePricing),

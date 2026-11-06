@@ -22,10 +22,14 @@ export function constantTimeEqual(left: string, right: string): boolean {
 }
 
 /**
- * One configured secret, two independent keys: signing session cookies and sealing GitHub
- * tokens must not share key material, so each purpose gets its own HKDF derivation.
+ * One configured secret, independent keys: signing session cookies, sealing GitHub tokens, and
+ * signing CLI sign-in codes must not share key material, so each purpose gets its own HKDF
+ * derivation.
  */
-export function deriveKey(secret: string, purpose: "session-signing" | "token-sealing"): Buffer {
+export function deriveKey(
+  secret: string,
+  purpose: "session-signing" | "token-sealing" | "cli-login",
+): Buffer {
   return Buffer.from(hkdfSync("sha256", secret, "", `selfbench:${purpose}`, 32));
 }
 

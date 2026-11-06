@@ -33,11 +33,11 @@ On a repository, choose **Add Scenario**: give it a title, a commit or branch (b
 
 ## From the CLI or API
 
-The `self-bench` CLI and the [Workspace API](/api-reference/workspace) act as the owner of a personal API key. Create a `write` key under **Settings → API Keys**:
+The [`self-bench` CLI](/cli/overview) and the [Workspace API](/api-reference/workspace) act as the owner of a personal API key. Create a `write` key under **Settings → API Keys**:
 
 ```bash
-export SELFBENCH_API_URL=https://app.selfbench.dev
 export SELFBENCH_API_KEY=sbk_…
+self-bench eval create "Data Import Bugs"   # for workspace scenarios
 
 # A repository scenario, starting from a commit (or a branch, or HEAD for the default branch)
 self-bench scenario create --repo mupt-ai/self-bench --commit HEAD \
@@ -45,7 +45,7 @@ self-bench scenario create --repo mupt-ai/self-bench --commit HEAD \
   --scenario-file scenario.md \
   --difficulty hard
 
-# A workspace scenario, in an eval created under Evals in the app
+# A workspace scenario, in the eval
 self-bench scenario create --repo evals/data-import-bugs \
   --title "CSV Import Drops Quoted Rows" \
   --scenario-file scenario.md \
@@ -53,7 +53,7 @@ self-bench scenario create --repo evals/data-import-bugs \
   --difficulty medium
 ```
 
-`--org` names the workspace when it isn't the repository's owner. Generation defaults to managed models and sandbox, as in the app; `--model`, `--reasoning`, `--model-credential`, `--sandbox`, and `--sandbox-credential` change it, or `--generation @settings.json` gives the full settings. See [Create a Scenario Task](/api-reference/create-scenario) for the HTTP request.
+`--org` names the workspace when it isn't the repository's owner. Generation defaults to managed models and sandbox, as in the app. `--model`, `--reasoning`, `--model-credential`, `--sandbox`, and `--sandbox-credential` change it, or `--generation @settings.json` gives the full settings. See [Create a Scenario Task](/api-reference/create-scenario) for the HTTP request.
 
 ## Edit a Task
 
@@ -62,14 +62,14 @@ Every task, scenario or PR, can be revised. A revision is a new task whose agent
 To edit the files yourself, pull the draft, change it, and send it back with your feedback:
 
 ```bash
-self-bench tasks --repo mupt-ai/self-bench
+self-bench tasks --repo mupt-ai/self-bench --state needs_review
 self-bench task pull RUN_ID TASK_ID ./traded --repo mupt-ai/self-bench
 # edit ./traded/instruction.md, ./traded/workspace/…, the patches, or the scripts
 self-bench task revise RUN_ID TASK_ID --repo mupt-ai/self-bench \
   --draft ./traded --feedback "Ask for the venue as well as the time."
 ```
 
-The agent keeps your edits, fixes what the checks report, and submits. `task approve`, `task reject`, `task cancel`, and `task delete` do the rest of the review from the CLI.
+The agent keeps your edits, fixes what the checks report, and submits. `task approve`, `task reject`, `task cancel`, and `task delete` do the rest of the review. See [CLI Commands](/cli/commands).
 
 ## Write a Good Scenario
 

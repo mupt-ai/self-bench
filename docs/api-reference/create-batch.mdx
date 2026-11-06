@@ -1,7 +1,7 @@
 ---
-title: "Create a Batch"
+title: "Generate Tasks"
 api: "POST https://app.selfbench.dev/api/orgs/{org}/repos/{owner}/{name}/batches"
-description: "Generate benchmark tasks from merged pull requests."
+description: "Generate tasks from merged pull requests, in a batch or one PR at a time."
 icon: "list-plus"
 ---
 
@@ -10,6 +10,7 @@ icon: "list-plus"
 <ParamField path="name" type="string" required>Repository name.</ParamField>
 <ParamField header="Authorization" type="string" required>`Bearer` plus a `write` API key.</ParamField>
 <ParamField body="candidateCounts" type="object" required>Easy, medium, and hard counts; 1–300 total.</ParamField>
+<ParamField body="focus" type="string">Which PRs discovery should prefer, in your words.</ParamField>
 <ParamField body="generation" type="object">Model, reasoning, sandbox, and credential choices. Required when credential storage is configured.</ParamField>
 
 <RequestExample>
@@ -26,4 +27,17 @@ curl -X POST https://app.selfbench.dev/api/orgs/mupt-ai/repos/mupt-ai/self-bench
 ```
 </RequestExample>
 
-Returns `202` with `{ "runId": "batch-…", "run": { … } }`. Poll `GET /api/orgs/{org}/repos/{owner}/{name}/batches/{runId}` for progress. Get available choices from `GET /api/orgs/{org}/repos/{owner}/{name}/generation-options`.
+Returns `202` with `{ "runId": "batch-…", "run": { … } }`. A batch proposes merged PRs, then authors and verifies each one as a task. It can take hours.
+
+| Method | Route | Does |
+| --- | --- | --- |
+| `GET` | `{repo}/batches` | The repository's batches |
+| `GET` | `{repo}/batches/{runId}` | A batch's progress |
+| `POST` | `{repo}/batches/{runId}/cancel` | Stop it and every task it is authoring |
+| `GET` | `{repo}/generation-options` | Models, sandboxes, and credentials `generation` can name |
+
+Leave out `generation` to use the managed models and sandbox, where the deployment offers them.
+
+## One Pull Request
+
+`POST {repo}/tasks/from-pr` with `{ "pr": 123, "generation": { … } }` authors one merged PR as a task. `pr` is a number or the PR's URL. It returns `201` with `{ task }`, which appears in [the task list](/api-reference/tasks) in progress. List merged PRs with `GET {repo}/pull-requests?page=1`.

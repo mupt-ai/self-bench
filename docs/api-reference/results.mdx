@@ -1,0 +1,71 @@
+---
+title: "Results"
+api: "GET https://app.selfbench.dev/api/orgs/{org}/repos/{owner}/{name}/evaluations/results"
+description: "Each configuration's score, and how every configuration did on each task."
+icon: "chart-column"
+---
+
+<ParamField path="org" type="string" required>Workspace login.</ParamField>
+<ParamField path="owner" type="string" required>GitHub owner, or `evals`.</ParamField>
+<ParamField path="name" type="string" required>Repository or eval name.</ParamField>
+<ParamField header="Authorization" type="string" required>`Bearer` plus an API key.</ParamField>
+<ParamField query="runId" type="string">With `taskId`, narrow `taskResults` to one task and add its latest fairness `audit`.</ParamField>
+<ParamField query="taskId" type="string">The task's ID.</ParamField>
+
+<RequestExample>
+```bash cURL
+curl "https://app.selfbench.dev/api/orgs/acme/repos/acme/app/evaluations/results?runId=batch-1a2b&taskId=fix-null-config" \
+  -H "Authorization: Bearer $SELFBENCH_API_KEY"
+```
+</RequestExample>
+
+<ResponseExample>
+```json
+{
+  "tasks": 24,
+  "configurations": [{
+    "key": "[\"gpt-6.1-sol\",\"pi\",\"high\"]",
+    "name": "GPT-6.1 Sol · high reasoning · Pi",
+    "model": "openai/gpt-6.1-sol",
+    "harness": "pi",
+    "reasoning": "high",
+    "scored": 24,
+    "passed": 17,
+    "passRate": 70.8,
+    "costPerTaskUsd": 0.41
+  }],
+  "taskResults": [{
+    "runId": "batch-1a2b",
+    "taskId": "fix-null-config",
+    "difficulty": "medium",
+    "scored": 6,
+    "passed": 1,
+    "results": [{
+      "configuration": "[\"claude-opus-5-5\",\"pi\",\"high\"]",
+      "passed": false,
+      "evaluationId": "3f9c…",
+      "harness": "pi",
+      "costUsd": 0.52,
+      "failureSummary": "It guarded the call site but left the parser returning null for an empty file."
+    }]
+  }],
+  "audit": {
+    "verdict": "fair",
+    "text": "The failures miss a case the instruction names…",
+    "model": "gpt-6.1-sol",
+    "attempts": 6,
+    "failures": 5,
+    "auditedAt": "2026-11-06T12:00:00.000Z"
+  }
+}
+```
+</ResponseExample>
+
+Results count the same results as the app's chart, model summaries, and releases:
+
+- only **counted tasks**: a repository's accepted tasks, or a benchmark's tasks;
+- each configuration's **latest scored result** on each task. A trial is scored when it completed, its model was verified, and it has a reward of 0 or 1 and a cost. Errors, cancellations, and trials still running don't count.
+
+`configurations` sort by pass rate, best first, and `taskResults` by the share of configurations that passed, hardest first. A failed result carries `failureSummary` once [explained](/api-reference/failure-analysis). A configuration's `key` is what [model summaries](/api-reference/failure-analysis#model-summaries) and [releases](/api-reference/publish-release) name it by.
+
+The same route runs under a [benchmark or group](/api-reference/create-benchmark) scope.

@@ -1,0 +1,39 @@
+---
+title: "Repositories, Evals, and Credentials"
+description: "Connect repositories, create evals, and read merged pull requests and credentials."
+icon: "folder-git-2"
+---
+
+| Method | Route | Body | Returns |
+| --- | --- | --- | --- |
+| `GET` | `/api/orgs/{org}/repos` | | `{ repos }`: repositories and evals |
+| `POST` | `/api/orgs/{org}/repos` | `{ "fullName": "owner/name" }` | `201` (or `200` if already connected) with `{ repo }` |
+| `GET` | `/api/orgs/{org}/repos/{owner}/{name}` | | `{ repo }` |
+| `PATCH` | `/api/orgs/{org}/repos/{owner}/{name}` | `{ "agentMinutes": 30 }` | `{ repo }` |
+| `DELETE` | `/api/orgs/{org}/repos/{owner}/{name}` | | `{ "ok": true }` |
+| `POST` | `/api/orgs/{org}/evals` | `{ "name": "Data Import Bugs" }` | `201` with `{ repo }` (`evals/data-import-bugs`); `409` if taken |
+| `GET` | `{repo}/pull-requests?page=1` | | `{ pullRequests, nextPage }`: merged PRs, newest first |
+| `GET` | `/api/orgs/{org}/credentials` | | `{ credentials }`: IDs, names, and kinds, never secrets |
+| `POST` | `/api/orgs/{org}/credentials` | `{ name, kind, value, tokenId?, teamId?, projectId?, endpoint? }` | `201` with the credential; admins only |
+| `POST` | `/api/orgs/{org}/credentials/{id}/update` · `/delete` | `{ name }` · none | Rename or remove one; admins only |
+| `POST` | `/api/orgs/{org}/credentials/codex-login` · `muse-login` · `claude-login` | `{ name }` | Start a ChatGPT, Meta, or Claude sign-in |
+
+Connecting reads the repository with your GitHub sign-in. A workspace may connect any public repository, but only private repositories it owns.
+
+An **eval** is a collection of your own tasks with no repository behind it. Its tasks are [workspace scenarios](/api-reference/create-scenario), and it is never released. Address it like a repository, with `evals` as its owner.
+
+`agentMinutes` is how long an evaluated agent may work on each task.
+
+```json
+{
+  "repo": {
+    "kind": "github",
+    "fullName": "acme/app",
+    "defaultBranch": "main",
+    "private": false,
+    "agentMinutes": 30,
+    "connectedBy": "avyay",
+    "connectedAt": "2026-11-01T12:00:00.000Z"
+  }
+}
+```
