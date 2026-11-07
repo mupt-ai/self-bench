@@ -91,6 +91,7 @@ test("a retried check's image build runs again, timed from its own start", () =>
       ["authoring-round-1-turn-1/compile/attempt-1/harbor-task.tar.gz", "2026-11-06T22:42:38Z"],
       ["authoring-round-1-turn-1/images-started.txt", "2026-11-06T22:42:49Z"],
       ["authoring-round-1-turn-1/live/01-nop-000000.json", "2026-11-06T22:54:00Z"],
+      ["authoring-round-1-turn-1/live/01-oracle-000000.json", "2026-11-06T22:58:00Z"],
       ["authoring-round-1-turn-1/attempt-2/images-started.txt", "2026-11-06T23:00:00Z"],
     ]),
   );
@@ -100,4 +101,7 @@ test("a retried check's image build runs again, timed from its own start", () =>
     since: "2026-11-06T23:00:00Z",
   });
   expect(round?.steps[2]?.state).toBe("pending");
+  // The earlier attempt's Harbor run is no longer shown or counted.
+  expect(round?.live).toBeUndefined();
+  expect(round?.steps[3]?.state).toBe("pending");
 });
