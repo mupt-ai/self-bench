@@ -76,10 +76,19 @@ function verifyRound(folder: string, entries: ArtifactEntry[]): VerifyRound | un
     .filter(Boolean)
     .reduce((first, value) => (!first || value < first ? value : first), "");
   const live = oracleLive ?? nopLive;
-  // A deployment that builds task images uploads the build's contexts as the build starts; Harbor
-  // starts once both images are pushed, or the check ends on the build's failure.
-  const contexts = latest(/\/compile\/attempt-\d+\/image-contexts-[^/]+\.tar\.gz$/);
-  const builtImages = Boolean(nopLive || nopDone || oracleDone || done);
+  // A deployment that builds task images marks each attempt's build start; that attempt's build is
+  // done once its Harbor run starts, or the check ends (a failed build ends it).
+  const buildAttemptOf = (entry: ArtifactEntry) =>
+    Number(entry.key.match(/\/attempt-(\d+)\/images-started\.txt$/)?.[1] ?? 1);
+  const building = entries
+    .filter((entry) => entry.key.endsWith("/images-started.txt"))
+    .reduce<ArtifactEntry | undefined>(
+      (last, entry) => (!last || buildAttemptOf(entry) > buildAttemptOf(last) ? entry : last),
+      undefined,
+    );
+  const buildAttempt = building ? buildAttemptOf(building) : 1;
+  const testing = Number(attempt ?? 0) >= buildAttempt;
+  const builtImages = done || (testing && Boolean(nopLive || nopDone || oracleDone));
   return {
     id: folder,
     title,
@@ -89,16 +98,19 @@ function verifyRound(folder: string, entries: ArtifactEntry[]): VerifyRound | un
     ...(live && !done ? { live } : {}),
     steps: [
       { label: "Compile", state: state(compiled || done, true) },
-      ...(contexts
+      ...(building
         ? [
             {
               label: "Build Images",
               state: state(builtImages, true),
-              ...(contexts.updatedAt ? { since: contexts.updatedAt } : {}),
+              ...(building.updatedAt ? { since: building.updatedAt } : {}),
             },
             {
               label: "Smoke and Tests Without Fix",
-              state: state(nopDone || oracleDone || (done && !!nopLive), !!nopLive),
+              state: state(
+                (testing && (nopDone || oracleDone)) || (done && !!nopLive),
+                testing && !!nopLive,
+              ),
             },
           ]
         : [
