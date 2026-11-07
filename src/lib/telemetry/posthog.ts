@@ -15,6 +15,7 @@ type ServerEvent =
   | "user signed in"
   | "repo connected"
   | "eval created"
+  | "task variant started"
   | "batch started"
   | "pull request task started"
   | "scenario task started"

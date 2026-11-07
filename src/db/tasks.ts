@@ -50,6 +50,8 @@ export interface TaskRecord {
   /** The task a person's feedback revised into this one. */
   readonly revisedFrom?: { readonly runId: string; readonly taskId: string };
   readonly feedback?: string;
+  /** A variant's label: the environment change it made to the task it revises. */
+  readonly variant?: string;
 }
 
 /** A task the site just started: no verdict yet, a workflow to own it. */
@@ -57,6 +59,8 @@ interface TaskStart extends Omit<PlannedTask, "workflowId"> {
   readonly startedBy: number;
   /** A revision: the row it revises and the feedback it addresses. */
   readonly revision?: { readonly from: number; readonly feedback: string };
+  /** A variant's label (generation/tasks/variant.ts); a variant is also a revision. */
+  readonly variant?: string;
 }
 
 interface RepoTaskCounts {
@@ -161,6 +165,7 @@ export function createTaskStore(db: Database, options: { now?: () => Date } = {}
           syncedAt: now(),
           startedBy: row.startedBy,
           startedAt: now(),
+          ...(row.variant ? { variant: row.variant } : {}),
           ...(row.revision
             ? { revisedFrom: row.revision.from, feedback: row.revision.feedback }
             : {}),

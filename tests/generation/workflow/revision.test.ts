@@ -105,3 +105,47 @@ test("the first prompt of a revision carries the full brief and the feedback", (
   expect(prompt).toContain("rather than starting over");
   expect(authoringPrompt(candidate("prompt", 1), 1)).not.toContain("Maintainer Feedback");
 });
+
+test("a variant is checked once, never authored or reviewed, and stands on its checks", async () => {
+  const value = candidate("variant", 9);
+  const original = draft("variant", "-next-docs");
+  const run_ = async (green: boolean) => {
+    const activities = acceptingActivities([value]);
+    const calls: string[] = [];
+    activities.runAuthoringTurn = async () => {
+      throw new Error("a variant runs no author");
+    };
+    activities.runReviewRound = async () => {
+      throw new Error("a variant runs no reviewer");
+    };
+    const verify = activities.compileAndVerify;
+    activities.compileAndVerify = async (input) => {
+      calls.push(input.task.taskId);
+      expect(input.task).toEqual(original);
+      return green
+        ? verify(input)
+        : {
+            report: redReport(input.stage, input.round, input.task.taskId, { oracle: true }),
+            reportRef: ref("file:///red/report.json"),
+          };
+    };
+    const result = await executeCandidate(
+      {
+        run,
+        candidate: value,
+        revision: { draft: original, feedback: "Variant: Next.js Docs", verifyOnly: true },
+      },
+      activities,
+      async () => {},
+    );
+    return { result, calls };
+  };
+  const passed = await run_(true);
+  expect(passed.result.progress.status).toBe("accepted");
+  expect(passed.result.task).toBeDefined();
+  expect(passed.calls).toHaveLength(1);
+  const failed = await run_(false);
+  expect(failed.result.progress.status).toBe("rejected");
+  expect(failed.result.progress.reason).toContain("The variant did not pass its checks");
+  expect(failed.calls).toHaveLength(1);
+});

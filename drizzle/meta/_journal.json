@@ -239,6 +239,13 @@
       "when": 1793994438645,
       "tag": "0033_repo_evals",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1793998327215,
+      "tag": "0034_task_variants",
+      "breakpoints": true
     }
   ]
 }

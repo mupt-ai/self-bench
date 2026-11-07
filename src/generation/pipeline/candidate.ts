@@ -59,6 +59,28 @@ export async function executeCandidate(
   let lastSummary = "no verification report";
   let reviews = 0;
   try {
+    // A variant changes only an accepted task's environment, so its checks alone decide it.
+    if (input.revision?.verifyOnly) {
+      const submitted = input.revision.draft;
+      await update({ status: "verifying", stage: "authoring", round: 1, taskId: submitted.taskId });
+      const verified = await activities.compileAndVerify({
+        run,
+        candidate,
+        task: submitted,
+        stage: "authoring",
+        round: 1,
+      });
+      if (verified.report.green && verified.task)
+        return {
+          progress: { ...progress, status: "accepted" },
+          task: verified.task,
+          report: verified.reportRef,
+        };
+      return finish(
+        "rejected",
+        `The variant did not pass its checks: ${verifyReportSummary(verified.report)}`,
+      );
+    }
     for (let round = 1; round <= MAX_AUTHORING_ROUNDS; round += 1) {
       await update({ status: "authoring", stage: "authoring", round });
       let turnReport = lastReport;

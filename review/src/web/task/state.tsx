@@ -9,7 +9,7 @@ export const STATE_LABEL: Record<TaskState, string> = {
   in_progress: "In Progress",
 };
 
-/** Readable status text with a small marker, shared by task lists and review. */
+/** Readable status text with a small dot after it, shared by task lists and review. */
 export function StateStamp({ state }: { state: TaskState }) {
   const colors: Record<TaskState, string> = {
     needs_review: "text-brand-foreground",
@@ -21,7 +21,7 @@ export function StateStamp({ state }: { state: TaskState }) {
   };
   return (
     <span
-      className={`inline-flex items-center gap-2 whitespace-nowrap text-xs leading-5 font-medium before:size-1.5 before:shrink-0 before:rounded-full before:bg-current before:content-[''] ${colors[state]}`}
+      className={`inline-flex items-center whitespace-nowrap text-xs leading-5 font-medium after:ml-2 after:size-1.5 after:shrink-0 after:rounded-full after:bg-current after:content-[''] ${colors[state]}`}
     >
       {STATE_LABEL[state]}
     </span>

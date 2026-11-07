@@ -100,6 +100,11 @@ export interface CandidateWorkflowInput {
 export interface TaskRevision {
   readonly draft: AuthoredTaskDraft;
   readonly feedback: string;
+  /**
+   * A variant (generation/tasks/variant.ts): the draft is the original's with only its environment
+   * changed, so no author runs; it is verified once and accepted if every check passes.
+   */
+  readonly verifyOnly?: boolean;
 }
 
 /** Authoritative outcome of one candidate child workflow; `task` is present only when accepted. */

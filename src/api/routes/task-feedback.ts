@@ -14,6 +14,11 @@ import {
   stageUploadedDraft,
   uploadedDraftProblems,
 } from "../../generation/tasks/uploaded-draft.js";
+import {
+  stageVariantDraft,
+  type VariantCondition,
+  variantRequestSchema,
+} from "../../generation/tasks/variant.js";
 import { generationProperties, track } from "../../lib/telemetry/posthog.js";
 import { GitHubOAuthError } from "../../third_party/github/oauth.js";
 import {
@@ -27,7 +32,7 @@ import type { PullRequestRoutesOptions } from "./pull-requests.js";
 import { taskItem } from "./tasks.js";
 
 const route =
-  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/tasks\/([a-z0-9][a-z0-9-]{2,62})\/([A-Za-z0-9][A-Za-z0-9._-]*)\/feedback$/;
+  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/tasks\/([a-z0-9][a-z0-9-]{2,62})\/([A-Za-z0-9][A-Za-z0-9._-]*)\/(feedback|variants)$/;
 
 const bodySchema = z.object({
   feedback: z.string().trim().min(1).max(MAX_FEEDBACK_LENGTH),
@@ -45,6 +50,11 @@ type Options = PullRequestRoutesOptions & { readonly fetchImpl: typeof fetch };
  * a finished task. The revision is a new task of the same PR or scenario, started like one from
  * Add PRs, whose agent begins from the task's last submitted draft, or from the edited draft the
  * person sent, with the feedback; the task itself, and the evaluations that ran it, stay as they are.
+ *
+ * POST …/tasks/<run>/<task>/variants {variant, generation}: an accepted task's variant, a revision
+ * whose draft is the task's own with only its environment changed (packages installed over its
+ * own, files written into /app). No author runs: it is checked once and accepted if it passes, so
+ * its instruction and tests stay the original's and the two can be compared.
  */
 export async function taskFeedbackRoute(
   options: Options,
@@ -55,7 +65,8 @@ export async function taskFeedbackRoute(
 ): Promise<boolean> {
   const match = route.exec(url.pathname);
   if (!match || request.method !== "POST") return false;
-  const [, org = "", owner, name, runId = "", taskId = ""] = match;
+  const [, org = "", owner, name, runId = "", taskId = "", action] = match;
+  const variantRequest = action === "variants";
   if (options.publicUrl && !trustedMutation(request, options.publicUrl, user)) {
     sendJson(response, 403, { error: "Same-origin JSON request required" });
     return true;
@@ -68,11 +79,28 @@ export async function taskFeedbackRoute(
     return true;
   }
   let body: z.infer<typeof bodySchema>;
+  let condition: VariantCondition | undefined;
   try {
-    body = bodySchema.parse(JSON.parse((await readBody(request, BODY_LIMIT)).toString("utf8")));
+    const raw = JSON.parse((await readBody(request, BODY_LIMIT)).toString("utf8"));
+    if (variantRequest) {
+      const parsed = variantRequestSchema.safeParse(raw);
+      if (!parsed.success) {
+        const issue = parsed.error.issues[0];
+        sendJson(response, 400, {
+          error: issue
+            ? `${issue.path.join(".") || "variant"}: ${issue.message}`
+            : "Invalid variant",
+        });
+        return true;
+      }
+      condition = parsed.data.variant;
+      body = { feedback: `Variant: ${condition.label}`, generation: parsed.data.generation };
+    } else body = bodySchema.parse(raw);
   } catch {
     sendJson(response, 400, {
-      error: `Write your feedback, in at most ${MAX_FEEDBACK_LENGTH.toLocaleString("en-US")} characters.`,
+      error: variantRequest
+        ? "Send the variant as JSON."
+        : `Write your feedback, in at most ${MAX_FEEDBACK_LENGTH.toLocaleString("en-US")} characters.`,
     });
     return true;
   }
@@ -83,6 +111,11 @@ export async function taskFeedbackRoute(
   }
   if (task.pipelineStatus === "in_progress") {
     sendJson(response, 409, { error: "Wait for this task's generation to finish." });
+    return true;
+  }
+  // A variant is compared with the task it changes, so that task must have passed its checks.
+  if (condition && task.pipelineStatus !== "accepted") {
+    sendJson(response, 409, { error: "Only an accepted task can have a variant." });
     return true;
   }
   const scenario = task.sourcePr === undefined && task.title !== undefined;
@@ -119,8 +152,19 @@ export async function taskFeedbackRoute(
   const stage = async (revisionRunId: string): Promise<AuthoredTaskDraft> =>
     uploaded
       ? await stageUploadedDraft(artifacts, revisionRunId, task, uploaded)
-      : await stageRevisionDraft(artifacts, revisionRunId, submitted as AuthoredTaskDraft);
-  const revision = { from: task.id, feedback: body.feedback };
+      : condition
+        ? await stageVariantDraft(
+            artifacts,
+            revisionRunId,
+            submitted as AuthoredTaskDraft,
+            condition,
+          )
+        : await stageRevisionDraft(artifacts, revisionRunId, submitted as AuthoredTaskDraft);
+  const revision = {
+    from: task.id,
+    feedback: body.feedback,
+    ...(condition ? { variant: condition.label } : {}),
+  };
   let row: TaskRecord;
   if (scenario) {
     // A repository scenario's run clones its commit with the person's token, as a PR's does.
@@ -145,7 +189,7 @@ export async function taskFeedbackRoute(
   }
   track(
     user,
-    "task revision started",
+    condition ? "task variant started" : "task revision started",
     {
       ...(generation ? generationProperties(generation.settings) : {}),
       source: scenario ? "scenario" : "pull_request",
@@ -163,7 +207,7 @@ async function revisePullRequest(
   repo: { readonly id: number; readonly fullName: string; readonly defaultBranch: string },
   task: TaskRecord,
   user: User,
-  revision: { readonly from: number; readonly feedback: string },
+  revision: { readonly from: number; readonly feedback: string; readonly variant?: string },
   stage: (runId: string) => Promise<AuthoredTaskDraft>,
   generation: Parameters<typeof saveGenerationRecords>[2] | undefined,
 ): Promise<{ row: TaskRecord } | { status: number; error: string }> {
@@ -203,7 +247,8 @@ async function revisePullRequest(
     difficulty: task.difficulty,
     stage: "authoring",
     startedBy: user.id,
-    revision,
+    revision: { from: revision.from, feedback: revision.feedback },
+    ...(revision.variant ? { variant: revision.variant } : {}),
   });
   await startTaskFromPullRequest({
     config: options.config,
@@ -222,7 +267,11 @@ async function revisePullRequest(
     attempt: 1,
     runId: row.runId,
     ...(generation ? { generation } : {}),
-    revision: { draft: await stage(row.runId), feedback: revision.feedback },
+    revision: {
+      draft: await stage(row.runId),
+      feedback: revision.feedback,
+      ...(revision.variant ? { verifyOnly: true } : {}),
+    },
   });
   return { row };
 }
