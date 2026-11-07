@@ -28,8 +28,7 @@ if ! self-bench help 2>/dev/null | grep -q 'self-bench login'; then
   die "the installed self-bench is too old to sign in. Try SELFBENCH_CLI_VERSION=<newer version>."
 fi
 
-say ""
-say "Installed: $(self-bench help >/dev/null 2>&1 && npm ls -g self-bench --depth=0 2>/dev/null | tail -1 | sed 's/.*self-bench@//')"
+say "self-bench installed."
 say ""
 say "Next steps:"
 say "  self-bench login     sign in through your browser and pick a workspace"
