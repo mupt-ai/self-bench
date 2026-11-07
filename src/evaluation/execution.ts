@@ -120,6 +120,7 @@ export async function credentialExecution(
     auth: info.auth,
     route,
     credential: { orgId, id: info.id },
+    sandboxLimits: "resourceLimits" in sandbox ? sandbox.resourceLimits : undefined,
     judge: await trialJudge(input, orgId, credentials),
   };
 }

@@ -246,6 +246,13 @@
       "when": 1793998327215,
       "tag": "0034_task_variants",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1794076849475,
+      "tag": "0035_sandbox_resource_limits",
+      "breakpoints": true
     }
   ]
 }

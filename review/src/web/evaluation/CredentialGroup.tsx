@@ -75,6 +75,9 @@ export function CredentialGroup({
                   {credential.endpoint && <> · {credential.endpoint}</>}
                   {credential.maxSandboxes && <> · Up to {credential.maxSandboxes} at once</>}
                   {credential.maxBuilds && <> · Up to {credential.maxBuilds} builds at once</>}
+                  {credential.resourceLimits && (
+                    <> · {resourceSummary(credential.resourceLimits)}</>
+                  )}
                   {credential.models?.length && <> · {credential.models.join(", ")}</>}
                 </p>
               </div>
@@ -94,4 +97,16 @@ export function CredentialGroup({
       )}
     </section>
   );
+}
+
+/** A sandbox account's per-sandbox limits, as `8 CPUs, 16 GiB memory`. */
+function resourceSummary(limits: NonNullable<CredentialInfo["resourceLimits"]>): string {
+  const gib = (mib: number) => `${Number((mib / 1024).toFixed(1))} GiB`;
+  return [
+    limits.cpus !== undefined ? `${limits.cpus} CPUs` : "",
+    limits.memoryMb !== undefined ? `${gib(limits.memoryMb)} memory` : "",
+    limits.storageMb !== undefined ? `${gib(limits.storageMb)} storage` : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
 }

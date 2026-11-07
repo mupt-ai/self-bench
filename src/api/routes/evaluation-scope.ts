@@ -140,6 +140,8 @@ export async function handleScopedEvaluations(
         sendJson(response, 202, {
           ...(await comparisonStatus(artifacts, record)),
           submissionError,
+          // Every evaluation of a comparison carries the same list (assertTasksFitSandbox).
+          resourceWarnings: record.inputs[0]?.resourceWarnings ?? [],
         });
         return !submissionError;
       };

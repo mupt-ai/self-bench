@@ -113,13 +113,17 @@ test("a download that finds no package tasks, or tasks outside the package cache
 test("a registry task is checked as published and left unchanged, with its own limits", async () => {
   const published: Record<string, string> = {
     ...publishedTask("terminal-bench/build").files,
-    "task.toml": harborTaskToml("terminal-bench/build", 'docker_image = "someone/build:1"\n'),
+    "task.toml": harborTaskToml(
+      "terminal-bench/build",
+      'docker_image = "someone/build:1"\ncpus = 2\nmemory = "4G"\nstorage_mb = 10240\n',
+    ),
   };
   const directory = await taskDirectory(published);
   // Build, agent, and verifier: 600 + 120 + 120 seconds.
   expect(await checkRegistryTask(directory, harborEnv)).toEqual({
     minutes: 14,
     judge: { variables: [], required: [] },
+    resources: { cpus: 2, memoryMb: 4096, storageMb: 10240 },
   });
   for (const [path, text] of Object.entries(published))
     expect(await readFile(join(directory, path), "utf8")).toBe(text);

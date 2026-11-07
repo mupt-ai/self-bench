@@ -38,6 +38,7 @@ export function CredentialEditor({
     endpoint: previous?.endpoint,
     maxSandboxes: previous?.maxSandboxes,
     maxBuilds: previous?.maxBuilds,
+    resourceLimits: previous?.resourceLimits,
     ...(previous?.models ? { models: previous.models } : {}),
   });
   const [busy, setBusy] = React.useState(false);

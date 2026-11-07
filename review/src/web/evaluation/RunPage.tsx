@@ -10,10 +10,12 @@ import { useOrgCredentials } from "../setup/SetupStatus";
 import { Button, Notice, PageContent, PageHeader } from "../ui";
 import { type EvaluationOptions, evaluationRequest, evaluationRequestId } from "./api";
 import {
+  type ComparisonReceipt,
   resumeComparison,
   submitComparison,
   UnsavedComparisonError,
 } from "./comparison-submission";
+import { ResourceWarnings } from "./ResourceWarnings";
 import {
   RunBlockerNotice,
   type RunDraft,
@@ -60,6 +62,7 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
   const [availableTasks, setAvailableTasks] = React.useState<EvaluationOptions["tasks"]>([]);
   const [judge, setJudge] = React.useState<JudgeNeeds>();
   const [error, setError] = React.useState("");
+  const [warnings, setWarnings] = React.useState<string[]>([]);
   const [busy, setBusy] = React.useState(false);
   const [tasksReady, setTasksReady] = React.useState(false);
   const { draft } = state;
@@ -154,6 +157,12 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
     !judgeReady && tasksReady && !state.submitted
       ? "Select a judge credential to continue."
       : runBlocker({ draft, ready, submitted: state.submitted, tasksReady, pairs });
+  const finish = (result: ComparisonReceipt) => {
+    if (result.submissionError) return setError(result.submissionError);
+    sessionStorage.removeItem(key);
+    if (result.resourceWarnings?.length) setWarnings(result.resourceWarnings);
+    else void navigate(`${pages}/results`);
+  };
   const submit = async (missingOnly = false) => {
     if (busy || (!state.submitted && !ready)) return;
     setBusy(true);
@@ -167,13 +176,7 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
       sessionStorage.setItem(key, JSON.stringify(pending));
     } catch {}
     try {
-      const result = await submitComparison(url, frozen);
-      if (result.submissionError) {
-        setError(result.submissionError ?? "Some runs were not submitted. Resume to finish them.");
-        return;
-      }
-      sessionStorage.removeItem(key);
-      void navigate(`${pages}/results`);
+      finish(await submitComparison(url, frozen));
     } catch (cause) {
       if (cause instanceof UnsavedComparisonError) setState({ draft: frozen, submitted: false });
       setError(
@@ -189,13 +192,7 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
     setBusy(true);
     setError("");
     try {
-      const result = await resumeComparison(url, draft.id);
-      if (result.submissionError) {
-        setError(result.submissionError ?? "Some runs were not submitted. Resume to finish them.");
-        return;
-      }
-      sessionStorage.removeItem(key);
-      void navigate(`${pages}/results`);
+      finish(await resumeComparison(url, draft.id));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not resume submission");
     } finally {
@@ -243,6 +240,12 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
         </div>
       )}
       {(error || credentialsError) && <Notice className="mb-5">{error || credentialsError}</Notice>}
+      {warnings.length > 0 && (
+        <ResourceWarnings
+          warnings={warnings}
+          onContinue={() => void navigate(`${pages}/results`)}
+        />
+      )}
       {coverage && !covered(coverage) ? (
         <RunSetupCallout coverage={coverage} />
       ) : (

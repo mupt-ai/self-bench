@@ -1,0 +1,1 @@
+ALTER TABLE "credentials" ADD COLUMN "resource_limits" jsonb;

@@ -14,8 +14,10 @@ import { startFromTaskImages } from "../harnesses/harbor/registry-pull.js";
 import {
   assertHostSafePublishedTask,
   assertHostSafeTask,
+  readTaskConfig,
 } from "../harnesses/harbor/task-safety.js";
 import { runCommand } from "../lib/process.js";
+import { checkResources, requestedResources } from "../sandbox/resources.js";
 import { credentialExecution } from "./execution.js";
 import { taskImagesFailed } from "./refusal.js";
 import type { RunnerOptions } from "./runner.js";
@@ -67,6 +69,16 @@ export async function prepareTaskImages(
     // is only checked, since it runs exactly as published.
     if (task.registry) await assertHostSafePublishedTask(taskPath, child);
     else await assertHostSafeTask(taskPath, child, trialTimeouts(input.agentMinutes).agentSeconds);
+    // A task over the account's per-sandbox limits builds nothing; its trials fail the same way.
+    const fit = checkResources(
+      requestedResources(await readTaskConfig(taskPath)),
+      execution.sandboxLimits,
+      input.sandbox,
+    );
+    if (fit.errors.length)
+      throw taskImagesFailed(
+        `This task ${fit.errors.join(", ")} (the sandbox credential's limits)`,
+      );
     // An E2B template is then made from the task's exported image instead of its Dockerfile.
     const pull = await startFromTaskImages(taskPath, task.images, input.sandbox, {
       env: options.env ?? process.env,

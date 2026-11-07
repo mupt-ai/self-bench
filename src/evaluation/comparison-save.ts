@@ -7,6 +7,7 @@ import { type ManagedOffer, managedHarborEnvironment } from "../generation/billi
 import { type CatalogModel, evaluationCatalog } from "./catalog.js";
 import type { ComparisonSelection } from "./comparisons.js";
 import { defaultThinking, routeFor, signInRefusal, thinkingOptions } from "./models.js";
+import { assertTasksFitSandbox } from "./resource-check.js";
 import { listRuns } from "./run-list.js";
 import { type EvaluationScope, sameScope } from "./scope.js";
 import { live } from "./store.js";
@@ -91,6 +92,7 @@ export async function saveComparison(
   )
     throw new Error("Select your matching sandbox credential");
   const frozen = await freeze();
+  const resourceWarnings = assertTasksFitSandbox(frozen, sandbox);
   const judgeCredentialId = judge?.(frozen, saved);
   const seen = new Set<string>();
   const createdAt = new Date().toISOString();
@@ -193,7 +195,9 @@ export async function saveComparison(
       scope: owner.scope,
       createdAt,
       signature,
-      inputs,
+      inputs: resourceWarnings.length
+        ? inputs.map((input) => ({ ...input, resourceWarnings }))
+        : inputs,
     }),
   );
 }

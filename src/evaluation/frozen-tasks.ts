@@ -6,6 +6,7 @@ import type { ArtifactStore } from "../artifacts/index.js";
 import { MAX_REGISTRY_TASKS } from "../contracts/harbor-registry.js";
 import { runnable } from "../db/task-record.js";
 import type { TaskStore } from "../db/tasks.js";
+import { TASK_LIMITS } from "../generation/task/render.js";
 import { assertHarborVersion, HARBOR_PROCESS_TIMEOUT_MS } from "../harnesses/harbor/command.js";
 import { checkRegistryTask, downloadRegistryTasks } from "../harnesses/harbor/registry-tasks.js";
 import { extractRegularArchive } from "../lib/archive.js";
@@ -15,6 +16,13 @@ import { assertEvaluationBundleSize } from "./task-bundle.js";
 import type { EvaluationInput } from "./types.js";
 
 type EvaluationTask = EvaluationInput["tasks"][number];
+
+/** What every generated task asks for (render.ts); a trial still checks its own task.toml. */
+const GENERATED_TASK_RESOURCES = {
+  cpus: TASK_LIMITS.cpus,
+  memoryMb: TASK_LIMITS.memoryMb,
+  storageMb: TASK_LIMITS.storageMb,
+};
 
 /** The selected tasks of a repository as its evaluations run them: approved, with bundles. */
 export async function repositoryTasks(
@@ -45,7 +53,13 @@ export async function repositoryTasks(
   return bundles.map((task) => {
     if (!task?.bundleKey) throw new Error("Task bundle unavailable");
     const { runId, taskId, bundleKey, images } = task;
-    return { runId, taskId, bundleKey, ...(images ? { images } : {}) };
+    return {
+      runId,
+      taskId,
+      bundleKey,
+      resources: GENERATED_TASK_RESOURCES,
+      ...(images ? { images } : {}),
+    };
   });
 }
 
@@ -102,6 +116,7 @@ export async function freezeRegistryTasks(
             bundleKey,
             registry,
             minutes: checked.minutes,
+            ...(Object.keys(checked.resources).length ? { resources: checked.resources } : {}),
             ...(checked.judge.variables.length ? { judge: checked.judge } : {}),
           },
           archive,

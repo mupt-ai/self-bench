@@ -5,6 +5,7 @@ import { AGENT_MINUTES } from "../../contracts/agent-limit.js";
 import { registryReference } from "../../contracts/harbor-registry.js";
 import type { runCommand } from "../../lib/process.js";
 import { isRecord } from "../../lib/util.js";
+import { type ResourceRequest, requestedResources } from "../../sandbox/resources.js";
 import { type JudgeNeeds, judgeNeeds } from "./host-variables.js";
 import { assertHostSafePublishedTask, UnsafeHarborTaskError } from "./task-safety.js";
 
@@ -74,7 +75,7 @@ const HARBOR_DEFAULT_SECONDS = { build: 600, verifier: 600 } as const;
 export async function checkRegistryTask(
   directory: string,
   harborEnv: NodeJS.ProcessEnv,
-): Promise<{ minutes: number; judge: JudgeNeeds }> {
+): Promise<{ minutes: number; judge: JudgeNeeds; resources: ResourceRequest }> {
   await assertRegularTree(directory);
   await assertHostSafePublishedTask(directory, harborEnv);
   const config = parse(await readFile(join(directory, "task.toml"), "utf8"));
@@ -86,7 +87,11 @@ export async function checkRegistryTask(
     seconds(config.environment, "build_timeout_sec", HARBOR_DEFAULT_SECONDS.build) +
     seconds(config.agent, "timeout_sec", AGENT_MINUTES.default * 60) +
     seconds(config.verifier, "timeout_sec", HARBOR_DEFAULT_SECONDS.verifier);
-  return { minutes: Math.ceil(total / 60), judge: judgeNeeds(config) };
+  return {
+    minutes: Math.ceil(total / 60),
+    judge: judgeNeeds(config),
+    resources: requestedResources(config),
+  };
 }
 
 async function assertRegularTree(root: string): Promise<void> {

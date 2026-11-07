@@ -61,7 +61,12 @@ test("comparisons accept eleven scoped approved tasks without truncation", async
     expect((await fixture.request(path, post(selection))).status).toBe(202);
     expect(fixture.starts).toHaveLength(before + 1);
     expect(fixture.starts.at(-1)?.tasks).toEqual(
-      tasks.map((task) => ({ ...task, bundleKey: `tasks/${task.taskId}.tar.gz` })),
+      // Every generated task asks for the same resources (render.ts's TASK_LIMITS).
+      tasks.map((task) => ({
+        ...task,
+        bundleKey: `tasks/${task.taskId}.tar.gz`,
+        resources: { cpus: 4, memoryMb: 8192, storageMb: 20480 },
+      })),
     );
     const task = tasks[0];
     if (!task) throw new Error("Missing task");
