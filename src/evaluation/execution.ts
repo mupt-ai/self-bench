@@ -119,7 +119,13 @@ export async function credentialExecution(
     secrets,
     auth: info.auth,
     route,
-    credential: { orgId, id: info.id },
+    // A custom endpoint's address says which provider in Pi's registry it is (endpointPicksEffort).
+    credential: {
+      orgId,
+      id: info.id,
+      endpoint:
+        info.kind === "custom" ? ("endpoint" in info ? info.endpoint : undefined) : undefined,
+    },
     sandboxLimits: "resourceLimits" in sandbox ? sandbox.resourceLimits : undefined,
     judge: await trialJudge(input, orgId, credentials),
   };
