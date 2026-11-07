@@ -40,6 +40,10 @@ Review
   self-bench task approve|reject RUN_ID TASK_ID --repo R [--note TEXT]
   self-bench task revise RUN_ID TASK_ID --repo R (--feedback TEXT | --feedback-file FILE)
       [--draft DIR]
+  self-bench task steer RUN_ID TASK_ID --repo R (--feedback TEXT | --feedback-file FILE)
+                                                     note for a task still generating; its
+                                                     author reads it at its next turn
+  self-bench task steering RUN_ID TASK_ID --repo R   notes sent, and which turn received each
   self-bench task unreview|cancel|delete RUN_ID TASK_ID --repo R
 
 Evaluate

@@ -19,6 +19,7 @@ import { finishAgent, startAgent } from "./agent.js";
 import { artifactFile, readAsset } from "./helpers.js";
 import { renderPrompt } from "./prompts.js";
 import type { SandboxCallback } from "./sandbox-job.js";
+import { withSteeringNotes } from "./steering.js";
 import { taskSourceEnvironment } from "./task-source.js";
 import { renderVerifyReport } from "./verify-report.js";
 
@@ -98,6 +99,19 @@ export async function startAuthoringTurn(
     .join("\n");
   const verifyReport =
     report && verifyReportSchema.parse(JSON.parse(Buffer.from(report).toString("utf8")));
+  const prompt = await withSteeringNotes(
+    store,
+    { runId: run.runId, candidateId: candidate.candidateId, round, turn },
+    turn === 1
+      ? authoringPrompt(
+          candidate,
+          round,
+          verifyReport && renderVerifyReport(verifyReport),
+          input.feedback,
+          input.maintainerFeedback,
+        )
+      : verifyResultPrompt(verifyReport, input.verifiesLeft),
+  );
   return await startAgent({
     store,
     sandbox,
@@ -113,16 +127,7 @@ export async function startAuthoringTurn(
     ...(setup ? { setup } : {}),
     extension: "/work/authoring.js",
     tools: "read,bash,grep,find,ls,verify,submit_task",
-    prompt:
-      turn === 1
-        ? authoringPrompt(
-            candidate,
-            round,
-            verifyReport && renderVerifyReport(verifyReport),
-            input.feedback,
-            input.maintainerFeedback,
-          )
-        : verifyResultPrompt(verifyReport, input.verifiesLeft),
+    prompt,
     files: [
       { path: "/work/authoring.js", contents: extension },
       { path: "/work/sandbox-check.js", contents: checker },
