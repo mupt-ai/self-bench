@@ -69,7 +69,8 @@ export function ResourceLimitFields({
               setDetected("");
               try {
                 const result = await onDetect();
-                if (result.limits) onChange({ ...limits, ...result.limits });
+                // The provider's answer replaces every dimension: one it left out has no limit.
+                if (result.limits) onChange(result.limits);
                 setDetected(result.limits ? `Filled from ${result.source}.` : `${result.source}.`);
               } catch (cause) {
                 setDetected(cause instanceof Error ? cause.message : "Could not detect limits.");

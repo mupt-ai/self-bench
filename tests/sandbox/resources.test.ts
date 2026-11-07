@@ -50,14 +50,18 @@ test("a Daytona key's organization quotas become its limits, in MiB", async () =
   const calls: { url: string; auth: string | null }[] = [];
   const fetcher = (async (url: string, init?: RequestInit) => {
     calls.push({ url, auth: new Headers(init?.headers).get("authorization") });
-    return Response.json([{ maxCpuPerSandbox: 4, maxMemoryPerSandbox: 8, maxDiskPerSandbox: 10 }]);
+    return url.endsWith("/api-keys/current")
+      ? Response.json({ name: "eval", organizationId: "org-2" })
+      : Response.json({ maxCpuPerSandbox: 4, maxMemoryPerSandbox: 8, maxDiskPerSandbox: 10 });
   }) as unknown as typeof fetch;
   expect(await inferResourceLimits("daytona", { value: "dtn_key" }, fetcher)).toEqual({
     limits: { cpus: 4, memoryMb: 8192, storageMb: 10240 },
     source: "Daytona organization quotas",
   });
+  // The key's own organization, never one picked from its user's memberships.
   expect(calls).toEqual([
-    { url: "https://app.daytona.io/api/organizations", auth: "Bearer dtn_key" },
+    { url: "https://app.daytona.io/api/api-keys/current", auth: "Bearer dtn_key" },
+    { url: "https://app.daytona.io/api/organizations/org-2", auth: "Bearer dtn_key" },
   ]);
 });
 

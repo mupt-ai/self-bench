@@ -45,23 +45,35 @@ interface DaytonaOrganization {
   maxDiskPerSandbox?: number | null;
 }
 
-/** An API key belongs to one organization; its per-sandbox quotas are in GiB. */
+/**
+ * An API key belongs to one organization (`/api-keys/current`), whose per-sandbox quotas are in
+ * GiB. The key's own organization is asked for, never a guess among its user's memberships.
+ */
 async function daytonaLimits(key: string, fetcher: typeof fetch): Promise<InferredLimits> {
-  let response: Response;
-  try {
-    response = await fetcher(`${DAYTONA_API}/organizations`, {
+  const get = async (path: string): Promise<unknown> => {
+    const response = await fetcher(`${DAYTONA_API}${path}`, {
       headers: { Authorization: `Bearer ${key}` },
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-  } catch {
-    return { source: "Daytona could not be reached" };
+    if (!response.ok) throw new Error(`Daytona refused the lookup (${response.status})`);
+    return await response.json();
+  };
+  let organization: DaytonaOrganization;
+  try {
+    const current = (await get("/api-keys/current")) as { organizationId?: unknown } | null;
+    const id = current?.organizationId;
+    if (typeof id !== "string" || !id)
+      return { source: "Daytona did not name this key's organization" };
+    organization = ((await get(`/organizations/${encodeURIComponent(id)}`)) ??
+      {}) as DaytonaOrganization;
+  } catch (error) {
+    return {
+      source:
+        error instanceof Error && error.message.startsWith("Daytona refused")
+          ? error.message
+          : "Daytona could not be reached",
+    };
   }
-  if (!response.ok) return { source: `Daytona refused the lookup (${response.status})` };
-  const body = (await response.json().catch(() => undefined)) as unknown;
-  const organizations = Array.isArray(body) ? (body as DaytonaOrganization[]) : [];
-  if (organizations.length !== 1)
-    return { source: "Daytona did not name exactly one organization for this key" };
-  const [organization] = organizations as [DaytonaOrganization];
   const positive = (value: number | null | undefined) =>
     typeof value === "number" && value > 0 ? value : undefined;
   const cpus = positive(organization.maxCpuPerSandbox);

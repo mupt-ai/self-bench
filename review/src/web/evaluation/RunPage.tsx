@@ -232,6 +232,7 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
               onClick={() => {
                 setState({ submitted: false, draft: { ...draft, id: evaluationRequestId() } });
                 setError("");
+                setWarnings([]);
               }}
             >
               New Comparison
@@ -240,12 +241,7 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
         </div>
       )}
       {(error || credentialsError) && <Notice className="mb-5">{error || credentialsError}</Notice>}
-      {warnings.length > 0 && (
-        <ResourceWarnings
-          warnings={warnings}
-          onContinue={() => void navigate(`${pages}/results`)}
-        />
-      )}
+      <ResourceWarnings warnings={warnings} onContinue={() => void navigate(`${pages}/results`)} />
       {coverage && !covered(coverage) ? (
         <RunSetupCallout coverage={coverage} />
       ) : (
