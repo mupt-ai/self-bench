@@ -46,8 +46,9 @@ interface DaytonaOrganization {
 }
 
 /**
- * An API key belongs to one organization (`/api-keys/current`), whose per-sandbox quotas are in
- * GiB. The key's own organization is asked for, never a guess among its user's memberships.
+ * An API key belongs to one organization, whose per-sandbox quotas are in GiB. Its key record
+ * (`/api-keys/current`) may name it (`organizationId` is optional in Daytona's API); otherwise the
+ * key's organizations are listed, and only a single one is taken, never a guess among several.
  */
 async function daytonaLimits(key: string, fetcher: typeof fetch): Promise<InferredLimits> {
   const get = async (path: string): Promise<unknown> => {
@@ -62,10 +63,15 @@ async function daytonaLimits(key: string, fetcher: typeof fetch): Promise<Inferr
   try {
     const current = (await get("/api-keys/current")) as { organizationId?: unknown } | null;
     const id = current?.organizationId;
-    if (typeof id !== "string" || !id)
-      return { source: "Daytona did not name this key's organization" };
-    organization = ((await get(`/organizations/${encodeURIComponent(id)}`)) ??
-      {}) as DaytonaOrganization;
+    if (typeof id === "string" && id)
+      organization = ((await get(`/organizations/${encodeURIComponent(id)}`)) ??
+        {}) as DaytonaOrganization;
+    else {
+      const listed = await get("/organizations");
+      if (!Array.isArray(listed) || listed.length !== 1)
+        return { source: "Daytona did not name this key's organization" };
+      organization = listed[0] as DaytonaOrganization;
+    }
   } catch (error) {
     return {
       source:

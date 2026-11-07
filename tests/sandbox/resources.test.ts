@@ -65,6 +65,23 @@ test("a Daytona key's organization quotas become its limits, in MiB", async () =
   ]);
 });
 
+test("a Daytona key record without its organization falls back to a single listed one", async () => {
+  const answer = (organizations: unknown[]) =>
+    (async (url: string) =>
+      url.endsWith("/api-keys/current")
+        ? Response.json({ name: "eval", userId: "u" })
+        : Response.json(organizations)) as unknown as typeof fetch;
+  const quota = { maxCpuPerSandbox: 2, maxMemoryPerSandbox: 4, maxDiskPerSandbox: null };
+  expect((await inferResourceLimits("daytona", { value: "k" }, answer([quota]))).limits).toEqual({
+    cpus: 2,
+    memoryMb: 4096,
+  });
+  // Several memberships could be any of them, so none is taken.
+  expect(
+    (await inferResourceLimits("daytona", { value: "k" }, answer([quota, quota]))).limits,
+  ).toBeUndefined();
+});
+
 test("a provider that refuses or does not share its limits infers none", async () => {
   const refused = (async () => new Response("no", { status: 403 })) as unknown as typeof fetch;
   expect((await inferResourceLimits("daytona", { value: "k" }, refused)).limits).toBeUndefined();
