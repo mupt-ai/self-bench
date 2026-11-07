@@ -9,7 +9,7 @@ import { HttpError } from "@mupt-ai/dari-gateway/http/errors";
 import { dariEndpoint } from "../db/credential-endpoints.js";
 import type { CredentialInfo, CredentialSecret } from "../db/credentials.js";
 import type { TokenUsage } from "../evaluation/types.js";
-import { customBaseUrl, modelConfig } from "./model-config.js";
+import { customBaseUrl, modelConfig, registryModel } from "./model-config.js";
 import { reportedServedCost, servedModel } from "./served-model.js";
 import { signInCredential } from "./sign-in.js";
 import { MANAGED_MODEL_CREDENTIAL, readTrialKey, type TrialKey } from "./trial-key.js";
@@ -117,12 +117,17 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
       if (credentialId && !credential) throw unavailable("The trial's credential");
       const id = createHash("sha256").update(apiKey).digest("base64url").slice(0, 22);
       const config = model && credential ? modelConfig(deps, key, credential) : undefined;
-      const price = model && deps.modelPrice?.(model);
+      // A custom endpoint's model that Pi's registry knows is priced at the registry's list rates.
+      const price = model && (deps.modelPrice?.(model) ?? registryModel(model)?.cost);
       for (const [stale, entry] of resolved)
         if (entry.expiresAt <= Date.now()) resolved.delete(stale);
+      // A custom endpoint's call is priced by the model its response names, unless Pi's registry
+      // knows its model, whose list price the gateway prices it at (model-config.ts).
       resolved.set(
         id,
-        credential && credential.kind === "custom" ? { ...key, customEndpoint: true } : key,
+        credential && credential.kind === "custom" && !(model && registryModel(model))
+          ? { ...key, customEndpoint: true }
+          : key,
       );
       return {
         router_id: ROUTER_ID,
@@ -172,8 +177,9 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
       return {
         ...supplied,
         ...(info.endpoint ? { baseUrl: customBaseUrl(deps, info.endpoint, key) } : {}),
-        // Anthropic's SDK sends the key as x-api-key; compatible endpoints (Shift) take a bearer.
-        ...(info.kind === "custom" && key.api === "anthropic-messages" && "apiKey" in supplied
+        // Anthropic's SDK sends the key as x-api-key; compatible endpoints (Shift, Fireworks) take
+        // a bearer.
+        ...(info.kind === "custom" && messagesEndpoint(key) && "apiKey" in supplied
           ? { headers: { authorization: `Bearer ${supplied.apiKey}` } }
           : {}),
       };
@@ -225,6 +231,12 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
       deps.captureError(error);
     },
   };
+}
+
+/** Whether a custom endpoint is called over Messages: for Claude Code, or as Pi calls its model. */
+function messagesEndpoint(key: TrialKey): boolean {
+  const registered = key.model ? registryModel(key.model) : undefined;
+  return (registered?.api ?? key.api) === "anthropic-messages";
 }
 
 /** A custom endpoint's call at the list rates of the model its response named, else unpriced. */

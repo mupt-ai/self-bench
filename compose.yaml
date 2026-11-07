@@ -34,8 +34,8 @@ x-selfbench-environment: &selfbench-environment
   # task's Dockerfiles itself).
   SELFBENCH_TASK_IMAGE_REPOSITORY: ${SELFBENCH_TASK_IMAGE_REPOSITORY:-}
   SELFBENCH_TASK_IMAGE_BUILDER: ${SELFBENCH_TASK_IMAGE_BUILDER:-}
-  # Hosts a Custom Endpoint credential may name: Dari's router, Applied Compute's Shift, and Ramp's Router.
-  SELFBENCH_CUSTOM_MODEL_HOSTS: ${SELFBENCH_CUSTOM_MODEL_HOSTS:-routing.dari.dev,api.shift.ac,api.router.com}
+  # Hosts a Custom Endpoint credential may name: Dari's router, Applied Compute's Shift, Ramp's Router, and Fireworks.
+  SELFBENCH_CUSTOM_MODEL_HOSTS: ${SELFBENCH_CUSTOM_MODEL_HOSTS:-routing.dari.dev,api.shift.ac,api.router.com,api.fireworks.ai}
   # Managed generation: one switch turns on model access and sandboxes on SelfBench's own
   # accounts and the Billing page; with it on, each managed option follows from its key.
   # The OpenRouter key is worker-only; the E2B key is shared because the API runs managed
