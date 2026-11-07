@@ -182,6 +182,10 @@ test("the steps escape Cloud Build substitutions and keep a cache per candidate"
   expect(agent?.args[1]).toContain(
     `--cache-from type=registry,ref=${config.cache}/run/cand/agent:cache`,
   );
+  // The shared Dockerfile steps hit either image's cache.
+  expect(steps[3]?.args[1]).toContain(
+    `--cache-from type=registry,ref=${config.cache}/run/cand/agent:cache`,
+  );
   expect(agent?.args[1]).toContain(
     `--output type=image,name=${REPOSITORY}/run/cand/agent,push-by-digest=true`,
   );

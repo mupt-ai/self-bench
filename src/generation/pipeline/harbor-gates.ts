@@ -90,6 +90,12 @@ export async function runHarborGates(
     const gates = notRunGates();
     let built: TaskImages | undefined;
     if (images) {
+      // Marks this attempt's build start for the check's progress; a retry reuses its contexts.
+      await store.put(
+        `${gateOutputs}/images-started.txt`,
+        Buffer.from(`${new Date().toISOString()}\n`),
+        "text/plain",
+      );
       const result = await images.builder.build(store, images.build, signal);
       if ("failure" in result) {
         gates.build = {

@@ -49,6 +49,7 @@ test.patch must apply to that commit first and gold.patch on top of it, and the 
 
 # Grade the Outcome, Fairly
 
+- Keep the tests fast and narrow: run only the tests test.patch adds or touches, with the repository's own test runner. Don't make a production build (`next build`, a bundler, a whole-project type check) a test or a step of run-tests.sh unless the scenario is about the build: every check runs it at least three times, it often fails on the base for reasons unrelated to the scenario, and a correct solution can break it elsewhere. Render the page or call the handler through the framework's test utilities instead.
 - The instruction defines the output contract: the exact path and format the agent writes (for example `/app/answer.json` with named fields), or the exact files it updates. Tests may check only what that contract and the scenario determine.
 - Tests parse structured output and compare facts. Normalize what the contract leaves open: case, whitespace, ordering of unordered lists, equivalent date and time spellings. Never match prose.
 - Accept every outcome a careful agent could reasonably reach from the instruction. If two answers are defensible, either the instruction must rule one out or the tests must accept both.

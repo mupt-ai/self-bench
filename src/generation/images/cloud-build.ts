@@ -147,6 +147,9 @@ export function buildSteps(input: {
   ];
   const image = (role: "agent" | "verifier", context: string) => {
     const cache = input.cache?.[role];
+    // Both images share the author's Dockerfile steps, so each also reads the other's cache: a
+    // verifier whose build was cut short still finds the dependency layers the agent's pushed.
+    const other = input.cache?.[role === "agent" ? "verifier" : "agent"];
     return [
       "set -euo pipefail",
       [
@@ -154,6 +157,7 @@ export function buildSteps(input: {
         ...(cache
           ? [
               `--cache-from type=registry,ref=${cache}`,
+              ...(other ? [`--cache-from type=registry,ref=${other}`] : []),
               `--cache-to type=registry,ref=${cache},mode=max,image-manifest=true,oci-mediatypes=true`,
             ]
           : []),

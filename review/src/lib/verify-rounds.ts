@@ -19,6 +19,8 @@ export type VerifyStepState = "pending" | "running" | "done";
 interface VerifyStep {
   label: string;
   state: VerifyStepState;
+  /** When a step with no Harbor snapshot of its own started, for its running time. */
+  since?: string;
 }
 
 /** One row per check, from the files under `verify/<candidate>/<stage>-round-<n>[-turn-<m>]/`. */
@@ -54,8 +56,25 @@ function verifyRound(folder: string, entries: ArtifactEntry[]): VerifyRound | un
       );
   const report = file("report.json");
   const reportText = file("report.md");
-  // A retried verification publishes under a later attempt; only its snapshots are current.
-  const attempt = latest(/\/live\/\d+-(nop|oracle)-\d+\.json$/)?.key.match(/\/live\/(\d+)-/)?.[1];
+  // A deployment that builds task images marks each attempt's build start. Harbor's snapshots and
+  // gate outputs carry their attempt too, and only the latest attempt's count.
+  const buildAttemptOf = (entry: ArtifactEntry) =>
+    Number(entry.key.match(/\/attempt-(\d+)\/images-started\.txt$/)?.[1] ?? 1);
+  const building = entries
+    .filter((entry) => entry.key.endsWith("/images-started.txt"))
+    .reduce<ArtifactEntry | undefined>(
+      (last, entry) => (!last || buildAttemptOf(entry) > buildAttemptOf(last) ? entry : last),
+      undefined,
+    );
+  const liveAttempt = latest(/\/live\/\d+-(nop|oracle)-\d+\.json$/)?.key.match(
+    /\/live\/(\d+)-/,
+  )?.[1];
+  // A retry still building its images has no Harbor run of its own yet.
+  const attempt =
+    liveAttempt && (!building || Number(liveAttempt) >= buildAttemptOf(building))
+      ? liveAttempt
+      : undefined;
+  const current = attempt ? Number(attempt) : building ? buildAttemptOf(building) : 1;
   const nopLive = attempt ? latest(new RegExp(`/live/${attempt}-nop-\\d+\\.json$`)) : undefined;
   const oracleLive = attempt
     ? latest(new RegExp(`/live/${attempt}-oracle-\\d+\\.json$`))
@@ -63,7 +82,7 @@ function verifyRound(folder: string, entries: ArtifactEntry[]): VerifyRound | un
   const compiled = entries.some((entry) => entry.key.endsWith("/harbor-task.tar.gz"));
   // Retries keep their gate outputs under attempt-<n>/, so an earlier attempt's never counts.
   const gateFile = (name: string) =>
-    Number(attempt ?? 1) > 1 ? file(`attempt-${Number(attempt)}/${name}`) : file(name);
+    current > 1 ? file(`attempt-${current}/${name}`) : file(name);
   const nopDone = Boolean(gateFile("smoke-nop.json"));
   const oracleDone = Boolean(gateFile("oracle.json"));
   const done = Boolean(report);
@@ -74,6 +93,8 @@ function verifyRound(folder: string, entries: ArtifactEntry[]): VerifyRound | un
     .filter(Boolean)
     .reduce((first, value) => (!first || value < first ? value : first), "");
   const live = oracleLive ?? nopLive;
+  // The build is done once its attempt's Harbor run starts, or the check ends (a failed build ends it).
+  const builtImages = done || Boolean(nopLive || nopDone || oracleDone);
   return {
     id: folder,
     title,
@@ -83,10 +104,24 @@ function verifyRound(folder: string, entries: ArtifactEntry[]): VerifyRound | un
     ...(live && !done ? { live } : {}),
     steps: [
       { label: "Compile", state: state(compiled || done, true) },
-      {
-        label: "Build, Smoke, and Tests Without Fix",
-        state: state(nopDone || oracleDone || done, compiled),
-      },
+      ...(building
+        ? [
+            {
+              label: "Build Images",
+              state: state(builtImages, true),
+              ...(building.updatedAt ? { since: building.updatedAt } : {}),
+            },
+            {
+              label: "Smoke and Tests Without Fix",
+              state: state(nopDone || oracleDone || (done && !!nopLive), !!nopLive),
+            },
+          ]
+        : [
+            {
+              label: "Build, Smoke, and Tests Without Fix",
+              state: state(nopDone || oracleDone || done, compiled),
+            },
+          ]),
       { label: "Tests With Fix", state: state(oracleDone || (done && !!oracleLive), !!oracleLive) },
     ],
   };

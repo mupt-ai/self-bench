@@ -28,6 +28,7 @@ export function VerifyPart({
     round.live?.key,
     (text) => JSON.parse(text) as HarborLiveSnapshot,
   );
+  const now = useNow(active && round.steps.some((step) => step.state === "running" && step.since));
   const status = report
     ? report.green
       ? "Passed"
@@ -64,8 +65,12 @@ export function VerifyPart({
                 <span>{step.label}</span>
                 <span className="text-muted-foreground">
                   {stepLabel(step.state, active)}
-                  {step.state === "running" && active && live
-                    ? ` · ${elapsed(live.startedAt, live.capturedAt)}`
+                  {step.state === "running" && active
+                    ? step.since
+                      ? ` · ${elapsed(step.since, new Date(now).toISOString())}`
+                      : live
+                        ? ` · ${elapsed(live.startedAt, live.capturedAt)}`
+                        : ""
                     : ""}
                 </span>
               </li>
@@ -139,4 +144,16 @@ function useArtifact<T>(
     };
   }, [key, source]);
   return key ? value : undefined;
+}
+
+/** The current time, ticking each second while `ticking`, for a step's running time. */
+function useNow(ticking: boolean): number {
+  const [now, setNow] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    if (!ticking) return;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(timer);
+  }, [ticking]);
+  return now;
 }
