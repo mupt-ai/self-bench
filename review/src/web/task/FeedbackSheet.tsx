@@ -9,6 +9,7 @@ import { cn } from "../primitives/cn";
 import { Button, controlStyles, fieldStyles, Notice } from "../ui";
 import { useGenerationSettings } from "../useGenerationSettings";
 import { taskPath } from "./review-queue";
+import { SteeringForm } from "./SteeringForm";
 import { StateStamp } from "./state";
 
 /**
@@ -123,9 +124,7 @@ export function FeedbackSheet({
             </div>
           </form>
         ) : (
-          <p className="text-sm leading-6 text-muted-foreground">
-            Feedback opens once this task's generation finishes.
-          </p>
+          <SteeringForm org={org} fullName={fullName} task={task} />
         )}
       </div>
       {revisions.length > 0 && (

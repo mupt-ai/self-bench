@@ -53,6 +53,8 @@ Workspace admins connect the model access and sandboxes everyone's runs use.
 | `task show RUN_ID TASK_ID R` | A task, its review, cost, and revisions |
 | `task pull RUN_ID TASK_ID [DIR] R` | Download its files: instruction, Dockerfile, patches, scripts, `workspace/` |
 | `task revise RUN_ID TASK_ID R (--feedback TEXT \| --feedback-file F) [--draft DIR]` | Start a revision from your feedback, and your edited files with `--draft` |
+| `task steer RUN_ID TASK_ID R (--feedback TEXT \| --feedback-file F)` | Send a note to a task still generating; its author reads it at its next turn |
+| `task steering RUN_ID TASK_ID R` | The notes sent, and which turn received each |
 | `task approve\|reject RUN_ID TASK_ID R [--note TEXT]` | Review it; only approved tasks are evaluated |
 | `task unreview\|cancel\|delete RUN_ID TASK_ID R` | Clear the review, stop its generation, or delete it |
 

@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
+import type { SteeringNote as Note } from "../../generation/pipeline/steering.js";
 import { WORKSPACE_DIRECTORY } from "../../generation/task/scenario-workspace.js";
 import { SUBMISSION_FILES } from "../../generation/task/submission.js";
 import { extractRegularArchive } from "../../lib/archive.js";
@@ -118,6 +119,33 @@ export async function taskCommand(args: string[], listing: boolean): Promise<voi
         ...(draft ? { draft: await packDraft(draft) } : {}),
       });
       return print(values, reply, () => taskLine(reply.task as Task));
+    }
+    case "steer": {
+      const feedback = await textOption(values, "feedback");
+      if (!feedback) throw new Error("task steer needs --feedback or --feedback-file");
+      const reply = await requestJson(`${task}/steering`, "POST", { feedback });
+      return print(
+        values,
+        reply,
+        () => `Queued for ${runId}/${taskId}'s next authoring turn (${(reply.note as Note).id}).`,
+      );
+    }
+    case "steering": {
+      const reply = await requestJson(`${task}/steering`);
+      return print(values, reply, () =>
+        table(reply.notes as Note[], [
+          ["SENT", (note) => note.createdAt],
+          [
+            "STATUS",
+            (note) =>
+              note.delivered
+                ? `delivered r${note.delivered.round} t${note.delivered.turn}`
+                : "pending",
+          ],
+          ["BY", (note) => note.author],
+          ["NOTE", (note) => note.feedback],
+        ]),
+      );
     }
     case "approve":
     case "reject": {
