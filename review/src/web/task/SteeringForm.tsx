@@ -8,6 +8,23 @@ import { Button, controlStyles, fieldStyles, Notice } from "../ui";
 import { getSteeringNotes, type SteeringNote, sendSteeringNote } from "./steering-api";
 
 /**
+ * Adds notes by id. A poll can answer from before a send, so a list it replaces could drop a note
+ * just sent; merging keeps every note. Delivery only moves forward, so the delivered turn stays
+ * once either copy has it.
+ */
+function mergeNotes(current: SteeringNote[], incoming: SteeringNote[]): SteeringNote[] {
+  const byId = new Map(current.map((note) => [note.id, note]));
+  for (const note of incoming) {
+    const known = byId.get(note.id);
+    byId.set(
+      note.id,
+      known?.delivered && !note.delivered ? { ...note, delivered: known.delivered } : note,
+    );
+  }
+  return [...byId.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+/**
  * Notes for a task still generating. Each waits until the author's next turn, which starts after
  * every verify and after a reviewer's suggestions; the list shows which turn read each one.
  */
@@ -33,7 +50,7 @@ export function SteeringForm({
     const load = async () => {
       try {
         const found = await getSteeringNotes(org, fullName, { runId, taskId });
-        if (!stopped) setNotes(found);
+        if (!stopped) setNotes((current) => mergeNotes(current, found));
       } catch {
         // The next poll tries again; sending still reports its own errors.
       }
@@ -54,7 +71,7 @@ export function SteeringForm({
     try {
       const note = await sendSteeringNote(org, fullName, { runId, taskId }, text);
       setFeedback("");
-      setNotes((current) => [...current, note]);
+      setNotes((current) => mergeNotes(current, [note]));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
