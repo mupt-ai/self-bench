@@ -1,4 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import type { RequestSummary } from "@mupt-ai/dari-gateway";
+import type { GatewayUsage, SelfBenchGatewayDeps } from "./platform.js";
 
 /**
  * The model a provider's response says served a gateway call. A router behind a custom endpoint
@@ -30,13 +32,38 @@ export function withServedModel<T>(
 }
 
 /** The model the current gateway request's provider response named, if any. */
-export function servedModel(): string | undefined {
+function servedModel(): string | undefined {
   return current.getStore()?.model;
 }
 
 /** The price the current gateway request's provider response reported, if it reported one. */
-export function reportedServedCost(): number | undefined {
+function reportedServedCost(): number | undefined {
   return current.getStore()?.cost;
+}
+
+/**
+ * A custom endpoint's call at the price its response reported (Ramp's usage.cost), else at the
+ * list rates of the model its response named (`provider`'s, for an endpoint that is one in Pi's
+ * registry), else unpriced.
+ */
+export function servedCost(
+  priceServed: SelfBenchGatewayDeps["servedModelCost"],
+  summary: RequestSummary,
+  provider: string | undefined,
+): Pick<GatewayUsage, "costUsd" | "costSource"> {
+  const reported = reportedServedCost();
+  if (reported !== undefined) return { costUsd: reported, costSource: "provider" };
+  const model = servedModel();
+  const tokens = {
+    input: summary.input_tokens ?? 0,
+    output: summary.output_tokens ?? 0,
+    cacheRead: summary.cache_read_tokens ?? 0,
+    cacheWrite: summary.cache_write_tokens ?? 0,
+  };
+  const costUsd = model ? priceServed?.(model, tokens, provider) : undefined;
+  return costUsd === undefined
+    ? { costUsd: null, costSource: null }
+    : { costUsd, costSource: "pricing" };
 }
 
 /**

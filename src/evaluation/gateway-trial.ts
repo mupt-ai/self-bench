@@ -1,6 +1,7 @@
 import type { ThinkingLevel } from "../contracts/models.js";
 import type { CredentialInfo } from "../db/credentials.js";
 import type { GatewayConnection } from "../gateway/connection.js";
+import { registryModel } from "../gateway/model-config.js";
 import type { CustomEndpointApi, PinnedThinking } from "../gateway/trial-key.js";
 import type { createGatewayUsageStore } from "../gateway/usage-store.js";
 import { catalogEntry } from "../gateways/catalog.js";
@@ -55,13 +56,19 @@ export function customEndpointApi(
  * Whether the trial's endpoint picks each call's reasoning effort, so the gateway sends none
  * (TrialKey.endpointEffort): Dari's router always, and a custom endpoint driven by Codex, which
  * asks a model it has no metadata for for effort "none". A custom endpoint takes no chosen level.
+ * On one whose model Pi's registry knows (Fire Pass, Baseten), every call is served at the
+ * model's own default (platform.ts), so no harness's effort is sent: Claude Code's may be one the
+ * model does not list (GLM 5.3 has no `medium`).
  */
 export function endpointPicksEffort(
-  input: Pick<EvaluationInput, "credentials">,
+  input: Pick<EvaluationInput, "credentials" | "modelName">,
   harness: Harness,
+  endpoint?: string | null,
 ): boolean {
   const provider = input.credentials?.provider;
-  return provider === "dari" || (provider === "custom" && harness === "codex");
+  if (provider === "dari") return true;
+  if (provider !== "custom") return false;
+  return harness === "codex" || (!!endpoint && !!registryModel(endpoint, gatewayModelId(input)));
 }
 
 /** The model name a gateway trial's requests carry, which the gateway serves exactly. */
