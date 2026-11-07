@@ -24,9 +24,11 @@ say "Installing self-bench@$VERSION ..."
 npm install -g "self-bench@$VERSION" >/dev/null
 
 # Guard against a stale published build: the CLI must include sign-in.
-if ! self-bench help 2>/dev/null | grep -q 'self-bench login'; then
-  die "the installed self-bench is too old to sign in. Try SELFBENCH_CLI_VERSION=<newer version>."
-fi
+help_output=$(self-bench help 2>&1) || die "self-bench installed but failed to run: $help_output"
+case "$help_output" in
+  *"self-bench login"*) ;;
+  *) die "the installed self-bench is too old to sign in. Try SELFBENCH_CLI_VERSION=<newer version>." ;;
+esac
 
 say "self-bench installed."
 say ""
