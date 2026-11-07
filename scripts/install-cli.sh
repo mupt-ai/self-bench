@@ -36,8 +36,10 @@ else
   tag=""
   page=1
   while [ -z "$tag" ] && [ "$page" -le 10 ]; do
-    tag=$(curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=100&page=$page" \
-      | grep -o '"tag_name": *"cli-v[^"]*"' | head -1 | sed 's/.*"\(cli-v[^"]*\)"/\1/') || true
+    # A failed request stops the install; it must not look like an empty page.
+    body=$(curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=100&page=$page") \
+      || die "could not list GitHub releases (page $page). Check your network and rerun."
+    tag=$(printf '%s\n' "$body" | grep -o '"tag_name": *"cli-v[^"]*"' | head -1 | sed 's/.*"\(cli-v[^"]*\)"/\1/')
     page=$((page + 1))
   done
   [ -n "$tag" ] || die "no SelfBench CLI release found on GitHub."
