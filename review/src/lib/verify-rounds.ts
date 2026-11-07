@@ -19,6 +19,8 @@ export type VerifyStepState = "pending" | "running" | "done";
 interface VerifyStep {
   label: string;
   state: VerifyStepState;
+  /** When a step with no Harbor snapshot of its own started, for its running time. */
+  since?: string;
 }
 
 /** One row per check, from the files under `verify/<candidate>/<stage>-round-<n>[-turn-<m>]/`. */
@@ -74,6 +76,10 @@ function verifyRound(folder: string, entries: ArtifactEntry[]): VerifyRound | un
     .filter(Boolean)
     .reduce((first, value) => (!first || value < first ? value : first), "");
   const live = oracleLive ?? nopLive;
+  // A deployment that builds task images uploads the build's contexts as the build starts; Harbor
+  // starts once both images are pushed, or the check ends on the build's failure.
+  const contexts = latest(/\/compile\/attempt-\d+\/image-contexts-[^/]+\.tar\.gz$/);
+  const builtImages = Boolean(nopLive || nopDone || oracleDone || done);
   return {
     id: folder,
     title,
@@ -83,10 +89,24 @@ function verifyRound(folder: string, entries: ArtifactEntry[]): VerifyRound | un
     ...(live && !done ? { live } : {}),
     steps: [
       { label: "Compile", state: state(compiled || done, true) },
-      {
-        label: "Build, Smoke, and Tests Without Fix",
-        state: state(nopDone || oracleDone || done, compiled),
-      },
+      ...(contexts
+        ? [
+            {
+              label: "Build Images",
+              state: state(builtImages, true),
+              ...(contexts.updatedAt ? { since: contexts.updatedAt } : {}),
+            },
+            {
+              label: "Smoke and Tests Without Fix",
+              state: state(nopDone || oracleDone || (done && !!nopLive), !!nopLive),
+            },
+          ]
+        : [
+            {
+              label: "Build, Smoke, and Tests Without Fix",
+              state: state(nopDone || oracleDone || done, compiled),
+            },
+          ]),
       { label: "Tests With Fix", state: state(oracleDone || (done && !!oracleLive), !!oracleLive) },
     ],
   };

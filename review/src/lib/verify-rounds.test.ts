@@ -63,3 +63,27 @@ test("finished checks expose their report, and submissions are titled apart from
   expect(submission?.live).toBeUndefined();
   expect(submission?.steps.map((step) => step.state)).toEqual(["done", "done", "done"]);
 });
+
+test("a check that builds task images shows the build as its own step until Harbor starts", () => {
+  const building = [
+    ["authoring-round-1-turn-1/compile/attempt-1/harbor-task.tar.gz", "2026-11-06T22:42:38Z"],
+    [
+      "authoring-round-1-turn-1/compile/attempt-1/image-contexts-0123.tar.gz",
+      "2026-11-06T22:42:49Z",
+    ],
+  ] satisfies [string, string][];
+  const [round] = verifyRounds(artifacts(building));
+  expect(round?.steps).toEqual([
+    { label: "Compile", state: "done" },
+    { label: "Build Images", state: "running", since: "2026-11-06T22:42:49Z" },
+    { label: "Smoke and Tests Without Fix", state: "pending" },
+    { label: "Tests With Fix", state: "pending" },
+  ]);
+  const [testing] = verifyRounds(
+    artifacts([
+      ...building,
+      ["authoring-round-1-turn-1/live/01-nop-000000.json", "2026-11-06T22:54:00Z"],
+    ]),
+  );
+  expect(testing?.steps.map((step) => step.state)).toEqual(["done", "done", "running", "pending"]);
+});

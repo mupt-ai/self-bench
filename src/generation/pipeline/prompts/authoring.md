@@ -33,6 +33,7 @@ Make both patches with `git diff` against the base commit; test.patch must apply
 
 # Isolate the Tests
 
+- Keep the tests fast and narrow: run only the tests test.patch adds or touches, with the repository's own test runner. Don't make a production build (`next build`, a bundler, a whole-project type check) a test or a step of run-tests.sh unless the scenario is about the build: every check runs it at least three times, it often fails on the base for reasons unrelated to the scenario, and a correct solution can break it elsewhere. Render the page or call the handler through the framework's test utilities instead.
 - gold.patch and test.patch touch different files. Fail-to-pass tests fail on the base, pass with gold, every time.
 - The agent's changes to any file test.patch touches are discarded before grading.
 - Test through a public boundary. Don't import private helpers from the gold patch, and don't pin SQL, error wording, UI copy, or response shapes the request doesn't ask for. A different correct implementation must pass.
