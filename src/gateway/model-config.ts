@@ -49,7 +49,7 @@ function customModelConfig(
   endpoint: string,
 ): GatewayModelConfig {
   const native = model.slice(model.indexOf("/") + 1);
-  const registered = registryModel(model);
+  const registered = registryModel(allowedEndpoint(deps, endpoint), model);
   if (registered)
     return {
       provider: registered.provider,
@@ -86,24 +86,44 @@ function customModelConfig(
  */
 export function customBaseUrl(deps: SelfBenchGatewayDeps, endpoint: string, key: TrialKey): string {
   const base = allowedEndpoint(deps, endpoint);
-  const registered = key.model ? registryModel(key.model) : undefined;
+  const registered = key.model ? registryModel(base, key.model) : undefined;
   if (registered) return new URL(registered.path, base).toString().replace(/\/$/, "");
   return key.api === "anthropic-messages" ? base.replace(/\/v1$/, "") : base;
 }
 
+/** Whether a custom endpoint is called over Messages: for Claude Code, or as Pi calls its model. */
+export function messagesEndpoint(key: TrialKey, endpoint: string | null | undefined): boolean {
+  const registered = key.model && endpoint ? registryModel(endpoint, key.model) : undefined;
+  return (registered?.api ?? key.api) === "anthropic-messages";
+}
+
 /**
- * The providers whose models Pi's registry lists under ids only that provider serves
- * (`accounts/fireworks/routers/kimi-fast-latest`), so a custom endpoint serving one is that
- * provider, or a proxy for it. Fire Pass keys reach only Fireworks' routers, which take no
- * Responses calls, so Codex's calls are served as Pi serves the router (its Messages API).
+ * The providers Pi's registry describes, by the host a custom endpoint reaches each on. A model
+ * the registry lists for the endpoint's provider is served as Pi serves it, in the API the
+ * registry gives it, whatever the harness speaks: Fire Pass keys reach Fireworks' routers, which
+ * take no Responses calls, so Codex's calls go over the router's Messages API. Baseten's Model
+ * APIs take Chat Completions with its own settings (system prompts under the system role,
+ * `max_tokens`).
  */
-const REGISTRY_PROVIDERS = ["fireworks"] as const;
+const REGISTRY_PROVIDERS = {
+  "api.fireworks.ai": "fireworks",
+  "inference.baseten.co": "baseten",
+} as const satisfies Record<string, string>;
+type RegistryProvider = (typeof REGISTRY_PROVIDERS)[keyof typeof REGISTRY_PROVIDERS];
+
+/** The provider in Pi's registry a custom endpoint is, by its host. */
+export function endpointProvider(endpoint: string): RegistryProvider | undefined {
+  const { hostname } = new URL(endpoint);
+  return Object.hasOwn(REGISTRY_PROVIDERS, hostname)
+    ? REGISTRY_PROVIDERS[hostname as keyof typeof REGISTRY_PROVIDERS]
+    : undefined;
+}
 
 /** The levels a model's own default is taken from when a call names none, first listed first. */
 const DEFAULT_LEVELS = ["high", "medium"] as const satisfies readonly ThinkingLevel[];
 
 interface RegistryModel {
-  readonly provider: (typeof REGISTRY_PROVIDERS)[number];
+  readonly provider: RegistryProvider;
   readonly api: string;
   /** Its address's path, which the credential's host serves it under. */
   readonly path: string;
@@ -114,36 +134,34 @@ interface RegistryModel {
 }
 
 /**
- * The registry's entry for a custom endpoint's model `custom/<id>`, when a provider in
- * REGISTRY_PROVIDERS lists `<id>`: its API, address, limits, thinking and list price.
+ * The registry's entry for the model `custom/<id>` at a custom endpoint, when the endpoint's
+ * provider (endpointProvider) lists `<id>`: its API, address, limits, thinking and list price.
  */
-export function registryModel(model: string): RegistryModel | undefined {
-  if (!model.startsWith("custom/")) return undefined;
-  const id = model.slice("custom/".length);
-  for (const provider of REGISTRY_PROVIDERS) {
-    const entry = pi.getModel?.(provider, id);
-    if (!entry || typeof entry.api !== "string" || typeof entry.baseUrl !== "string") continue;
-    const levels = record(entry.thinkingLevelMap);
-    const cost = record(entry.cost);
-    return {
-      provider,
-      api: entry.api,
-      path: new URL(entry.baseUrl).pathname,
-      contextWindow: number(entry.contextWindow) ?? null,
-      maxTokens: number(entry.maxTokens) ?? null,
-      defaultLevel:
-        entry.reasoning === true
-          ? DEFAULT_LEVELS.find((level) => typeof levels[level] === "string")
-          : undefined,
-      cost: {
-        input: number(cost.input) ?? 0,
-        output: number(cost.output) ?? 0,
-        cached_input: number(cost.cacheRead) ?? null,
-        cache_write: number(cost.cacheWrite) ?? null,
-      },
-    };
-  }
-  return undefined;
+export function registryModel(endpoint: string, model: string): RegistryModel | undefined {
+  const provider = endpointProvider(endpoint);
+  if (!provider || !model.startsWith("custom/")) return undefined;
+  const entry = pi.getModel?.(provider, model.slice("custom/".length));
+  if (!entry || typeof entry.api !== "string" || typeof entry.baseUrl !== "string")
+    return undefined;
+  const levels = record(entry.thinkingLevelMap);
+  const cost = record(entry.cost);
+  return {
+    provider,
+    api: entry.api,
+    path: new URL(entry.baseUrl).pathname,
+    contextWindow: number(entry.contextWindow) ?? null,
+    maxTokens: number(entry.maxTokens) ?? null,
+    defaultLevel:
+      entry.reasoning === true
+        ? DEFAULT_LEVELS.find((level) => typeof levels[level] === "string")
+        : undefined,
+    cost: {
+      input: number(cost.input) ?? 0,
+      output: number(cost.output) ?? 0,
+      cached_input: number(cost.cacheRead) ?? null,
+      cache_write: number(cost.cacheWrite) ?? null,
+    },
+  };
 }
 
 const record = (value: unknown): Record<string, unknown> =>

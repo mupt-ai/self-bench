@@ -37,10 +37,16 @@ export function catalogEntry(model: string): CatalogModel | undefined {
 
 /**
  * What `usage` cost at the list rates of the model a provider's response named: its catalog id, or
- * a vendor's bare id (`gpt-6-astra`, as Shift names it) under the vendor that lists it. Undefined
- * when no catalog entry prices it, or a long-context tier it reached is unpriced.
+ * a vendor's bare id (`gpt-6-astra`, as Shift names it) under the vendor that lists it, else, on
+ * an endpoint that is a `provider` in Pi's registry (a Baseten Grid route), that provider's list
+ * rates for it (`zai-org/GLM-5.3`). Undefined when neither prices it, or a long-context tier it
+ * reached is unpriced.
  */
-export function servedModelCost(model: string, usage: TokenUsage): number | undefined {
+export function servedModelCost(
+  model: string,
+  usage: TokenUsage,
+  provider?: string,
+): number | undefined {
   const ids = model.includes("/") ? [model] : CATALOG_VENDORS.map((vendor) => `${vendor}/${model}`);
   for (const id of ids) {
     const price = catalogEntry(id)?.price;
@@ -48,7 +54,17 @@ export function servedModelCost(model: string, usage: TokenUsage): number | unde
     const listed = listedRates(price, "");
     return requestsCost(ratesPricing(listed.rates, id, undefined, listed), [usage]);
   }
-  return undefined;
+  const cost = provider ? pi.getModel?.(provider, model)?.cost : undefined;
+  if (!cost || typeof cost !== "object") return undefined;
+  const { input, output, cacheRead, cacheWrite } = cost as Record<string, unknown>;
+  if (typeof input !== "number" || typeof output !== "number") return undefined;
+  const rates = [
+    input,
+    output,
+    typeof cacheRead === "number" ? cacheRead : input,
+    typeof cacheWrite === "number" ? cacheWrite : input,
+  ] as const;
+  return requestsCost(ratesPricing(rates, `${provider}/${model}`), [usage]);
 }
 
 /** The model's list price, as the gateway takes it; undefined when the catalog has none. */

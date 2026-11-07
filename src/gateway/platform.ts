@@ -9,8 +9,14 @@ import { HttpError } from "@mupt-ai/dari-gateway/http/errors";
 import { dariEndpoint } from "../db/credential-endpoints.js";
 import type { CredentialInfo, CredentialSecret } from "../db/credentials.js";
 import type { TokenUsage } from "../evaluation/types.js";
-import { customBaseUrl, modelConfig, registryModel } from "./model-config.js";
-import { reportedServedCost, servedModel } from "./served-model.js";
+import {
+  customBaseUrl,
+  endpointProvider,
+  messagesEndpoint,
+  modelConfig,
+  registryModel,
+} from "./model-config.js";
+import { servedCost } from "./served-model.js";
 import { signInCredential } from "./sign-in.js";
 import { MANAGED_MODEL_CREDENTIAL, readTrialKey, type TrialKey } from "./trial-key.js";
 
@@ -61,7 +67,12 @@ export interface SelfBenchGatewayDeps {
    * (served-model.ts): the endpoint reports no price, and may be a router serving each call from a
    * different model. Undefined when no catalog prices that model, which leaves the call unpriced.
    */
-  readonly servedModelCost?: (model: string, usage: TokenUsage) => number | undefined;
+  readonly servedModelCost?: (
+    model: string,
+    usage: TokenUsage,
+    /** The endpoint's provider in Pi's registry, whose list rates price the models it serves. */
+    provider?: string,
+  ) => number | undefined;
   /**
    * A custom credential's endpoint, once it is checked to be one the operator allows the API to
    * call (validateEndpoint); throws when it is not.
@@ -102,7 +113,10 @@ const unavailable = (what: string) =>
  */
 export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform {
   // The key behind each api_key_id this process resolved, so recordRequest can attribute usage.
-  const resolved = new Map<string, TrialKey & { readonly customEndpoint?: true }>();
+  const resolved = new Map<
+    string,
+    TrialKey & { readonly customEndpoint?: { readonly provider?: string } }
+  >();
   const keyOf = (token: string) => {
     const key = readTrialKey(token, deps.secret);
     if (!key)
@@ -117,16 +131,19 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
       if (credentialId && !credential) throw unavailable("The trial's credential");
       const id = createHash("sha256").update(apiKey).digest("base64url").slice(0, 22);
       const config = model && credential ? modelConfig(deps, key, credential) : undefined;
+      const endpoint = credential && credential.kind === "custom" ? credential.endpoint : undefined;
+      const registered = model && endpoint ? registryModel(endpoint, model) : undefined;
       // A custom endpoint's model that Pi's registry knows is priced at the registry's list rates.
-      const price = model && (deps.modelPrice?.(model) ?? registryModel(model)?.cost);
+      const price = model && (deps.modelPrice?.(model) ?? registered?.cost);
+      const pinned = thinking ?? registered?.defaultLevel;
       for (const [stale, entry] of resolved)
         if (entry.expiresAt <= Date.now()) resolved.delete(stale);
-      // A custom endpoint's call is priced by the model its response names, unless Pi's registry
-      // knows its model, whose list price the gateway prices it at (model-config.ts).
+      // Any other custom endpoint's call is priced by the model its response names.
+      const provider = endpoint ? endpointProvider(endpoint) : undefined;
       resolved.set(
         id,
-        credential && credential.kind === "custom" && !(model && registryModel(model))
-          ? { ...key, customEndpoint: true }
+        credential && credential.kind === "custom" && !registered
+          ? { ...key, customEndpoint: provider ? { provider } : {} }
           : key,
       );
       return {
@@ -138,8 +155,10 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
         provider_keys: {},
         ...(model && config ? { model_configs: { [model]: config } } : {}),
         ...(model && price ? { model_prices: { [model]: price } } : {}),
-        // A pinned level is the only one served, whatever level a call asks for or omits.
-        ...(model && thinking ? { model_thinking_levels: { [model]: [thinking] } } : {}),
+        // A pinned level is the only one served, whatever level a call asks for or omits. A custom
+        // endpoint's model that Pi's registry knows, which takes no chosen level, is pinned to its
+        // own default: every call, Claude Code's too, is served at one level the model lists.
+        ...(model && pinned ? { model_thinking_levels: { [model]: [pinned] } } : {}),
         strict: true,
         ...(judge ? { strict_providers: [judge.provider] } : {}),
         model_fallback_enabled: false,
@@ -179,7 +198,7 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
         ...(info.endpoint ? { baseUrl: customBaseUrl(deps, info.endpoint, key) } : {}),
         // Anthropic's SDK sends the key as x-api-key; compatible endpoints (Shift, Fireworks) take
         // a bearer.
-        ...(info.kind === "custom" && messagesEndpoint(key) && "apiKey" in supplied
+        ...(info.kind === "custom" && messagesEndpoint(key, info.endpoint) && "apiKey" in supplied
           ? { headers: { authorization: `Bearer ${supplied.apiKey}` } }
           : {}),
       };
@@ -202,7 +221,7 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
       // A custom endpoint's call is priced by the model that served it, unless it said its price.
       const cost =
         key.customEndpoint && solver && summary.cost_source !== "provider"
-          ? servedCost(deps, summary)
+          ? servedCost(deps.servedModelCost, summary, key.customEndpoint.provider)
           : { costUsd: summary.total_cost_usd, costSource: summary.cost_source };
       try {
         deps.recordUsage({
@@ -231,34 +250,6 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
       deps.captureError(error);
     },
   };
-}
-
-/** Whether a custom endpoint is called over Messages: for Claude Code, or as Pi calls its model. */
-function messagesEndpoint(key: TrialKey): boolean {
-  const registered = key.model ? registryModel(key.model) : undefined;
-  return (registered?.api ?? key.api) === "anthropic-messages";
-}
-
-/** A custom endpoint's call at the list rates of the model its response named, else unpriced. */
-function servedCost(
-  deps: SelfBenchGatewayDeps,
-  summary: RequestSummary,
-): Pick<GatewayUsage, "costUsd" | "costSource"> {
-  // A router that reports its billed price for the call (Ramp's usage.cost) is taken as it says.
-  const reported = reportedServedCost();
-  if (reported !== undefined) return { costUsd: reported, costSource: "provider" };
-  const model = servedModel();
-  const costUsd = model
-    ? deps.servedModelCost?.(model, {
-        input: summary.input_tokens ?? 0,
-        output: summary.output_tokens ?? 0,
-        cacheRead: summary.cache_read_tokens ?? 0,
-        cacheWrite: summary.cache_write_tokens ?? 0,
-      })
-    : undefined;
-  return costUsd === undefined
-    ? { costUsd: null, costSource: null }
-    : { costUsd, costSource: "pricing" };
 }
 
 /** The judge's credential, when `model` is one of the judge's provider's. */

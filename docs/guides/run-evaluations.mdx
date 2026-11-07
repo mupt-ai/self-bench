@@ -23,10 +23,16 @@ A custom endpoint's call is priced from what its response reports. A router that
 | Applied Compute Shift-1 | `https://api.shift.ac/v1` | `shift-1` | Codex (GPT-6 Astra or GPT-6.1 Sol), Claude Code (Claude Opus 5.5 or Sonnet 5.5) |
 | Ramp's Router | `https://api.router.com/v1` | a routing model from its `/v1/models` | Codex, Claude Code |
 | Fireworks Fire Pass | `https://api.fireworks.ai/inference/v1` | a Fire Pass router, such as `accounts/fireworks/routers/kimi-fast-latest` | Pi, Codex, Claude Code |
+| Baseten Grid | `https://inference.baseten.co/v1` | a Grid route's name, such as an auto route's | Pi, plus Codex and Claude Code on routes that serve their APIs |
+| Baseten Model APIs | `https://inference.baseten.co/v1` | a model slug, such as `zai-org/GLM-5.3` | Pi, Codex, Claude Code |
 
 Shift-1 runs on your own OpenAI and Anthropic keys, which you connect at shift.ac; the Shift key goes in the credential.
 
-For Fire Pass, put your Fire Pass key (`fpk_…`) in the credential. SelfBench knows Fireworks' routers, so it calls them as Fireworks' own clients do, over its Messages API, whatever the harness: Codex works although Fire Pass takes no Responses calls. Calls that name no reasoning level (Pi's and Codex's) run at the router's default, `high`. Each call is priced at the router's Fireworks list rates, though Fire Pass itself charges nothing for covered calls. Fire Pass is for non-production use under its [terms](https://docs.fireworks.ai/firepass#terms-of-use).
+SelfBench knows the models Fireworks and Baseten serve, so on their hosts it calls a model it knows as their own clients do, whatever the harness: Fireworks' routers over its Messages API, so Codex runs although Fire Pass takes no Responses calls, and Baseten's Model APIs over its Chat Completions. Every call runs at the model's own default reasoning level, usually `high`, and is priced at the provider's list rates.
+
+For Fire Pass, put your Fire Pass key (`fpk_…`) in the credential. Fire Pass itself charges nothing for covered calls, and is for non-production use under its [terms](https://docs.fireworks.ai/firepass#terms-of-use).
+
+Baseten's router is a Grid auto route, whose classifier picks a model for each call. Grid is in preview for enterprise organizations. Create a team API key for SelfBench, such as a machine user's (`baseten grid machine-user create`), and use the route's name as the model ID (`baseten grid route list`). If `baseten grid route describe` gives an invoke URL on another host, that host must be allowed too. Each call is priced at Baseten's list rates for the model the route picked, as its response names it.
 
 For Dari, add a **Dari** credential with your API key. It runs your default router; to run another, paste that router's address, such as `https://routing.dari.dev/rtr_…`, into **Router URL**. An address ending in `/chat/completions` is accepted and trimmed. It runs **Pi**, **Codex**, or **Claude Code**. Each trial's cost is the price Dari returned for its calls; a trial with a call Dari did not price (one cut off by the time limit) has no cost.
 

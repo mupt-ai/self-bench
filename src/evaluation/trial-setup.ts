@@ -107,7 +107,9 @@ export async function setUpTrial(
       // A custom endpoint is called in the harness's own protocol: Responses for Codex, as its
       // direct route did, and Messages for Claude Code.
       ...customEndpointApi(input, trial.harness),
-      ...(endpointPicksEffort(input, trial.harness) ? { endpointEffort: true as const } : {}),
+      ...(endpointPicksEffort(input, trial.harness, execution.credential.endpoint)
+        ? { endpointEffort: true as const }
+        : {}),
       tags,
     });
     secrets.push(connection.key);
