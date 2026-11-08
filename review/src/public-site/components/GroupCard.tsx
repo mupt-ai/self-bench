@@ -1,6 +1,5 @@
-import { Layers } from "lucide-react";
 import { Link } from "react-router";
-import { groupHref } from "../../../../src/public/release-groups";
+import { DEFAULT_GROUP_LOGO, groupHref } from "../../../../src/public/release-groups";
 import type { PublicGroupCard } from "../contract";
 import { ago, dollars, percent, pickLabel, publisherName } from "../format";
 import { PANEL } from "../frame";
@@ -17,7 +16,11 @@ export function GroupCard({ card }: { card: PublicGroupCard }) {
       className={`group relative flex min-w-0 flex-col gap-3 px-4 pt-4 pb-2.5 transition-[border-color,box-shadow] hover:border-foreground/30 hover:shadow-[0_2px_4px_rgb(0_0_0/0.06),0_10px_24px_-8px_rgb(0_0_0/0.14)] focus-visible:border-foreground/40 ${PANEL}`}
     >
       <div className="flex min-w-0 items-center gap-2.5">
-        <Layers className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <img
+          src={card.logo ?? DEFAULT_GROUP_LOGO}
+          alt=""
+          className="size-5 shrink-0 rounded-sm object-contain"
+        />
         <span className="min-w-0 flex-1 truncate text-sm font-semibold group-hover:underline">
           {card.name}
         </span>

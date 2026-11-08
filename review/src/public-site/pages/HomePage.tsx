@@ -147,31 +147,25 @@ function Directory({
 }) {
   const groups = needle ? data.groups.filter((card) => groupMatches(card, needle)) : data.groups;
   const cards = needle ? data.lines.filter((card) => matches(card, needle)) : data.repos;
-  // A search that finds only groups shows them alone, not "no evals" beneath them.
-  const empty = groups.length > 0 ? null : <NoMatch query={needle ? query.trim() : undefined} />;
-  const grid = <Grid cards={cards} byLine={!!needle} onOpen={onOpen} empty={empty} />;
+  if (groups.length === 0 && cards.length === 0)
+    return <NoMatch query={needle ? query.trim() : undefined} />;
+  // One grid for both: a group is a card like any repository.
+  // One column on a phone, sized to the screen: without a template, the column would stretch
+  // to fit the longest line any card holds, even one the card truncates.
   return (
-    <>
-      {groups.length > 0 && (
-        <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-medium">Repository Groups</h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {groups.map((card) => (
-              <GroupCard key={`${card.publisher.login}/${card.slug}`} card={card} />
-            ))}
-          </div>
-        </section>
-      )}
-      {groups.length > 0 && cards.length > 0 ? (
-        // Named only beside the groups, which would otherwise read as part of the grid.
-        <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-medium">Repositories</h2>
-          {grid}
-        </section>
-      ) : (
-        grid
-      )}
-    </>
+    <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {groups.map((card) => (
+        <GroupCard key={`${card.publisher.login}/${card.slug}`} card={card} />
+      ))}
+      {cards.map((card) => (
+        <RepoCard
+          key={card.releaseId}
+          card={card}
+          byLine={!!needle}
+          onOpen={(element) => onOpen(card, element)}
+        />
+      ))}
+    </section>
   );
 }
 
@@ -186,34 +180,6 @@ function groupMatches(card: PublicGroupCard, needle: string): boolean {
 function matches(card: PublicRepoSummary, needle: string): boolean {
   return [card.repository.fullName, card.publisher.login, publisherName(card.publisher)].some(
     (text) => text.toLowerCase().includes(needle),
-  );
-}
-
-function Grid({
-  cards,
-  byLine = false,
-  onOpen,
-  empty,
-}: {
-  cards: PublicRepoSummary[];
-  byLine?: boolean;
-  onOpen: (card: PublicRepoSummary, element: HTMLElement) => void;
-  empty: React.ReactNode;
-}) {
-  if (cards.length === 0) return empty;
-  return (
-    // One column on a phone, sized to the screen: without a template, the column would stretch
-    // to fit the longest line any card holds, even one the card truncates.
-    <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {cards.map((card) => (
-        <RepoCard
-          key={card.releaseId}
-          card={card}
-          byLine={byLine}
-          onOpen={(element) => onOpen(card, element)}
-        />
-      ))}
-    </section>
   );
 }
 

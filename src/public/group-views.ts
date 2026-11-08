@@ -16,6 +16,8 @@ export interface GroupView {
   slug: string;
   name: string;
   description: string;
+  /** A data URL logo, or null for the default mark. */
+  logo: string | null;
   repositories: GroupMemberView[];
   /** Every member's approved tasks together. */
   tasks: number;
@@ -34,5 +36,7 @@ export interface GroupInput {
   name: string;
   slug: string;
   description: string;
+  /** Left out keeps the logo; null restores the default mark. */
+  logo?: string | null | undefined;
   repositoryIds: number[];
 }

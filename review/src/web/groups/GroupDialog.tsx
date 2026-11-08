@@ -1,9 +1,15 @@
 import { ArrowDown, ArrowUp } from "lucide-react";
 import React from "react";
 import { GROUP_SLUG, GROUP_SLUG_MAX } from "../../../../src/public/paths";
-import { slugOf } from "../../../../src/public/release-groups";
+import {
+  DEFAULT_GROUP_LOGO,
+  GROUP_LOGO,
+  isGroupLogo,
+  slugOf,
+} from "../../../../src/public/release-groups";
 import { plural } from "../api";
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
+import { InfoTooltip } from "../primitives/tooltip";
 import { Tick } from "../releases/SettingsPicker";
 import { Button, controlStyles, fieldStyles, Input, Notice, SearchInput } from "../ui";
 import { matchesQuery } from "../word-search";
@@ -34,6 +40,8 @@ export function GroupDialog({
   // A new group's address follows its name until the address is typed in.
   const [slugEdited, setSlugEdited] = React.useState(group !== undefined);
   const [description, setDescription] = React.useState(group?.description ?? "");
+  // Null shows the default mark.
+  const [logo, setLogo] = React.useState<string | null>(group?.logo ?? null);
   const [chosen, setChosen] = React.useState<number[]>(
     group?.repositories.map((repository) => repository.id) ?? [],
   );
@@ -68,10 +76,36 @@ export function GroupDialog({
     });
   const nameOf = (id: number) => listed.find((entry) => entry.id === id)?.fullName ?? String(id);
 
+  const chooseLogo = (file: File | undefined) => {
+    if (!file) return;
+    setError("");
+    if (!(GROUP_LOGO.types as readonly string[]).includes(file.type)) {
+      setError("Choose a PNG, JPEG, WebP, or SVG image.");
+      return;
+    }
+    if (file.size > GROUP_LOGO.maxBytes) {
+      setError("Choose an image under 48 KB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const value = String(reader.result);
+      if (isGroupLogo(value)) setLogo(value);
+      else setError("Choose a PNG, JPEG, WebP, or SVG image under 48 KB.");
+    };
+    reader.readAsDataURL(file);
+  };
+
   const save = async () => {
     setBusy(true);
     setError("");
-    const body: GroupInput = { name: name.trim(), slug, description, repositoryIds: chosen };
+    const body: GroupInput = {
+      name: name.trim(),
+      slug,
+      description,
+      logo,
+      repositoryIds: chosen,
+    };
     try {
       const saved = await groupRequest<{ group: GroupView }>(
         groupsUrl(org, group?.slug),
@@ -148,6 +182,35 @@ export function GroupDialog({
             onChange={(event) => setDescription(event.target.value)}
           />
         </label>
+        <div className="grid gap-2">
+          <span className="flex items-center gap-1.5 text-sm font-semibold">
+            Logo
+            <InfoTooltip label="Shown on the group's card on selfbench.dev. Use a square PNG, JPEG, WebP, or SVG under 48 KB." />
+          </span>
+          <div className="flex flex-wrap items-center gap-3">
+            <img
+              src={logo ?? DEFAULT_GROUP_LOGO}
+              alt=""
+              className="size-12 shrink-0 rounded-sm border border-border object-contain p-1"
+            />
+            <input
+              type="file"
+              aria-label="Logo"
+              accept={GROUP_LOGO.types.join(",")}
+              disabled={busy}
+              className="min-w-0 text-sm"
+              onChange={(event) => {
+                chooseLogo(event.target.files?.[0]);
+                event.target.value = "";
+              }}
+            />
+            {logo && (
+              <Button size="small" disabled={busy} onClick={() => setLogo(null)}>
+                Use Default Logo
+              </Button>
+            )}
+          </div>
+        </div>
         <fieldset className="grid min-w-0 gap-2">
           <legend className="mb-2 text-sm font-semibold">Repositories</legend>
           {listed.length < 2 ? (

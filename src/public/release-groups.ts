@@ -35,6 +35,8 @@ export interface GroupReleasePayload {
   slug: string;
   name: string;
   description?: string;
+  /** The group's logo as a data URL; absent for the default mark. */
+  logo?: string;
   members: GroupMember[];
   /** Every member's released tasks together. */
   tasks: number;
@@ -55,11 +57,31 @@ export interface GroupCard {
   slug: string;
   name: string;
   description?: string;
+  logo?: string;
   updatedAt: string;
   repositories: string[];
   tasks: number;
   settings: number;
   picks: SettingPick<Pick<ReleaseSetting, "id" | "model" | "accuracy" | "costPerTaskUsd">>[];
+}
+
+/** The mark a group shows until its publisher uploads a logo. */
+export const DEFAULT_GROUP_LOGO = "/dari-logo.svg";
+
+/**
+ * A group's logo: a small image as a data URL, served inline with the release. Images only,
+ * under 48 KB, so the release stays small.
+ */
+export const GROUP_LOGO = {
+  maxBytes: 48 * 1024,
+  types: ["image/png", "image/jpeg", "image/webp", "image/svg+xml"] as const,
+};
+
+/** Whether a value is a data URL of an allowed image type, small enough to store and serve. */
+export function isGroupLogo(value: string): boolean {
+  const match = /^data:(image\/[a-z+]+);base64,([A-Za-z0-9+/]+=*)$/.exec(value);
+  if (!match || !(GROUP_LOGO.types as readonly string[]).includes(match[1] ?? "")) return false;
+  return Math.floor(((match[2]?.length ?? 0) * 3) / 4) <= GROUP_LOGO.maxBytes;
 }
 
 /** A group's address on selfbench.dev, in its publisher's own spelling. */
@@ -155,6 +177,7 @@ export function groupCardOf(group: PublishedGroup): GroupCard {
     slug: group.slug,
     name: group.name,
     ...(group.description ? { description: group.description } : {}),
+    ...(group.logo ? { logo: group.logo } : {}),
     updatedAt: group.updatedAt,
     repositories: group.members.map((member) => member.repository.fullName),
     tasks: group.tasks,

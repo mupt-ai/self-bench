@@ -1,4 +1,4 @@
-import { Layers } from "lucide-react";
+import { DEFAULT_GROUP_LOGO } from "../../../../src/public/release-groups";
 import { formatAgo } from "../api";
 import { ScopeCard } from "../ScopeCard";
 import type { GroupView } from "./api";
@@ -9,7 +9,13 @@ export function GroupCard({ group, onRemove }: { group: GroupView; onRemove(): v
     <ScopeCard
       name={group.name}
       to={`/groups/${group.slug}`}
-      icon={<Layers className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />}
+      icon={
+        <img
+          src={group.logo ?? DEFAULT_GROUP_LOGO}
+          alt=""
+          className="size-5 shrink-0 rounded-sm object-contain"
+        />
+      }
       details={[
         group.repositories.map((member) => member.fullName).join(", "),
         `Updated ${formatAgo(group.updatedAt)}`,

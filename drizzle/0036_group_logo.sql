@@ -1,0 +1,1 @@
+ALTER TABLE "repository_groups" ADD COLUMN "logo" text;
