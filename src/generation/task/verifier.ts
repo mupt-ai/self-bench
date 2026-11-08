@@ -75,6 +75,10 @@ fi
 
 if [ "$patch_applied" -eq 1 ] && [ "$setup_completed" -eq 1 ]; then
   kill_verifier_processes
+  # The tests run as the verifier user over /app, so it owns the tree. This happens here rather than
+  # in the image: a recursive chown in a Dockerfile copies every file into a layer of its own. The
+  # held-out paths are locked back to root below.
+  chown -R verifier:verifier /app
   for protected_path in ${protectedPaths}; do
     app_git restore --source=HEAD --staged --worktree -- "$protected_path" 2>/dev/null || true
     app_git clean -fd -- "$protected_path" >/dev/null 2>&1 || true
