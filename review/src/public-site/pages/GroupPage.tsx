@@ -3,15 +3,16 @@ import { useSyncExternalStore } from "react";
 import { useParams } from "react-router";
 import { mostAccurate } from "../../../../src/public/release-groups";
 import { Avatar } from "../components/Avatar";
-import { GroupLogo } from "../components/GroupCard";
+import { GroupLogo } from "../components/GroupLogo";
+import { ResultHead } from "../components/ResultHead";
 import { SettingsPanels, useSettingMarks } from "../components/SettingsPanels";
 import type { PublicGroup, PublicGroupCard, PublicGroupMember } from "../contract";
-import { flightTo, pageBody, revealFade, revealGroup, shownLine } from "../effects/marks";
+import { pageBody, revealGroup, shownLine } from "../effects/marks";
 import { bodyHeld, watchBodyHold } from "../effects/transition-run";
-import { ago, percent, publisherName, settingLabel } from "../format";
+import { percent, settingLabel } from "../format";
 import { AdaptiveTable, type Column } from "../mobile/AdaptiveTable";
 import { APP_URL } from "../PublicLayout";
-import { groupKey, openedGroupCard, takeGroupRead, visitedGroups } from "../page-preload";
+import { groupKey, groupPages } from "../page-preload";
 import { groupTitle } from "../seo";
 import { useSource } from "../source-context";
 import { useLoad } from "../use-load";
@@ -66,14 +67,14 @@ export function GroupPage() {
   const state = useLoad(
     key,
     // A read its card started as it was pressed, if there is one (page-preload.ts).
-    () => takeGroupRead(key) ?? source.getGroup(publisher, slug),
+    () => groupPages.take(key) ?? source.getGroup(publisher, slug),
     key,
-    visitedGroups,
+    groupPages.visited,
   );
   // While an opening flight is in the air, the body waits (transition-run.ts `holdBody`).
   const held = useSyncExternalStore(watchBodyHold, bodyHeld, () => false);
   const group = state.status === "ready" ? state.value : undefined;
-  const card = openedGroupCard(key);
+  const card = groupPages.card(key);
   useTitle(groupTitle(group?.name ?? card?.name ?? slug));
   if (state.status === "error" || (state.status === "ready" && !group)) return <NoGroup />;
   const head = group ? headOf(group) : card ? headOfCard(card) : undefined;
@@ -87,45 +88,25 @@ function Group({ line, head, group }: { line: string; head: GroupHead; group?: P
   const repositories = head.repositories.length;
   return (
     <article className="flex flex-col gap-8" {...shownLine(line)}>
-      <header className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="flex shrink-0" {...flightTo("avatar")}>
-            <GroupLogo logo={head.logo} size={32} />
-          </span>
-          <h1
-            className="min-w-0 text-2xl font-semibold tracking-tight wrap-anywhere"
-            {...flightTo("name")}
-          >
-            {head.name}
-          </h1>
-          <span
-            className="flex items-center gap-1 font-mono text-sm text-muted-foreground"
-            {...flightTo("stars")}
-          >
+      <ResultHead
+        avatar={<GroupLogo logo={head.logo} size={32} />}
+        title={head.name}
+        monoTitle={false}
+        badge={
+          <>
             <Layers className="size-3.5" aria-hidden="true" />
             {repositories} repos
-          </span>
-        </div>
-        <p className="line-clamp-2 max-w-3xl text-muted-foreground" {...flightTo("description")}>
-          {head.description || head.repositories.join(" · ")}
-        </p>
-        {/* Fades in whole when the page is revealed after a card click, rather than assembling. */}
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm" {...revealFade}>
-          <span className="flex items-center gap-1.5">
-            <Avatar src={head.publisher.avatarUrl} size={16} />
-            Run by <strong className="font-medium">{publisherName(head.publisher)}</strong>
-          </span>
-          <span className="text-muted-foreground">· Released {ago(head.updatedAt)}</span>
-          <span className="text-muted-foreground">·</span>
-          <span className="font-mono">
-            {repositories} {repositories === 1 ? "repository" : "repositories"}
-          </span>
-          <span className="text-muted-foreground">·</span>
-          <span className="font-mono">{head.tasks} tasks</span>
-          <span className="text-muted-foreground">·</span>
-          <span className="font-mono">{head.settings} settings</span>
-        </p>
-      </header>
+          </>
+        }
+        description={head.description || head.repositories.join(" · ")}
+        publisher={head.publisher}
+        releasedAt={head.updatedAt}
+        facts={[
+          `${repositories} ${repositories === 1 ? "repository" : "repositories"}`,
+          `${head.tasks} tasks`,
+          `${head.settings} settings`,
+        ]}
+      />
 
       {group &&
         (group.settings.length > 0 ? (

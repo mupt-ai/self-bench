@@ -12,13 +12,14 @@ import {
 } from "../components/LayoutToggle";
 import { OpenTask } from "../components/OpenTask";
 import { OpenTrace } from "../components/OpenTrace";
+import { ResultHead } from "../components/ResultHead";
 import type { PublicPublisher, PublicRepoPage, PublicRepoSummary } from "../contract";
-import { flightTo, pageBody, revealFade, shownLine } from "../effects/marks";
+import { pageBody, shownLine } from "../effects/marks";
 import { bodyHeld, watchBodyHold } from "../effects/transition-run";
-import { ago, cleanDescription, compactNumber, publisherName } from "../format";
+import { cleanDescription, compactNumber } from "../format";
 import { motionOff } from "../motion";
 import { APP_URL } from "../PublicLayout";
-import { cardOf, pageKey, takeRead, visitedPages } from "../page-preload";
+import { pageKey, repoPages } from "../page-preload";
 import { scrollArea } from "../scroll-area";
 import { repositoryTitle } from "../seo";
 import { useSource } from "../source-context";
@@ -69,11 +70,11 @@ export function RepoPage() {
     key,
     // A read its card started as it was pressed, if there is one (page-preload.ts).
     () =>
-      takeRead(key) ??
+      repoPages.take(key) ??
       (publisher ? source.getLine(owner, name, publisher) : source.getRepo(owner, name)),
     // Runs of one repository share a group, so switching between them keeps the page up.
     fullName.toLowerCase(),
-    visitedPages,
+    repoPages.visited,
   );
   // While an opening flight is in the air, the body waits (transition-run.ts `holdBody`).
   const held = useSyncExternalStore(watchBodyHold, bodyHeld, () => false);
@@ -86,7 +87,7 @@ export function RepoPage() {
   const page = state.status === "ready" ? state.value : undefined;
   if (state.status === "error" || (state.status === "ready" && !page))
     return <NoResults fullName={fullName} />;
-  const card = cardOf(key);
+  const card = repoPages.card(key);
   const head = page ? headOf(page) : card ? headOfCard(card) : undefined;
   if (!head) return <p className="text-muted-foreground">Loading…</p>;
   return <Results head={head} page={held ? undefined : page} />;
@@ -166,69 +167,48 @@ function Results({ head, page }: { head: PageHead; page?: PublicRepoPage }) {
       }`}
       {...shownLine(`${repository.fullName}/${head.publisher.login}`)}
     >
-      <header className="flex flex-col gap-3" data-morph="title">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="flex shrink-0" {...flightTo("avatar")}>
-            <Avatar src={head.ownerAvatarUrl} size={32} />
-          </span>
-          {/* The page's heading, as in the page text the server writes (src/api/site-body.ts):
-              without it, a crawler that runs the page finds no h1 once this replaces that text. */}
-          <h1 className="min-w-0 font-mono text-2xl font-medium" {...flightTo("name")}>
-            {/* An eval is its publisher's own scenarios: there is no repository to link to. */}
-            {isEvalName(repository.fullName) ? (
-              <span className="block">
-                {owner}/<wbr />
-                {name}
-              </span>
-            ) : (
-              <a
-                href={`https://github.com/${repository.fullName}`}
-                target="_blank"
-                rel="noreferrer"
-                className="hit relative block hover:underline"
-              >
-                {/* A long name wraps after the owner, never inside a word. */}
-                {owner}/<wbr />
-                {name}
-              </a>
-            )}
-          </h1>
-          {repository.stars !== undefined && (
-            <span
-              className="flex items-center gap-1 font-mono text-sm text-muted-foreground"
-              {...flightTo("stars")}
+      <ResultHead
+        avatar={<Avatar src={head.ownerAvatarUrl} size={32} />}
+        title={
+          // An eval is its publisher's own scenarios: there is no repository to link to.
+          isEvalName(repository.fullName) ? (
+            <span className="block">
+              {owner}/<wbr />
+              {name}
+            </span>
+          ) : (
+            <a
+              href={`https://github.com/${repository.fullName}`}
+              target="_blank"
+              rel="noreferrer"
+              className="hit relative block hover:underline"
             >
-              <Star className="size-3.5 fill-current" aria-hidden="true" />
-              {compactNumber(repository.stars)}
-            </span>
-          )}
-          <span className="ml-auto self-center" data-morph="toggle">
-            <LayoutToggle layout={layout} onChange={chooseLayout} />
-          </span>
-        </div>
-        {repository.description && (
-          <p className="line-clamp-2 max-w-3xl text-muted-foreground" {...flightTo("description")}>
-            {cleanDescription(repository.description)}
-          </p>
-        )}
-        {/* Fades in whole when the page is revealed after a card click, rather than assembling. */}
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm" {...revealFade}>
-          <span className="flex items-center gap-1.5">
-            <Avatar src={head.publisher.avatarUrl} size={16} />
-            Run by <strong className="font-medium">{publisherName(head.publisher)}</strong>
-          </span>
-          <span className="text-muted-foreground">· Released {ago(head.releasedAt)}</span>
-          <span className="text-muted-foreground">·</span>
-          <span className="font-mono">{head.tasks} tasks</span>
-          <span className="text-muted-foreground">·</span>
-          <span className="font-mono">{head.settings} settings</span>
-          {head.endorsed && (
-            <span className="border border-border px-1.5 py-0.5 text-xs">
-              Endorsed by Maintainers
-            </span>
-          )}
-        </p>
-      </header>
+              {/* A long name wraps after the owner, never inside a word. */}
+              {owner}/<wbr />
+              {name}
+            </a>
+          )
+        }
+        monoTitle
+        {...(repository.stars === undefined
+          ? {}
+          : {
+              badge: (
+                <>
+                  <Star className="size-3.5 fill-current" aria-hidden="true" />
+                  {compactNumber(repository.stars)}
+                </>
+              ),
+            })}
+        aside={<LayoutToggle layout={layout} onChange={chooseLayout} />}
+        {...(repository.description
+          ? { description: cleanDescription(repository.description) }
+          : {})}
+        publisher={head.publisher}
+        releasedAt={head.releasedAt}
+        facts={[`${head.tasks} tasks`, `${head.settings} settings`]}
+        endorsed={head.endorsed}
+      />
 
       {page && (
         <RepoBody

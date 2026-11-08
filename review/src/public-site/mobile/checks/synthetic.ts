@@ -2,27 +2,10 @@ import type { PublicRepoPage, PublicSetting } from "../../contract";
 import { memorySource, type PublicSource } from "../../source";
 import { page, setting } from "../../test-fixture";
 import { syntheticGroupRoutes, syntheticGroups } from "./synthetic-groups";
+import { anthropic, type Model, openai, routed } from "./synthetic-models";
 import { OPENED_SETTING, OPENED_TASK, syntheticTasks } from "./synthetic-tasks";
 
-type Model = PublicSetting["model"];
-
-const openai = (id: string, label: string): Model => ({
-  catalogId: id,
-  name: `openai/${id}`,
-  label,
-});
-const anthropic = (id: string, label: string): Model => ({
-  catalogId: id,
-  name: `anthropic/${id}`,
-  label,
-});
 const LONG = "Review its edge cases: it tends to cover the main path and miss the rest. ".repeat(3);
-/** An OpenRouter model, named "vendor/model" as the catalog names them. */
-const routed = (name: string, label: string): Model => ({
-  catalogId: name.split("/")[1] ?? name,
-  name,
-  label,
-});
 
 /**
  * A setting that passed `passed` of 40 tasks at `cost` per task, run the way its vendor's

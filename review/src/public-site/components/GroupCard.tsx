@@ -1,23 +1,10 @@
 import { Layers } from "lucide-react";
-import { DEFAULT_GROUP_LOGO, groupHref } from "../../../../src/public/release-groups";
+import { groupHref } from "../../../../src/public/release-groups";
 import type { PublicGroupCard } from "../contract";
 import { groupKey, preloadGroup } from "../page-preload";
 import { useSource } from "../source-context";
+import { GroupLogo } from "./GroupLogo";
 import { ResultCard } from "./ResultCard";
-
-/** A group's logo, or the default mark, drawn where a repository card draws its owner's avatar. */
-export function GroupLogo({ logo, size }: { logo: string | undefined; size: number }) {
-  return (
-    <img
-      src={logo ?? DEFAULT_GROUP_LOGO}
-      alt=""
-      width={size}
-      height={size}
-      style={{ width: size, height: size }}
-      className="shrink-0 rounded-sm object-contain"
-    />
-  );
-}
 
 /**
  * A repository group's card, the same card a repository has: its logo, name, members, and two

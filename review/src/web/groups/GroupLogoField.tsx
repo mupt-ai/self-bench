@@ -1,4 +1,5 @@
-import { DEFAULT_GROUP_LOGO, GROUP_LOGO, isGroupLogo } from "../../../../src/public/release-groups";
+import { GROUP_LOGO, isGroupLogo } from "../../../../src/public/release-groups";
+import { GroupLogo } from "../../public-site/components/GroupLogo";
 import { InfoTooltip } from "../primitives/tooltip";
 import { Button } from "../ui";
 
@@ -45,11 +46,7 @@ export function GroupLogoField({
         <InfoTooltip label="Shown on the group's card and page on selfbench.dev. Use a square PNG, JPEG, WebP, or SVG under 48 KB." />
       </span>
       <div className="flex flex-wrap items-center gap-3">
-        <img
-          src={logo ?? DEFAULT_GROUP_LOGO}
-          alt=""
-          className="size-12 shrink-0 rounded-sm border border-border object-contain p-1"
-        />
+        <GroupLogo logo={logo} size={48} className="border border-border p-1" />
         <input
           type="file"
           aria-label="Logo"

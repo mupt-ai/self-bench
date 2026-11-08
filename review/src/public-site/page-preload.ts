@@ -1,89 +1,79 @@
 import type { PublicGroup, PublicGroupCard, PublicRepoPage, PublicRepoSummary } from "./contract";
 import type { PublicSource } from "./source";
-import { loadMemory } from "./use-load";
+import { type LoadMemory, loadMemory } from "./use-load";
 
 /**
- * Repository pages read during the visit, so coming back to one draws it at once, from the
- * first frame, while it is checked in the background. The latest 50 are kept.
+ * Pages read ahead from their cards, one kind of page each (repositories, groups): what a page
+ * opened from a card reads and draws first.
  */
-export const visitedPages = loadMemory<PublicRepoPage | undefined>(50);
+export interface Preloads<Card, Page> {
+  /** Pages read during the visit, so coming back to one draws it at once; the latest 50. */
+  visited: LoadMemory<Page | undefined>;
+  /**
+   * Starts reading a card's page as the card is pressed or hovered, before it is clicked, so the
+   * page usually has its data by the time its title lands, and remembers the card, so the page
+   * can draw its title at once. A page already kept, or being read, is not read again.
+   */
+  preload(key: string, card: Card, read: () => Promise<Page | undefined>): void;
+  /** The read started for `key` before its page opened, taken once; undefined when none is. */
+  take(key: string): Promise<Page | undefined> | undefined;
+  /** The card the page at `key` was opened from, if it was. */
+  card(key: string): Card | undefined;
+}
+
+function preloads<Card, Page>(): Preloads<Card, Page> {
+  const visited = loadMemory<Page | undefined>(50);
+  /** Reads started before their page opened, until the page takes them or they land. */
+  const started = new Map<string, Promise<Page | undefined>>();
+  const cards = new Map<string, Card>();
+  return {
+    visited,
+    preload(key, card, read) {
+      cards.set(key, card);
+      if (started.has(key) || visited.get(key) !== undefined) return;
+      const reading = read();
+      started.set(key, reading);
+      // A read its page never takes (the card was only hovered) still lands in memory.
+      reading.then(
+        (page) => {
+          visited.set(key, page);
+          started.delete(key);
+        },
+        () => started.delete(key),
+      );
+    },
+    take(key) {
+      const reading = started.get(key);
+      started.delete(key);
+      return reading;
+    },
+    card: (key) => cards.get(key),
+  };
+}
+
+/** Repository (and eval) pages, keyed by `pageKey`. */
+export const repoPages = preloads<PublicRepoSummary, PublicRepoPage>();
+/** Group pages, keyed by `groupKey`. */
+export const groupPages = preloads<PublicGroupCard, PublicGroup>();
 
 /** A repository page's key, from its address: the repository, and the publisher if named. */
 export const pageKey = (fullName: string, publisher?: string) => `${fullName}/${publisher ?? ""}`;
 
-/** Reads started before their page opened, until the page takes them or they land. */
-const started = new Map<string, Promise<PublicRepoPage | undefined>>();
-/** The card each page was last opened from: enough to draw its title before its data is in. */
-const cards = new Map<string, PublicRepoSummary>();
-
-/**
- * Starts reading a card's page as the card is pressed or hovered, before it is clicked, so the
- * page usually has its data by the time its title lands, and remembers the card, so the page can
- * draw its title at once. A page already kept, or being read, is not read again.
- */
-export function preloadPage(source: PublicSource, card: PublicRepoSummary, byLine: boolean): void {
-  const publisher = byLine ? card.publisher.login : undefined;
-  const key = pageKey(card.repository.fullName, publisher);
-  cards.set(key, card);
-  if (started.has(key) || visitedPages.get(key) !== undefined) return;
-  const [owner = "", name = ""] = card.repository.fullName.split("/");
-  const read = publisher ? source.getLine(owner, name, publisher) : source.getRepo(owner, name);
-  started.set(key, read);
-  // A read its page never takes (the card was only hovered) still lands in memory.
-  read.then(
-    (page) => {
-      visitedPages.set(key, page);
-      started.delete(key);
-    },
-    () => started.delete(key),
-  );
-}
-
-/** The read started for `key` before its page opened, taken once; undefined when none is. */
-export function takeRead(key: string): Promise<PublicRepoPage | undefined> | undefined {
-  const read = started.get(key);
-  started.delete(key);
-  return read;
-}
-
-/** The card the page at `key` was opened from, if it was. */
-export function cardOf(key: string): PublicRepoSummary | undefined {
-  return cards.get(key);
-}
-
-/** Group pages read during the visit, as `visitedPages` keeps repository pages. */
-export const visitedGroups = loadMemory<PublicGroup | undefined>(50);
-
 /** A group page's key, as its cards and its page name it: also its line (marks.ts). */
 export const groupKey = (publisher: string, slug: string) => `groups/${publisher}/${slug}`;
 
-const startedGroups = new Map<string, Promise<PublicGroup | undefined>>();
-const groupCards = new Map<string, PublicGroupCard>();
-
-/** Starts reading a group card's page as `preloadPage` does a repository's, and remembers the card. */
-export function preloadGroup(source: PublicSource, card: PublicGroupCard): void {
-  const key = groupKey(card.publisher.login, card.slug);
-  groupCards.set(key, card);
-  if (startedGroups.has(key) || visitedGroups.get(key) !== undefined) return;
-  const read = source.getGroup(card.publisher.login, card.slug);
-  startedGroups.set(key, read);
-  read.then(
-    (group) => {
-      visitedGroups.set(key, group);
-      startedGroups.delete(key);
-    },
-    () => startedGroups.delete(key),
+/** Reads a repository card's page ahead: its default line, or the card's own with `byLine`. */
+export function preloadPage(source: PublicSource, card: PublicRepoSummary, byLine: boolean): void {
+  const publisher = byLine ? card.publisher.login : undefined;
+  const [owner = "", name = ""] = card.repository.fullName.split("/");
+  repoPages.preload(pageKey(card.repository.fullName, publisher), card, () =>
+    publisher ? source.getLine(owner, name, publisher) : source.getRepo(owner, name),
   );
 }
 
-/** The read started for a group page before it opened, taken once. */
-export function takeGroupRead(key: string): Promise<PublicGroup | undefined> | undefined {
-  const read = startedGroups.get(key);
-  startedGroups.delete(key);
-  return read;
-}
-
-/** The card the group page at `key` was opened from, if it was. */
-export function openedGroupCard(key: string): PublicGroupCard | undefined {
-  return groupCards.get(key);
+/** Reads a group card's page ahead. */
+export function preloadGroup(source: PublicSource, card: PublicGroupCard): void {
+  groupPages.preload(groupKey(card.publisher.login, card.slug), card, () =>
+    source.getGroup(card.publisher.login, card.slug),
+  );
 }
