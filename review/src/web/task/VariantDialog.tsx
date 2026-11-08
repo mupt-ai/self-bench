@@ -11,7 +11,7 @@ import { Button, fieldStyles, Input, Notice } from "../ui";
 import { useGenerationSettings } from "../useGenerationSettings";
 import { taskPath } from "./review-queue";
 import { createTaskVariant, type VariantInput } from "./task-variant-api";
-import { FileFields, PackageFields } from "./VariantFields";
+import { VariantChanges } from "./VariantFields";
 
 type PackageRow = VariantInput["packages"][number];
 type FileRow = VariantInput["files"][number];
@@ -107,7 +107,7 @@ function VariantDialog({
               <label htmlFor="variant-label" className={fieldStyles}>
                 <span className="flex items-center gap-1.5">
                   Variant Name
-                  <InfoTooltip label="What this variant changes, so it is easy to tell apart in the task list, such as Docs Before PR 100191. The instruction, hidden tests, and reference solution stay the same." />
+                  <InfoTooltip label="A short name for what this variant changes, so it is easy to tell apart in the task list." />
                 </span>
                 <Input
                   id="variant-label"
@@ -122,8 +122,13 @@ function VariantDialog({
                 />
               </label>
 
-              <PackageFields rows={packages} onChange={setPackages} disabled={busy} />
-              <FileFields rows={files} onChange={setFiles} disabled={busy} />
+              <VariantChanges
+                packages={packages}
+                files={files}
+                onPackagesChange={setPackages}
+                onFilesChange={setFiles}
+                disabled={busy}
+              />
             </div>
           ) : optionsError ? (
             <Notice>
