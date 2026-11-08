@@ -27,7 +27,7 @@ export function GroupSettingsPage() {
     if (!group) return;
     setBusy(true);
     try {
-      if (await deleteGroup(org.login, group)) navigate("/groups");
+      if (await deleteGroup(org.login, group)) navigate("/");
       else setBusy(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not delete the group");

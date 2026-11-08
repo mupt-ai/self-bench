@@ -125,14 +125,12 @@ export function ReposPage() {
         </Button>
       </PageHeader>
       {error && <Notice className="mb-4">{error}</Notice>}
-      {(repos.status === "loading" || !groups) && !error && (
-        <CardGridSkeleton label="Loading Repositories" />
-      )}
-      {repos.status === "ok" && groups && (
+      {repos.status === "loading" && !error && <CardGridSkeleton label="Loading Repositories" />}
+      {repos.status === "ok" && (
         <RepositoryList
           repos={repos.repos}
           stats={stats}
-          groups={groups.groups}
+          groups={groups?.groups ?? []}
           onDisconnect={disconnect}
           onRemoveGroup={removeGroup}
           onConnect={() => setConnecting("mine")}

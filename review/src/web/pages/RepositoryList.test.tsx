@@ -71,3 +71,34 @@ test("the Mined Repos list offers a new group next to connecting a repository", 
   );
   expect(html).toContain('aria-label="New Group"');
 });
+
+test("a group is a card on the list, linking to its own page", () => {
+  const removed: string[] = [];
+  const html = renderToStaticMarkup(
+    <MemoryRouter>
+      <RepositoryList
+        repos={[]}
+        stats={{}}
+        groups={[
+          {
+            slug: "python-web",
+            name: "Python Web",
+            description: "",
+            repositories: [{ id: 1, fullName: "example/api", connected: false, tasks: 3 }],
+            tasks: 3,
+            updatedAt: "2026-09-18T00:00:00.000Z",
+            updatedBy: "example",
+          },
+        ]}
+        onDisconnect={() => {}}
+        onRemoveGroup={(group) => removed.push(group.slug)}
+        onConnect={() => {}}
+        onNewGroup={() => {}}
+      />
+    </MemoryRouter>,
+  );
+  expect(html).toContain('href="/groups/python-web"');
+  expect(html).toContain("Python Web");
+  expect(html).toContain("Disconnected");
+  expect(removed).toEqual([]);
+});
