@@ -5,7 +5,6 @@ import {
   FolderGit2,
   Gauge,
   KeyRound,
-  Layers,
   LockKeyhole,
   type LucideIcon,
   Rocket,
@@ -57,31 +56,27 @@ interface NavItem {
 /** SelfBench's documentation, a separate Mintlify site (docs/). */
 const DOCS_URL = "https://docs.selfbench.dev";
 
-/** The sidebar's sections, in order: what is evaluated, the workspace itself, and help. */
+/** The sidebar's sections, in order: the benchmarks, the workspace itself, and help. */
 function sectionsOf(billing: boolean): { label: string; items: NavItem[] }[] {
   return [
     {
-      label: "Evaluate",
+      label: "Benchmarks",
       items: [
         {
-          label: "Repositories",
+          // Repositories and groups of repositories, mined from coding repos.
+          label: "Mined Repos",
           to: "/",
           icon: FolderGit2,
           active: (path) =>
             path === "/" ||
+            path.startsWith("/groups") ||
             (path.startsWith("/repos/") && !path.startsWith(`/repos/${EVAL_OWNER}/`)),
         },
         {
-          label: "Evals",
+          label: "Scenarios",
           to: "/evals",
           icon: FlaskConical,
           active: (path) => path.startsWith("/evals") || path.startsWith(`/repos/${EVAL_OWNER}/`),
-        },
-        {
-          label: "Repository Groups",
-          to: "/groups",
-          icon: Layers,
-          active: (path) => path.startsWith("/groups"),
         },
         {
           label: "Public Benchmarks",

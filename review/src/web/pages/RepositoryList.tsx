@@ -1,4 +1,6 @@
 import { type ConnectedRepo, formatAgo } from "../api";
+import type { GroupView } from "../groups/api";
+import { GroupCard } from "../groups/GroupCard";
 import { AddScopeButton, ScopeCard } from "../ScopeCard";
 
 export interface RepoStats {
@@ -10,16 +12,27 @@ export interface RepoStats {
 export function RepositoryList({
   repos,
   stats,
+  groups,
   onDisconnect,
+  onRemoveGroup,
   onConnect,
+  onNewGroup,
 }: {
   repos: ConnectedRepo[];
   stats: Record<string, RepoStats>;
+  groups: GroupView[];
   onDisconnect(repo: ConnectedRepo): void;
+  onRemoveGroup(group: GroupView): void;
   onConnect(): void;
+  onNewGroup(): void;
 }) {
   return (
     <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {groups.map((group) => (
+        <li key={`group:${group.slug}`}>
+          <GroupCard group={group} onRemove={() => onRemoveGroup(group)} />
+        </li>
+      ))}
       {repos.map((repo) => (
         <li key={repo.fullName}>
           <RepositoryCard repo={repo} stats={stats[repo.fullName]} onDisconnect={onDisconnect} />
@@ -27,6 +40,9 @@ export function RepositoryList({
       ))}
       <li>
         <AddScopeButton label="Connect a Repository" onClick={onConnect} />
+      </li>
+      <li>
+        <AddScopeButton label="New Group" onClick={onNewGroup} />
       </li>
     </ul>
   );

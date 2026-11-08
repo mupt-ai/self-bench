@@ -19,8 +19,11 @@ test("connected repositories link to their page with task stats beside the conne
       <RepositoryList
         repos={[repo]}
         stats={{ "example/repo": { tasks: 4, needsReview: 2, lastPr: 18 } }}
+        groups={[]}
         onDisconnect={() => {}}
+        onRemoveGroup={() => {}}
         onConnect={() => {}}
+        onNewGroup={() => {}}
       />
     </MemoryRouter>,
   );
@@ -38,8 +41,33 @@ test("connected repositories link to their page with task stats beside the conne
 test("an empty list still offers the connect card", () => {
   const html = renderToStaticMarkup(
     <MemoryRouter>
-      <RepositoryList repos={[]} stats={{}} onDisconnect={() => {}} onConnect={() => {}} />
+      <RepositoryList
+        repos={[]}
+        stats={{}}
+        groups={[]}
+        onDisconnect={() => {}}
+        onRemoveGroup={() => {}}
+        onConnect={() => {}}
+        onNewGroup={() => {}}
+      />
     </MemoryRouter>,
   );
   expect(html).toContain('aria-label="Connect a Repository"');
+});
+
+test("the Mined Repos list offers a new group next to connecting a repository", () => {
+  const html = renderToStaticMarkup(
+    <MemoryRouter>
+      <RepositoryList
+        repos={[]}
+        stats={{}}
+        groups={[]}
+        onDisconnect={() => {}}
+        onRemoveGroup={() => {}}
+        onConnect={() => {}}
+        onNewGroup={() => {}}
+      />
+    </MemoryRouter>,
+  );
+  expect(html).toContain('aria-label="New Group"');
 });

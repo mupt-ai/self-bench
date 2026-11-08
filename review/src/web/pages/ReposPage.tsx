@@ -1,5 +1,6 @@
 import { Plus } from "lucide-react";
 import React from "react";
+import { useNavigate } from "react-router";
 import {
   type ConnectedRepo,
   disconnectRepo,
@@ -8,6 +9,14 @@ import {
   type RepoTaskCounts,
 } from "../api";
 import { ConnectRepoSheet } from "../ConnectRepoSheet";
+import {
+  deleteGroup,
+  type GroupList,
+  type GroupView,
+  groupRequest,
+  groupsUrl,
+} from "../groups/api";
+import { GroupDialog } from "../groups/GroupDialog";
 import { CardGridSkeleton } from "../LoadingSkeleton";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
@@ -25,15 +34,30 @@ function statsOf(counts: RepoTaskCounts | undefined): RepoStats {
   };
 }
 
+/**
+ * Mined Repos: the workspace's connected repositories and its groups, in one list. A group is
+ * evaluated like one repository over all its members' approved tasks.
+ */
 export function ReposPage() {
   const { org } = useOrg();
+  const navigate = useNavigate();
   useDocumentTitle(`${org.login} · SelfBench`);
   const [repos, setRepos] = React.useState<Repos>({ status: "loading" });
+  const [groups, setGroups] = React.useState<GroupList>();
   const [error, setError] = React.useState<string | null>(null);
   const [connecting, setConnecting] = React.useState<"mine" | "public" | null>(null);
+  const [creatingGroup, setCreatingGroup] = React.useState(false);
   const [stats, setStats] = React.useState<Record<string, RepoStats>>({});
+  const loadGroups = React.useCallback(
+    () =>
+      groupRequest<GroupList>(groupsUrl(org.login)).then(setGroups, (cause: Error) =>
+        setError(cause.message),
+      ),
+    [org.login],
+  );
   React.useEffect(() => {
     let cancelled = false;
+    void loadGroups();
     fetchConnectedRepos(org.login).then(
       (found) => {
         if (cancelled) return;
@@ -55,7 +79,7 @@ export function ReposPage() {
     return () => {
       cancelled = true;
     };
-  }, [org.login]);
+  }, [org.login, loadGroups]);
 
   const closeSheet = React.useCallback(() => setConnecting(null), []);
   const onConnected = React.useCallback((repo: ConnectedRepo) => {
@@ -76,6 +100,11 @@ export function ReposPage() {
       (cause: Error) => setError(cause.message),
     );
   };
+  const removeGroup = (group: GroupView) =>
+    deleteGroup(org.login, group).then(
+      (deleted) => deleted && void loadGroups(),
+      (cause: Error) => setError(cause.message),
+    );
   const connected = new Set(
     repos.status === "ok" ? repos.repos.map((r) => r.fullName.toLowerCase()) : [],
   );
@@ -96,13 +125,18 @@ export function ReposPage() {
         </Button>
       </PageHeader>
       {error && <Notice className="mb-4">{error}</Notice>}
-      {repos.status === "loading" && !error && <CardGridSkeleton label="Loading Repositories" />}
-      {repos.status === "ok" && (
+      {(repos.status === "loading" || !groups) && !error && (
+        <CardGridSkeleton label="Loading Repositories" />
+      )}
+      {repos.status === "ok" && groups && (
         <RepositoryList
           repos={repos.repos}
           stats={stats}
+          groups={groups.groups}
           onDisconnect={disconnect}
+          onRemoveGroup={removeGroup}
           onConnect={() => setConnecting("mine")}
+          onNewGroup={() => setCreatingGroup(true)}
         />
       )}
       {connecting && (
@@ -112,6 +146,14 @@ export function ReposPage() {
           connected={connected}
           onClose={closeSheet}
           onConnected={onConnected}
+        />
+      )}
+      {creatingGroup && groups && (
+        <GroupDialog
+          org={org.login}
+          repositories={groups.repositories}
+          onClose={() => setCreatingGroup(false)}
+          onSaved={(group) => navigate(`/groups/${group.slug}`)}
         />
       )}
     </PageFrame>

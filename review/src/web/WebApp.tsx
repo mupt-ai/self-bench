@@ -17,7 +17,6 @@ import { GroupDatasetPage } from "./groups/GroupDatasetPage";
 import { GroupLayout } from "./groups/GroupLayout";
 import { GroupReleasesPage } from "./groups/GroupReleasesPage";
 import { GroupSettingsPage } from "./groups/GroupSettingsPage";
-import { GroupsPage } from "./groups/GroupsPage";
 import { SiteSkeleton } from "./LoadingSkeleton";
 import { AddPrPage } from "./pages/AddPrPage";
 import { AddScenarioPage } from "./pages/AddScenarioPage";
@@ -94,7 +93,7 @@ export function WebApp() {
                     <Route path="settings/billing" element={<BillingPage />} />
                   )}
                   <Route path="evals" element={<EvalsPage />} />
-                  <Route path="groups" element={<GroupsPage />} />
+                  <Route path="groups" element={<Navigate to="/" replace />} />
                   <Route path="groups/:slug" element={<GroupLayout />}>
                     <Route index element={<GroupDatasetPage />} />
                     <Route path="run" element={<RunPage />} />
