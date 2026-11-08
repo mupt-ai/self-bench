@@ -48,21 +48,25 @@ export function ReposPage() {
   const [connecting, setConnecting] = React.useState<"mine" | "public" | null>(null);
   const [creatingGroup, setCreatingGroup] = React.useState(false);
   const [stats, setStats] = React.useState<Record<string, RepoStats>>({});
+  // Each groups request supersedes the ones before it, so a slow earlier response can't overwrite a later one.
+  const groupsSeq = React.useRef(0);
+  const loadGroups = React.useCallback((login: string) => {
+    const seq = ++groupsSeq.current;
+    groupRequest<GroupList>(groupsUrl(login)).then(
+      (next) => seq === groupsSeq.current && setGroups(next),
+      (cause: Error) => seq === groupsSeq.current && setError(cause.message),
+    );
+  }, []);
   // Reloads the groups after a change here, so the cards and the New Group picker stay current.
-  const reloadGroups = React.useCallback(
-    () =>
-      groupRequest<GroupList>(groupsUrl(org.login)).then(setGroups, (cause: Error) =>
-        setError(cause.message),
-      ),
-    [org.login],
-  );
+  const reloadGroups = React.useCallback(() => loadGroups(org.login), [loadGroups, org.login]);
   React.useEffect(() => {
     let cancelled = false;
     setGroups(undefined);
-    groupRequest<GroupList>(groupsUrl(org.login)).then(
-      (next) => !cancelled && setGroups(next),
-      (cause: Error) => !cancelled && setError(cause.message),
-    );
+    loadGroups(org.login);
+    // Invalidates the groups request in flight when the org changes.
+    const invalidate = () => {
+      groupsSeq.current++;
+    };
     fetchConnectedRepos(org.login).then(
       (found) => {
         if (cancelled) return;
@@ -83,8 +87,9 @@ export function ReposPage() {
     );
     return () => {
       cancelled = true;
+      invalidate();
     };
-  }, [org.login]);
+  }, [org.login, loadGroups]);
 
   const closeSheet = React.useCallback(() => setConnecting(null), []);
   const onConnected = React.useCallback(
