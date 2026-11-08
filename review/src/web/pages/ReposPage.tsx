@@ -48,7 +48,8 @@ export function ReposPage() {
   const [connecting, setConnecting] = React.useState<"mine" | "public" | null>(null);
   const [creatingGroup, setCreatingGroup] = React.useState(false);
   const [stats, setStats] = React.useState<Record<string, RepoStats>>({});
-  const loadGroups = React.useCallback(
+  // Reloads the groups after a change here, so the cards and the New Group picker stay current.
+  const reloadGroups = React.useCallback(
     () =>
       groupRequest<GroupList>(groupsUrl(org.login)).then(setGroups, (cause: Error) =>
         setError(cause.message),
@@ -57,7 +58,11 @@ export function ReposPage() {
   );
   React.useEffect(() => {
     let cancelled = false;
-    void loadGroups();
+    setGroups(undefined);
+    groupRequest<GroupList>(groupsUrl(org.login)).then(
+      (next) => !cancelled && setGroups(next),
+      (cause: Error) => !cancelled && setError(cause.message),
+    );
     fetchConnectedRepos(org.login).then(
       (found) => {
         if (cancelled) return;
@@ -79,30 +84,36 @@ export function ReposPage() {
     return () => {
       cancelled = true;
     };
-  }, [org.login, loadGroups]);
+  }, [org.login]);
 
   const closeSheet = React.useCallback(() => setConnecting(null), []);
-  const onConnected = React.useCallback((repo: ConnectedRepo) => {
-    setRepos((current) =>
-      current.status === "ok" ? { status: "ok", repos: [repo, ...current.repos] } : current,
-    );
-    setConnecting(null);
-  }, []);
+  const onConnected = React.useCallback(
+    (repo: ConnectedRepo) => {
+      setRepos((current) =>
+        current.status === "ok" ? { status: "ok", repos: [repo, ...current.repos] } : current,
+      );
+      setConnecting(null);
+      void reloadGroups();
+    },
+    [reloadGroups],
+  );
   const disconnect = (repo: ConnectedRepo) => {
     if (!window.confirm(`Disconnect ${repo.fullName}?`)) return;
     disconnectRepo(org.login, repo.fullName).then(
-      () =>
+      () => {
         setRepos((current) =>
           current.status === "ok"
             ? { status: "ok", repos: current.repos.filter((r) => r.fullName !== repo.fullName) }
             : current,
-        ),
+        );
+        void reloadGroups();
+      },
       (cause: Error) => setError(cause.message),
     );
   };
   const removeGroup = (group: GroupView) =>
     deleteGroup(org.login, group).then(
-      (deleted) => deleted && void loadGroups(),
+      (deleted) => deleted && void reloadGroups(),
       (cause: Error) => setError(cause.message),
     );
   const connected = new Set(
@@ -134,7 +145,8 @@ export function ReposPage() {
           onDisconnect={disconnect}
           onRemoveGroup={removeGroup}
           onConnect={() => setConnecting("mine")}
-          onNewGroup={() => setCreatingGroup(true)}
+          // The picker needs the groups' repository list, so New Group waits for it to load.
+          onNewGroup={groups ? () => setCreatingGroup(true) : undefined}
         />
       )}
       {connecting && (

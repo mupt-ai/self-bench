@@ -24,7 +24,8 @@ export function RepositoryList({
   onDisconnect(repo: ConnectedRepo): void;
   onRemoveGroup(group: GroupView): void;
   onConnect(): void;
-  onNewGroup(): void;
+  /** Absent until the groups have loaded, since a group is picked from the repositories they hold. */
+  onNewGroup?: () => void;
 }) {
   return (
     <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -41,9 +42,11 @@ export function RepositoryList({
       <li>
         <AddScopeButton label="Connect a Repository" onClick={onConnect} />
       </li>
-      <li>
-        <AddScopeButton label="New Group" onClick={onNewGroup} />
-      </li>
+      {onNewGroup && (
+        <li>
+          <AddScopeButton label="New Group" onClick={onNewGroup} />
+        </li>
+      )}
     </ul>
   );
 }
