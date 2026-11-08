@@ -1,3 +1,4 @@
+import { isEvalName } from "../contracts/evals.js";
 import { frontierSettings } from "./directory.js";
 import type { PublishedGroup } from "./release-groups.js";
 import type { PublishedLine, ReleaseSetting } from "./release-types.js";
@@ -101,7 +102,9 @@ export function repositoryDescription(line: PublishedLine, limit = DESCRIPTION_L
     release.repository.fullName,
     release.settings,
     release.tasks,
-    "from its merged pull requests",
+    isEvalName(release.repository.fullName)
+      ? "from its own scenarios"
+      : "from its merged pull requests",
     limit,
   );
 }

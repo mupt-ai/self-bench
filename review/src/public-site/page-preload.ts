@@ -1,4 +1,4 @@
-import type { PublicRepoPage, PublicRepoSummary } from "./contract";
+import type { PublicGroup, PublicGroupCard, PublicRepoPage, PublicRepoSummary } from "./contract";
 import type { PublicSource } from "./source";
 import { loadMemory } from "./use-load";
 
@@ -49,4 +49,41 @@ export function takeRead(key: string): Promise<PublicRepoPage | undefined> | und
 /** The card the page at `key` was opened from, if it was. */
 export function cardOf(key: string): PublicRepoSummary | undefined {
   return cards.get(key);
+}
+
+/** Group pages read during the visit, as `visitedPages` keeps repository pages. */
+export const visitedGroups = loadMemory<PublicGroup | undefined>(50);
+
+/** A group page's key, as its cards and its page name it: also its line (marks.ts). */
+export const groupKey = (publisher: string, slug: string) => `groups/${publisher}/${slug}`;
+
+const startedGroups = new Map<string, Promise<PublicGroup | undefined>>();
+const groupCards = new Map<string, PublicGroupCard>();
+
+/** Starts reading a group card's page as `preloadPage` does a repository's, and remembers the card. */
+export function preloadGroup(source: PublicSource, card: PublicGroupCard): void {
+  const key = groupKey(card.publisher.login, card.slug);
+  groupCards.set(key, card);
+  if (startedGroups.has(key) || visitedGroups.get(key) !== undefined) return;
+  const read = source.getGroup(card.publisher.login, card.slug);
+  startedGroups.set(key, read);
+  read.then(
+    (group) => {
+      visitedGroups.set(key, group);
+      startedGroups.delete(key);
+    },
+    () => startedGroups.delete(key),
+  );
+}
+
+/** The read started for a group page before it opened, taken once. */
+export function takeGroupRead(key: string): Promise<PublicGroup | undefined> | undefined {
+  const read = startedGroups.get(key);
+  startedGroups.delete(key);
+  return read;
+}
+
+/** The card the group page at `key` was opened from, if it was. */
+export function openedGroupCard(key: string): PublicGroupCard | undefined {
+  return groupCards.get(key);
 }

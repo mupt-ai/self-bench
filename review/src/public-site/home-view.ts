@@ -96,8 +96,12 @@ export function saveHomeNow(leavingFor?: string): void {
   saveShownHome?.(leavingFor);
 }
 
-/** The repository ("owner/name") a path points at, if it is a repository page. */
+/**
+ * What a path's page shows, if it is a results page: a repository ("owner/name"), or a
+ * repository group ("groups/publisher/slug", which its cards and title name it by too).
+ */
 export function repositoryOf(path: string): string | undefined {
-  const [owner, name] = path.split("/").filter(Boolean);
+  const [owner, name, slug] = path.split("/").filter(Boolean);
+  if (owner === "groups") return name && slug ? `groups/${name}/${slug}` : undefined;
   return owner && name ? `${owner}/${name}` : undefined;
 }

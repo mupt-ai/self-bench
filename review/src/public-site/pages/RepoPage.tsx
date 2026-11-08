@@ -2,6 +2,7 @@ import { Star } from "lucide-react";
 import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
 import { useLocation, useNavigationType, useParams } from "react-router";
+import { isEvalName } from "../../../../src/contracts/evals";
 import { Avatar } from "../components/Avatar";
 import {
   LayoutToggle,
@@ -173,16 +174,24 @@ function Results({ head, page }: { head: PageHead; page?: PublicRepoPage }) {
           {/* The page's heading, as in the page text the server writes (src/api/site-body.ts):
               without it, a crawler that runs the page finds no h1 once this replaces that text. */}
           <h1 className="min-w-0 font-mono text-2xl font-medium" {...flightTo("name")}>
-            <a
-              href={`https://github.com/${repository.fullName}`}
-              target="_blank"
-              rel="noreferrer"
-              className="hit relative block hover:underline"
-            >
-              {/* A long name wraps after the owner, never inside a word. */}
-              {owner}/<wbr />
-              {name}
-            </a>
+            {/* An eval is its publisher's own scenarios: there is no repository to link to. */}
+            {isEvalName(repository.fullName) ? (
+              <span className="block">
+                {owner}/<wbr />
+                {name}
+              </span>
+            ) : (
+              <a
+                href={`https://github.com/${repository.fullName}`}
+                target="_blank"
+                rel="noreferrer"
+                className="hit relative block hover:underline"
+              >
+                {/* A long name wraps after the owner, never inside a word. */}
+                {owner}/<wbr />
+                {name}
+              </a>
+            )}
           </h1>
           {repository.stars !== undefined && (
             <span

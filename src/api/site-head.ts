@@ -1,3 +1,4 @@
+import { isEvalName } from "../contracts/evals.js";
 import { groupHref, type PublishedGroup } from "../public/release-groups.js";
 import type { PublishedLine } from "../public/release-types.js";
 import {
@@ -131,7 +132,7 @@ export function resultsStructuredData(data: ResultsData): Record<string, unknown
         ...data.date,
         isAccessibleForFree: true,
         keywords: ["coding agents", "AI models", "benchmark", "evals", ...data.repositories],
-        about: about.length === 1 ? about[0] : about,
+        ...(about.length > 0 ? { about: about.length === 1 ? about[0] : about } : {}),
         measurementTechnique: MEASUREMENT_TECHNIQUE,
         variableMeasured: [
           { "@type": "PropertyValue", name: "Accuracy", unitText: "percent" },
@@ -167,7 +168,8 @@ function repositoryStructuredData(
     description: repositoryDescription(line, Number.POSITIVE_INFINITY),
     publisher: release.publisher,
     date: { datePublished: release.releasedAt },
-    repositories: [fullName],
+    // An eval has no repository behind it to name.
+    repositories: isEvalName(fullName) ? [] : [fullName],
     contentUrl: `${origin}/api/public/results/${fullName}`,
   });
 }

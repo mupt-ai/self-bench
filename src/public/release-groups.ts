@@ -1,4 +1,12 @@
-import { picks, type SettingPick } from "./directory.js";
+import {
+  type CardSetting,
+  cardSetting,
+  frontierSettings,
+  offFrontier,
+  PREVIEW_LINES,
+  picks,
+  type SettingPick,
+} from "./directory.js";
 import { GROUP_SLUG_MAX } from "./paths.js";
 import type { ReleasePublisher, ReleaseRepository, ReleaseSetting } from "./release-types.js";
 
@@ -62,7 +70,11 @@ export interface GroupCard {
   repositories: string[];
   tasks: number;
   settings: number;
-  picks: SettingPick<Pick<ReleaseSetting, "id" | "model" | "accuracy" | "costPerTaskUsd">>[];
+  picks: SettingPick<CardSetting>[];
+  /** Every frontier setting, cheapest first, for the card's hover preview. */
+  frontier: CardSetting[];
+  /** The most accurate settings off the frontier, for the preview lines the frontier leaves. */
+  others: CardSetting[];
 }
 
 /** The mark a group shows until its publisher uploads a logo. */
@@ -182,14 +194,8 @@ export function groupCardOf(group: PublishedGroup): GroupCard {
     repositories: group.members.map((member) => member.repository.fullName),
     tasks: group.tasks,
     settings: group.settings.length,
-    picks: picks(group.settings).map((pick) => ({
-      roles: pick.roles,
-      setting: {
-        id: pick.setting.id,
-        model: pick.setting.model,
-        accuracy: pick.setting.accuracy,
-        costPerTaskUsd: pick.setting.costPerTaskUsd,
-      },
-    })),
+    picks: picks(group.settings).map((pick) => ({ ...pick, setting: cardSetting(pick.setting) })),
+    frontier: frontierSettings(group.settings).map(cardSetting),
+    others: offFrontier(group.settings).slice(0, PREVIEW_LINES).map(cardSetting),
   };
 }

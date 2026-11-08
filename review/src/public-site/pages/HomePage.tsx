@@ -8,6 +8,7 @@ import { select } from "../effects/marks";
 import { publisherName } from "../format";
 import { homeView, onSaveHome, saveHomeView, startJourney } from "../home-view";
 import { APP_URL } from "../PublicLayout";
+import { groupKey } from "../page-preload";
 import { scrollArea } from "../scroll-area";
 import { HOME_HEADING, HOME_TITLE } from "../seo";
 import type { PublicSource } from "../source";
@@ -99,15 +100,15 @@ export function HomePage() {
     return () => onSaveHome(undefined);
   }, [save]);
 
-  // Records the view, and which card was opened, when a card is clicked.
-  const opened = (card: PublicRepoSummary, element: HTMLElement) => {
-    const line = `${card.repository.fullName}/${card.publisher.login}`;
+  // Records the view, and which card was opened, when a card is clicked: the run it shows,
+  // and what its page shows (home-view.ts `repositoryOf`), for the trip back.
+  const opened = (line: string, subject: string, element: HTMLElement) => {
     saveHomeView(location.key, {
       scrollTop: window.scrollY,
       query,
       anchor: { line, top: element.getBoundingClientRect().top },
     });
-    startJourney(location.key, card.repository.fullName);
+    startJourney(location.key, subject);
   };
 
   return (
@@ -131,8 +132,8 @@ export function HomePage() {
 }
 
 /**
- * The repository groups, then the repositories: each repository's default line, or with a
- * search, every line and group that matches it.
+ * One grid: the repository groups, then the repositories and evals (each one's default line, or
+ * with a search, every line and group that matches it), every card alike.
  */
 function Directory({
   data,
@@ -143,7 +144,7 @@ function Directory({
   data: HomeData;
   needle: string;
   query: string;
-  onOpen: (card: PublicRepoSummary, element: HTMLElement) => void;
+  onOpen: (line: string, subject: string, element: HTMLElement) => void;
 }) {
   const groups = needle ? data.groups.filter((card) => groupMatches(card, needle)) : data.groups;
   const cards = needle ? data.lines.filter((card) => matches(card, needle)) : data.repos;
@@ -154,15 +155,22 @@ function Directory({
   // to fit the longest line any card holds, even one the card truncates.
   return (
     <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {groups.map((card) => (
-        <GroupCard key={`${card.publisher.login}/${card.slug}`} card={card} />
-      ))}
+      {groups.map((card) => {
+        const key = groupKey(card.publisher.login, card.slug);
+        return <GroupCard key={key} card={card} onOpen={(element) => onOpen(key, key, element)} />;
+      })}
       {cards.map((card) => (
         <RepoCard
           key={card.releaseId}
           card={card}
           byLine={!!needle}
-          onOpen={(element) => onOpen(card, element)}
+          onOpen={(element) =>
+            onOpen(
+              `${card.repository.fullName}/${card.publisher.login}`,
+              card.repository.fullName,
+              element,
+            )
+          }
         />
       ))}
     </section>

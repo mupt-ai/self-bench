@@ -20,7 +20,7 @@ export interface SettingPick<S> {
 }
 
 /** What a card shows of a setting: its name and its two numbers. */
-interface CardSetting {
+export interface CardSetting {
   id: string;
   model: { label: string };
   accuracy: number;
@@ -28,8 +28,8 @@ interface CardSetting {
   costedTasks?: number;
 }
 
-/** How many lines a card's hover preview has (RepoCard's PREVIEW_LINES). */
-const PREVIEW_LINES = 5;
+/** How many lines a card's hover preview has (ResultCard's PREVIEW_LINES). */
+export const PREVIEW_LINES = 5;
 
 /** One release line, reduced to its card. */
 export interface DirectoryCard {
@@ -105,7 +105,7 @@ export function offFrontier<S extends Ranked>(settings: readonly S[]): S[] {
     );
 }
 
-const cardSetting = (setting: ReleaseSetting): CardSetting => ({
+export const cardSetting = (setting: ReleaseSetting): CardSetting => ({
   id: setting.id,
   model: { label: setting.model.label },
   accuracy: setting.accuracy,

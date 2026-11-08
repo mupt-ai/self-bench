@@ -1,6 +1,7 @@
 import { ArrowUpRight } from "lucide-react";
 import React from "react";
 import { useParams, useSearchParams } from "react-router";
+import { isEvalName } from "../../../../src/contracts/evals";
 import { formatAgo, plural } from "../api";
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
 import { GhostRelease } from "../ghosts";
@@ -44,12 +45,13 @@ function useRepositoryTarget(): ReleaseTarget {
   const { org } = useOrg();
   const { owner = "", name = "" } = useParams();
   const repo = `${owner}/${name}`;
+  const scope = isEvalName(repo) ? "eval" : "repository";
   return {
     url: releasesUrl(org.login, repo),
     label: repo,
     repo,
     pageUrl: (site, release) => publicPageUrl(site, release.fullName, release.publisher),
-    description: "Publish this repository's results on selfbench.dev. Each release is kept.",
+    description: `Publish this ${scope}'s results on selfbench.dev. Each release is kept.`,
     empty: `Nothing from this workspace is public for ${repo}. Release Results publishes accuracy and cost for the settings you choose.`,
   };
 }

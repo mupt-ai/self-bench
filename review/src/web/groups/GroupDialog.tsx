@@ -1,19 +1,14 @@
 import { ArrowDown, ArrowUp } from "lucide-react";
 import React from "react";
 import { GROUP_SLUG, GROUP_SLUG_MAX } from "../../../../src/public/paths";
-import {
-  DEFAULT_GROUP_LOGO,
-  GROUP_LOGO,
-  isGroupLogo,
-  slugOf,
-} from "../../../../src/public/release-groups";
+import { slugOf } from "../../../../src/public/release-groups";
 import { plural } from "../api";
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
-import { InfoTooltip } from "../primitives/tooltip";
 import { Tick } from "../releases/SettingsPicker";
 import { Button, controlStyles, fieldStyles, Input, Notice, SearchInput } from "../ui";
 import { matchesQuery } from "../word-search";
 import { type GroupInput, type GroupList, type GroupView, groupRequest, groupsUrl } from "./api";
+import { GroupLogoField } from "./GroupLogoField";
 
 /**
  * Creates or edits a repository group: its name, its address, and which of the workspace's
@@ -75,26 +70,6 @@ export function GroupDialog({
       return next;
     });
   const nameOf = (id: number) => listed.find((entry) => entry.id === id)?.fullName ?? String(id);
-
-  const chooseLogo = (file: File | undefined) => {
-    if (!file) return;
-    setError("");
-    if (!(GROUP_LOGO.types as readonly string[]).includes(file.type)) {
-      setError("Choose a PNG, JPEG, WebP, or SVG image.");
-      return;
-    }
-    if (file.size > GROUP_LOGO.maxBytes) {
-      setError("Choose an image under 48 KB.");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const value = String(reader.result);
-      if (isGroupLogo(value)) setLogo(value);
-      else setError("Choose a PNG, JPEG, WebP, or SVG image under 48 KB.");
-    };
-    reader.readAsDataURL(file);
-  };
 
   const save = async () => {
     setBusy(true);
@@ -182,35 +157,15 @@ export function GroupDialog({
             onChange={(event) => setDescription(event.target.value)}
           />
         </label>
-        <div className="grid gap-2">
-          <span className="flex items-center gap-1.5 text-sm font-semibold">
-            Logo
-            <InfoTooltip label="Shown on the group's card on selfbench.dev. Use a square PNG, JPEG, WebP, or SVG under 48 KB." />
-          </span>
-          <div className="flex flex-wrap items-center gap-3">
-            <img
-              src={logo ?? DEFAULT_GROUP_LOGO}
-              alt=""
-              className="size-12 shrink-0 rounded-sm border border-border object-contain p-1"
-            />
-            <input
-              type="file"
-              aria-label="Logo"
-              accept={GROUP_LOGO.types.join(",")}
-              disabled={busy}
-              className="min-w-0 text-sm"
-              onChange={(event) => {
-                chooseLogo(event.target.files?.[0]);
-                event.target.value = "";
-              }}
-            />
-            {logo && (
-              <Button size="small" disabled={busy} onClick={() => setLogo(null)}>
-                Use Default Logo
-              </Button>
-            )}
-          </div>
-        </div>
+        <GroupLogoField
+          logo={logo}
+          disabled={busy}
+          onChange={(next) => {
+            setError("");
+            setLogo(next);
+          }}
+          onError={setError}
+        />
         <fieldset className="grid min-w-0 gap-2">
           <legend className="mb-2 text-sm font-semibold">Repositories</legend>
           {listed.length < 2 ? (

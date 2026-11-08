@@ -254,6 +254,12 @@ function syntheticPages(): PublicRepoPage[] {
       },
       true,
     ),
+    // An eval: a workspace's own scenarios, released as a repository is, with no GitHub behind it.
+    page({
+      releaseId: "synthetic-eval",
+      releasedAt: "2026-09-17T10:00:00Z",
+      repository: { id: 2001, fullName: "evals/terminal-scenarios" },
+    }),
     page({
       releaseId: "synthetic-shared-community",
       releasedAt: "2026-09-18T10:00:00Z",

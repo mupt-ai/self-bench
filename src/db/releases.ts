@@ -6,30 +6,14 @@ import { endpointHostsOf, type ReleasedResults } from "../public/release-trials.
 import type { PublishedLine, PublishedRelease, ReleasePayload } from "../public/release-types.js";
 import type { Database } from "./client.js";
 import { chainOrder, currentOf } from "./release-chain.js";
+import { type AnyLine, lineKey, lineOfRow, ofLine } from "./release-lines.js";
 import { releases } from "./schema.js";
 
 export { currentOf, headOf } from "./release-chain.js";
+export type { AnyLine, EvalLine, ReleaseLine } from "./release-lines.js";
 
-/** One workspace's releases of one GitHub repository. */
-export interface ReleaseLine {
-  readonly orgId: number;
-  readonly githubRepoId: number;
-}
-
-/** One workspace's releases of one of its repository groups. */
-interface GroupLine {
-  readonly orgId: number;
-  readonly groupId: number;
-}
-
-/** A line of releases: a repository's, or a repository group's. */
-export type AnyLine = ReleaseLine | GroupLine;
-
-/** What a line's rows store in `payload`: a repository's release, or a group's. */
+/** What a line's rows store in `payload`: a repository's or eval's release, or a group's. */
 export type LinePayload = ReleasePayload | GroupReleasePayload;
-
-const lineKey = (line: AnyLine) =>
-  "groupId" in line ? `group/${line.groupId}` : `${line.orgId}/${line.githubRepoId}`;
 
 /** A release row. What the public API serves is `published()`; the rest stays on the server. */
 export interface ReleaseRow<Payload extends LinePayload = ReleasePayload> {
@@ -74,10 +58,7 @@ const rowFrom = <Payload extends LinePayload = ReleasePayload>(
   row: StoredRow,
 ): ReleaseRow<Payload> => ({
   id: row.id,
-  line:
-    row.groupId !== null
-      ? { orgId: row.orgId, groupId: row.groupId }
-      : { orgId: row.orgId, githubRepoId: row.githubRepoId ?? 0 },
+  line: lineOfRow(row),
   fullName: row.fullName,
   publisherLogin: row.publisherLogin,
   ...(row.predecessorId ? { predecessorId: row.predecessorId } : {}),
@@ -122,14 +103,6 @@ function currentAmong<Row extends ReleaseRow<LinePayload>>(rows: readonly Row[])
 
 export function createReleaseStore(db: Database, options: { now?: () => Date } = {}) {
   const now = options.now ?? (() => new Date());
-  const ofLine = (line: AnyLine) =>
-    "groupId" in line
-      ? and(eq(releases.orgId, line.orgId), eq(releases.groupId, line.groupId))
-      : and(
-          eq(releases.orgId, line.orgId),
-          eq(releases.githubRepoId, line.githubRepoId),
-          isNull(releases.groupId),
-        );
   const repositoryRows = isNull(releases.groupId);
   const newestFirst = [desc(releases.releasedAt), desc(releases.id)];
   const rowsWhere = async (where?: SQL) =>
@@ -174,7 +147,9 @@ export function createReleaseStore(db: Database, options: { now?: () => Date } =
             orgId: release.line.orgId,
             ...("groupId" in release.line
               ? { groupId: release.line.groupId }
-              : { githubRepoId: release.line.githubRepoId }),
+              : "evalRepoId" in release.line
+                ? { evalRepoId: release.line.evalRepoId }
+                : { githubRepoId: release.line.githubRepoId }),
             fullName: release.fullName,
             publisherLogin: release.publisherLogin,
             predecessorId: release.predecessorId ?? null,
@@ -271,14 +246,16 @@ export function createReleaseStore(db: Database, options: { now?: () => Date } =
       // A renamed repository's line is found under any name it released with, then shown
       // only under the name its current release carries.
       const named = await db
-        .selectDistinct({ orgId: releases.orgId, githubRepoId: releases.githubRepoId })
+        .selectDistinct({
+          orgId: releases.orgId,
+          githubRepoId: releases.githubRepoId,
+          groupId: releases.groupId,
+          evalRepoId: releases.evalRepoId,
+        })
         .from(releases)
         .where(and(eq(sql`lower(${releases.fullName})`, wanted), repositoryRows));
       if (named.length === 0) return [];
-      const lines = named.map(({ orgId, githubRepoId }) => ({
-        orgId,
-        githubRepoId: githubRepoId ?? 0,
-      }));
+      const lines = named.map(lineOfRow);
       const current = currentAmong(await publicRowsWhere(or(...lines.map(ofLine))));
       return asLines(current.filter((row) => row.fullName.toLowerCase() === wanted));
     },
