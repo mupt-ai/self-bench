@@ -69,6 +69,7 @@ The Dockerfile's build context holds only `repo.tar.gz`, the files of workspace/
 
 - Choose a small, standard base image by tag (`python:3.12-bookworm`); the worker pins each tag to its current digest. Never write a digest yourself. `skopeo inspect docker://IMAGE` confirms a tag exists. Only literal, non-secret values.
 - The image needs bash, git, pkill (procps), runuser and useradd (passwd), and tar. Leave /app without a .git directory.
+- Don't run `chown -R` or `chmod -R` over /app. On a large dependency tree each one copies every file into a layer of its own, which can take minutes and push the build past its limit. Install and build as root; the verifier takes ownership of /app when its tests start.
 - The agent works in its image as root, and its network is limited to its model provider. Install everything ahead of time, including the libraries an agent would reasonably reach for to read the workspace (for example openpyxl for .xlsx) and everything the tests use.
 - smoke.sh runs in /app under exactly the agent's conditions. Exercise the tools the agent needs, such as reading one workspace file the way the agent would.
 - run-tests.sh runs in /app as an unprivileged user, over the agent's changes with test.patch applied. Its one argument is `fail-to-pass` or `pass-to-pass`, and it exits 0 only when every one of those tests passes.

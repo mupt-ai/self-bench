@@ -143,7 +143,6 @@ WORKDIR /app
 export function verifierDockerfile(authored: string): string {
   return `${baseDockerfile(authored)}
 RUN useradd --create-home --shell /bin/bash verifier \\
-    && chown -R verifier:verifier /app /home/verifier \\
     && mkdir -p /opt/selfbench \\
     && chmod 700 /opt/selfbench
 ENV HOME=/home/verifier

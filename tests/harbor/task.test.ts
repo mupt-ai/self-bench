@@ -93,7 +93,9 @@ describe("Harbor task compiler", () => {
     );
     expect(agentDockerfile).not.toMatch(/useradd --create-home|ENV HOME|test\.patch/);
     expect(verifierDockerfile).toContain("useradd --create-home --shell /bin/bash verifier");
-    expect(verifierDockerfile).toContain("chown -R verifier:verifier /app /home/verifier");
+    // A recursive chown over /app copies every file into its own layer; the verifier takes /app
+    // over when its tests run (verifier.ts).
+    expect(verifierDockerfile).not.toMatch(/chown -R [^\n]*\/app/);
     expect(verifierDockerfile).toContain(
       "COPY runtime/ run-tests.sh services.sh /opt/selfbench-runtime/",
     );
