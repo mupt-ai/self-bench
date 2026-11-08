@@ -29,8 +29,10 @@ function renderSidebar(
 test("sidebar exposes labeled navigation and credentials", () => {
   const html = renderSidebar("/");
   const links = html.match(/<a[^>]*data-slot="sidebar-menu-button"[^>]*>/g) ?? [];
-  expect(links).toHaveLength(8);
+  expect(links).toHaveLength(7);
   expect(html).toContain('aria-label="Organization Navigation"');
+  expect(html).toContain('aria-label="Mined Repos"');
+  expect(html).toContain('aria-label="Scenarios"');
   expect(html).toContain('aria-label="Public Benchmarks"');
   expect(html).toContain(">Public Benchmarks</span>");
   expect(html).toContain('aria-label="Credentials"');
@@ -48,19 +50,19 @@ test("sidebar exposes labeled navigation and credentials", () => {
 
 test("sidebar sorts its pages into named sections, in order", () => {
   const html = renderSidebar("/");
-  const order = ["Evaluate", "Repositories", "Evals", "Repository Groups", "Public Benchmarks"]
+  const order = ["Benchmarks", "Mined Repos", "Scenarios", "Public Benchmarks"]
     .concat(["Organization", "Credentials", "API Keys", "Billing"])
     .map((label) => html.indexOf(`>${label}</`));
   expect(order.every((at) => at >= 0)).toBe(true);
   expect(order).toEqual([...order].sort((left, right) => left - right));
   // Each section is a group named by its heading, so a screen reader announces where it is.
-  for (const section of ["Evaluate", "Organization"])
+  for (const section of ["Benchmarks", "Organization"])
     expect(html).toContain(`aria-labelledby="sidebar-section-${section.toLowerCase()}"`);
 });
 
 test("sidebar leaves out Billing without the managed offering", () => {
   const html = renderSidebar("/", "org", false);
-  expect(html.match(/<a[^>]*data-slot="sidebar-menu-button"[^>]*>/g) ?? []).toHaveLength(7);
+  expect(html.match(/<a[^>]*data-slot="sidebar-menu-button"[^>]*>/g) ?? []).toHaveLength(6);
   expect(html).not.toContain("Billing");
 });
 
@@ -102,8 +104,8 @@ test("sidebar preserves active navigation across repository and settings routes"
     ["/settings/credentials", "/settings/credentials"],
     ["/settings/api-keys", "/settings/api-keys"],
     ["/settings/billing", "/settings/billing"],
-    ["/groups", "/groups"],
-    ["/groups/python-web/results", "/groups"],
+    // Groups are part of Mined Repos.
+    ["/groups/python-web/results", "/"],
   ]) {
     const html = renderSidebar(path);
     const active = html.match(/<a[^>]*data-active="true"[^>]*>/g) ?? [];

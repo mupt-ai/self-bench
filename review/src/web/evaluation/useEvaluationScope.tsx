@@ -49,7 +49,7 @@ export function useEvaluationScope(): EvaluationScope {
       url: groupsUrl(org.login, slug, "/evaluations"),
       pages: `/groups/${slug}`,
       label: slug,
-      parent: { label: "Repository Groups", to: "/groups" },
+      parent: { label: "Mined Repos", to: "/" },
     };
   return benchmark
     ? {
@@ -65,9 +65,9 @@ export function useEvaluationScope(): EvaluationScope {
         url: evaluationUrl(org.login, full),
         pages: `/repos/${full}`,
         label: full,
-        // An eval's pages are a repository's, but it is listed under Evals.
+        // An eval's pages are a repository's, but it is listed under Scenarios.
         parent: isEvalName(full)
-          ? { label: "Evals", to: "/evals" }
-          : { label: "Repositories", to: "/" },
+          ? { label: "Scenarios", to: "/evals" }
+          : { label: "Mined Repos", to: "/" },
       };
 }

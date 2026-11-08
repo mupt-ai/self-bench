@@ -132,8 +132,8 @@ function TaskPageContent() {
           <Breadcrumbs
             items={[
               isEvalName(fullName)
-                ? { label: "Evals", to: "/evals" }
-                : { label: "Repositories", to: "/" },
+                ? { label: "Scenarios", to: "/evals" }
+                : { label: "Mined Repos", to: "/" },
               {
                 label: fullName,
                 to: queue?.backLabel === "Dataset" ? queue.back : `/repos/${fullName}`,

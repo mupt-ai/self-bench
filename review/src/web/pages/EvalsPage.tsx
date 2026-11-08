@@ -26,7 +26,7 @@ import { Button, fieldStyles, Input, Notice, PageFrame, PageHeader } from "../ui
 export function EvalsPage() {
   const { org } = useOrg();
   const navigate = useNavigate();
-  useDocumentTitle(`Evals · ${org.login}`);
+  useDocumentTitle(`Scenarios · ${org.login}`);
   const [evals, setEvals] = React.useState<ConnectedRepo[]>();
   const [counts, setCounts] = React.useState<Record<string, RepoTaskCounts>>({});
   const [error, setError] = React.useState("");
@@ -55,9 +55,9 @@ export function EvalsPage() {
   };
   return (
     <PageFrame>
-      <PageHeader title="Evals" />
+      <PageHeader title="Scenarios" description="Evals built from scenarios you describe." />
       {error && <Notice className="mb-4">{error}</Notice>}
-      {!evals && !error && <CardGridSkeleton label="Loading Evals" />}
+      {!evals && !error && <CardGridSkeleton label="Loading Scenarios" />}
       {evals && (
         <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {evals.map((entry) => {

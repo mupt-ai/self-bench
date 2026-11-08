@@ -15,7 +15,7 @@ export function TaskSkeleton({ fullName, taskId }: { fullName: string; taskId: s
       <header className={`border-b border-border bg-background py-5 ${pageGutter}`}>
         <Breadcrumbs
           items={[
-            { label: "Repositories", to: "/" },
+            { label: "Mined Repos", to: "/" },
             { label: fullName, to: `/repos/${fullName}`, mono: true },
             { label: "Task" },
           ]}
