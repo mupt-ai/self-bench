@@ -2,6 +2,7 @@ import type { ModelPricing, ThinkingLevel } from "../contracts/models.js";
 import type { TaskImages } from "../contracts/task.js";
 import type { CredentialInfo } from "../db/credentials.js";
 import type { JudgeNeeds } from "../harnesses/harbor/host-variables.js";
+import type { ResourceRequest } from "../sandbox/resources.js";
 import type { CatalogProvider } from "./catalog.js";
 import type { Harness } from "./models.js";
 import type { EvaluationScope } from "./scope.js";
@@ -24,6 +25,8 @@ interface EvaluationTask {
   minutes?: number;
   /** For a registry task with an LLM judge, the judge variables its judge credential fills. */
   judge?: JudgeNeeds;
+  /** What its task.toml asks of a sandbox, checked against the sandbox credential's limits. */
+  resources?: ResourceRequest;
 }
 export interface EvaluationInput extends EvaluationScope {
   id: string;
@@ -51,6 +54,8 @@ export interface EvaluationInput extends EvaluationScope {
    * credentials' limits (maxSandboxes) when it started. A trial holds one sandbox at a time.
    */
   maxTrials?: number;
+  /** Requests close to the sandbox credential's limits, or that its provider rounds. */
+  resourceWarnings?: string[];
   pricing?: ModelPricing;
   /**
    * Failed trials are explained (failure-summary.ts), which sends their material to the summary

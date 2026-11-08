@@ -81,6 +81,9 @@ export function memoryVault(records: EncryptedRecordStore = new MemoryRecords())
         ...(parsed.maxSandboxes ? { maxSandboxes: parsed.maxSandboxes } : {}),
         ...(parsed.maxBuilds ? { maxBuilds: parsed.maxBuilds } : {}),
         ...(parsed.models?.length ? { models: parsed.models } : {}),
+        ...(parsed.resourceLimits && Object.keys(parsed.resourceLimits).length
+          ? { resourceLimits: parsed.resourceLimits }
+          : {}),
         secret: {
           value,
           ...(tokenId ? { tokenId } : {}),
@@ -89,6 +92,12 @@ export function memoryVault(records: EncryptedRecordStore = new MemoryRecords())
         },
       });
       return (await find(orgId, id)) as CredentialInfo;
+    },
+    async setResourceLimits(orgId, id, limits) {
+      const row = live(orgId, id);
+      if (!row) throw new Error("Credential not found");
+      if (limits && Object.keys(limits).length) row.resourceLimits = limits;
+      else delete row.resourceLimits;
     },
     async rename(orgId, id, name) {
       const row = live(orgId, id);

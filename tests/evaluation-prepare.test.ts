@@ -181,3 +181,42 @@ test("the build runs on Harbor's own Python with the evaluation's sandbox", asyn
     message: "The verifier image: E2B could not make it",
   });
 });
+
+test("a task over the sandbox credential's resource limits builds nothing and fails its trials", async () => {
+  const root = await temporary();
+  const task = join(root, "task", "harbor-task");
+  await mkdir(task, { recursive: true });
+  await writeFile(
+    join(task, "task.toml"),
+    'schema_version = "1.4"\n[environment]\ncpus = 16\nmemory_mb = 4096\n',
+  );
+  await runCommand("tar", ["-czf", join(root, "task.tar.gz"), "-C", join(root, "task"), "."]);
+  const store = new LocalArtifactStore(join(root, "store"));
+  await store.put(
+    "tasks/task.tar.gz",
+    await readFile(join(root, "task.tar.gz")),
+    "application/gzip",
+  );
+  const vault = memoryVault();
+  const input = await credentialedInput(vault);
+  await vault.credentials.setResourceLimits(1, input.credentials?.sandboxCredentialId ?? "", {
+    cpus: 8,
+  });
+  const calls: string[] = [];
+  const command: typeof runCommand = async (name, args) => {
+    calls.push(name);
+    return { exitCode: 0, stdout: args[0] === "--version" ? HARBOR_VERSION : "", stderr: "" };
+  };
+  const refused = await prepareTaskImages(store, trialInput(input, 0), {
+    command,
+    vault,
+    env: { PATH: "" },
+  }).catch((error: unknown) => error);
+  expect(refused).toBeInstanceOf(ApplicationFailure);
+  expect((refused as ApplicationFailure).type).toBe(TASK_IMAGES_FAILED);
+  expect((refused as ApplicationFailure).message).toBe(
+    "This task asks for 16 CPUs; the limit is 8 (the sandbox credential's limits)",
+  );
+  // Only Harbor's version was asked; nothing was built.
+  expect(calls).toEqual(["harbor"]);
+});

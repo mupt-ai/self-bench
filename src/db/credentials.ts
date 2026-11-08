@@ -3,14 +3,24 @@ import { and, count, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { createSecretBox } from "../api/auth/crypto.js";
 import { CHATGPT_SIGN_IN_MAX_SANDBOXES } from "../contracts/config/execution-limits.js";
-import { modelIdPattern } from "../contracts/models.js";
 import { gatewayIds } from "../gateways/index.js";
+import {
+  type ResourceLimits,
+  resourceLimitsSchema,
+  savedResourceLimits,
+} from "../sandbox/resources.js";
 import type { Database } from "./client.js";
 import { credentialEndpoint, dariEndpoint } from "./credential-endpoints.js";
+import {
+  type CredentialSecret,
+  isSandboxKind,
+  museSignIn,
+  sandboxKinds,
+  savedModelsSchema,
+} from "./credential-kinds.js";
 import { RecordStoreError } from "./encrypted-records.js";
 import { credentials } from "./schema.js";
 
-const sandboxKinds = ["e2b", "modal", "daytona", "vercel"] as const;
 const credentialKinds = [
   "dari",
   "openai",
@@ -37,16 +47,6 @@ const claudeToken = /^sk-ant-oat[A-Za-z0-9_-]+$/;
  */
 export const maxSandboxesSchema = z.number().int().min(1).max(1000);
 
-/**
- * A custom endpoint's saved model IDs (`shift-1`, `switchyard`), so the Run page offers each with
- * its credential instead of a typed ID. Trimmed, blank and repeated entries dropped, at most 20.
- */
-export const savedModelsSchema = z
-  .array(z.string().trim())
-  .max(20)
-  .transform((models) => [...new Set(models.filter(Boolean))])
-  .pipe(z.array(z.string().regex(modelIdPattern, "Model IDs use letters, numbers and . _ : / -")));
-
 export const credentialSchema = z
   .object({
     name: z.string().trim().min(1).max(80),
@@ -64,6 +64,7 @@ export const credentialSchema = z
     // Image builds a sandbox account runs at once; E2B counts them apart from its sandboxes.
     maxBuilds: maxSandboxesSchema.optional(),
     models: savedModelsSchema.optional(),
+    resourceLimits: resourceLimitsSchema.optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -107,18 +108,11 @@ export const credentialSchema = z
       issue("Only custom and Dari providers accept an endpoint");
     if (value.kind !== "custom" && value.models?.length)
       issue("Only custom providers save model IDs");
+    if (value.resourceLimits && !isSandboxKind(value.kind))
+      issue("Only sandbox providers save resource limits");
   });
 export type CredentialDraft = z.infer<typeof credentialSchema>;
 
-/** Muse Code's auth.json holding a Meta sign-in's token in the file, as SelfBench writes it. */
-function museSignIn(value: string): boolean {
-  try {
-    const meta = JSON.parse(value).providers?.meta;
-    return meta?.mechanism === "oauth" && meta.storage === "file" && !!meta.access_token;
-  } catch {
-    return false;
-  }
-}
 type CredentialKind = (typeof credentialKinds)[number];
 
 /** What the browser sees: never the secret. */
@@ -131,15 +125,12 @@ export interface CredentialInfo {
   endpoint?: string;
   maxSandboxes?: number;
   maxBuilds?: number;
+  /** A sandbox account's per-sandbox limits; tasks asking for more are refused before they run. */
+  resourceLimits?: ResourceLimits;
   /** A custom endpoint's saved model IDs. */
   models?: string[];
 }
-export interface CredentialSecret {
-  value: string;
-  tokenId?: string;
-  teamId?: string;
-  projectId?: string;
-}
+export { type CredentialSecret, savedModelsSchema } from "./credential-kinds.js";
 
 const CREDENTIAL_LIMIT = 200;
 
@@ -156,6 +147,7 @@ export function createCredentialStore(db: Database, key: string) {
     ...(row.endpoint ? { endpoint: row.endpoint } : {}),
     ...(row.maxSandboxes ? { maxSandboxes: row.maxSandboxes } : {}),
     ...(row.maxBuilds ? { maxBuilds: row.maxBuilds } : {}),
+    ...(row.resourceLimits ? { resourceLimits: row.resourceLimits } : {}),
     ...(row.models?.length ? { models: row.models } : {}),
   });
   const live = (orgId: number, id: string) =>
@@ -225,6 +217,7 @@ export function createCredentialStore(db: Database, key: string) {
             parsed.maxSandboxes ??
             (parsed.auth === "codex-login" ? CHATGPT_SIGN_IN_MAX_SANDBOXES : undefined),
           maxBuilds: parsed.maxBuilds,
+          resourceLimits: savedResourceLimits(parsed.resourceLimits),
           ...(parsed.models?.length ? { models: parsed.models } : {}),
           secret: seal(id, secret),
         })
@@ -251,6 +244,15 @@ export function createCredentialStore(db: Database, key: string) {
         .update(credentials)
         .set({ [column]: parsed })
         .where(live(orgId, id));
+    },
+    /** Sets or clears (undefined, or no dimension) a sandbox account's per-sandbox limits. */
+    async setResourceLimits(orgId: number, id: string, limits?: ResourceLimits): Promise<void> {
+      const credential = await find(orgId, id);
+      if (!credential) throw new Error("Credential not found");
+      const kept = savedResourceLimits(limits);
+      if (kept && !isSandboxKind(credential.kind))
+        throw new Error("Only sandbox providers save resource limits");
+      await db.update(credentials).set({ resourceLimits: kept }).where(live(orgId, id));
     },
     /** Replaces a custom endpoint's saved model IDs; an empty list clears them. */
     async saveModels(orgId: number, id: string, models: string[]): Promise<void> {

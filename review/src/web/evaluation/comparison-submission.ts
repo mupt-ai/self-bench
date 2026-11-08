@@ -6,6 +6,8 @@ export class UnsavedComparisonError extends Error {}
 export type ComparisonReceipt = {
   id: string;
   submissionError?: string;
+  /** Tasks close to the sandbox credential's resource limits, or that its provider rounds. */
+  resourceWarnings?: string[];
 };
 
 export function resumeComparison(url: string, id: string) {

@@ -133,6 +133,7 @@ function CredentialsContent({ org }: { org: string }) {
         <EditCredentialDialog
           credential={changing}
           onClose={() => setChanging(undefined)}
+          onDetect={() => evaluationRequest(`${url}/${changing.id}/infer-limits`, {})}
           onSave={async (settings) => {
             await evaluationRequest(`${url}/${changing.id}/update`, settings);
             setChanging(undefined);

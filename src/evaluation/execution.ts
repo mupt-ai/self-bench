@@ -126,6 +126,7 @@ export async function credentialExecution(
       endpoint:
         info.kind === "custom" ? ("endpoint" in info ? info.endpoint : undefined) : undefined,
     },
+    sandboxLimits: "resourceLimits" in sandbox ? sandbox.resourceLimits : undefined,
     judge: await trialJudge(input, orgId, credentials),
   };
 }

@@ -16,6 +16,7 @@ import {
   refuseWithoutRetry,
 } from "../harnesses/harbor/task-safety.js";
 import type { runCommand } from "../lib/process.js";
+import { checkResources, requestedResources } from "../sandbox/resources.js";
 import { credentialExecution } from "./execution.js";
 import {
   allowedHosts,
@@ -86,6 +87,15 @@ export async function setUpTrial(
     ...(options.snapshotLink ? { snapshotLink: options.snapshotLink } : {}),
     ...(options.setupSignal ? { signal: options.setupSignal } : {}),
   });
+  // A task asking for more than one of the account's sandboxes may use fails here, before any
+  // image build or agent spends, rather than partway through.
+  const fit = checkResources(
+    requestedResources(await readTaskConfig(taskPath).catch(refuseWithoutRetry)),
+    execution.sandboxLimits,
+    run.sandbox,
+  );
+  if (fit.errors.length)
+    throw refuseTrial(`This task ${fit.errors.join(", ")} (the sandbox credential's limits)`);
   // The trial reaches its model through the gateway, under a key that pins the model, unless its
   // route is direct. A judge calls the gateway under its own key, which names only its credential:
   // a key never serves both the model under test and the judge, so the two are never confused.

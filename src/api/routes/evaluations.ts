@@ -17,6 +17,7 @@ import type { ClaudeLogins } from "../../harnesses/claude-code/login.js";
 import type { CodexLogins } from "../../harnesses/codex/login.js";
 import type { MuseLogins } from "../../harnesses/muse-code/login.js";
 import { lookupRepositoryById } from "../../public/release-sources.js";
+import type { inferResourceLimits } from "../../sandbox/resource-inference.js";
 import { tenantFor } from "../auth/tenant.js";
 import { sendJson } from "../http.js";
 import { benchmarkRoutes } from "./benchmarks.js";
@@ -71,6 +72,8 @@ export interface EvaluationRoutesOptions {
   codexLogins?: CodexLogins;
   claudeLogins?: ClaudeLogins;
   museLogins?: MuseLogins;
+  /** Reads a sandbox account's per-sandbox limits from its provider (resource-inference.ts). */
+  inferResourceLimits?: typeof inferResourceLimits;
 }
 
 export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
