@@ -120,6 +120,7 @@ export function HomePage({ view }: { view: DirectoryView }) {
 
   return (
     <div className="flex flex-col gap-10">
+      <Tabs view={view} query={query} />
       {/*
         The heading stays on one line on any screen: the line is just under 16em wide, so its
         size follows the section's width (cqi), up to 1.5rem.
@@ -129,7 +130,6 @@ export function HomePage({ view }: { view: DirectoryView }) {
           {shown.heading}
         </h1>
         <SearchBox query={query} label={shown.search} onChange={setQuery} />
-        <Tabs view={view} query={query} />
       </section>
 
       {!data && !failed && <p className="text-center text-muted-foreground">Loading…</p>}
@@ -139,10 +139,14 @@ export function HomePage({ view }: { view: DirectoryView }) {
   );
 }
 
-/** The directory's views as tabs, each its own address; a search goes along to the other. */
+/**
+ * The directory's views as tabs along the top of the page, quiet beside the heading and search:
+ * each its own address, and a search goes along to the other. A fixed set (seo.ts
+ * `DIRECTORY_VIEWS`): a new view is one entry there.
+ */
 function Tabs({ view, query }: { view: DirectoryView; query: string }) {
   return (
-    <nav aria-label="Directory" className="flex items-center gap-1 text-sm">
+    <nav aria-label="Directory" className="-mb-4 flex gap-5 border-b border-border text-sm">
       {(Object.keys(DIRECTORY_VIEWS) as DirectoryView[]).map((each) => (
         <Link
           key={each}
@@ -151,9 +155,9 @@ function Tabs({ view, query }: { view: DirectoryView; query: string }) {
             search: query ? `?q=${encodeURIComponent(query)}` : "",
           }}
           aria-current={each === view ? "page" : undefined}
-          className={`hit relative border-b-[1.5px] px-3 py-1.5 transition-colors ${
+          className={`hit relative -mb-px border-b-[1.5px] pb-2 transition-colors ${
             each === view
-              ? "border-foreground font-medium text-foreground"
+              ? "border-foreground text-foreground"
               : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >

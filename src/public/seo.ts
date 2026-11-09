@@ -44,7 +44,7 @@ export const DIRECTORY_VIEWS = {
     title: `Evals: Benchmark Coding Agents on Custom Scenarios · ${SITE_NAME}`,
     description:
       "Coding agent and model results on evals publishers build from their own scenarios: accuracy and cost per task, side by side. By dari.dev.",
-    heading: "Find the best models for your evals",
+    heading: "Find the best models for evals",
     search: "Search Evals",
   },
 } as const;
