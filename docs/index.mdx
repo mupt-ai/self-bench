@@ -1,37 +1,17 @@
 ---
-title: "SelfBench Overview"
-description: "Build private coding-agent benchmarks from your repository's merged pull requests."
+title: "SelfBench"
+description: "Private coding-agent benchmarks built from your repository's merged pull requests."
 icon: "house"
 ---
 
-SelfBench helps you find the best models for *your* repository. It turns merged pull requests into tasks with hidden tests, runs coding agents against them, and compares accuracy with model cost. You can keep your dataset private or release aggregate results for a public repository on [selfbench.dev](https://selfbench.dev).
+SelfBench turns merged pull requests into verified tasks, runs coding agents on them, and compares accuracy with cost. Use the app, the [CLI](/cli), or the [API](/api) for the same loop.
 
-<CardGroup cols={2}>
-  <Card title="Quickstart" icon="bolt" href="/quickstart">
-    Connect a repository, build tasks, and run your first comparison.
-  </Card>
-  <Card title="Generate Tasks" icon="code-pull-request" href="/guides/generate-tasks">
-    Create and review tasks from merged pull requests.
-  </Card>
-  <Card title="Run Evaluations" icon="chart-scatter" href="/guides/run-evaluations">
-    Compare models, harnesses, and reasoning settings.
-  </Card>
-  <Card title="Inspect Results" icon="microscope" href="/guides/inspect-results">
-    Find why models fail and whether a task is fair.
-  </Card>
-  <Card title="CLI" icon="terminal" href="/cli/overview">
-    Build, review, run, and publish evals from the terminal.
-  </Card>
-  <Card title="API Reference" icon="code" href="/api-reference/workspace">
-    Every route the app and CLI use.
-  </Card>
-</CardGroup>
+| Stage | Does | CLI | API |
+| --- | --- | --- | --- |
+| Build | Generate tasks from merged PRs or a described scenario | `generate`, `scenario create` | `…/batches`, `…/tasks/from-scenario` |
+| Review | Approve, reject, or revise each task | `task approve`, `task revise` | `…/tasks/{runId}/{taskId}/review`, `…/feedback` |
+| Evaluate | Run models and harnesses on approved tasks | `compare` | `…/evaluations/comparisons` |
+| Inspect | Scores, failure explanations, fairness audits | `results`, `task explain`, `task audit` | `…/evaluations/results`, `…/explain`, `…/audit` |
+| Publish | Release aggregate results on selfbench.dev | `release publish` | `…/releases` |
 
-## How It Works
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcSet="/media/how-it-works-dark.gif" />
-  <img src="/media/how-it-works-light.gif" alt="A merged PR becomes a verified task; agents then attempt it and their accuracy is plotted against cost." />
-</picture>
-
-SelfBench starts at the commit before a PR's change. An authoring agent creates an instruction, held-out tests, and a reference solution. A task is accepted only after smoke, no-solution, reference-solution, and determinism checks, followed by an independent review. Accepted tasks can run as native [Harbor](https://harborframework.com/) tasks. Read [Task Generation](/concepts/task-generation) for the full pipeline.
+Start with the [Quickstart](/quickstart), or read [How It Works](/concepts/how-it-works) for the pipeline.

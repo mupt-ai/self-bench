@@ -15,96 +15,56 @@
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Docs",
         "groups": [
           {
             "group": "Get Started",
-            "pages": [
-              "index",
-              "quickstart"
-            ]
-          },
-          {
-            "group": "Use SelfBench",
-            "pages": [
-              "guides/generate-tasks",
-              "guides/author-scenarios",
-              "guides/run-evaluations",
-              "guides/inspect-results",
-              "guides/publish-results"
-            ]
+            "pages": ["index", "quickstart"]
           },
           {
             "group": "Concepts",
-            "pages": [
-              "concepts/task-generation",
-              "concepts/self-hosting"
-            ]
+            "pages": ["concepts/how-it-works", "concepts/credentials", "concepts/self-hosting"]
           }
         ]
       },
       {
-        "tab": "CLI",
+        "tab": "Reference",
         "groups": [
           {
             "group": "CLI",
-            "pages": [
-              "cli/overview",
-              "cli/commands"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "API Reference",
-        "groups": [
-          {
-            "group": "Workspace API",
-            "pages": [
-              "api-reference/workspace",
-              "api-reference/api-keys",
-              "api-reference/repositories"
-            ]
+            "pages": ["cli"]
           },
           {
-            "group": "Build and Review",
-            "pages": [
-              "api-reference/create-batch",
-              "api-reference/create-scenario",
-              "api-reference/tasks"
-            ]
-          },
-          {
-            "group": "Evaluate and Inspect",
-            "pages": [
-              "api-reference/create-comparison",
-              "api-reference/results",
-              "api-reference/failure-analysis",
-              "api-reference/create-benchmark"
-            ]
-          },
-          {
-            "group": "Publish",
-            "pages": [
-              "api-reference/publish-release"
-            ]
-          },
-          {
-            "group": "Public Results",
-            "pages": [
-              "api-reference/overview",
-              "api-reference/list-results",
-              "api-reference/repository-results"
-            ]
+            "group": "API",
+            "pages": ["api", "public-api"]
           }
         ]
       }
     ]
   },
   "redirects": [
-    {
-      "source": "/api-reference/list-tasks",
-      "destination": "/api-reference/tasks"
-    }
+    { "source": "/cli/overview", "destination": "/cli" },
+    { "source": "/cli/commands", "destination": "/cli" },
+    { "source": "/guides/generate-tasks", "destination": "/concepts/how-it-works" },
+    { "source": "/guides/author-scenarios", "destination": "/concepts/how-it-works" },
+    { "source": "/guides/run-evaluations", "destination": "/concepts/credentials" },
+    { "source": "/guides/inspect-results", "destination": "/api" },
+    { "source": "/guides/publish-results", "destination": "/quickstart" },
+    { "source": "/concepts/task-generation", "destination": "/concepts/how-it-works" },
+    { "source": "/api-reference/overview", "destination": "/public-api" },
+    { "source": "/api-reference/list-results", "destination": "/public-api" },
+    { "source": "/api-reference/repository-results", "destination": "/public-api" },
+    { "source": "/api-reference/workspace", "destination": "/api" },
+    { "source": "/api-reference/api-keys", "destination": "/api" },
+    { "source": "/api-reference/repositories", "destination": "/api" },
+    { "source": "/api-reference/create-batch", "destination": "/api" },
+    { "source": "/api-reference/create-scenario", "destination": "/api" },
+    { "source": "/api-reference/tasks", "destination": "/api" },
+    { "source": "/api-reference/list-tasks", "destination": "/api" },
+    { "source": "/api-reference/create-comparison", "destination": "/api" },
+    { "source": "/api-reference/results", "destination": "/api" },
+    { "source": "/api-reference/failure-analysis", "destination": "/api" },
+    { "source": "/api-reference/create-benchmark", "destination": "/api" },
+    { "source": "/api-reference/publish-release", "destination": "/api" }
   ]
 }
