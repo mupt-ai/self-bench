@@ -48,7 +48,9 @@ export function TaskView({
         } else {
           loadedKey.current = null;
           setFiles({ taskId: row.id, files: [] });
-          setTab("pipeline");
+          // Each status poll re-reads the artifacts; only the empty File tab moves to Pipeline,
+          // so a tab the person opened stays open.
+          setTab((current) => (current === "file" ? "pipeline" : current));
         }
       } catch (cause) {
         if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause));
