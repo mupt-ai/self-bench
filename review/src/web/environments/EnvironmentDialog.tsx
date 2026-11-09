@@ -7,7 +7,7 @@ import { InfoTooltip } from "../primitives/tooltip";
 import { Button, fieldStyles, Input, Notice } from "../ui";
 import { useGenerationSettings } from "../useGenerationSettings";
 import { EnvironmentChanges } from "./EnvironmentChanges";
-import { createEnvironment, type EnvironmentInput, type EnvironmentItem } from "./environment-api";
+import { createEnvironment, type EnvironmentBuild, type EnvironmentInput } from "./environment-api";
 
 type PackageRow = EnvironmentInput["packages"][number];
 type FileRow = EnvironmentInput["files"][number];
@@ -26,7 +26,7 @@ export function EnvironmentDialog({
   org: string;
   fullName: string;
   onClose: () => void;
-  onCreated: (environment: EnvironmentItem) => void;
+  onCreated: (build: EnvironmentBuild) => void;
 }) {
   const [step, setStep] = React.useState<1 | 2>(1);
   const {
@@ -54,7 +54,7 @@ export function EnvironmentDialog({
     setBusy(true);
     setError(null);
     try {
-      const environment = await createEnvironment(
+      const build = await createEnvironment(
         org,
         fullName,
         {
@@ -68,7 +68,7 @@ export function EnvironmentDialog({
         },
         settings,
       );
-      onCreated(environment);
+      onCreated(build);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
       setBusy(false);

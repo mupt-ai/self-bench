@@ -27,22 +27,24 @@ export async function getEnvironment(
   return requestJson(`${environmentsPath(org, fullName)}/${id}`);
 }
 
+/** What a build started, and the tasks it could not start, each with why. */
+export interface EnvironmentBuild {
+  environment: EnvironmentItem;
+  failures?: string[];
+}
+
 /** Saves an environment and builds every approved task in it, each checked once. */
 export async function createEnvironment(
   org: string,
   fullName: string,
   environment: EnvironmentInput,
   generation?: GenerationSettings,
-): Promise<EnvironmentItem> {
-  const body = await requestJson<{ environment: EnvironmentItem }>(
-    environmentsPath(org, fullName),
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ environment, ...(generation ? { generation } : {}) }),
-    },
-  );
-  return body.environment;
+): Promise<EnvironmentBuild> {
+  return requestJson<EnvironmentBuild>(environmentsPath(org, fullName), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ environment, ...(generation ? { generation } : {}) }),
+  });
 }
 
 /** Builds the approved tasks an environment has none ready or checking for. */
@@ -51,8 +53,8 @@ export async function buildEnvironment(
   fullName: string,
   id: number,
   generation?: GenerationSettings,
-): Promise<void> {
-  await requestJson(`${environmentsPath(org, fullName)}/${id}/build`, {
+): Promise<EnvironmentBuild> {
+  return requestJson<EnvironmentBuild>(`${environmentsPath(org, fullName)}/${id}/build`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(generation ? { generation } : {}),

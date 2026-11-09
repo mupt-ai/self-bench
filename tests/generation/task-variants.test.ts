@@ -1,4 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
+import { writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import type { ScenarioCandidate } from "../../src/contracts/index.js";
 import { createTaskStore } from "../../src/db/tasks.js";
 import { repositoryDataset } from "../../src/evaluation/dataset.js";
@@ -232,4 +234,23 @@ test("deleting a task deletes its variants, so no environment runs it", async ()
   expect(listed.map((environment) => [environment.id, environment.tasks.total])).toEqual([
     [created.id, 0],
   ]);
+});
+
+test("a build that cannot start is settled as failed and reported, so it can be built again", async () => {
+  const { environments, task, store, repoId, artifacts, started } = await evalWithTask();
+  const candidateId = started[0]?.input.candidate.candidateId ?? "";
+  const source = await artifacts.stat(
+    `runs/${task.runId}/authoring/${candidateId}/round-1/source-task.tar.gz`,
+  );
+  if (!source) throw new Error("no source bundle");
+  // The task's draft can no longer be unpacked, so staging its variant throws after the reserve.
+  await writeFile(fileURLToPath(source.uri), "not a tarball");
+  const response = await environments({ environment: ENVIRONMENT });
+  expect(response.status).toBe(201);
+  const body = (await response.json()) as { failures?: string[]; environment: { tasks: unknown } };
+  expect(body.failures).toEqual([expect.stringContaining(`${task.taskId}: `)]);
+  expect(body.environment.tasks).toEqual({ ready: 0, checking: 0, failed: 1, total: 1 });
+  const [variant] = await store.variants.listForRepo(repoId);
+  expect(variant).toMatchObject({ pipelineStatus: "infrastructure_failed" });
+  expect(variant?.reason).toStartWith("The check could not start:");
 });

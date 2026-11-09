@@ -20,6 +20,12 @@ import {
   listEnvironments,
 } from "./environment-api";
 
+/** The tasks a build could not start, each with why; null when every one started. */
+const notStarted = (failures?: string[]) =>
+  failures?.length
+    ? `${failures.length} ${failures.length === 1 ? "task" : "tasks"} did not start: ${failures.join("; ")}`
+    : null;
+
 const coverage = ({ tasks }: EnvironmentItem) =>
   [
     `${tasks.ready} of ${tasks.total} ready`,
@@ -122,9 +128,10 @@ export function EnvironmentsPage() {
           org={org.login}
           fullName={fullName}
           onClose={() => setCreating(false)}
-          onCreated={(environment) => {
+          onCreated={({ environment, failures }) => {
             setCreating(false);
             setOpen(environment.id);
+            setError(notStarted(failures));
             changed();
           }}
         />
@@ -223,9 +230,15 @@ function EnvironmentDetail({
     setNotice(null);
     try {
       // Builds with the generation settings last chosen for this repository, as New Environment did.
-      if (action === "build")
-        await buildEnvironment(org, fullName, id, valid ? settings : undefined);
-      else await deleteEnvironment(org, fullName, id);
+      if (action === "build") {
+        const { failures } = await buildEnvironment(
+          org,
+          fullName,
+          id,
+          valid ? settings : undefined,
+        );
+        setNotice(notStarted(failures));
+      } else await deleteEnvironment(org, fullName, id);
       onChanged();
     } catch (cause) {
       setNotice(cause instanceof Error ? cause.message : String(cause));

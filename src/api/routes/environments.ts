@@ -1,13 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type {
-  EnvironmentCoverage,
-  EnvironmentItem,
-  EnvironmentTaskItem,
-  VariantState,
-} from "../../contracts/variants.js";
 import { runnable } from "../../db/task-record.js";
-import type { TaskEnvironmentRecord, TaskVariantRecord } from "../../db/task-variants.js";
-import type { TaskRecord } from "../../db/tasks.js";
+import type { TaskVariantRecord } from "../../db/task-variants.js";
 import type { User } from "../../db/users.js";
 import { submittedDraft } from "../../generation/tasks/revision.js";
 import {
@@ -18,6 +11,7 @@ import {
 import { generationProperties, track } from "../../lib/telemetry/posthog.js";
 import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
+import { environmentItem, environmentTasks } from "./environment-items.js";
 import { requestedGeneration } from "./generation-request.js";
 import { type RevisionRouteOptions, startRevision } from "./task-feedback.js";
 
@@ -177,6 +171,7 @@ export async function environmentsRoute(
       pending.slice(at, at + STARTING).map(async (task) => {
         const draft = await submittedDraft(options.artifacts, task);
         if (!draft) return failures.push(`${task.taskId}: never submitted a draft`);
+        let reserved: TaskVariantRecord | undefined;
         const started = await startRevision(options, {
           repo,
           task,
@@ -186,8 +181,8 @@ export async function environmentsRoute(
           // The variant's own run holds its changed draft, so it never depends on the task's.
           stage: (variantRunId) =>
             stageVariantDraft(options.artifacts, variantRunId, draft, changes),
-          reserve: (row) =>
-            options.tasks.variants.reserve({
+          reserve: async (row) => {
+            reserved = await store.reserve({
               environmentId: saved.id,
               parentId: task.id,
               repoId: repo.id,
@@ -195,8 +190,20 @@ export async function environmentsRoute(
               candidateId: row.candidateId,
               taskId: row.taskId,
               startedBy: row.startedBy,
-            }),
+            });
+            return reserved;
+          },
           ...(generation ? { generation } : {}),
+        }).catch(async (error: unknown) => {
+          const message = error instanceof Error ? error.message : String(error);
+          // A build that never started settles as failed, so Build Missing Tasks tries it again.
+          if (reserved)
+            await store.settle(reserved.runId, reserved.candidateId, {
+              pipelineStatus: "infrastructure_failed",
+              stage: "verifying",
+              reason: `The check could not start: ${message}`,
+            });
+          return { status: 500, error: message };
         });
         if ("status" in started) failures.push(`${task.taskId}: ${started.error}`);
       }),
@@ -218,73 +225,4 @@ export async function environmentsRoute(
     ...(failures.length ? { failures } : {}),
   });
   return true;
-}
-
-function variantState(variant: Pick<TaskVariantRecord, "pipelineStatus" | "stage">): VariantState {
-  if (variant.stage === "cancelled") return "cancelled";
-  switch (variant.pipelineStatus) {
-    case "accepted":
-      return "accepted";
-    case "rejected":
-      return "rejected";
-    case "infrastructure_failed":
-      return "failed";
-    default:
-      return "in_progress";
-  }
-}
-
-/** Each task's latest variant in the environment, by the task it changes. */
-function latestByTask(environment: TaskEnvironmentRecord, variants: TaskVariantRecord[]) {
-  const latest = new Map<number, TaskVariantRecord>();
-  for (const variant of variants)
-    if (variant.environmentId === environment.id) latest.set(variant.parentId, variant);
-  return latest;
-}
-
-function coverageOf(variants: Iterable<TaskVariantRecord>): EnvironmentCoverage {
-  const counts = { ready: 0, checking: 0, failed: 0, total: 0 };
-  for (const variant of variants) {
-    counts.total += 1;
-    const state = variantState(variant);
-    if (state === "accepted") counts.ready += 1;
-    else if (state === "in_progress") counts.checking += 1;
-    else counts.failed += 1;
-  }
-  return counts;
-}
-
-function environmentItem(
-  environment: TaskEnvironmentRecord,
-  variants: TaskVariantRecord[],
-): EnvironmentItem {
-  return {
-    id: environment.id,
-    name: environment.name,
-    ...(environment.changes ? { changes: environment.changes } : {}),
-    ...(environment.createdBy ? { createdBy: environment.createdBy } : {}),
-    createdAt: environment.createdAt,
-    tasks: coverageOf(latestByTask(environment, variants).values()),
-  };
-}
-
-function environmentTasks(
-  environment: TaskEnvironmentRecord,
-  variants: TaskVariantRecord[],
-  tasks: TaskRecord[],
-): EnvironmentTaskItem[] {
-  const byId = new Map(tasks.map((task) => [task.id, task]));
-  return [...latestByTask(environment, variants).values()].flatMap((variant) => {
-    const task = byId.get(variant.parentId);
-    if (!task) return [];
-    const reason = variant.reason?.split("\n")[0]?.slice(0, 240);
-    return [
-      {
-        task: { runId: task.runId, taskId: task.taskId },
-        runId: variant.runId,
-        state: variantState(variant),
-        ...(reason && variantState(variant) !== "accepted" ? { reasonSummary: reason } : {}),
-      },
-    ];
-  });
 }
