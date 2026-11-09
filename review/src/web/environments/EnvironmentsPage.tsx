@@ -8,6 +8,7 @@ import { useDocumentTitle } from "../session";
 import { taskPath } from "../task/review-queue";
 import { StateStamp } from "../task/state";
 import { Button, DataTable, EmptyState, Notice, PageContent, PageHeader } from "../ui";
+import { useGenerationSettings } from "../useGenerationSettings";
 import { ChangesSummary } from "./ChangesSummary";
 import { EnvironmentDialog } from "./EnvironmentDialog";
 import {
@@ -199,6 +200,7 @@ function EnvironmentDetail({
   const [busy, setBusy] = React.useState<"build" | "delete" | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
   const { id, tasks: counts } = environment;
+  const { settings, valid } = useGenerationSettings(org, fullName);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: counts change as checks settle.
   React.useEffect(() => {
@@ -220,7 +222,9 @@ function EnvironmentDetail({
     setBusy(action);
     setNotice(null);
     try {
-      if (action === "build") await buildEnvironment(org, fullName, id);
+      // Builds with the generation settings last chosen for this repository, as New Environment did.
+      if (action === "build")
+        await buildEnvironment(org, fullName, id, valid ? settings : undefined);
       else await deleteEnvironment(org, fullName, id);
       onChanged();
     } catch (cause) {
