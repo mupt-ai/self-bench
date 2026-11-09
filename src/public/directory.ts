@@ -1,3 +1,4 @@
+import { isEvalName } from "../contracts/evals.js";
 import type {
   PublishedLine,
   ReleasePublisher,
@@ -148,11 +149,14 @@ export function directoryOf(lines: readonly PublishedLine[]): DirectoryCard[] {
       right.release.releasedAt.localeCompare(left.release.releasedAt) ||
       left.release.releaseId.localeCompare(right.release.releaseId),
   );
-  const defaults = new Map<number, PublishedLine>();
+  // A repository's lines share its GitHub id, across renames. An eval's id is its own row's, which
+  // may equal some repository's GitHub id, so evals go by name: one publisher holds each.
+  const defaults = new Map<string, PublishedLine>();
   for (const line of ordered) {
-    const id = line.release.repository.id;
-    const chosen = defaults.get(id);
-    if (!chosen || (line.endorsed && !chosen.endorsed)) defaults.set(id, line);
+    const { id, fullName } = line.release.repository;
+    const key = isEvalName(fullName) ? `eval/${fullName.toLowerCase()}` : `github/${id}`;
+    const chosen = defaults.get(key);
+    if (!chosen || (line.endorsed && !chosen.endorsed)) defaults.set(key, line);
   }
   const chosen = new Set(defaults.values());
   return ordered.map((line) => cardOf(line, chosen.has(line)));

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useLocation, useNavigationType, useSearchParams } from "react-router";
+import { Link, useLocation, useNavigationType, useSearchParams } from "react-router";
 import { GroupCard } from "../components/GroupCard";
 import { RepoCard } from "../components/RepoCard";
 import { SearchBox } from "../components/SearchBox";
@@ -10,7 +10,7 @@ import { homeView, onSaveHome, saveHomeView, startJourney } from "../home-view";
 import { APP_URL } from "../PublicLayout";
 import { groupKey } from "../page-preload";
 import { scrollArea } from "../scroll-area";
-import { HOME_HEADING, HOME_TITLE } from "../seo";
+import { DIRECTORY_VIEWS, type DirectoryView, listedIn } from "../seo";
 import type { PublicSource } from "../source";
 import { useSource } from "../source-context";
 import { useTitle } from "../use-title";
@@ -38,7 +38,7 @@ function useHomeData(source: PublicSource) {
     let live = true;
     Promise.all([source.listRepos(), source.listLines(), source.listGroups()]).then(
       ([repos, lines, groups]) => {
-        const next = { repos: repos.slice(0, HOME_LIMIT), lines, groups };
+        const next = { repos, lines, groups };
         if (!live || JSON.stringify(next) === JSON.stringify(kept)) return;
         kept = next;
         setData(next);
@@ -52,8 +52,13 @@ function useHomeData(source: PublicSource) {
   return { data, failed: failed && !data };
 }
 
-export function HomePage() {
-  useTitle(HOME_TITLE);
+/**
+ * The directory: one of its views (seo.ts `DIRECTORY_VIEWS`), repositories with their groups at
+ * `/` or evals at `/evals`, each a tab of the same page, with the same grid, search, and cards.
+ */
+export function HomePage({ view }: { view: DirectoryView }) {
+  const shown = DIRECTORY_VIEWS[view];
+  useTitle(shown.title);
   const { data, failed } = useHomeData(useSource());
   const location = useLocation();
   const [params, setParams] = useSearchParams();
@@ -87,13 +92,14 @@ export function HomePage() {
   const save = useCallback(
     (leavingFor?: string) => {
       saveHomeView(location.key, {
+        path: location.pathname,
         scrollTop: window.scrollY,
         query,
         anchor: undefined,
       });
       if (leavingFor) startJourney(location.key, leavingFor);
     },
-    [location.key, query],
+    [location.key, location.pathname, query],
   );
   useEffect(() => {
     onSaveHome(save);
@@ -104,6 +110,7 @@ export function HomePage() {
   // and what its page shows (home-view.ts `repositoryOf`), for the trip back.
   const opened = (line: string, subject: string, element: HTMLElement) => {
     saveHomeView(location.key, {
+      path: location.pathname,
       scrollTop: window.scrollY,
       query,
       anchor: { line, top: element.getBoundingClientRect().top },
@@ -119,35 +126,71 @@ export function HomePage() {
       */}
       <section className="@container mx-auto flex w-full max-w-2xl flex-col items-center gap-4 text-center">
         <h1 className="text-[length:min(1.5rem,100cqi/16)] leading-[calc(2/1.5)] font-semibold tracking-tight">
-          {HOME_HEADING}
+          {shown.heading}
         </h1>
-        <SearchBox query={query} onChange={setQuery} />
+        <SearchBox query={query} label={shown.search} onChange={setQuery} />
+        <Tabs view={view} query={query} />
       </section>
 
       {!data && !failed && <p className="text-center text-muted-foreground">Loading…</p>}
       {failed && <p className="text-center text-muted-foreground">Results could not be loaded.</p>}
-      {data && <Directory data={data} needle={needle} query={query} onOpen={opened} />}
+      {data && <Directory data={data} view={view} needle={needle} query={query} onOpen={opened} />}
     </div>
   );
 }
 
+/** The directory's views as tabs, each its own address; a search goes along to the other. */
+function Tabs({ view, query }: { view: DirectoryView; query: string }) {
+  return (
+    <nav aria-label="Directory" className="flex items-center gap-1 text-sm">
+      {(Object.keys(DIRECTORY_VIEWS) as DirectoryView[]).map((each) => (
+        <Link
+          key={each}
+          to={{
+            pathname: DIRECTORY_VIEWS[each].path,
+            search: query ? `?q=${encodeURIComponent(query)}` : "",
+          }}
+          aria-current={each === view ? "page" : undefined}
+          className={`hit relative border-b-[1.5px] px-3 py-1.5 transition-colors ${
+            each === view
+              ? "border-foreground font-medium text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {DIRECTORY_VIEWS[each].tab}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
 /**
- * One grid: the repository groups, then the repositories and evals (each one's default line, or
- * with a search, every line and group that matches it), every card alike.
+ * One grid of the view's cards, every card alike: for repositories, the repository groups, then
+ * each repository's default line; for evals, each eval's. With a search, every line and group
+ * that matches it.
  */
 function Directory({
   data,
+  view,
   needle,
   query,
   onOpen,
 }: {
   data: HomeData;
+  view: DirectoryView;
   needle: string;
   query: string;
   onOpen: (line: string, subject: string, element: HTMLElement) => void;
 }) {
-  const groups = needle ? data.groups.filter((card) => groupMatches(card, needle)) : data.groups;
-  const cards = needle ? data.lines.filter((card) => matches(card, needle)) : data.repos;
+  const groups =
+    view !== "repositories"
+      ? []
+      : needle
+        ? data.groups.filter((card) => groupMatches(card, needle))
+        : data.groups;
+  const cards = (needle ? data.lines.filter((card) => matches(card, needle)) : data.repos)
+    .filter((card) => listedIn(view, card.repository.fullName))
+    .slice(0, needle ? undefined : HOME_LIMIT);
   if (groups.length === 0 && cards.length === 0)
     return <NoMatch query={needle ? query.trim() : undefined} />;
   // One grid for both: a group is a card like any repository.

@@ -8,8 +8,9 @@ import { INDEXNOW_KEY_PATH, sendIndexNowKey } from "./indexnow.js";
 import { cardPng } from "./link-card.js";
 import { clientIp, type RateLimiter } from "./rate-limit.js";
 import type { PublicReleaseRoutes } from "./routes/public-releases.js";
-import { headTags, lineAt, type PageHead, sitemapOf } from "./site-head.js";
+import { headTags, lineAt, type PageHead } from "./site-head.js";
 import { sitePages } from "./site-pages.js";
+import { sitemapOf } from "./sitemap.js";
 import { sendTagged, type TaggedBody, tagged } from "./tagged.js";
 
 export interface ResultsSiteOptions {

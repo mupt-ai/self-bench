@@ -260,7 +260,7 @@ export function syntheticSource(): PublicSource {
 }
 
 /**
- * A path to every kind of page, over the synthetic data: home, a search, each repository's
+ * A path to every kind of page, over the synthetic data: home, a search, the evals view, each repository's
  * default line, each other publisher's line, a task open in the viewer, a trace open in its
  * viewer, a repository with nothing released, and each repository group and one that is not.
  */
@@ -279,6 +279,7 @@ export function syntheticRoutes(): string[] {
   return [
     "/",
     "/?q=widgets",
+    "/evals",
     ...repositories.map((name) => `/${name}`),
     ...otherLines.map((line) => `/${line}`),
     `/example-org/widgets?task=${OPENED_TASK}`,

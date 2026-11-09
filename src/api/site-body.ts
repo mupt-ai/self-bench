@@ -5,9 +5,10 @@ import { directoryOf } from "../public/directory.js";
 import { groupHref, type PublishedGroup } from "../public/release-groups.js";
 import type { PublishedLine, ReleaseSetting } from "../public/release-types.js";
 import {
+  DIRECTORY_VIEWS,
+  type DirectoryView,
   defaultLineOf,
-  HOME_DESCRIPTION,
-  HOME_HEADING,
+  listedIn,
   repositoryDescription,
 } from "../public/seo.js";
 import { escapeAttribute, escapeText } from "./http.js";
@@ -49,16 +50,23 @@ function groupItems(groups: readonly PublishedGroup[]): string[] {
   });
 }
 
+/** The directory's tabs, as links, so a crawler finds each view. */
+const tabs = () =>
+  `<nav>${Object.values(DIRECTORY_VIEWS)
+    .map((each) => link(each.path, each.tab))
+    .join(" ")}</nav>`;
+
 /**
- * The directory's heading, then one list: the repository groups, then every repository's default
- * line, newest first, as the page lists them.
+ * A directory view's heading and tabs, then one list, as the page lists it: for repositories, the
+ * repository groups, then every repository's default line; for evals, every eval's. Newest first.
  */
 export function homeBody(
   repositories: readonly (readonly PublishedLine[])[],
   groups: readonly PublishedGroup[] = [],
+  view: DirectoryView = "repositories",
 ): string {
   const cards = directoryOf(repositories.flat())
-    .filter((card) => card.defaultLine)
+    .filter((card) => card.defaultLine && listedIn(view, card.repository.fullName))
     .slice(0, HOME_LIMIT);
   const repositoryItems = cards.map((card) => {
     // The repository's two picks, as its description names them: the most accurate setting and
@@ -78,10 +86,12 @@ export function homeBody(
     ];
     return `<li>${link(`/${card.repository.fullName}`, card.repository.fullName)} <span>${escapeText(facts.filter(Boolean).join(" "))}</span></li>`;
   });
+  const { heading, description } = DIRECTORY_VIEWS[view];
   return main("home", [
-    `<h1>${escapeText(HOME_HEADING)}</h1>`,
-    `<p>${escapeText(HOME_DESCRIPTION)}</p>`,
-    ...listOf([...groupItems(groups), ...repositoryItems]),
+    `<h1>${escapeText(heading)}</h1>`,
+    `<p>${escapeText(description)}</p>`,
+    tabs(),
+    ...listOf([...(view === "repositories" ? groupItems(groups) : []), ...repositoryItems]),
   ]);
 }
 

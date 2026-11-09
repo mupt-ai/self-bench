@@ -12,7 +12,7 @@ import type { PublishedLine, ReleaseSetting } from "./release-types.js";
 
 export const SITE_NAME = "SelfBench";
 
-export const HOME_TITLE = "SelfBench: Benchmark Coding Agents on Your Own Repository";
+const HOME_TITLE = "SelfBench: Benchmark Coding Agents on Your Own Repository";
 
 /**
  * Written with a typographic apostrophe (’): some search engines show an ASCII one in a
@@ -23,6 +23,44 @@ export const HOME_DESCRIPTION =
 
 /** The home page's heading, which the server also writes for readers that run no scripts. */
 export const HOME_HEADING = "Find the best models for your repo";
+
+/**
+ * The directory's two views, each a page of its own: repositories and their groups at `/`, and
+ * evals (a publisher's own scenarios, `evals/<slug>`) at `/evals`. The server writes each one's
+ * head and text, and the site its tabs, title, heading, and search, from these.
+ */
+export const DIRECTORY_VIEWS = {
+  repositories: {
+    path: "/",
+    tab: "Repositories",
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
+    heading: HOME_HEADING,
+    search: "Search Repositories",
+  },
+  evals: {
+    path: "/evals",
+    tab: "Evals",
+    title: `Evals: Benchmark Coding Agents on Custom Scenarios · ${SITE_NAME}`,
+    description:
+      "Coding agent and model results on evals publishers build from their own scenarios: accuracy and cost per task, side by side. By dari.dev.",
+    heading: "Find the best models for your evals",
+    search: "Search Evals",
+  },
+} as const;
+
+export type DirectoryView = keyof typeof DIRECTORY_VIEWS;
+
+/** The directory view a path shows, if it is one. */
+export function directoryViewAt(path: string): DirectoryView | undefined {
+  return (Object.keys(DIRECTORY_VIEWS) as DirectoryView[]).find(
+    (view) => DIRECTORY_VIEWS[view].path === path,
+  );
+}
+
+/** Whether a repository or eval, by its `owner/name`, is listed in `view`. */
+export const listedIn = (view: DirectoryView, fullName: string) =>
+  isEvalName(fullName) === (view === "evals");
 
 export function repositoryTitle(fullName: string): string {
   return `${fullName}: Coding Agent Benchmark · ${SITE_NAME}`;
