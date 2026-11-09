@@ -10,11 +10,13 @@ Read the aggregate results shown on [selfbench.dev](https://selfbench.dev). No k
 | --- | --- | --- |
 | `GET` | `/api/public/results` | `{ cards }`: one card per released repository and publisher, newest first, with `picks` and `frontier` |
 | `GET` | `/api/public/results/{owner}/{name}` | `{ lines }`: the current release for each publisher; `404` if none |
+| `GET` | `/api/public/results/evals/{org}/{name}` | The same for a public benchmark |
+| `GET` | `/api/public/groups/{publisher}/{slug}` | `{ group }`: a group of repositories scored together, with its `settings` and `frontier`; `404` if none |
 
 ```bash
 curl https://selfbench.dev/api/public/results/earendil-works/pi
 ```
 
-`accuracy` is a percentage; `costPerTaskUsd` is model API USD per task. `frontier` lists setting IDs on the cost-accuracy frontier. Responses carry an `ETag` and a 10-second shared cache. Excess requests get `429` with `Retry-After`. The older `/api/public/directory` and `/api/public/repos/{owner}/{name}` paths still work.
+`accuracy` is a percentage; `costPerTaskUsd` is model API USD per task. `frontier` lists setting IDs on the cost-accuracy frontier. Responses carry an `ETag` and a 10-second shared cache. Excess requests get `429` with `Retry-After`. The older `/api/public/directory` and `/api/public/repos/{owner}/{name}` paths still work. A page on any site can read these routes, a `404` or `429` included, so it can tell a withdrawn release from a failed request.
 
 Per-task trial results are never public. For authenticated access, see the [API](/api).
