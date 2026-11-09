@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
-import type { PublicRelease } from "../contract";
+import type { PublicResults } from "../contract";
 import { loadTraceViewer } from "./ResultsGrid";
 import type { OpenedTask } from "./TaskList";
 
@@ -11,7 +11,7 @@ const TraceViewer = lazy(loadTraceViewer);
  * Opened from the grid, closing goes back to it; opened from a link, closing takes the trace out
  * of the address. View Task swaps it for the task viewer in the same place in history.
  */
-export function OpenTrace({ release }: { release: PublicRelease }) {
+export function OpenTrace({ release }: { release: PublicResults }) {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();

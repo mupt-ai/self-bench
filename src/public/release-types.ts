@@ -114,11 +114,29 @@ export interface PublishedRelease extends ReleasePayload {
   releasedAt: string;
 }
 
+/** What a release may publish beyond its scores: its tasks, their trials, its model summaries. */
+export type ReleasePublished = Pick<
+  ReleasePayload,
+  "tasksPublished" | "trialsPublished" | "modelSummaries"
+>;
+
+/**
+ * What a results page's summaries, results by task, and tasks read of its release: a
+ * repository's or public benchmark's (`PublishedRelease`), or a group's, which has no repository.
+ */
+export type PublishedResults = ReleasePublished &
+  Pick<PublishedRelease, "releaseId" | "settings" | "tasks" | "benchmark"> & {
+    repository?: Pick<ReleaseRepository, "fullName">;
+  };
+
 /** One task of a release that published its tasks, as selfbench.dev lists it. */
 export interface PublishedTask {
   /** The task's id, unique within the release and safe in an address (numbered if two match). */
   id: string;
-  difficulty: TaskRecord["difficulty"];
+  /** Absent for a public benchmark's task, which has none. */
+  difficulty?: TaskRecord["difficulty"];
+  /** On a group's release, the member repository (`owner/name`) the task is from. */
+  repository?: string;
   /** The merged pull request the task was built from. */
   sourcePr?: number;
   sourceUrl?: string;

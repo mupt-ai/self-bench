@@ -5,13 +5,19 @@ import type { Database } from "../../db/client.js";
 import type { ReleaseStore } from "../../db/releases.js";
 import type { UserStore } from "../../db/users.js";
 import { catalogVersion } from "../../evaluation/catalog.js";
+import { readModelSummaries } from "../../evaluation/model-summary.js";
 import { evaluationTaskKey } from "../../evaluation/models.js";
 import { track } from "../../lib/telemetry/posthog.js";
 import { BENCHMARKS } from "../../public/paths.js";
-import { type BuiltRelease, buildRelease, ReleaseRefused } from "../../public/release-build.js";
 import type { ReleaseTask } from "../../public/release-rule.js";
 import { lineInputs } from "../../public/release-sources.js";
-import { createLineRoutes, type LineKind } from "./release-line.js";
+import {
+  buildRequested,
+  createLineRoutes,
+  isReply,
+  type LineKind,
+  publisherOf,
+} from "./release-line.js";
 
 const NAME = "[A-Za-z0-9][A-Za-z0-9._-]{0,98}";
 /** `[org, registry org/name, section?, action?]`. */
@@ -41,8 +47,8 @@ interface Subject {
  * A public benchmark's releases (a Harbor registry dataset such as Terminal-Bench): a
  * repository's Releases tab (release-line.ts) over the benchmark's runs, on the tasks frozen when
  * it was added. Each workspace that runs it publishes its own line, and selfbench.dev shows them
- * together at /evals/<org>/<name>, as a repository's lines. Only its scores are published: its
- * tasks are the registry's to publish, not the workspace's.
+ * together at /evals/<org>/<name>, as a repository's lines, with its tasks, their trials, and
+ * its model summaries when the releaser publishes them.
  */
 export function createBenchmarkReleaseRoutes(options: BenchmarkReleaseRoutesOptions) {
   const kind: LineKind<Subject> = {
@@ -56,9 +62,6 @@ export function createBenchmarkReleaseRoutes(options: BenchmarkReleaseRoutesOpti
           key: evaluationTaskKey(runId, taskId),
           runId,
           taskId,
-          // A registry task has no difficulty; it shows only on published tasks, which a
-          // benchmark's never are.
-          difficulty: "medium",
           bundleKey,
           // Frozen from the registry when added: every one is the benchmark's, as it stands.
           state: "accepted",
@@ -69,41 +72,31 @@ export function createBenchmarkReleaseRoutes(options: BenchmarkReleaseRoutesOpti
     },
     lineOf: (tenant, { benchmark }) => ({ orgId: tenant.id, benchmarkId: benchmark.id }),
     async gather(tenant, { benchmark, tasks }, rows) {
-      const inputs = await lineInputs(
-        options.db,
-        options.artifacts,
-        {
-          scopes: [{ benchmarkId: benchmark.id }],
-          orgId: tenant.id,
-          tasks: Promise.resolve(tasks),
-        },
-        rows,
-      );
-      return { inputs };
+      const scope = { benchmarkId: benchmark.id };
+      const [inputs, { report }] = await Promise.all([
+        lineInputs(
+          options.db,
+          options.artifacts,
+          { scopes: [scope], orgId: tenant.id, tasks: Promise.resolve(tasks) },
+          rows,
+        ),
+        readModelSummaries(options.artifacts, scope),
+      ]);
+      return { inputs, ...(report ? { report } : {}) };
     },
     async build({ tenant, subject: { benchmark }, body, gathered }) {
-      if (body.publishTasks || body.publishTrials || body.publishSummaries)
-        return [400, { error: "A public benchmark publishes its scores only." }];
-      let built: BuiltRelease;
-      try {
-        built = buildRelease(gathered.inputs, body.settings, {
-          repository: { id: benchmark.id, fullName: benchmark.name },
-          publisher: { login: tenant.login, kind: tenant.kind },
-        });
-      } catch (error) {
-        if (!(error instanceof ReleaseRefused)) throw error;
-        return [400, { error: error.message }];
-      }
+      const built = buildRequested(gathered, body, {
+        repository: { id: benchmark.id, fullName: benchmark.name },
+        publisher: { login: tenant.login, kind: tenant.kind },
+      });
+      if (isReply(built)) return built;
       return {
         fullName: benchmark.name,
         hash: built.hash,
         payload: {
           ...built.payload,
           benchmark: { ref: benchmark.ref },
-          publisher: {
-            ...built.payload.publisher,
-            ...(tenant.avatarUrl ? { avatarUrl: tenant.avatarUrl } : {}),
-          },
+          publisher: publisherOf(tenant),
         },
         detail: {
           ...built.detail,

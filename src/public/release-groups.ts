@@ -8,7 +8,12 @@ import {
   type SettingPick,
 } from "./directory.js";
 import { GROUP_SLUG_MAX } from "./paths.js";
-import type { ReleasePublisher, ReleaseRepository, ReleaseSetting } from "./release-types.js";
+import type {
+  ReleasePublished,
+  ReleasePublisher,
+  ReleaseRepository,
+  ReleaseSetting,
+} from "./release-types.js";
 
 /**
  * Repository groups as selfbench.dev shows them. A group is a workspace's named set of
@@ -37,8 +42,11 @@ export interface GroupMember {
   scores: Record<string, MemberScore>;
 }
 
-/** What a group release row stores in `payload`: everything public but its id and time. */
-export interface GroupReleasePayload {
+/**
+ * What a group release row stores in `payload`: everything public but its id and time, with its
+ * tasks, their trials, and its model summaries when it published them, as a repository's.
+ */
+export interface GroupReleasePayload extends ReleasePublished {
   publisher: ReleasePublisher;
   slug: string;
   name: string;

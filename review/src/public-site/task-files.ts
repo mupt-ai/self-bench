@@ -15,6 +15,12 @@ export function baseCommit(files: readonly TaskFile[]): string | undefined {
   return /^base_commit\s*=\s*"([0-9a-f]{7,64})"/m.exec(config)?.[1];
 }
 
+/** The repository (`owner/name`) the task's own `task.toml` says it builds from, if it says. */
+export function sourceRepository(files: readonly TaskFile[]): string | undefined {
+  const config = files.find((file) => file.path === "task.toml")?.text ?? "";
+  return /^repo\s*=\s*"([\w.-]+\/[\w.-]+)"/m.exec(config)?.[1];
+}
+
 /** Whether the task was built from a scenario, whose snapshot is a workspace its author wrote. */
 export function isScenarioTask(files: readonly TaskFile[]): boolean {
   const config = files.find((file) => file.path === "task.toml")?.text ?? "";

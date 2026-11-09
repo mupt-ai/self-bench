@@ -4,13 +4,20 @@ import type { GroupStore, RepositoryGroup } from "../../db/groups.js";
 import type { ReleaseStore } from "../../db/releases.js";
 import { type GitHubRepo, isGitHubRepo, type RepoStore } from "../../db/repos.js";
 import type { UserStore } from "../../db/users.js";
+import { readModelSummaries } from "../../evaluation/model-summary.js";
 import { canonicalJson, sha256 } from "../../lib/hash.js";
 import { track } from "../../lib/telemetry/posthog.js";
-import { buildRelease, ReleaseRefused } from "../../public/release-build.js";
 import { type GroupMember, groupHref, membersOf } from "../../public/release-groups.js";
 import type { ReleaseTask } from "../../public/release-rule.js";
 import { lineInputs, lookupRepositoryById, releaseTasks } from "../../public/release-sources.js";
-import { createLineRoutes, type LineKind, type Reply } from "./release-line.js";
+import {
+  buildRequested,
+  createLineRoutes,
+  isReply,
+  type LineKind,
+  publisherOf,
+  type Reply,
+} from "./release-line.js";
 
 /** `[org, slug, section?, action?]`. */
 const route =
@@ -41,9 +48,9 @@ interface Subject {
 
 /**
  * A repository group's releases: a repository's Releases tab (release-line.ts) over the group's
- * runs and its members' own, on every member's tasks. Only its scores are published, never its
- * tasks or transcripts, each setting's over the group and on each member, and only while every
- * member is connected and public.
+ * runs and its members' own, on every member's tasks: each setting's scores over the group and on
+ * each member, and, as a repository's, its tasks, their trials, and its model summaries when the
+ * releaser publishes them. Only while every member is connected and public.
  */
 export function createGroupReleaseRoutes(options: GroupReleaseRoutesOptions) {
   const fetchImpl = options.fetchImpl ?? fetch;
@@ -93,32 +100,34 @@ export function createGroupReleaseRoutes(options: GroupReleaseRoutesOptions) {
       );
       const owner = new Map<string, number>();
       const tasks: ReleaseTask[] = [];
+      // Each task names its member, so its published page links that repository's pull request.
       for (const repo of members)
         for (const task of await releaseTasks(options.db, repo.id)) {
           owner.set(task.key, repo.githubId);
-          tasks.push(task);
+          tasks.push({ ...task, repository: repo.fullName });
         }
       return { group, members, owner, tasks };
     },
     lineOf: (tenant, { group }) => ({ orgId: tenant.id, groupId: group.id }),
     async gather(tenant, { group, members, tasks }, rows) {
-      const inputs = await lineInputs(
-        options.db,
-        options.artifacts,
-        {
-          // The group's own runs and its members' count alike, as its Results page shows them.
-          scopes: [{ groupId: group.id }, ...members.map((repo) => ({ repoId: repo.id }))],
-          orgId: tenant.id,
-          tasks: Promise.resolve(tasks),
-        },
-        rows,
-      );
-      return { inputs };
+      const [inputs, { report }] = await Promise.all([
+        lineInputs(
+          options.db,
+          options.artifacts,
+          {
+            // The group's own runs and its members' count alike, as its Results page shows them.
+            scopes: [{ groupId: group.id }, ...members.map((repo) => ({ repoId: repo.id }))],
+            orgId: tenant.id,
+            tasks: Promise.resolve(tasks),
+          },
+          rows,
+        ),
+        readModelSummaries(options.artifacts, { groupId: group.id }),
+      ]);
+      return { inputs, ...(report ? { report } : {}) };
     },
     async build({ tenant, subject, token, body, gathered }) {
       const { group, members, owner } = subject;
-      if (body.publishTasks || body.publishTrials || body.publishSummaries)
-        return [400, { error: "A group publishes its scores only." }];
       // The page names every member, so each must still be here to be scored and checked.
       if (members.length < group.repositoryIds.length)
         return [
@@ -131,17 +140,13 @@ export function createGroupReleaseRoutes(options: GroupReleaseRoutesOptions) {
       const live = await publicMembers(members, token);
       if ("reply" in live) return live.reply;
       const checked = live.repositories;
-      let built: ReturnType<typeof buildRelease>;
-      try {
-        built = buildRelease(gathered.inputs, body.settings, {
-          repository: { id: group.id, fullName: group.name },
-          publisher: { login: tenant.login, kind: tenant.kind },
-        });
-      } catch (error) {
-        if (!(error instanceof ReleaseRefused)) throw error;
-        return [400, { error: error.message }];
-      }
-      const { settings, frontier, tasks } = built.payload;
+      const built = buildRequested(gathered, body, {
+        repository: { id: group.id, fullName: group.name },
+        publisher: { login: tenant.login, kind: tenant.kind },
+      });
+      if (isReply(built)) return built;
+      const { settings, frontier, tasks, tasksPublished, trialsPublished, modelSummaries } =
+        built.payload;
       const keyed = settings.map((setting, index) => ({
         id: setting.id,
         key: built.detail.settings[index] ?? "",
@@ -159,11 +164,7 @@ export function createGroupReleaseRoutes(options: GroupReleaseRoutesOptions) {
           }),
         ),
         payload: {
-          publisher: {
-            login: tenant.login,
-            kind: tenant.kind,
-            ...(tenant.avatarUrl ? { avatarUrl: tenant.avatarUrl } : {}),
-          },
+          publisher: publisherOf(tenant),
           slug: group.slug,
           name: group.name,
           ...(group.description ? { description: group.description } : {}),
@@ -172,6 +173,9 @@ export function createGroupReleaseRoutes(options: GroupReleaseRoutesOptions) {
           tasks,
           settings,
           frontier,
+          ...(tasksPublished ? { tasksPublished } : {}),
+          ...(trialsPublished ? { trialsPublished } : {}),
+          ...(modelSummaries ? { modelSummaries } : {}),
         },
         detail: built.detail,
       };

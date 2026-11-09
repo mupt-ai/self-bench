@@ -2,7 +2,7 @@ import { resultsName } from "../../../../../src/public/paths";
 import type { PublicRepoPage, PublicSetting } from "../../contract";
 import { memorySource, type PublicSource } from "../../source";
 import { page, setting } from "../../test-fixture";
-import { syntheticGroupRoutes, syntheticGroups } from "./synthetic-groups";
+import { syntheticGroupRoutes, syntheticGroups, syntheticGroupTasks } from "./synthetic-groups";
 import { anthropic, type Model, openai, routed } from "./synthetic-models";
 import { OPENED_SETTING, OPENED_TASK, syntheticTasks } from "./synthetic-tasks";
 
@@ -258,7 +258,7 @@ export function syntheticSource(): PublicSource {
   const pages = syntheticPages();
   const crowded = pages.find((entry) => entry.release.releaseId === "synthetic-crowded");
   const tasks = syntheticTasks(crowded?.release.settings.map((entry) => entry.id) ?? []);
-  return memorySource(pages, tasks, syntheticGroups());
+  return memorySource(pages, { ...tasks, ...syntheticGroupTasks() }, syntheticGroups());
 }
 
 /**

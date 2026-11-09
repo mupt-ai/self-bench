@@ -10,12 +10,18 @@ import type { ReleaseSetting } from "./release-types.js";
  * approved task all of them have a result for; scores are over exactly that set.
  */
 
-/** A task of the repository in any state, deleted ones included. */
+/**
+ * A task of the line in any state, deleted ones included: a repository's, a group member's, or a
+ * public benchmark's, which has no difficulty or pull request.
+ */
 export interface ReleaseTask
   extends Pick<
     TaskRecord,
-    "runId" | "taskId" | "difficulty" | "sourcePr" | "sourceUrl" | "reason" | "review" | "bundleKey"
+    "runId" | "taskId" | "sourcePr" | "sourceUrl" | "reason" | "review" | "bundleKey"
   > {
+  difficulty?: TaskRecord["difficulty"];
+  /** On a group's release, the member repository (`owner/name`) the task is from. */
+  repository?: string;
   /** `evaluationTaskKey(runId, taskId)`. */
   key: string;
   /** The app's task state, or "deleted" for a deleted task. */

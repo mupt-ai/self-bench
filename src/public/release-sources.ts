@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import type { ArtifactStore } from "../artifacts/index.js";
 import type { Database } from "../db/client.js";
 import { credentialAuths } from "../db/credentials.js";
-import { currentOf, headOf, type ReleaseLine, type ReleaseRow } from "../db/releases.js";
+import { currentOf, headOf, type ReleaseRow } from "../db/releases.js";
 import { credentials, repos } from "../db/schema.js";
 import { runnable, taskState } from "../db/task-record.js";
 import { createTaskStore } from "../db/tasks.js";
@@ -15,7 +15,7 @@ import { apiHeaders, GitHubOAuthError } from "../third_party/github/oauth.js";
 import type { ReleaseInputs } from "./release-build.js";
 import type { CredentialFacts } from "./release-results.js";
 import type { ReleaseTask } from "./release-rule.js";
-import type { TrialSource } from "./release-trials.js";
+import type { TrialLine, TrialSource } from "./release-trials.js";
 import type { ReleaseRepository } from "./release-types.js";
 
 /**
@@ -134,34 +134,70 @@ export async function lineInputs(
   };
 }
 
+/** How many runs' scopes `releasedTrials` remembers. */
+const KEPT_SCOPES = 256;
+
 /**
- * Reads released trials from the line's connected repository, where its evaluations are kept:
- * nothing once the repository is disconnected or the run is gone, since a release outlives both.
+ * Reads released trials from the runs of the line, where its evaluations are kept: a connected
+ * repository's, a public benchmark's, or a group's own and its members'. Nothing once the
+ * repository (or a group's member) is disconnected or the run is gone, since a release outlives
+ * both.
  */
 export function releasedTrials(db: Database, artifacts: ArtifactStore): TrialSource {
-  // A connected repository keeps its id, so each line is looked up once; a miss is asked again.
+  /** A connected repository's id by its GitHub id; each is looked up once, a miss asked again. */
   const repoIds = new Map<string, number>();
-  const repoIdOf = async (line: ReleaseLine) => {
-    const key = `${line.orgId}/${line.githubRepoId}`;
+  const repoIdOf = async (orgId: number, githubId: number) => {
+    const key = `${orgId}/${githubId}`;
     const known = repoIds.get(key);
     if (known !== undefined) return known;
     const [repo] = await db
       .select({ id: repos.id })
       .from(repos)
-      .where(and(eq(repos.orgId, line.orgId), eq(repos.githubId, line.githubRepoId)));
+      .where(and(eq(repos.orgId, orgId), eq(repos.githubId, githubId)));
     if (repo) repoIds.set(key, repo.id);
     return repo?.id;
   };
+  /**
+   * Where a line's runs may be: a benchmark's own; a repository's; or a group's own, then each
+   * member its release recorded, as it counted them.
+   */
+  const scopesOf = async (line: TrialLine): Promise<EvaluationScope[]> => {
+    if ("benchmarkId" in line) return [{ benchmarkId: line.benchmarkId }];
+    const githubIds = "groupId" in line ? (line.members ?? []) : [line.githubRepoId];
+    const members = await Promise.all(githubIds.map((id) => repoIdOf(line.orgId, id)));
+    return [
+      ...("groupId" in line ? [{ groupId: line.groupId }] : []),
+      ...members.flatMap((repoId) => (repoId === undefined ? [] : [{ repoId }])),
+    ];
+  };
+  /**
+   * The scope each run read so far is kept under, by its id, so reading its artifacts after it
+   * never reads the run again: a run holds every trial, so it is large.
+   */
+  const kept = new Map<string, EvaluationScope>();
+  const located = async (line: TrialLine, evaluationId: string) => {
+    for (const scope of await scopesOf(line)) {
+      const run = await getEvaluation(artifacts, scope, evaluationId);
+      if (!run) continue;
+      kept.set(evaluationId, scope);
+      for (const oldest of kept.keys()) {
+        if (kept.size <= KEPT_SCOPES) break;
+        kept.delete(oldest);
+      }
+      return { scope, run };
+    }
+    return undefined;
+  };
   return {
     async run(line, evaluationId): Promise<EvaluationRun | undefined> {
-      const repoId = await repoIdOf(line);
-      return repoId ? getEvaluation(artifacts, { repoId }, evaluationId) : undefined;
+      return (await located(line, evaluationId))?.run;
     },
     async artifact(line, evaluationId, name) {
-      const repoId = await repoIdOf(line);
-      if (!repoId || name.split("/").includes("..")) return undefined;
+      if (name.split("/").includes("..")) return undefined;
+      const scope = kept.get(evaluationId) ?? (await located(line, evaluationId))?.scope;
+      if (!scope) return undefined;
       const bytes = await artifacts.getByKey(
-        `${evaluationPrefix({ repoId }, evaluationId)}artifacts/${name}`,
+        `${evaluationPrefix(scope, evaluationId)}artifacts/${name}`,
       );
       return bytes ? Buffer.from(bytes).toString("utf8") : undefined;
     },

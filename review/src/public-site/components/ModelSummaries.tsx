@@ -1,4 +1,4 @@
-import type { PublicRelease } from "../contract";
+import type { PublicResults } from "../contract";
 import { revealGroup } from "../effects/marks";
 import { harnessLabel, reasoningLabel, settingLabel, vendorColor } from "../format";
 import { PANEL } from "../frame";
@@ -13,7 +13,7 @@ export function ModelSummaries({
   release,
   activeId,
 }: {
-  release: PublicRelease;
+  release: PublicResults;
   /** The setting the chart's or table's pointer is on, marked here too. */
   activeId: string | null;
 }) {

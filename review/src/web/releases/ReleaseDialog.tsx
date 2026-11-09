@@ -6,7 +6,13 @@ import { ListSkeleton } from "../LoadingSkeleton";
 import { InfoTooltip } from "../primitives/tooltip";
 import { Button, Notice } from "../ui";
 import { ReleaseRequestError, type ReleaseSummary, type ReleaseView, releaseRequest } from "./api";
-import { PUBLISH_DEFAULTS, PublishOptions, privacyNote } from "./PublishOptions";
+import {
+  PUBLISH_DEFAULTS,
+  PublishOptions,
+  privacyNote,
+  REPOSITORY_SUBJECT,
+  type ReleaseSubject,
+} from "./PublishOptions";
 import { Notes, Unsolved } from "./ReleaseNotes";
 import { SettingsPicker } from "./SettingsPicker";
 import { selectionOf } from "./selection";
@@ -20,6 +26,7 @@ export function ReleaseDialog({
   url,
   repo,
   summary,
+  subject = REPOSITORY_SUBJECT,
   workspace,
   onReleased,
   onClose,
@@ -27,7 +34,9 @@ export function ReleaseDialog({
   url: string;
   /** What the release publishes, under the title, when it is not a repository's or a group's. */
   summary?: string;
-  /** The repository's full name, for links to its tasks; a group has none and publishes scores only. */
+  /** What the release is of, as its privacy note names it; a repository by default. */
+  subject?: ReleaseSubject;
+  /** The repository's full name, for links to its unsolved tasks in the app; a group has none. */
   repo?: string;
   /** The publishing workspace: a GitHub org, or the person's own account. */
   workspace: { login: string; kind: "org" | "user" };
@@ -96,14 +105,9 @@ export function ReleaseDialog({
         settings: [...ticked],
         head: view.head?.id ?? null,
         fingerprint: view.preview.fingerprint,
-        // A group publishes its scores only.
-        ...(repo
-          ? {
-              publishTasks: publish.tasks,
-              publishTrials: publish.tasks && publish.trials,
-              publishSummaries,
-            }
-          : {}),
+        publishTasks: publish.tasks,
+        publishTrials: publish.tasks && publish.trials,
+        publishSummaries,
       });
       onReleased(result.release, result.unchanged === true);
     } catch (cause) {
@@ -179,14 +183,12 @@ export function ReleaseDialog({
             />
             {selection && <Notes view={view} selection={selection} />}
             {selection && repo && <Unsolved view={view} selection={selection} repo={repo} />}
-            {repo && (
-              <PublishOptions
-                publish={publish}
-                disabled={busy}
-                {...(summarized ? { summaries: summarized } : {})}
-                onChange={setPublish}
-              />
-            )}
+            <PublishOptions
+              publish={publish}
+              disabled={busy}
+              {...(summarized ? { summaries: summarized } : {})}
+              onChange={setPublish}
+            />
           </>
         )}
         {/* One line when the dialog is wide. Narrow: the summary alone on top, then Reset on the
@@ -221,9 +223,8 @@ export function ReleaseDialog({
                   <InfoTooltip
                     label={privacyNote(
                       workspace,
-                      repo
-                        ? { ...publish, summaries: publishSummaries }
-                        : { tasks: false, trials: false, summaries: false },
+                      { ...publish, summaries: publishSummaries },
+                      subject,
                     )}
                     contentClassName="border border-border bg-card text-foreground"
                   />

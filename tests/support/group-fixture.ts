@@ -18,6 +18,7 @@ import { credentials } from "../../src/db/schema.js";
 import { createTaskStore } from "../../src/db/tasks.js";
 import { createUserStore } from "../../src/db/users.js";
 import type { EvaluationRun } from "../../src/evaluation/types.js";
+import { releasedTrials } from "../../src/public/release-sources.js";
 import { sessionFetch } from "./session-fetch.js";
 import { type TestDatabase, testAuthConfig, testDatabase } from "./site-fixture.js";
 import { seedTasks } from "./task-rows.js";
@@ -115,7 +116,10 @@ export function groupSuite() {
     });
     const groups = createGroupStore(fixture.database.db);
     const groupReleases = createReleaseStore(fixture.database.db);
-    const publicRoutes = createPublicReleaseRoutes(groupReleases);
+    const publicRoutes = createPublicReleaseRoutes(groupReleases, {
+      artifacts: fixture.artifacts,
+      trials: releasedTrials(fixture.database.db, fixture.artifacts),
+    });
     let routes:
       | {
           evaluations: ReturnType<typeof createEvaluationRoutes>;

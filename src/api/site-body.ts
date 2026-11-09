@@ -4,7 +4,7 @@ import { gateways, isGateway } from "../gateways/index.js";
 import { directoryOf } from "../public/directory.js";
 import { resultsName } from "../public/paths.js";
 import { groupHref, type PublishedGroup } from "../public/release-groups.js";
-import type { PublishedLine, ReleaseSetting } from "../public/release-types.js";
+import type { PublishedLine, PublishedResults, ReleaseSetting } from "../public/release-types.js";
 import {
   DIRECTORY_VIEWS,
   type DirectoryView,
@@ -148,7 +148,7 @@ export function settingsTable(settings: readonly ReleaseSetting[]): string {
  * The published Model Summaries, as the page shows them: what the settings share, then each
  * covered setting's own section in the table's order, named by model, harness and reasoning.
  */
-function summariesText(release: PublishedLine["release"]): string[] {
+function summariesText(release: PublishedResults): string[] {
   const summaries = release.modelSummaries;
   if (!summaries) return [];
   const sections = ranked(release.settings).flatMap((setting) => {
@@ -166,6 +166,29 @@ function summariesText(release: PublishedLine["release"]): string[] {
     summaries.overview ? `<p>${escapeText(summaries.overview)}</p>` : "",
     ...sections,
     `<p>${escapeText(`Written by ${summaries.model} from these results on ${day(summaries.summarizedAt)}.`)}</p>`,
+  ];
+}
+
+/**
+ * What a release published beyond its scores, as its page shows it below its table (a
+ * repository's, a public benchmark's, or a group's): its model summaries, then that its results
+ * by task and its tasks are there. Those themselves are kept out of crawls (robots.txt).
+ */
+export function publishedText(release: PublishedResults): string[] {
+  return [
+    ...summariesText(release),
+    ...(release.trialsPublished
+      ? [
+          "<h2>Results by Task</h2>",
+          "<p>Whether each setting passed each task, with how its attempt was graded and its transcript.</p>",
+        ]
+      : []),
+    ...(release.tasksPublished
+      ? [
+          "<h2>Tasks</h2>",
+          `<p>${escapeText(`All ${plural(release.tasks, "task")}, each with its instruction, tests, and solution to browse and download.`)}</p>`,
+        ]
+      : []),
   ];
 }
 
@@ -219,21 +242,7 @@ export function repositoryBody(
     `<p>${escapeText(repositoryDescription(line, Number.POSITIVE_INFINITY))}</p>`,
     "<h2>All Settings</h2>",
     settingsTable(release.settings),
-    ...summariesText(release),
-    // The tasks and trials themselves are kept out of crawls (robots.txt); the page only says
-    // they are there.
-    ...(release.trialsPublished
-      ? [
-          "<h2>Results by Task</h2>",
-          "<p>Whether each setting passed each task, with how its attempt was graded and its transcript.</p>",
-        ]
-      : []),
-    ...(release.tasksPublished
-      ? [
-          "<h2>Tasks</h2>",
-          `<p>${escapeText(`All ${plural(release.tasks, "task")}, each with its instruction, tests, and solution to browse and download.`)}</p>`,
-        ]
-      : []),
+    ...publishedText(release),
     ...(others.length > 0
       ? ["<h2>Other Benchmarks of This Repo</h2>", `<ul>${others.join("")}</ul>`]
       : []),

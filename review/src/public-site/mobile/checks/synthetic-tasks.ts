@@ -8,12 +8,16 @@ export const OPENED_TASK = "widgets-pr-1203";
 export const OPENED_SETTING = "alpha-codex";
 
 /**
- * The published tasks of the crowded release: a dozen, one with a long id, each with the files a
- * compiled task has, among them lines too long for a phone and the snapshot a download leaves out.
- * Each carries every setting's result (`settingIds`), with a transcript whose tool output has
- * lines too long for a phone.
+ * The published tasks of a release (the crowded one, or a group's): a dozen, one with a long id,
+ * each with the files a compiled task has, among them lines too long for a phone and the snapshot
+ * a download leaves out. Each carries every setting's result (`settingIds`), with a transcript
+ * whose tool output has lines too long for a phone. A group's tasks name their `repository`.
  */
-export function syntheticTasks(settingIds: readonly string[]): MemoryTasks {
+export function syntheticTasks(
+  settingIds: readonly string[],
+  releaseId = "synthetic-crowded",
+  repository?: string,
+): MemoryTasks {
   const listed: PublicTask[] = [
     ...Array.from({ length: 11 }, (_, index) => ({
       id: `widgets-pr-${1200 + index}`,
@@ -28,6 +32,7 @@ export function syntheticTasks(settingIds: readonly string[]): MemoryTasks {
   ];
   const tasks = listed.map((task, taskIndex) => ({
     ...task,
+    ...(repository ? { repository } : {}),
     // Some settings pass most tasks and some few, so the grid has its usual spread.
     passed: Object.fromEntries(
       settingIds.map((id, settingIndex) => [id, (taskIndex * 5 + settingIndex * 3) % 7 > 1]),
@@ -129,7 +134,7 @@ export function syntheticTasks(settingIds: readonly string[]): MemoryTasks {
     ],
   });
   return {
-    "synthetic-crowded": {
+    [releaseId]: {
       tasks,
       files: Object.fromEntries(tasks.map((task) => [task.id, filesOf(task)])),
       trials: Object.fromEntries(

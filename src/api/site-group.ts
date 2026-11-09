@@ -1,7 +1,7 @@
 import { groupHref, mostAccurate, type PublishedGroup } from "../public/release-groups.js";
 import { groupDescription, groupTitle } from "../public/seo.js";
 import { escapeText } from "./http.js";
-import { HOME_LINK, link, main, settingsTable } from "./site-body.js";
+import { HOME_LINK, link, main, publishedText, settingsTable } from "./site-body.js";
 import { type PageHead, resultsStructuredData } from "./site-head.js";
 
 /**
@@ -75,6 +75,8 @@ export function groupBody(group: PublishedGroup): string {
       : ["<p>This release has no settings.</p>"]),
     "<h2>Repositories</h2>",
     `<ul>${members.join("")}</ul>`,
+    // As on the page, what it published beyond its scores follows its repositories.
+    ...publishedText(group),
     HOME_LINK,
   ]);
 }
