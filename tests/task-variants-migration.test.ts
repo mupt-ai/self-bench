@@ -59,6 +59,11 @@ test("variants made as task rows move to task_variants as they stood", async () 
         stage, revised_from, feedback, variant, review_decision)
         VALUES (3, ${ids.repo}, 'run-rejected', 'cand', 'fix-it', 'easy', 'accepted', 'accepted', 1,
         'Variant: Old', 'Old', 'reject');
+      -- A variant of a variant moves under the task they both change.
+      INSERT INTO tasks (id, repo_id, run_id, candidate_id, task_id, difficulty, pipeline_status,
+        stage, revised_from, feedback, variant)
+        VALUES (5, ${ids.repo}, 'run-nested', 'cand', 'fix-it', 'easy', 'accepted', 'accepted', 2,
+        'Variant: Docs and Next', 'Docs and Next');
       -- A revision made from a variant keeps its row, without the link.
       INSERT INTO tasks (id, repo_id, run_id, candidate_id, task_id, difficulty, pipeline_status,
         stage, revised_from, feedback)
@@ -88,6 +93,16 @@ test("variants made as task rows move to task_variants as they stood", async () 
         deleted_at IS NOT NULL AS deleted FROM task_variants ORDER BY run_id`,
     );
     expect(variants.rows.map((row) => ({ ...row, parent_id: Number(row.parent_id) }))).toEqual([
+      {
+        parent_id: 1,
+        label: "Docs and Next",
+        run_id: "run-nested",
+        task_id: "fix-it",
+        pipeline_status: "accepted",
+        bundle_key: null,
+        started_by: null,
+        deleted: false,
+      },
       {
         parent_id: 1,
         label: "Old",

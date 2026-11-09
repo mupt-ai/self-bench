@@ -27,21 +27,37 @@ CREATE UNIQUE INDEX "task_variants_run_candidate" ON "task_variants" USING btree
 CREATE UNIQUE INDEX "task_variants_workflow_id" ON "task_variants" USING btree ("workflow_id");--> statement-breakpoint
 CREATE INDEX "task_variants_parent_id" ON "task_variants" USING btree ("parent_id");--> statement-breakpoint
 CREATE INDEX "task_variants_repo_id" ON "task_variants" USING btree ("repo_id");--> statement-breakpoint
--- Variants made before this table were task rows revising their task: move each here, as it stood.
--- A variant a person rejected leaves with it; one whose task was never recorded stays a task.
+-- Variants made before this table were task rows revising their task: move each here, as it stood,
+-- under the nearest task that is not itself a variant (a variant of a variant changes that task
+-- too). A variant a person rejected leaves with it; one with no such task stays a task.
 INSERT INTO "task_variants" (
 	"parent_id", "repo_id", "label", "run_id", "candidate_id", "task_id", "pipeline_status", "stage",
 	"reason", "bundle_key", "images", "workflow_id", "started_by", "started_at", "deleted_at",
 	"synced_at", "created_at"
 )
+WITH RECURSIVE "lineage" ("id", "ancestor") AS (
+	SELECT "id", "revised_from" FROM "tasks" WHERE "variant" IS NOT NULL AND "revised_from" IS NOT NULL
+	UNION ALL
+	SELECT "lineage"."id", "above"."revised_from" FROM "lineage"
+	JOIN "tasks" "above" ON "above"."id" = "lineage"."ancestor"
+	WHERE "above"."variant" IS NOT NULL AND "above"."revised_from" IS NOT NULL
+)
 SELECT
-	"revised_from", "repo_id", "variant", "run_id", "candidate_id", "task_id", "pipeline_status",
-	"stage", "reason", "bundle_key", "images", "workflow_id", "started_by", "started_at",
-	CASE WHEN "review_decision" = 'reject' THEN coalesce("deleted_at", now()) ELSE "deleted_at" END,
-	"synced_at", "created_at"
-FROM "tasks"
-WHERE "variant" IS NOT NULL AND "revised_from" IS NOT NULL;--> statement-breakpoint
+	"lineage"."ancestor", "v"."repo_id", "v"."variant", "v"."run_id", "v"."candidate_id", "v"."task_id",
+	"v"."pipeline_status", "v"."stage", "v"."reason", "v"."bundle_key", "v"."images", "v"."workflow_id",
+	"v"."started_by", "v"."started_at",
+	CASE WHEN "v"."review_decision" = 'reject' THEN coalesce("v"."deleted_at", now()) ELSE "v"."deleted_at" END,
+	"v"."synced_at", "v"."created_at"
+FROM "lineage"
+JOIN "tasks" "root" ON "root"."id" = "lineage"."ancestor" AND "root"."variant" IS NULL
+JOIN "tasks" "v" ON "v"."id" = "lineage"."id";--> statement-breakpoint
+-- Rows made from a moved variant (a revision, or another variant) no longer point at it.
 UPDATE "tasks" SET "revised_from" = NULL
-WHERE "revised_from" IN (SELECT "id" FROM "tasks" WHERE "variant" IS NOT NULL AND "revised_from" IS NOT NULL);--> statement-breakpoint
-DELETE FROM "tasks" WHERE "variant" IS NOT NULL AND "revised_from" IS NOT NULL;--> statement-breakpoint
+WHERE "revised_from" IN (
+	SELECT "t"."id" FROM "tasks" "t"
+	JOIN "task_variants" "m" ON "m"."run_id" = "t"."run_id" AND "m"."candidate_id" = "t"."candidate_id"
+	WHERE "t"."variant" IS NOT NULL
+);--> statement-breakpoint
+DELETE FROM "tasks" "t" USING "task_variants" "m"
+WHERE "t"."variant" IS NOT NULL AND "m"."run_id" = "t"."run_id" AND "m"."candidate_id" = "t"."candidate_id";--> statement-breakpoint
 ALTER TABLE "tasks" DROP COLUMN "variant";
