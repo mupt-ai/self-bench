@@ -2,39 +2,43 @@ import { and, eq, isNull } from "drizzle-orm";
 import { candidateWorkflowId, type TaskImages } from "../contracts/index.js";
 import type { VariantChanges } from "../contracts/variants.js";
 import type { Database } from "./client.js";
-import { taskVariants, users } from "./schema.js";
+import { taskEnvironments, taskVariants, users } from "./schema.js";
 import type { TaskProgressPatch, TaskVerdict } from "./task-lifecycle.js";
 
-type VariantPipelineStatus = (typeof taskVariants.$inferSelect)["pipelineStatus"];
+/** An environment as stored (task-variant-schema.ts): a repository's change to its tasks' files. */
+export interface TaskEnvironmentRecord {
+  readonly id: number;
+  readonly repoId: number;
+  readonly name: string;
+  readonly changes?: VariantChanges;
+  readonly createdBy?: string;
+  readonly createdAt: string;
+}
 
-/** A variant as stored (schema.ts `taskVariants`): its task, what it changes, and its one check. */
+/** One approved task built in one environment, and its one check. */
 export interface TaskVariantRecord {
   readonly id: number;
+  readonly environmentId: number;
   /** The task row it changes. */
   readonly parentId: number;
   readonly repoId: number;
-  readonly label: string;
-  readonly changes?: VariantChanges;
   readonly runId: string;
   readonly candidateId: string;
   readonly taskId: string;
-  readonly pipelineStatus: VariantPipelineStatus;
+  readonly pipelineStatus: (typeof taskVariants.$inferSelect)["pipelineStatus"];
   readonly stage: string;
   readonly reason?: string;
   readonly bundleKey?: string;
   readonly images?: TaskImages;
   readonly workflowId?: string;
-  readonly startedBy?: string;
-  readonly startedAt?: string;
   readonly syncedAt: string;
 }
 
 /** A variant the site just started, before its workflow does. */
 interface VariantStart {
+  readonly environmentId: number;
   readonly parentId: number;
   readonly repoId: number;
-  readonly label: string;
-  readonly changes: VariantChanges;
   /** A run ID of its own; a collision takes the next attempt suffix, as tasks do. */
   readonly runId: string;
   readonly candidateId: string;
@@ -43,20 +47,23 @@ interface VariantStart {
 }
 
 export interface TaskVariantStore {
+  createEnvironment(row: {
+    repoId: number;
+    name: string;
+    changes: VariantChanges;
+    createdBy: number;
+  }): Promise<TaskEnvironmentRecord>;
+  /** A repository's visible environments, oldest first. */
+  listEnvironments(repoId: number): Promise<TaskEnvironmentRecord[]>;
+  findEnvironment(repoId: number, id: number): Promise<TaskEnvironmentRecord | undefined>;
+  /** Tombstones an environment and its variants; checks still running settle nothing. */
+  deleteEnvironment(repoId: number, id: number): Promise<boolean>;
   reserve(row: VariantStart): Promise<TaskVariantRecord>;
   /** False when no running variant has this run and candidate, so the row is a task's. */
   progress(runId: string, candidateId: string, patch: TaskProgressPatch): Promise<boolean>;
   settle(runId: string, candidateId: string, verdict: TaskVerdict): Promise<boolean>;
-  /** A task's visible variants, oldest first. */
-  listForTask(parentId: number): Promise<TaskVariantRecord[]>;
-  /** A repository's visible variants. */
+  /** A repository's visible variants, by environment then task. */
   listForRepo(repoId: number): Promise<TaskVariantRecord[]>;
-  /** A repository's deleted variants, whose trials leave current results. */
-  listDeleted(repoId: number): Promise<TaskVariantRecord[]>;
-  /** A visible variant, by its own run. */
-  find(repoId: number, runId: string): Promise<TaskVariantRecord | undefined>;
-  /** Tombstones a settled variant. Repeating a deletion succeeds. */
-  delete(repoId: number, runId: string): Promise<"deleted" | "active" | "missing">;
 }
 
 /** An accepted variant with a bundle runs, as long as the task it changes does. */
@@ -67,11 +74,11 @@ export function variantRunnable(
 }
 
 export function createTaskVariantStore(db: Database, now: () => Date): TaskVariantStore {
-  const select = () =>
+  const environments = () =>
     db
-      .select({ variant: taskVariants, startedBy: users.login })
-      .from(taskVariants)
-      .leftJoin(users, eq(users.id, taskVariants.startedBy));
+      .select({ environment: taskEnvironments, createdBy: users.login })
+      .from(taskEnvironments)
+      .leftJoin(users, eq(users.id, taskEnvironments.createdBy));
   const running = (runId: string, candidateId: string) =>
     and(
       eq(taskVariants.runId, runId),
@@ -79,35 +86,70 @@ export function createTaskVariantStore(db: Database, now: () => Date): TaskVaria
       eq(taskVariants.pipelineStatus, "in_progress"),
       isNull(taskVariants.deletedAt),
     );
-  const byId = async (id: number) => {
-    const [row] = await select().where(eq(taskVariants.id, id));
-    if (!row) throw new Error(`variant ${id} is missing`);
-    return variantFrom(row);
-  };
   return {
+    async createEnvironment(row) {
+      const [created] = await db
+        .insert(taskEnvironments)
+        .values({ ...row, createdAt: now() })
+        .returning({ id: taskEnvironments.id });
+      if (!created) throw new Error("environment was not created");
+      const [found] = await environments().where(eq(taskEnvironments.id, created.id));
+      if (!found) throw new Error("environment is missing");
+      return environmentFrom(found);
+    },
+    async listEnvironments(repoId) {
+      const rows = await environments()
+        .where(and(eq(taskEnvironments.repoId, repoId), isNull(taskEnvironments.deletedAt)))
+        .orderBy(taskEnvironments.id);
+      return rows.map(environmentFrom);
+    },
+    async findEnvironment(repoId, id) {
+      const [row] = await environments().where(
+        and(
+          eq(taskEnvironments.repoId, repoId),
+          eq(taskEnvironments.id, id),
+          isNull(taskEnvironments.deletedAt),
+        ),
+      );
+      return row ? environmentFrom(row) : undefined;
+    },
+    deleteEnvironment: (repoId, id) =>
+      db.transaction(async (tx) => {
+        const changed = await tx
+          .update(taskEnvironments)
+          .set({ deletedAt: now() })
+          .where(
+            and(
+              eq(taskEnvironments.repoId, repoId),
+              eq(taskEnvironments.id, id),
+              isNull(taskEnvironments.deletedAt),
+            ),
+          )
+          .returning({ id: taskEnvironments.id });
+        if (changed.length === 0) return false;
+        await tx
+          .update(taskVariants)
+          .set({ deletedAt: now() })
+          .where(and(eq(taskVariants.environmentId, id), isNull(taskVariants.deletedAt)));
+        return true;
+      }),
     async reserve(row) {
       for (let attempt = 1; ; attempt++) {
         const runId = `${row.runId}${attempt > 1 ? `-a${attempt}` : ""}`;
         const [inserted] = await db
           .insert(taskVariants)
           .values({
-            parentId: row.parentId,
-            repoId: row.repoId,
-            label: row.label,
-            changes: row.changes,
+            ...row,
             runId,
-            candidateId: row.candidateId,
-            taskId: row.taskId,
             pipelineStatus: "in_progress",
             stage: "verifying",
             workflowId: candidateWorkflowId(runId, row.candidateId),
-            startedBy: row.startedBy,
             startedAt: now(),
             syncedAt: now(),
           })
           .onConflictDoNothing()
-          .returning({ id: taskVariants.id });
-        if (inserted) return await byId(inserted.id);
+          .returning();
+        if (inserted) return variantFrom(inserted);
       }
     },
     async progress(runId, candidateId, patch) {
@@ -133,64 +175,38 @@ export function createTaskVariantStore(db: Database, now: () => Date): TaskVaria
         .returning({ id: taskVariants.id });
       return changed.length > 0;
     },
-    async listForTask(parentId) {
-      const rows = await select()
-        .where(and(eq(taskVariants.parentId, parentId), isNull(taskVariants.deletedAt)))
-        .orderBy(taskVariants.id);
-      return rows.map(variantFrom);
-    },
     async listForRepo(repoId) {
-      const rows = await select()
+      const rows = await db
+        .select()
+        .from(taskVariants)
         .where(and(eq(taskVariants.repoId, repoId), isNull(taskVariants.deletedAt)))
-        .orderBy(taskVariants.id);
+        .orderBy(taskVariants.environmentId, taskVariants.parentId, taskVariants.id);
       return rows.map(variantFrom);
     },
-    async listDeleted(repoId) {
-      const rows = await select().where(eq(taskVariants.repoId, repoId));
-      return rows.filter((row) => row.variant.deletedAt !== null).map(variantFrom);
-    },
-    async find(repoId, runId) {
-      const [row] = await select()
-        .where(
-          and(
-            eq(taskVariants.repoId, repoId),
-            eq(taskVariants.runId, runId),
-            isNull(taskVariants.deletedAt),
-          ),
-        )
-        .limit(1);
-      return row ? variantFrom(row) : undefined;
-    },
-    delete: (repoId, runId) =>
-      db.transaction(async (tx) => {
-        const [variant] = await tx
-          .select()
-          .from(taskVariants)
-          .where(and(eq(taskVariants.repoId, repoId), eq(taskVariants.runId, runId)))
-          .for("update");
-        if (!variant) return "missing";
-        if (variant.deletedAt) return "deleted";
-        if (variant.pipelineStatus === "in_progress") return "active";
-        await tx
-          .update(taskVariants)
-          .set({ deletedAt: now() })
-          .where(eq(taskVariants.id, variant.id));
-        return "deleted";
-      }),
   };
 }
 
-function variantFrom(row: {
-  variant: typeof taskVariants.$inferSelect;
-  startedBy: string | null;
-}): TaskVariantRecord {
-  const { variant } = row;
+function environmentFrom(row: {
+  environment: typeof taskEnvironments.$inferSelect;
+  createdBy: string | null;
+}): TaskEnvironmentRecord {
+  const { environment } = row;
+  return {
+    id: environment.id,
+    repoId: environment.repoId,
+    name: environment.name,
+    ...(environment.changes ? { changes: environment.changes } : {}),
+    ...(row.createdBy ? { createdBy: row.createdBy } : {}),
+    createdAt: environment.createdAt.toISOString(),
+  };
+}
+
+function variantFrom(variant: typeof taskVariants.$inferSelect): TaskVariantRecord {
   return {
     id: variant.id,
+    environmentId: variant.environmentId,
     parentId: variant.parentId,
     repoId: variant.repoId,
-    label: variant.label,
-    ...(variant.changes ? { changes: variant.changes } : {}),
     runId: variant.runId,
     candidateId: variant.candidateId,
     taskId: variant.taskId,
@@ -200,8 +216,6 @@ function variantFrom(row: {
     ...(variant.bundleKey ? { bundleKey: variant.bundleKey } : {}),
     ...(variant.images ? { images: variant.images } : {}),
     ...(variant.workflowId ? { workflowId: variant.workflowId } : {}),
-    ...(row.startedBy ? { startedBy: row.startedBy } : {}),
-    ...(variant.startedAt ? { startedAt: variant.startedAt.toISOString() } : {}),
     syncedAt: variant.syncedAt.toISOString(),
   };
 }

@@ -1,3 +1,4 @@
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import React from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { isEvalName } from "../../../../src/contracts/evals";
@@ -7,19 +8,22 @@ import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { FeedbackSheet } from "../task/FeedbackSheet";
 import { LiveTaskState } from "../task/LiveTaskState";
-import { QueueNav } from "../task/QueueNav";
 import { ReviewBar } from "../task/ReviewBar";
-import { queuePosition, readQueue, type TaskRef, taskPath } from "../task/review-queue";
+import {
+  isTyping,
+  queuePosition,
+  type ReviewQueue,
+  readQueue,
+  type TaskRef,
+  taskPath,
+} from "../task/review-queue";
 import { prefetchTaskFiles, rowFor, siteTaskSource } from "../task/site-source";
 import { TaskCost, TaskGenerationControls } from "../task/TaskGenerationControls";
 import { TaskSkeleton } from "../task/TaskSkeleton";
 import { TaskView } from "../task/TaskView";
 import { taskTitle } from "../task/task-title";
-import { listTaskVariants, type VariantItem } from "../task/task-variant-api";
 import { taskTechnicalDetails } from "../task/technical-details";
-import { CreateVariantButton } from "../task/VariantDialog";
-import { VariantsPanel } from "../task/VariantsPanel";
-import { Breadcrumbs, Notice, PageFrame } from "../ui";
+import { Breadcrumbs, Button, Notice, PageFrame } from "../ui";
 
 /** Keyed by the route, so a new task never inherits the previous task's state or controls. */
 export function TaskPage() {
@@ -34,25 +38,19 @@ function TaskPageContent() {
   const fullName = `${owner}/${name}`;
   const [task, setTask] = React.useState<TaskItem | null | undefined>(undefined);
   const [revisions, setRevisions] = React.useState<TaskItem[]>([]);
-  const [variants, setVariants] = React.useState<VariantItem[]>([]);
   // Sending feedback starts a revision, which the page then follows until it finishes.
   const [followed, setFollowed] = React.useState(0);
-  const follow = () => setFollowed((count) => count + 1);
   const title = taskTitle(task ?? { taskId });
   useDocumentTitle(`${title} · SelfBench`);
   const [error, setError] = React.useState<string | null>(null);
 
   const refresh = React.useCallback(async () => {
     try {
-      const [found, listed] = await Promise.all([
-        fetchTask(org.login, fullName, runId, taskId),
-        listTaskVariants(org.login, fullName, { runId, taskId }).catch(() => undefined),
-      ]);
+      const found = await fetchTask(org.login, fullName, runId, taskId);
       setTask(found.task);
       setRevisions(found.revisions);
-      if (listed) setVariants(listed);
       setError(null);
-      return { ...found, variants: listed ?? [] };
+      return found;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
       return undefined;
@@ -68,8 +66,7 @@ function TaskPageContent() {
       const active =
         !found ||
         found.task.state === "in_progress" ||
-        found.revisions.some((revision) => revision.state === "in_progress") ||
-        found.variants.some((variant) => variant.state === "in_progress");
+        found.revisions.some((revision) => revision.state === "in_progress");
       if (!disposed && active) timer = setTimeout(() => void poll(), 3000);
     };
     void poll();
@@ -201,12 +198,6 @@ function TaskPageContent() {
             onRequested={() => void refresh()}
           />
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <CreateVariantButton
-              task={task}
-              org={org.login}
-              fullName={fullName}
-              onCreated={follow}
-            />
             {task.state !== "in_progress" &&
               task.state !== "failed" &&
               task.state !== "cancelled" && (
@@ -230,16 +221,66 @@ function TaskPageContent() {
             fullName={fullName}
             task={task}
             revisions={revisions}
-            onSent={follow}
+            onSent={() => setFollowed((count) => count + 1)}
           />
         }
-        variants={{
-          count: variants.length,
-          sheet: (
-            <VariantsPanel {...{ org: org.login, fullName, task, variants }} onChanged={follow} />
-          ),
-        }}
       />
     </div>
+  );
+}
+
+/** Previous / next through the list the task was opened from, also on `K` / `J`. */
+function QueueNav({
+  queue,
+  position,
+  onGo,
+}: {
+  queue: ReviewQueue;
+  position: NonNullable<ReturnType<typeof queuePosition>>;
+  onGo: (task: TaskRef) => void;
+}) {
+  const { previous, next } = position;
+  React.useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (isTyping(event)) return;
+      const target = event.key === "j" ? next : event.key === "k" ? previous : undefined;
+      if (!target) return;
+      event.preventDefault();
+      onGo(target);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [previous, next, onGo]);
+  return (
+    <nav className="flex items-center gap-1" aria-label="Task Queue">
+      <Link className="mr-2 text-xs text-muted-foreground hover:text-foreground" to={queue.back}>
+        Back to {queue.backLabel}
+      </Link>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        aria-label="Previous Task"
+        title="Previous Task (K)"
+        disabled={!previous}
+        onClick={() => previous && onGo(previous)}
+      >
+        <ChevronLeft aria-hidden="true" />
+      </Button>
+      <span className="font-mono text-xs tabular-nums text-muted-foreground" role="status">
+        {position.index + 1} of {queue.tasks.length}
+      </span>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        aria-label="Next Task"
+        title="Next Task (J)"
+        disabled={!next}
+        onClick={() => next && onGo(next)}
+      >
+        <ChevronRight aria-hidden="true" />
+      </Button>
+    </nav>
   );
 }

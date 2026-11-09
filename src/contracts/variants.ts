@@ -1,9 +1,9 @@
-/** A task variant's label: the environment change it makes (generation/tasks/variant.ts). */
+/** An environment's name: the change it makes to every task (generation/tasks/variant.ts). */
 export const MAX_VARIANT_LABEL_LENGTH = 60;
 
 /**
- * What a variant changes in its task's environment: packages installed over the task's own with
- * its package manager, and files written into /app before the agent starts.
+ * What an environment changes in each task: packages installed over the task's own with its
+ * package manager, and files written into or removed from /app before the agent starts.
  */
 export interface VariantChanges {
   readonly packages: readonly {
@@ -14,29 +14,39 @@ export interface VariantChanges {
   }[];
   readonly files: readonly {
     readonly path: string;
-    readonly mode: "replace" | "append";
+    readonly mode: "replace" | "append" | "delete";
+    /** What a replace or append writes; a delete has none. */
     readonly content: string;
   }[];
 }
 
-/** Where a variant stands: it is checked once, so it never waits for a person's review. */
+/** Where one task's variant stands: it is checked once, so it never waits for a review. */
 export type VariantState = "in_progress" | "accepted" | "rejected" | "failed" | "cancelled";
 
-/** A variant as the API and the app show it, beside the task it changes. */
-export interface VariantItem {
-  /** Its own run, which names it in URLs, comparisons, and trials. */
-  readonly runId: string;
-  readonly taskId: string;
-  readonly label: string;
-  /** Absent for variants made before their changes were recorded. */
+/** How many of an environment's tasks are ready to run, still being checked, or failed. */
+export interface EnvironmentCoverage {
+  readonly ready: number;
+  readonly checking: number;
+  readonly failed: number;
+  readonly total: number;
+}
+
+/** An environment as the API and the app show it. */
+export interface EnvironmentItem {
+  readonly id: number;
+  readonly name: string;
+  /** Absent for environments made from per-task variants before changes were recorded. */
   readonly changes?: VariantChanges;
+  readonly createdBy?: string;
+  readonly createdAt: string;
+  readonly tasks: EnvironmentCoverage;
+}
+
+/** One task in an environment: its variant's check, by the task it changes. */
+export interface EnvironmentTaskItem {
+  readonly task: { readonly runId: string; readonly taskId: string };
+  /** The variant's own run. */
+  readonly runId: string;
   readonly state: VariantState;
-  readonly stage: string;
-  readonly reason?: string;
   readonly reasonSummary?: string;
-  readonly startedBy?: string;
-  readonly startedAt?: string;
-  readonly syncedAt: string;
-  /** The task it changes. */
-  readonly of: { readonly runId: string; readonly taskId: string };
 }

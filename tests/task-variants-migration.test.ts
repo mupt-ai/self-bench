@@ -19,7 +19,7 @@ async function migrate(client: PGlite, from: string | undefined, last: string) {
     await client.exec(await readFile(join(migrationsFolder(), `${tag}.sql`), "utf8"));
 }
 
-test("variants made as task rows move to task_variants as they stood", async () => {
+test("variants made as task rows move to task_variants as they stood, one environment a label", async () => {
   const client = new PGlite();
   try {
     await client.waitReady;
@@ -59,6 +59,11 @@ test("variants made as task rows move to task_variants as they stood", async () 
         stage, revised_from, feedback, variant, review_decision)
         VALUES (3, ${ids.repo}, 'run-rejected', 'cand', 'fix-it', 'easy', 'accepted', 'accepted', 1,
         'Variant: Old', 'Old', 'reject');
+      -- A second variant with the same label joins the same environment.
+      INSERT INTO tasks (id, repo_id, run_id, candidate_id, task_id, difficulty, pipeline_status,
+        stage, revised_from, feedback, variant)
+        VALUES (8, ${ids.repo}, 'run-variant-again', 'cand', 'fix-it', 'easy', 'accepted',
+        'accepted', 1, 'Variant: Docs', 'Docs');
       -- A variant of a variant moves under the task they both change.
       INSERT INTO tasks (id, repo_id, run_id, candidate_id, task_id, difficulty, pipeline_status,
         stage, revised_from, feedback, variant)
@@ -78,7 +83,7 @@ test("variants made as task rows move to task_variants as they stood", async () 
         VALUES (4, ${ids.repo}, 'run-revision', 'cand', 'fix-it', 'easy', 'in_progress', 'authoring', 2,
         'Tighten the tests');
     `);
-    await migrate(client, "0037_benchmark_releases", "0038_task_variant_records");
+    await migrate(client, "0037_benchmark_releases", "0038_task_environments");
 
     const tasks = await client.query<{ id: number; revised_from: number | null }>(
       "SELECT id, revised_from FROM tasks ORDER BY id",
@@ -98,8 +103,9 @@ test("variants made as task rows move to task_variants as they stood", async () 
       started_by: number | null;
       deleted: boolean;
     }>(
-      `SELECT parent_id, label, run_id, task_id, pipeline_status, bundle_key, started_by,
-        deleted_at IS NOT NULL AS deleted FROM task_variants ORDER BY run_id`,
+      `SELECT v.parent_id, e.name AS label, v.run_id, v.task_id, v.pipeline_status, v.bundle_key,
+        v.started_by, v.deleted_at IS NOT NULL AS deleted
+        FROM task_variants v JOIN task_environments e ON e.id = v.environment_id ORDER BY v.run_id`,
     );
     expect(variants.rows.map((row) => ({ ...row, parent_id: Number(row.parent_id) }))).toEqual([
       {
@@ -142,6 +148,29 @@ test("variants made as task rows move to task_variants as they stood", async () 
         started_by: expect.anything(),
         deleted: false,
       },
+      {
+        parent_id: 1,
+        label: "Docs",
+        run_id: "run-variant-again",
+        task_id: "fix-it",
+        pipeline_status: "accepted",
+        bundle_key: null,
+        started_by: null,
+        deleted: false,
+      },
+    ]);
+    const environments = await client.query<{ name: string }>(
+      "SELECT name FROM task_environments ORDER BY name",
+    );
+    const docs = await client.query<{ count: number }>(
+      "SELECT count(*)::int AS count FROM task_variants v JOIN task_environments e ON e.id = v.environment_id WHERE e.name = 'Docs'",
+    );
+    expect(docs.rows[0]?.count).toBe(2);
+    expect(environments.rows.map((row) => row.name)).toEqual([
+      "Docs",
+      "Docs and Next",
+      "Old",
+      "Orphan",
     ]);
   } finally {
     await client.close();

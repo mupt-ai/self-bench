@@ -20,6 +20,14 @@ export interface RetrySelection {
   judgeCredentialId?: string;
   /** Leaves out tasks that completed for this setting since, in this run or another. */
   skipCompleted: true;
+  /** A run under a condition retries under it alone, not the tasks as they are too. */
+  conditions?: {
+    name: string;
+    skills: string[];
+    instructions?: string;
+    environment?: number;
+  }[];
+  baseline?: false;
 }
 
 /**
@@ -68,6 +76,19 @@ export function retrySelection(
         ? { judgeCredentialId: credentials.judgeCredentialId }
         : {}),
       skipCompleted: true,
+      ...(run.condition
+        ? {
+            conditions: [
+              {
+                name: run.condition.name,
+                skills: [...run.condition.skills],
+                ...(run.condition.instructions ? { instructions: run.condition.instructions } : {}),
+                ...(run.condition.environment ? { environment: run.condition.environment.id } : {}),
+              },
+            ],
+            baseline: false as const,
+          }
+        : {}),
     },
   };
 }

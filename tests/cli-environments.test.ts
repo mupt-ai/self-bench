@@ -32,7 +32,7 @@ async function cli(args: string[]): Promise<Record<string, unknown>> {
   }
 }
 
-test("the CLI creates, lists, and deletes a task's variants", async () => {
+test("the CLI creates, shows, and deletes an environment of every approved task", async () => {
   const fixture = await prFixture({});
   server = fixture.site;
   const { secret } = await mint(fixture.site, fixture.headers, { name: "CLI" });
@@ -70,59 +70,54 @@ test("the CLI creates, lists, and deletes a task's variants", async () => {
     ),
     "application/json",
   );
-  const store = createTaskStore(fixture.site.db);
-  await store.settle(task.runId, candidate.candidateId, {
+  await createTaskStore(fixture.site.db).settle(task.runId, candidate.candidateId, {
     stage: "accepted",
     pipelineStatus: "accepted",
+    bundleKey: `runs/${task.runId}/harbor-task.tar.gz`,
   });
-  root = await mkdtemp(join(tmpdir(), "selfbench-cli-variant-"));
-  await writeFile(join(root, "agents.md"), "Read the bundled docs.");
+  await cli(["task", "approve", task.runId, task.taskId, ...repo]);
+  root = await mkdtemp(join(tmpdir(), "selfbench-cli-environment-"));
+  await writeFile(join(root, "claude.md"), "Read the bundled docs.");
 
-  const ids = [task.runId, task.taskId];
   const started = await cli([
-    "task",
-    "variant",
+    "environment",
     "create",
-    ...ids,
     ...repo,
-    "--label",
-    "Docs",
+    "--name",
+    "Docs, No AGENTS.md",
     "--package",
     "@scope/next@16.4.5",
     "--directory",
     "apps/web",
     "--file",
-    `AGENTS.md=${join(root, "agents.md")}`,
+    `CLAUDE.md=${join(root, "claude.md")}`,
+    "--delete",
+    "AGENTS.md",
   ]);
-  const variant = started.variant as { runId: string; label: string; changes: unknown };
-  expect(variant).toMatchObject({
-    label: "Docs",
+  const made = started.environment as { id: number; name: string; changes: unknown };
+  expect(made).toMatchObject({
+    name: "Docs, No AGENTS.md",
     changes: {
       packages: [{ name: "@scope/next", spec: "16.4.5", directory: "apps/web" }],
-      files: [{ path: "AGENTS.md", mode: "append", content: "Read the bundled docs." }],
+      files: [
+        { path: "CLAUDE.md", mode: "append", content: "Read the bundled docs." },
+        { path: "AGENTS.md", mode: "delete", content: "" },
+      ],
     },
   });
-  const dockerfile = (
-    await tarEntries(
-      Buffer.from(
-        await fixture.artifacts.get(
-          fixture.started.at(-1)?.input.revision?.draft.sourceBundle ?? source,
-        ),
-      ),
-    )
-  ).find((entry) => entry.path === "Dockerfile")?.text;
+  const staged = fixture.started.at(-1)?.input.revision?.draft.sourceBundle ?? source;
+  const dockerfile = (await tarEntries(Buffer.from(await fixture.artifacts.get(staged)))).find(
+    (entry) => entry.path === "Dockerfile",
+  )?.text;
   expect(dockerfile).toContain("'@scope/next@16.4.5'");
+  expect(dockerfile).toContain("rm -rf -- /app/AGENTS.md");
 
-  expect((await cli(["task", "variant", "list", ...ids, ...repo])).variants).toMatchObject([
-    { runId: variant.runId, state: "in_progress" },
+  expect((await cli(["environments", ...repo])).environments).toMatchObject([
+    { id: made.id, tasks: { checking: 1, total: 1 } },
   ]);
-  await store.variants.settle(variant.runId, candidate.candidateId, {
-    pipelineStatus: "rejected",
-    stage: "verifying",
-    reason: "The tests failed.",
-  });
-  expect(await cli(["task", "variant", "delete", ...ids, variant.runId, ...repo])).toEqual({
-    deleted: true,
-  });
-  expect((await cli(["task", "variant", "list", ...ids, ...repo])).variants).toEqual([]);
+  expect((await cli(["environment", "show", String(made.id), ...repo])).tasks).toMatchObject([
+    { task: { runId: task.runId, taskId: task.taskId }, state: "in_progress" },
+  ]);
+  expect(await cli(["environment", "delete", String(made.id), ...repo])).toEqual({ deleted: true });
+  expect((await cli(["environments", ...repo])).environments).toEqual([]);
 });

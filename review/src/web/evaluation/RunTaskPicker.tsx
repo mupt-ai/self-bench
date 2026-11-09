@@ -68,15 +68,10 @@ export function RunTaskPicker({
               size="small"
               disabled={disabled || readOnly}
               onClick={() =>
-                onChange(
-                  // A variant runs only when picked on its own, beside the task it changes.
-                  availableTasks
-                    .filter((task) => !task.variant)
-                    .map(({ runId, taskId }) => ({ runId, taskId })),
-                )
+                onChange(availableTasks.map(({ runId, taskId }) => ({ runId, taskId })))
               }
             >
-              Select All Tasks
+              Select All
             </Button>
             <Button
               type="button"
@@ -142,14 +137,7 @@ export function RunTaskPicker({
                           className="size-4 accent-brand"
                         />
                       </td>
-                      <td className="px-4 py-3 text-xs wrap-anywhere">
-                        <span className="font-mono">{task.taskId}</span>
-                        {task.variant && (
-                          <span className="ml-2 text-muted-foreground">
-                            Variant: {task.variant.label}
-                          </span>
-                        )}
-                      </td>
+                      <td className="px-4 py-3 font-mono text-xs wrap-anywhere">{task.taskId}</td>
                       {difficulty && (
                         <td className="hidden px-4 py-3 text-xs text-muted-foreground sm:table-cell">
                           {task.difficulty?.[0]?.toUpperCase()}

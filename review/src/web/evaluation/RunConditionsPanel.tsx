@@ -1,4 +1,5 @@
 import { ChevronDown, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
+import React from "react";
 import {
   MAX_CONDITIONS,
   MAX_SKILL_LENGTH,
@@ -7,10 +8,13 @@ import {
   skillSource,
 } from "../../../../src/contracts/conditions";
 import { harnessLabels } from "../../../../src/evaluation/models";
+import { type EnvironmentItem, listEnvironments } from "../environments/environment-api";
 import { cn } from "../primitives/cn";
 import { InfoTooltip } from "../primitives/tooltip";
-import { Button, controlStyles, fieldStyles, Input } from "../ui";
+import { useOrg } from "../SiteLayout";
+import { Button, controlStyles, fieldStyles, Input, Select } from "../ui";
 import type { RunDraft } from "./RunExecution";
+import { useEvaluationScope } from "./useEvaluationScope";
 
 type Condition = NonNullable<RunDraft["conditions"]>[number];
 
@@ -23,8 +27,8 @@ export function conditionsProblem(draft: RunDraft): string | undefined {
     const name = condition.name.trim();
     if (!name) return "Name each condition.";
     const skills = condition.skills.filter((skill) => skill.trim());
-    if (!skills.length && !condition.instructions?.trim())
-      return `${name} needs a skill or instructions.`;
+    if (!skills.length && !condition.instructions?.trim() && condition.environment === undefined)
+      return `${name} needs an environment, a skill, or instructions.`;
     if (skills.length > MAX_SKILLS) return `${name} can add at most ${MAX_SKILLS} skills.`;
     if (skills.some((skill) => !skillSource(skill)))
       return `${name}: write each skill as a GitHub org/repo, org/repo@ref, or URL.`;
@@ -43,6 +47,7 @@ export function submittedConditions(draft: RunDraft): Pick<RunDraft, "conditions
     name: condition.name.trim(),
     skills: condition.skills.map((skill) => skill.trim()).filter(Boolean),
     ...(condition.instructions?.trim() ? { instructions: condition.instructions.trim() } : {}),
+    ...(condition.environment !== undefined ? { environment: condition.environment } : {}),
   }));
   return {
     ...(conditions.length ? { conditions } : {}),
@@ -52,8 +57,9 @@ export function submittedConditions(draft: RunDraft): Pick<RunDraft, "conditions
 
 /**
  * Run conditions: what every task also runs under, beside the tasks as they are (the baseline).
- * A condition adds skills, which Harbor installs for the agent, or instructions appended to each
- * task's instruction; results keep it apart, so its pass rate compares with the baseline's.
+ * A condition runs each task in a repository environment (its files changed and built), adds
+ * skills, which Harbor installs for the agent, or appends instructions to each task's instruction;
+ * results keep it apart, so its pass rate compares with the baseline's.
  */
 export function RunConditionsPanel({
   draft,
@@ -66,6 +72,23 @@ export function RunConditionsPanel({
 }) {
   const conditions = draft.conditions ?? [];
   const baseline = draft.baseline !== false;
+  const { org } = useOrg();
+  const { repo } = useEvaluationScope();
+  const [environments, setEnvironments] = React.useState<EnvironmentItem[]>([]);
+  React.useEffect(() => {
+    // Only a repository has environments; a benchmark's or group's conditions are run-time only.
+    if (!repo) return;
+    let stopped = false;
+    listEnvironments(org.login, repo).then(
+      (found) => {
+        if (!stopped) setEnvironments(found);
+      },
+      () => undefined,
+    );
+    return () => {
+      stopped = true;
+    };
+  }, [org.login, repo]);
   const set = (next: Condition[], keepBaseline = baseline) =>
     onChange({ ...draft, conditions: next, baseline: keepBaseline });
   const update = (index: number, patch: Partial<Condition>) =>
@@ -135,6 +158,37 @@ export function RunConditionsPanel({
                 <Trash2 aria-hidden="true" />
               </Button>
             </div>
+            {environments.length > 0 && (
+              <label htmlFor={`condition-${index}-environment`} className={fieldStyles}>
+                <span className="flex items-center gap-1.5">
+                  Environment
+                  <InfoTooltip label="Run each task as an environment built it, with its files changed. Tasks it has no ready build for are left out of this condition." />
+                </span>
+                <Select
+                  id={`condition-${index}-environment`}
+                  aria-label="Environment"
+                  value={condition.environment ?? ""}
+                  onChange={(event) => {
+                    const picked = environments.find(
+                      (environment) => String(environment.id) === event.target.value,
+                    );
+                    update(index, {
+                      environment: picked?.id,
+                      // A condition that is only an environment is named after it.
+                      ...(picked && !condition.name.trim() ? { name: picked.name } : {}),
+                    });
+                  }}
+                >
+                  <option value="">None: The Tasks as They Are</option>
+                  {environments.map((environment) => (
+                    <option key={environment.id} value={environment.id}>
+                      {environment.name} ({environment.tasks.ready} of {environment.tasks.total}{" "}
+                      Ready)
+                    </option>
+                  ))}
+                </Select>
+              </label>
+            )}
             <div className={fieldStyles}>
               <span className="flex items-center gap-1.5">
                 Skills

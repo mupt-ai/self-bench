@@ -192,3 +192,80 @@ test("a release publishes the baseline, never a run condition", () => {
   });
   expect(previewRelease(source).settings.map((setting) => setting.condition)).toEqual([undefined]);
 });
+
+test("a condition with an environment runs each ready task from its variant, as the task", async () => {
+  const fixture = await evaluationServer();
+  const post = (body: unknown) => ({ method: "POST", body: JSON.stringify(body) });
+  try {
+    const save = async (kind: string) =>
+      (
+        await (
+          await fixture.request(
+            "/api/orgs/avyay/credentials",
+            post({ kind, name: kind, value: `fake-${kind}` }),
+          )
+        ).json()
+      ).id as string;
+    const credentialId = await save("openrouter");
+    const sandboxCredentialId = await save("e2b");
+    const task = await fixture.tasks.find(fixture.repo.id, "run-one", "task-one");
+    if (!task) throw new Error("Missing fixture task");
+    const environment = await fixture.tasks.variants.createEnvironment({
+      repoId: fixture.repo.id,
+      name: "No AGENTS.md",
+      changes: { packages: [], files: [{ path: "AGENTS.md", mode: "delete", content: "" }] },
+      createdBy: fixture.user.id,
+    });
+    const variant = await fixture.tasks.variants.reserve({
+      environmentId: environment.id,
+      parentId: task.id,
+      repoId: fixture.repo.id,
+      runId: "scn-variant",
+      candidateId: task.candidateId,
+      taskId: task.taskId,
+      startedBy: fixture.user.id,
+    });
+    const draft = {
+      id: crypto.randomUUID(),
+      sandbox: "e2b",
+      sandboxCredentialId,
+      models: [{ catalogId: "gpt-6-sol", credentialId, harnesses: ["pi"], thinking: "high" }],
+      conditions: [{ name: "No AGENTS.md", environment: environment.id }],
+    };
+    // Nothing is ready yet, so the condition has nothing to run.
+    const early = await fixture.request(`${fixture.base}/comparisons`, post(draft));
+    expect(await early.json()).toEqual({
+      error: "No AGENTS.md: no picked task is ready in No AGENTS.md yet",
+    });
+    await fixture.tasks.variants.settle(variant.runId, variant.candidateId, {
+      pipelineStatus: "accepted",
+      stage: "accepted",
+      bundleKey: "runs/scn-variant/harbor-task.tar.gz",
+    });
+    const started = await fixture.request(
+      `${fixture.base}/comparisons`,
+      post({ ...draft, id: crypto.randomUUID() }),
+    );
+    expect(started.status).toBe(202);
+    const [baseline, conditioned] = fixture.starts;
+    expect(baseline?.tasks).toEqual([expect.objectContaining({ bundleKey: "tasks/task.tar.gz" })]);
+    expect(conditioned?.condition).toMatchObject({
+      name: "No AGENTS.md",
+      environment: { id: environment.id, name: "No AGENTS.md" },
+    });
+    expect(conditioned?.tasks).toEqual([
+      expect.objectContaining({
+        runId: "run-one",
+        taskId: "task-one",
+        bundleKey: "runs/scn-variant/harbor-task.tar.gz",
+      }),
+    ]);
+    const unknown = await fixture.request(
+      `${fixture.base}/comparisons`,
+      post({ ...draft, id: crypto.randomUUID(), conditions: [{ name: "Gone", environment: 999 }] }),
+    );
+    expect(await unknown.json()).toEqual({ error: "Gone: no such environment in this repository" });
+  } finally {
+    await fixture.close();
+  }
+});

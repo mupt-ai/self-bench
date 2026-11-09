@@ -72,7 +72,7 @@ export type { ComparisonOwner } from "./comparison-save.js";
  */
 export async function createComparison(
   vault: Pick<Vault, "credentials" | "comparisons">,
-  dataset: Pick<EvaluationDataset, "select">,
+  dataset: Pick<EvaluationDataset, "select" | "environment">,
   store: ArtifactStore,
   managed: ManagedOffer,
   owner: ComparisonOwner,
@@ -90,6 +90,7 @@ export async function createComparison(
     () => dataset.select(selection.tasks),
     environment,
     (tasks, saved) => judgeCredential(tasks, saved, selection.judgeCredentialId),
+    dataset.environment?.bind(dataset),
   );
 }
 

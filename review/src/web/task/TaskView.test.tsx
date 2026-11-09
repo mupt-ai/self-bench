@@ -65,12 +65,12 @@ test("a status poll on a task without files keeps the tab the person opened", as
       }),
     });
     const row = { id: "task", name: "task" };
-    const variants = { count: 2, sheet: <p>Variant List</p> };
+    const feedback = <p>Feedback Form</p>;
     const container = document.createElement("div");
     const root = createRoot(container);
     const render = async (current: TaskSource) => {
       await act(async () =>
-        root.render(<TaskView source={current} row={row} variants={variants} />),
+        root.render(<TaskView source={current} row={row} feedback={feedback} />),
       );
       await act(async () => {
         await Promise.resolve();
@@ -79,14 +79,14 @@ test("a status poll on a task without files keeps the tab the person opened", as
     await render(polled());
     const selected = () => container.querySelector('[aria-selected="true"]')?.textContent;
     expect(selected()).toBe("Pipeline");
-    const tab = [...container.querySelectorAll("button")].find((button) =>
-      button.textContent?.startsWith("Variants"),
+    const tab = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Feedback",
     );
     await act(async () => tab?.click());
-    expect(selected()).toBe("Variants · 2");
+    expect(selected()).toBe("Feedback");
     await render(polled());
-    expect(selected()).toBe("Variants · 2");
-    expect(container.textContent).toContain("Variant List");
+    expect(selected()).toBe("Feedback");
+    expect(container.textContent).toContain("Feedback Form");
     await act(async () => root.unmount());
   } finally {
     for (const [key, descriptor] of previous) {

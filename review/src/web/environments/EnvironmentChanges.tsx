@@ -3,20 +3,20 @@ import { type ReactNode, useId } from "react";
 import { cn } from "../primitives/cn";
 import { InfoTooltip } from "../primitives/tooltip";
 import { Button, controlStyles, Input, Select } from "../ui";
-import type { VariantInput } from "./task-variant-api";
+import type { EnvironmentInput } from "./environment-api";
 
-type PackageRow = VariantInput["packages"][number];
-type FileRow = VariantInput["files"][number];
+type PackageRow = EnvironmentInput["packages"][number];
+type FileRow = EnvironmentInput["files"][number];
 
 const update = <T,>(rows: T[], index: number, patch: Partial<T>) =>
   rows.map((row, at) => (at === index ? { ...row, ...patch } : row));
 
 /**
- * A variant's changes to the task's environment: packages installed over the task's own, in a
- * workspace under /app, and files written into /app before the agent starts. Each change is a card
- * with its own labeled fields, so a filled-in row still says what each value is.
+ * An environment's changes to every task: packages installed over the task's own, in a workspace
+ * under /app, and files written into or removed from /app before the agent starts. Each change is
+ * a card with its own labeled fields, so a filled-in row still says what each value is.
  */
-export function VariantChanges({
+export function EnvironmentChanges({
   packages,
   files,
   onPackagesChange,
@@ -31,13 +31,13 @@ export function VariantChanges({
 }) {
   const empty = packages.length + files.length === 0;
   return (
-    <section className="grid gap-3" aria-labelledby="variant-changes">
+    <section className="grid gap-3" aria-labelledby="environment-changes">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
-          <h3 id="variant-changes" className="text-sm font-semibold">
+          <h3 id="environment-changes" className="text-sm font-semibold">
             Changes
           </h3>
-          <InfoTooltip label="What this variant changes in the task's environment. The instruction, hidden tests, and reference solution stay the same." />
+          <InfoTooltip label="What this environment changes in every task. Each task's instruction, hidden tests, and reference solution stay the same." />
         </div>
         <div className="flex gap-2">
           <Button
@@ -60,7 +60,8 @@ export function VariantChanges({
       </div>
       {empty ? (
         <p className="border border-dashed border-border px-4 py-8 text-center text-sm leading-6 text-muted-foreground">
-          No changes yet. Swap a package for another build, or add a file such as AGENTS.md.
+          No changes yet. Swap a package for another build, or add, change, or remove a file such as
+          AGENTS.md.
         </p>
       ) : (
         <ul className="grid gap-3">
@@ -129,8 +130,8 @@ export function VariantChanges({
               // biome-ignore lint/suspicious/noArrayIndexKey: rows have no identity besides their place
               key={`file-${index}`}
               icon={<FileText aria-hidden="true" />}
-              title="Write File"
-              help="Written into /app before the agent starts, so the agent sees it as part of its files. Append adds to the end of a file that exists, such as AGENTS.md; Replace overwrites it."
+              title="Change File"
+              help="Changed in /app before the agent starts, so the agent sees it as part of its files. Append adds to the end of a file that exists, such as AGENTS.md; Replace overwrites it; Delete removes it."
               removeLabel="Remove File"
               disabled={disabled}
               onRemove={() => onFilesChange(files.filter((_, at) => at !== index))}
@@ -165,31 +166,34 @@ export function VariantChanges({
                     >
                       <option value="append">Append</option>
                       <option value="replace">Replace</option>
+                      <option value="delete">Delete</option>
                     </Select>
                   )}
                 </Field>
-                <Field label="Content" className="sm:col-span-2">
-                  {(id) => (
-                    <textarea
-                      id={id}
-                      rows={6}
-                      placeholder={
-                        row.mode === "append"
-                          ? "Text to add to the end of the file"
-                          : "The file's full contents"
-                      }
-                      className={cn(
-                        controlStyles,
-                        "h-auto resize-y py-2 font-mono leading-6 placeholder:font-sans",
-                      )}
-                      value={row.content}
-                      disabled={disabled}
-                      onChange={(event) =>
-                        onFilesChange(update(files, index, { content: event.target.value }))
-                      }
-                    />
-                  )}
-                </Field>
+                {row.mode !== "delete" && (
+                  <Field label="Content" className="sm:col-span-2">
+                    {(id) => (
+                      <textarea
+                        id={id}
+                        rows={6}
+                        placeholder={
+                          row.mode === "append"
+                            ? "Text to add to the end of the file"
+                            : "The file's full contents"
+                        }
+                        className={cn(
+                          controlStyles,
+                          "h-auto resize-y py-2 font-mono leading-6 placeholder:font-sans",
+                        )}
+                        value={row.content}
+                        disabled={disabled}
+                        onChange={(event) =>
+                          onFilesChange(update(files, index, { content: event.target.value }))
+                        }
+                      />
+                    )}
+                  </Field>
+                )}
               </div>
             </ChangeCard>
           ))}

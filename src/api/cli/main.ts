@@ -2,6 +2,7 @@ import { fail } from "../../lib/util.js";
 import { download, passthrough } from "./api-client.js";
 import { readConfig } from "./config.js";
 import { credentialCommand } from "./credentials.js";
+import { environmentCommand } from "./environments.js";
 import {
   catalogCommand,
   compareCommand,
@@ -47,6 +48,8 @@ const COMMANDS: Record<string, Command> = {
   scenario: scenarioCommand,
   tasks: (args) => taskCommand(args, true),
   task: (args) => taskCommand(args, false),
+  environments: (args) => environmentCommand(args, true),
+  environment: (args) => environmentCommand(args, false),
   catalog: catalogCommand,
   compare: compareCommand,
   comparisons: (args) => comparisonCommand(args, true),

@@ -7,6 +7,7 @@ import { type ManagedOffer, managedHarborEnvironment } from "../generation/billi
 import { type CatalogModel, evaluationCatalog } from "./catalog.js";
 import type { ComparisonSelection } from "./comparisons.js";
 import { conditionRefusal, type RunCondition, runCondition } from "./conditions.js";
+import type { EvaluationDataset } from "./dataset.js";
 import { defaultThinking, routeFor, signInRefusal, thinkingOptions } from "./models.js";
 import { assertTasksFitSandbox } from "./resource-check.js";
 import { listRuns } from "./run-list.js";
@@ -51,6 +52,8 @@ export async function saveComparison(
     tasks: EvaluationInput["tasks"],
     saved: ReadonlyMap<string, CredentialInfo>,
   ) => string | undefined,
+  /** The scope's environments, for conditions that name one (EvaluationDataset.environment). */
+  environments?: EvaluationDataset["environment"],
 ): Promise<ComparisonRecord> {
   const owned = (record: ComparisonRecord) => {
     if (
@@ -92,15 +95,27 @@ export async function saveComparison(
       : sandbox.kind !== selection.sandbox)
   )
     throw new Error("Select your matching sandbox credential");
-  // The baseline runs the tasks as they are; each condition runs them again, kept apart in results.
-  const conditions: (RunCondition | undefined)[] = [
-    ...(selection.baseline === false ? [] : [undefined]),
-    ...(selection.conditions ?? []).map(runCondition),
-  ];
-  if (conditions.length === 0) throw new Error("Run the baseline or at least one condition");
-  if (new Set(conditions.map((condition) => condition?.id)).size !== conditions.length)
-    throw new Error("Pick each condition once");
+  const given = selection.conditions ?? [];
+  if (selection.baseline === false && given.length === 0)
+    throw new Error("Run the baseline or at least one condition");
+  const ids = given.map((condition) => runCondition(condition).id);
+  if (new Set(ids).size !== ids.length) throw new Error("Pick each condition once");
   const frozen = await freeze();
+  // The baseline runs the tasks as they are; each condition runs them again, kept apart in results.
+  // A condition with an environment runs each task its environment has ready, from its variant.
+  const conditions: { condition?: RunCondition; tasks: EvaluationInput["tasks"] }[] =
+    selection.baseline === false ? [] : [{ tasks: frozen }];
+  for (const condition of given) {
+    if (condition.environment === undefined) {
+      conditions.push({ condition: runCondition(condition), tasks: frozen });
+      continue;
+    }
+    const built = await environments?.(condition.environment, frozen);
+    if (!built) throw new Error(`${condition.name}: no such environment in this repository`);
+    if (built.tasks.length === 0)
+      throw new Error(`${condition.name}: no picked task is ready in ${built.name} yet`);
+    conditions.push({ condition: runCondition(condition, built.name), tasks: built.tasks });
+  }
   const resourceWarnings = assertTasksFitSandbox(frozen, sandbox);
   const judgeCredentialId = judge?.(frozen, saved);
   const seen = new Set<string>();
@@ -145,18 +160,18 @@ export async function saveComparison(
       if (seen.has(pair))
         throw new Error("Select each model, harness, and thinking configuration once");
       seen.add(pair);
-      for (const condition of conditions) {
+      for (const { condition } of conditions) {
         const refusal = condition && conditionRefusal(condition, harness);
         if (refusal) throw new Error(refusal);
       }
     }
     const modelName = `${route.provider === "custom" ? "openai" : route.provider}/${route.model}`;
-    const groups = conditions.flatMap((condition) =>
+    const groups = conditions.flatMap(({ condition, tasks }) =>
       selection.skipCompleted
         ? selected.harnesses.map((harness) => ({
             condition,
             harnesses: [harness],
-            tasks: frozen.filter(
+            tasks: tasks.filter(
               (task) =>
                 !completed.has(
                   configurationTaskKey(
@@ -167,7 +182,7 @@ export async function saveComparison(
                 ),
             ),
           }))
-        : [{ condition, harnesses: selected.harnesses, tasks: frozen }],
+        : [{ condition, harnesses: selected.harnesses, tasks }],
     );
     const { pricing } = route;
     return groups

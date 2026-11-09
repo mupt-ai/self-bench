@@ -1,5 +1,5 @@
 {
-  "id": "e3047bc1-f12a-418c-9f39-b88a7a9a50b6",
+  "id": "0eb299f6-bdef-4409-b617-c50f0c5698e4",
   "prevId": "819088e3-d69b-4cc8-8b86-0261f7eebf2d",
   "version": "7",
   "dialect": "postgresql",
@@ -2771,6 +2771,105 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.task_environments": {
+      "name": "task_environments",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "repo_id": {
+          "name": "repo_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "changes": {
+          "name": "changes",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "task_environments_repo_id": {
+          "name": "task_environments_repo_id",
+          "columns": [
+            {
+              "expression": "repo_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "task_environments_repo_id_repos_id_fk": {
+          "name": "task_environments_repo_id_repos_id_fk",
+          "tableFrom": "task_environments",
+          "tableTo": "repos",
+          "columnsFrom": [
+            "repo_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "task_environments_created_by_users_id_fk": {
+          "name": "task_environments_created_by_users_id_fk",
+          "tableFrom": "task_environments",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.task_variants": {
       "name": "task_variants",
       "schema": "",
@@ -2779,6 +2878,12 @@
           "name": "id",
           "type": "bigserial",
           "primaryKey": true,
+          "notNull": true
+        },
+        "environment_id": {
+          "name": "environment_id",
+          "type": "bigint",
+          "primaryKey": false,
           "notNull": true
         },
         "parent_id": {
@@ -2792,18 +2897,6 @@
           "type": "bigint",
           "primaryKey": false,
           "notNull": true
-        },
-        "label": {
-          "name": "label",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "changes": {
-          "name": "changes",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
         },
         "run_id": {
           "name": "run_id",
@@ -2929,6 +3022,21 @@
           "method": "btree",
           "with": {}
         },
+        "task_variants_environment_id": {
+          "name": "task_variants_environment_id",
+          "columns": [
+            {
+              "expression": "environment_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "task_variants_parent_id": {
           "name": "task_variants_parent_id",
           "columns": [
@@ -2961,6 +3069,19 @@
         }
       },
       "foreignKeys": {
+        "task_variants_environment_id_task_environments_id_fk": {
+          "name": "task_variants_environment_id_task_environments_id_fk",
+          "tableFrom": "task_variants",
+          "tableTo": "task_environments",
+          "columnsFrom": [
+            "environment_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
         "task_variants_parent_id_tasks_id_fk": {
           "name": "task_variants_parent_id_tasks_id_fk",
           "tableFrom": "task_variants",

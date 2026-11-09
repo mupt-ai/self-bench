@@ -46,14 +46,13 @@ Review
   self-bench task steering RUN_ID TASK_ID --repo R   notes sent, and which turn received each
   self-bench task unreview|cancel|delete RUN_ID TASK_ID --repo R
 
-Variants
-  self-bench task variant create RUN_ID TASK_ID --repo R --label L
-      [--package NAME@SPEC ...] [--directory DIR] [--file DEST=SOURCE ...] [--replace]
-      or --variant JSON|@FILE                        the accepted task with only its
-                                                     environment changed, checked once
-  self-bench task variant list RUN_ID TASK_ID --repo R
-  self-bench task variant cancel|delete RUN_ID TASK_ID VARIANT_RUN --repo R
-  Run one with compare --task VARIANT_RUN/TASK_ID; task results shows it beside its task.
+Environments (changes to every approved task's files, each task built and checked once)
+  self-bench environments --repo R                   each one and how many tasks are ready
+  self-bench environment create --repo R --name N [--package NAME@SPEC ...] [--directory DIR]
+      [--file DEST=SOURCE ...] [--replace] [--delete PATH ...] | --environment JSON|@FILE
+  self-bench environment show|build|delete ID --repo R
+                                                     build: tasks approved since, or that failed
+  Run one with compare --condition '{"name":"No AGENTS.md","environment":ID}'.
 
 Evaluate
   self-bench catalog --repo R                        models evaluations can use

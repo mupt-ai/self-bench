@@ -49,8 +49,14 @@ export const conditionSchema = z
       .max(MAX_SKILLS)
       .default([]),
     instructions: z.string().trim().max(MAX_INSTRUCTIONS).optional(),
+    /** A repository environment (`{repo}/environments`): every task as it built them. */
+    environment: z.number().int().positive().optional(),
   })
   .strict()
-  .refine((condition) => condition.skills.length > 0 || !!condition.instructions, {
-    message: "a condition adds a skill or instructions",
-  });
+  .refine(
+    (condition) =>
+      condition.skills.length > 0 ||
+      !!condition.instructions ||
+      condition.environment !== undefined,
+    { message: "a condition adds a skill, instructions, or an environment" },
+  );

@@ -37,6 +37,7 @@ const draftStateSchema = z.object({
           name: z.string().max(60),
           skills: z.array(z.string().max(MAX_SKILL_LENGTH)).max(MAX_SKILLS),
           instructions: z.string().max(4000).optional(),
+          environment: z.number().int().positive().optional(),
         }),
       )
       .max(4)

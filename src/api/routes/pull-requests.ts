@@ -27,12 +27,12 @@ import { listMergedPullRequests, MAX_PR_PAGE } from "../../third_party/github/pu
 import type { AuthConfig } from "../auth/config.js";
 import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson } from "../http.js";
+import { environmentsRoute } from "./environments.js";
 import { requestedGeneration } from "./generation-request.js";
 import { scenarioRoute } from "./scenarios.js";
 import { taskDraftRoute } from "./task-draft.js";
 import { taskFeedbackRoute } from "./task-feedback.js";
 import { taskSteeringRoute } from "./task-steering.js";
-import { taskVariantsRoute } from "./task-variants.js";
 import { taskItem } from "./tasks.js";
 
 const route =
@@ -67,8 +67,8 @@ export interface PullRequestRoutes {
 /**
  * POST …/tasks/from-pr {pr}: one merged PR becomes one task, built by its own workflow. POST
  * …/tasks/from-scenario does the same for a described scenario (scenarios.ts), POST
- * …/tasks/<run>/<task>/feedback revises a task the same way (task-feedback.ts), …/variants
- * changes only its environment (task-variants.ts), and GET
+ * …/tasks/<run>/<task>/feedback revises a task the same way (task-feedback.ts), …/environments
+ * builds every approved task with only its files changed (environments.ts), and GET
  * …/tasks/<run>/<task>/draft downloads the files a revision would start from (task-draft.ts), and
  * …/tasks/<run>/<task>/steering sends notes to a task still being generated (task-steering.ts).
  */
@@ -79,7 +79,7 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
     async handle(request, url, response, user) {
       if (await taskFeedbackRoute({ ...options, fetchImpl }, request, url, response, user))
         return true;
-      if (await taskVariantsRoute({ ...options, fetchImpl }, request, url, response, user))
+      if (await environmentsRoute({ ...options, fetchImpl }, request, url, response, user))
         return true;
       if (await scenarioRoute(options, request, url, response, user)) return true;
       if (await taskDraftRoute(options, request, url, response, user)) return true;

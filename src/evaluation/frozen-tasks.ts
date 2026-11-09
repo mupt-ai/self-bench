@@ -5,7 +5,6 @@ import { fileDigest } from "../artifacts/common.js";
 import type { ArtifactStore } from "../artifacts/index.js";
 import { MAX_REGISTRY_TASKS } from "../contracts/harbor-registry.js";
 import { runnable } from "../db/task-record.js";
-import { variantRunnable } from "../db/task-variants.js";
 import type { TaskStore } from "../db/tasks.js";
 import { TASK_LIMITS } from "../generation/task/render.js";
 import { assertHarborVersion, HARBOR_PROCESS_TIMEOUT_MS } from "../harnesses/harbor/command.js";
@@ -25,10 +24,7 @@ const GENERATED_TASK_RESOURCES = {
   storageMb: TASK_LIMITS.storageMb,
 };
 
-/**
- * The selected tasks of a repository as its evaluations run them: approved, with bundles. A key may
- * name an accepted variant of an approved task (its own run), which runs from its own bundle.
- */
+/** The selected tasks of a repository as its evaluations run them: approved, with bundles. */
 export async function repositoryTasks(
   tasks: TaskStore,
   repoId: number,
@@ -40,39 +36,21 @@ export async function repositoryTasks(
   )
     throw new Error("Duplicate task selection");
   // A retry may have been opened before deletion, or come from an older run's trials.
-  const [everyTask, deletedVariants] = await Promise.all([
-    tasks.listWithDeleted(repoId),
-    tasks.variants.listDeleted(repoId),
-  ]);
   const deleted = new Set(
-    [...everyTask.filter((task) => task.deleted), ...deletedVariants].map((task) =>
-      evaluationTaskKey(task.runId, task.taskId),
-    ),
+    (await tasks.listWithDeleted(repoId))
+      .filter((task) => task.deleted)
+      .map((task) => evaluationTaskKey(task.runId, task.taskId)),
   );
   const remaining = selected.filter(
     (task) => !deleted.has(evaluationTaskKey(task.runId, task.taskId)),
   );
   if (remaining.length === 0) throw new Error("No selected tasks remain in this repository");
-  const approved = new Map(
-    everyTask.filter((task) => !task.deleted && runnable(task)).map((task) => [task.id, task]),
+  const bundles = await Promise.all(
+    remaining.map((task) => tasks.find(repoId, task.runId, task.taskId)),
   );
-  const resolved = await Promise.all(
-    remaining.map(async (picked) => {
-      const task = await tasks.find(repoId, picked.runId, picked.taskId);
-      if (task) return runnable(task) ? task : undefined;
-      // A variant runs while it is accepted and the task it changes is still approved.
-      const variant = await tasks.variants.find(repoId, picked.runId);
-      return variant &&
-        variant.taskId === picked.taskId &&
-        variantRunnable(variant) &&
-        approved.has(variant.parentId)
-        ? variant
-        : undefined;
-    }),
-  );
-  if (resolved.some((task) => !task))
+  if (bundles.some((task) => !task || !runnable(task)))
     throw new Error("Every task must be human-approved in this repository");
-  return resolved.map((task) => {
+  return bundles.map((task) => {
     if (!task?.bundleKey) throw new Error("Task bundle unavailable");
     const { runId, taskId, bundleKey, images } = task;
     return {
