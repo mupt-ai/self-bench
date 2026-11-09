@@ -1,9 +1,9 @@
-import { findModel, models, type ThinkingLevel } from "../../../../src/contracts/models";
+import type { ThinkingLevel } from "../../../../src/contracts/models";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import { costTotal } from "../../../../src/evaluation/cost-total";
 import { eligibleTrial } from "../../../../src/evaluation/eligible";
-import { findListedModel, isGateway } from "../../../../src/gateways";
 import type { EvaluationRun, EvaluationTrial, Harness } from "./api";
+import { type Identity, identityOf } from "./results-identity";
 import { routeLabel } from "./results-presentation";
 
 /**
@@ -76,6 +76,8 @@ export interface Configuration extends Tally {
   provider: string;
   harness: Harness;
   thinking?: ThinkingLevel;
+  /** The run condition it ran under; none for the tasks as they are. */
+  condition?: { id: string; name: string };
   /** How its runs reached the model, in the order they were first used. */
   routes: string[];
   /** Oldest first. */
@@ -113,35 +115,6 @@ export function outcomeOf(trial: EvaluationTrial): Outcome {
   const reward = trial.rewards.reward;
   return reward === 1 ? "passed" : reward === 0 ? "failed" : "unscored";
 }
-
-/**
- * The release's setting for a run's trials on one harness (settingOf in
- * src/public/release-results.ts): model, harness and reasoning, whatever route reached the model.
- * A run from before runs recorded their credentials has none, and is left out, as a release
- * leaves it out.
- */
-function identityOf(run: EvaluationRun, harness: Harness) {
-  if (!run.credentials) return undefined;
-  const custom = run.credentials.provider === "custom";
-  // Curated models use one id on their direct provider and another on the gateways.
-  const catalog =
-    findModel(run.model) ??
-    (isGateway(run.credentials.provider)
-      ? models.find((model) => model.openRouter === run.model)
-      : undefined);
-  // Custom models are recorded as `openai/<typed name>`; the typed name is the identity.
-  const typed = custom ? run.modelName.replace(/^openai\//, "") : undefined;
-  const model = custom ? `custom/${typed}` : (catalog?.id ?? run.model);
-  return {
-    key: JSON.stringify([model, harness, run.thinking ?? "default"]),
-    label: typed ?? catalog?.label ?? findListedModel(run.model)?.label ?? run.modelLabel,
-    modelName: typed ?? (catalog?.vendor ? `${catalog.vendor}/${catalog.id}` : run.modelName),
-    provider: custom ? "custom" : (catalog?.vendor ?? run.credentials.provider),
-    harness,
-    ...(run.thinking ? { thinking: run.thinking } : {}),
-  };
-}
-type Identity = NonNullable<ReturnType<typeof identityOf>>;
 
 const noOutcomes = (): Record<Outcome, number> => ({
   passed: 0,

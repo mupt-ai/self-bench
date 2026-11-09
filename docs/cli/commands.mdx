@@ -78,6 +78,8 @@ Workspace admins connect the model access and sandboxes everyone's runs use.
 | `--task RUN_ID/TASK_ID` (repeatable) | every approved task |
 | `--skip-completed` | rerun everything |
 | `--judge-credential ID` | needed for tasks graded by an LLM judge |
+| `--condition JSON\|@FILE` (repeatable): `{"name": "…", "skills": ["org/repo"], "instructions": "…"}` | none: only the tasks as they are |
+| `--no-baseline` | runs the tasks as they are too |
 | `--selection JSON\|@FILE` | a full [comparison body](/api-reference/create-comparison) in place of the flags |
 
 ## Inspect

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { MAX_SUMMARY_CONFIGURATIONS } from "../../contracts/model-summary-limit.js";
 import type { ResultsReport } from "../../evaluation/results-report.js";
 import type { TaskAudit } from "../../evaluation/task-audit.js";
@@ -26,6 +27,8 @@ const SELECTION = {
   task: { type: "string", multiple: true },
   "skip-completed": { type: "boolean", default: false },
   "judge-credential": { type: "string" },
+  condition: { type: "string", multiple: true },
+  "no-baseline": { type: "boolean", default: false },
   selection: { type: "string" },
 } as const;
 
@@ -50,7 +53,10 @@ export async function catalogCommand(args: string[]): Promise<void> {
 export async function compareCommand(args: string[]): Promise<void> {
   const { values } = parse(args, SELECTION);
   const scope = scopePath(values);
-  const body = (await jsonOption(values, "selection")) ?? selectionFromFlags(values);
+  const body = (await jsonOption(values, "selection")) ?? {
+    ...selectionFromFlags(values),
+    ...(await conditionsFromFlags(values)),
+  };
   const reply = await requestJson(`${scope}/evaluations/comparisons`, "POST", body);
   print(values, reply, () => comparisonView(reply as unknown as Comparison));
 }
@@ -78,6 +84,26 @@ export function selectionFromFlags(values: Values): Record<string, unknown> {
   };
 }
 
+/**
+ * `--condition JSON|@FILE`, repeatable: each an object `{name, skills?, instructions?}`, or a file
+ * holding one or a list. `--no-baseline` runs only the conditions.
+ */
+async function conditionsFromFlags(values: Values): Promise<Record<string, unknown>> {
+  const conditions = (
+    await Promise.all(
+      list(values, "condition").map(async (given) => {
+        const text = given.startsWith("@") ? await readFile(given.slice(1), "utf8") : given;
+        const parsed: unknown = JSON.parse(text);
+        return Array.isArray(parsed) ? parsed : [parsed];
+      }),
+    )
+  ).flat();
+  return {
+    ...(conditions.length ? { conditions } : {}),
+    ...(values["no-baseline"] === true ? { baseline: false } : {}),
+  };
+}
+
 interface Comparison {
   id: string;
   createdAt: string;
@@ -85,6 +111,7 @@ interface Comparison {
   runs: {
     id: string;
     model: string;
+    condition?: string;
     harnesses: string[];
     status: string;
     completed: number;
@@ -96,6 +123,7 @@ function comparisonView(comparison: Comparison): string {
   const runs = table(comparison.runs, [
     ["EVALUATION", (run) => run.id],
     ["MODEL", (run) => run.model],
+    ["CONDITION", (run) => run.condition ?? "Baseline"],
     ["HARNESSES", (run) => run.harnesses.join(", ")],
     ["STATUS", (run) => run.status],
     ["TRIALS", (run) => `${run.completed}/${run.trials}`],

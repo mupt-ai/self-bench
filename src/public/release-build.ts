@@ -76,7 +76,9 @@ interface Evaluated {
 
 function evaluate(inputs: ReleaseInputs): Evaluated {
   const approved = approvedKeys(inputs.tasks);
-  return { approved, all: candidates(resultsBySetting(inputs.runs, inputs.credentials), approved) };
+  // A release publishes how agents do on the tasks as they are, never under a run condition.
+  const baseline = inputs.runs.filter((run) => !run.condition);
+  return { approved, all: candidates(resultsBySetting(baseline, inputs.credentials), approved) };
 }
 
 /** Changes whenever anything the release would contain, or the line's head, changes. */

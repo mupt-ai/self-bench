@@ -4,6 +4,7 @@ import type { CredentialInfo } from "../db/credentials.js";
 import type { JudgeNeeds } from "../harnesses/harbor/host-variables.js";
 import type { ResourceRequest } from "../sandbox/resources.js";
 import type { CatalogProvider } from "./catalog.js";
+import type { RunCondition } from "./conditions.js";
 import type { Harness } from "./models.js";
 import type { EvaluationScope } from "./scope.js";
 
@@ -36,6 +37,8 @@ export interface EvaluationInput extends EvaluationScope {
   model: string;
   modelName: string;
   thinking?: ThinkingLevel;
+  /** The run condition its trials ran under (conditions.ts); none for the tasks as they are. */
+  condition?: RunCondition;
   harnesses: Harness[];
   sandbox: EvaluationSandbox;
   tasks: EvaluationTask[];

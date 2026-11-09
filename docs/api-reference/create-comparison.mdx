@@ -15,6 +15,8 @@ icon: "chart-scatter"
 <ParamField body="sandboxCredentialId" type="string" required>The sandbox credential's ID, or `managed-sandbox`.</ParamField>
 <ParamField body="tasks" type="object[]">`{ runId, taskId }` pairs from `GET …/evaluations/options`. Leave out to run every approved task.</ParamField>
 <ParamField body="skipCompleted" type="boolean">Skip tasks each model and harness already completed.</ParamField>
+<ParamField body="conditions" type="object[]">Up to 4 [run conditions](/guides/run-evaluations#compare-run-conditions), each `{ "name", "skills"?, "instructions"? }`. Every model and harness also runs every task under each.</ParamField>
+<ParamField body="baseline" type="boolean">`false` runs only the conditions. Defaults to `true`.</ParamField>
 <ParamField body="judgeCredentialId" type="string">A model API key for tasks graded by an LLM judge; required when `GET …/evaluations/options` lists `judge` variables.</ParamField>
 
 <RequestExample>

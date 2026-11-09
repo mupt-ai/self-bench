@@ -15,6 +15,7 @@ export function comparisonProgress(
         id: input.id,
         model: input.modelName,
         thinking: input.thinking,
+        ...(input.condition ? { condition: input.condition.name } : {}),
         harnesses: input.harnesses,
         status: run?.status ?? "pending",
         completed:

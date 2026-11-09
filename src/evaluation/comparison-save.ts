@@ -6,6 +6,7 @@ import type { Vault } from "../db/vault.js";
 import { type ManagedOffer, managedHarborEnvironment } from "../generation/billing/managed.js";
 import { type CatalogModel, evaluationCatalog } from "./catalog.js";
 import type { ComparisonSelection } from "./comparisons.js";
+import { conditionRefusal, type RunCondition, runCondition } from "./conditions.js";
 import { defaultThinking, routeFor, signInRefusal, thinkingOptions } from "./models.js";
 import { assertTasksFitSandbox } from "./resource-check.js";
 import { listRuns } from "./run-list.js";
@@ -91,6 +92,14 @@ export async function saveComparison(
       : sandbox.kind !== selection.sandbox)
   )
     throw new Error("Select your matching sandbox credential");
+  // The baseline runs the tasks as they are; each condition runs them again, kept apart in results.
+  const conditions: (RunCondition | undefined)[] = [
+    ...(selection.baseline === false ? [] : [undefined]),
+    ...(selection.conditions ?? []).map(runCondition),
+  ];
+  if (conditions.length === 0) throw new Error("Run the baseline or at least one condition");
+  if (new Set(conditions.map((condition) => condition?.id)).size !== conditions.length)
+    throw new Error("Pick each condition once");
   const frozen = await freeze();
   const resourceWarnings = assertTasksFitSandbox(frozen, sandbox);
   const judgeCredentialId = judge?.(frozen, saved);
@@ -136,19 +145,30 @@ export async function saveComparison(
       if (seen.has(pair))
         throw new Error("Select each model, harness, and thinking configuration once");
       seen.add(pair);
+      for (const condition of conditions) {
+        const refusal = condition && conditionRefusal(condition, harness);
+        if (refusal) throw new Error(refusal);
+      }
     }
     const modelName = `${route.provider === "custom" ? "openai" : route.provider}/${route.model}`;
-    const groups = selection.skipCompleted
-      ? selected.harnesses.map((harness) => ({
-          harnesses: [harness],
-          tasks: frozen.filter(
-            (task) =>
-              !completed.has(
-                configurationTaskKey(modelIdentity, thinking, harness, task.runId, task.taskId),
-              ),
-          ),
-        }))
-      : [{ harnesses: selected.harnesses, tasks: frozen }];
+    const groups = conditions.flatMap((condition) =>
+      selection.skipCompleted
+        ? selected.harnesses.map((harness) => ({
+            condition,
+            harnesses: [harness],
+            tasks: frozen.filter(
+              (task) =>
+                !completed.has(
+                  configurationTaskKey(
+                    configurationIdentity(modelIdentity, thinking, harness, condition?.id),
+                    task.runId,
+                    task.taskId,
+                  ),
+                ),
+            ),
+          }))
+        : [{ condition, harnesses: selected.harnesses, tasks: frozen }],
+    );
     const { pricing } = route;
     return groups
       .filter((group) => group.tasks.length > 0)
@@ -156,6 +176,7 @@ export async function saveComparison(
         (group): EvaluationInput => ({
           id: randomUUID(),
           ...owner.scope,
+          ...(group.condition ? { condition: group.condition } : {}),
           model: model.id,
           modelName,
           thinking,
@@ -208,18 +229,18 @@ function taskMinutes(tasks: EvaluationInput["tasks"]): { taskMinutes?: number } 
   return minutes.length ? { taskMinutes: Math.max(...minutes) } : {};
 }
 
-function configurationIdentity(model: string, thinking: string | undefined, harness: string) {
-  return JSON.stringify([model, thinking ?? "default", harness]);
-}
-
-function configurationTaskKey(
+/** A configuration: model, thinking, harness, and the run condition it ran under, if any. */
+function configurationIdentity(
   model: string,
   thinking: string | undefined,
   harness: string,
-  runId: string,
-  taskId: string,
+  condition?: string,
 ) {
-  return JSON.stringify([configurationIdentity(model, thinking, harness), runId, taskId]);
+  return JSON.stringify([model, thinking ?? "default", harness, ...(condition ? [condition] : [])]);
+}
+
+function configurationTaskKey(configuration: string, runId: string, taskId: string) {
+  return JSON.stringify([configuration, runId, taskId]);
 }
 
 function completedConfigurationTasks(runs: EvaluationRun[]) {
@@ -229,9 +250,12 @@ function completedConfigurationTasks(runs: EvaluationRun[]) {
       if (trial.status === "completed")
         completed.add(
           configurationTaskKey(
-            run.model === "custom" ? run.modelName.replace(/^[^/]+\//, "") : run.model,
-            run.thinking,
-            trial.harness,
+            configurationIdentity(
+              run.model === "custom" ? run.modelName.replace(/^[^/]+\//, "") : run.model,
+              run.thinking,
+              trial.harness,
+              run.condition?.id,
+            ),
             trial.runId,
             trial.taskId,
           ),

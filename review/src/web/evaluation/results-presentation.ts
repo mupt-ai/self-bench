@@ -35,7 +35,8 @@ function harnessName(harness: string): string {
 
 /** The configuration's model and harness, for sentences about it. */
 export function configurationName(configuration: Configuration): string {
-  return `${configuration.label} · ${harnessName(configuration.harness)}`;
+  const condition = configuration.condition ? ` · ${configuration.condition.name}` : "";
+  return `${configuration.label} · ${harnessName(configuration.harness)}${condition}`;
 }
 
 /**

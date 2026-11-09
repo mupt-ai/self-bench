@@ -4,12 +4,12 @@ import type { Configuration } from "./results-model";
 import type { Order } from "./results-view";
 
 /**
- * Narrowing and ordering the Results table's configurations: by vendor, route, reasoning and
- * harness, and by how much is done, the pass rate, or the cost per task.
+ * Narrowing and ordering the Results table's configurations: by vendor, route, reasoning,
+ * harness and run condition, and by how much is done, the pass rate, or the cost per task.
  */
 
 export interface Facet {
-  key: "vendor" | "route" | "reasoning" | "harness";
+  key: "vendor" | "route" | "reasoning" | "harness" | "condition";
   label: string;
   /** What the filter reads when nothing is chosen. */
   all: string;
@@ -53,6 +53,13 @@ export const facets: Facet[] = [
     values: (configuration) => [
       harnessLabels[configuration.harness as keyof typeof harnessLabels] ?? configuration.harness,
     ],
+  },
+  {
+    key: "condition",
+    label: "Condition",
+    all: "All Conditions",
+    // The tasks as they are, or the run condition (skills, instructions) a comparison added.
+    values: ({ condition }) => [condition?.name ?? "Baseline"],
   },
 ];
 

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ArtifactStore } from "../artifacts/index.js";
+import { conditionSchema, MAX_CONDITIONS } from "../contracts/conditions.js";
 import { modelIdPattern, thinkingLevels } from "../contracts/models.js";
 import type { ComparisonRecord } from "../db/comparisons.js";
 import type { CredentialInfo } from "../db/credentials.js";
@@ -35,6 +36,10 @@ const selectionFields = {
   sandbox: z.enum(["managed", ...hostedSandboxes]),
   sandboxCredentialId: z.union([z.uuid(), z.literal("managed-sandbox")]),
   skipCompleted: z.boolean().optional(),
+  /** Run conditions (conditions.ts): every configuration also runs every task under each. */
+  conditions: z.array(conditionSchema).max(MAX_CONDITIONS).optional(),
+  /** Whether the tasks also run as they are; false runs only the conditions. Default true. */
+  baseline: z.boolean().optional(),
 };
 const comparisonSelection = z.object(selectionFields).strict();
 export type ComparisonSelection = z.infer<typeof comparisonSelection>;

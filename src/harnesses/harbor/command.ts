@@ -26,6 +26,8 @@ export interface HarborRunCommand {
   extraAllowedHosts?: readonly string[];
   /** Harbor `--ve` entries, `KEY=VALUE`, for the verifier (an LLM judge's key, judgeTrial). */
   verifierEnv?: readonly string[];
+  /** A run condition's `--skill` and `--extra-instruction` arguments (conditionArguments). */
+  conditionArguments?: readonly string[];
   quiet?: boolean;
 }
 
@@ -55,6 +57,7 @@ export function harborRunArguments(input: HarborRunCommand): string[] {
     ...(input.quiet ? ["--quiet"] : []),
     ...(input.extraAllowedHosts ?? []).flatMap((host) => ["--allow-agent-host", host]),
     ...(input.verifierEnv ?? []).flatMap((entry) => ["--ve", entry]),
+    ...(input.conditionArguments ?? []),
     ...(input.solver?.agentArguments ?? []),
   ];
 }

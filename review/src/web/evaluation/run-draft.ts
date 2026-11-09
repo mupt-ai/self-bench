@@ -29,6 +29,18 @@ const draftStateSchema = z.object({
     sandboxCredentialId: z.string().max(36),
     skipCompleted: z.boolean().optional(),
     judgeCredentialId: z.string().max(36).optional(),
+    // Run conditions as typed: checked on submit (RunConditionsPanel), so a draft may be partial.
+    conditions: z
+      .array(
+        z.object({
+          name: z.string().max(60),
+          skills: z.array(z.string().max(300)).max(10),
+          instructions: z.string().max(4000).optional(),
+        }),
+      )
+      .max(4)
+      .optional(),
+    baseline: z.boolean().optional(),
   }),
 });
 const blankModel = () => ({ catalogId: "", credentialId: "", harnesses: [] });
