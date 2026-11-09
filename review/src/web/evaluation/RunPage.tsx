@@ -117,7 +117,10 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
             const tasks =
               selectedTasks.length || current.draft.tasks.length
                 ? selectedTasks
-                : result.tasks.map(({ runId, taskId }) => ({ runId, taskId }));
+                : // A variant runs only when picked, as Run Task and Variants does.
+                  result.tasks
+                    .filter((task) => !task.variant)
+                    .map(({ runId, taskId }) => ({ runId, taskId }));
             return { ...current, draft: { ...current.draft, tasks } };
           });
           setTasksReady(true);

@@ -148,8 +148,6 @@ export interface TaskItem {
   /** The task feedback revised into this one. */
   revisedFrom?: { runId: string; taskId: string };
   feedback?: string;
-  /** A variant's label: the environment change it made to the task it revises. */
-  variant?: string;
 }
 
 /** One task as its page shows it: the task, and the revisions feedback started from it. */

@@ -57,6 +57,9 @@ Workspace admins connect the model access and sandboxes everyone's runs use.
 | `task steering RUN_ID TASK_ID R` | The notes sent, and which turn received each |
 | `task approve\|reject RUN_ID TASK_ID R [--note TEXT]` | Review it; only approved tasks are evaluated |
 | `task unreview\|cancel\|delete RUN_ID TASK_ID R` | Clear the review, stop its generation, or delete it |
+| `task variant create RUN_ID TASK_ID R --label L [--package NAME@SPEC ...] [--directory DIR] [--file DEST=SOURCE ...] [--replace]` | A variant: the accepted task with only its environment changed, checked once; or give it whole with `--variant JSON\|@FILE` |
+| `task variant list RUN_ID TASK_ID R` | Its variants and their checks |
+| `task variant cancel\|delete RUN_ID TASK_ID VARIANT_RUN R` | Stop a variant's check, or delete it |
 
 ## Evaluate
 

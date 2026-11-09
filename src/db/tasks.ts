@@ -12,6 +12,7 @@ import { tasks, users } from "./schema.js";
 import { taskCountsForRepos } from "./task-counts.js";
 import { type PlannedTask, taskLifecycle } from "./task-lifecycle.js";
 import { taskFrom } from "./task-record.js";
+import { createTaskVariantStore, type TaskVariantStore } from "./task-variants.js";
 
 export type PipelineStatus = (typeof tasks.$inferSelect)["pipelineStatus"];
 export type ReviewDecision = "approve" | "reject";
@@ -50,17 +51,13 @@ export interface TaskRecord {
   /** The task a person's feedback revised into this one. */
   readonly revisedFrom?: { readonly runId: string; readonly taskId: string };
   readonly feedback?: string;
-  /** A variant's label: the environment change it made to the task it revises. */
-  readonly variant?: string;
 }
 
 /** A task the site just started: no verdict yet, a workflow to own it. */
-interface TaskStart extends Omit<PlannedTask, "workflowId"> {
+export interface TaskStart extends Omit<PlannedTask, "workflowId"> {
   readonly startedBy: number;
   /** A revision: the row it revises and the feedback it addresses. */
   readonly revision?: { readonly from: number; readonly feedback: string };
-  /** A variant's label (generation/tasks/variant.ts); a variant is also a revision. */
-  readonly variant?: string;
 }
 
 interface RepoTaskCounts {
@@ -96,6 +93,8 @@ export interface TaskStore extends ReturnType<typeof taskLifecycle> {
   ): Promise<TaskRecord>;
   clearReview(taskRowId: number): Promise<TaskRecord>;
   countsForRepos(repoIds: readonly number[]): Promise<RepoTaskCounts[]>;
+  /** The variants of accepted tasks, which are kept apart from tasks (task-variants.ts). */
+  readonly variants: TaskVariantStore;
 }
 
 const reviewers = alias(users, "reviewers");
@@ -165,7 +164,6 @@ export function createTaskStore(db: Database, options: { now?: () => Date } = {}
           syncedAt: now(),
           startedBy: row.startedBy,
           startedAt: now(),
-          ...(row.variant ? { variant: row.variant } : {}),
           ...(row.revision
             ? { revisedFrom: row.revision.from, feedback: row.revision.feedback }
             : {}),
@@ -226,5 +224,6 @@ export function createTaskStore(db: Database, options: { now?: () => Date } = {}
         reviewedAt: null,
       }),
     countsForRepos: (repoIds) => taskCountsForRepos(db, repoIds),
+    variants: createTaskVariantStore(db, now),
   };
 }

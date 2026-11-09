@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { z } from "zod";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { AuthoredTaskDraft } from "../../contracts/index.js";
-import type { TaskRecord } from "../../db/tasks.js";
+import type { TaskRecord, TaskStart } from "../../db/tasks.js";
 import type { User } from "../../db/users.js";
 import { saveGenerationRecords } from "../../generation/settings/credentials.js";
 import { MAX_FEEDBACK_LENGTH } from "../../generation/tasks/feedback-limit.js";
@@ -14,11 +14,6 @@ import {
   stageUploadedDraft,
   uploadedDraftProblems,
 } from "../../generation/tasks/uploaded-draft.js";
-import {
-  stageVariantDraft,
-  type VariantCondition,
-  variantRequestSchema,
-} from "../../generation/tasks/variant.js";
 import { generationProperties, track } from "../../lib/telemetry/posthog.js";
 import { GitHubOAuthError } from "../../third_party/github/oauth.js";
 import {
@@ -32,7 +27,7 @@ import type { PullRequestRoutesOptions } from "./pull-requests.js";
 import { taskItem } from "./tasks.js";
 
 const route =
-  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/tasks\/([a-z0-9][a-z0-9-]{2,62})\/([A-Za-z0-9][A-Za-z0-9._-]*)\/(feedback|variants)$/;
+  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/repos\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/tasks\/([a-z0-9][a-z0-9-]{2,62})\/([A-Za-z0-9][A-Za-z0-9._-]*)\/feedback$/;
 
 const bodySchema = z.object({
   feedback: z.string().trim().min(1).max(MAX_FEEDBACK_LENGTH),
@@ -43,21 +38,17 @@ const bodySchema = z.object({
 
 const BODY_LIMIT = Math.ceil((MAX_DRAFT_BYTES * 4) / 3) + 64 * 1024;
 
-type Options = PullRequestRoutesOptions & { readonly fetchImpl: typeof fetch };
+export type RevisionRouteOptions = PullRequestRoutesOptions & { readonly fetchImpl: typeof fetch };
 
 /**
  * POST …/tasks/<run>/<task>/feedback {feedback, generation, draft?}: a person's feedback revises
  * a finished task. The revision is a new task of the same PR or scenario, started like one from
  * Add PRs, whose agent begins from the task's last submitted draft, or from the edited draft the
  * person sent, with the feedback; the task itself, and the evaluations that ran it, stay as they are.
- *
- * POST …/tasks/<run>/<task>/variants {variant, generation}: an accepted task's variant, a revision
- * whose draft is the task's own with only its environment changed (packages installed over its
- * own, files written into /app). No author runs: it is checked once and accepted if it passes, so
- * its instruction and tests stay the original's and the two can be compared.
+ * A variant, which changes only the environment, starts the same way from task-variants.ts.
  */
 export async function taskFeedbackRoute(
-  options: Options,
+  options: RevisionRouteOptions,
   request: IncomingMessage,
   url: URL,
   response: ServerResponse,
@@ -65,8 +56,7 @@ export async function taskFeedbackRoute(
 ): Promise<boolean> {
   const match = route.exec(url.pathname);
   if (!match || request.method !== "POST") return false;
-  const [, org = "", owner, name, runId = "", taskId = "", action] = match;
-  const variantRequest = action === "variants";
+  const [, org = "", owner, name, runId = "", taskId = ""] = match;
   if (options.publicUrl && !trustedMutation(request, options.publicUrl, user)) {
     sendJson(response, 403, { error: "Same-origin JSON request required" });
     return true;
@@ -79,28 +69,11 @@ export async function taskFeedbackRoute(
     return true;
   }
   let body: z.infer<typeof bodySchema>;
-  let condition: VariantCondition | undefined;
   try {
-    const raw = JSON.parse((await readBody(request, BODY_LIMIT)).toString("utf8"));
-    if (variantRequest) {
-      const parsed = variantRequestSchema.safeParse(raw);
-      if (!parsed.success) {
-        const issue = parsed.error.issues[0];
-        sendJson(response, 400, {
-          error: issue
-            ? `${issue.path.join(".") || "variant"}: ${issue.message}`
-            : "Invalid variant",
-        });
-        return true;
-      }
-      condition = parsed.data.variant;
-      body = { feedback: `Variant: ${condition.label}`, generation: parsed.data.generation };
-    } else body = bodySchema.parse(raw);
+    body = bodySchema.parse(JSON.parse((await readBody(request, BODY_LIMIT)).toString("utf8")));
   } catch {
     sendJson(response, 400, {
-      error: variantRequest
-        ? "Send the variant as JSON."
-        : `Write your feedback, in at most ${MAX_FEEDBACK_LENGTH.toLocaleString("en-US")} characters.`,
+      error: `Write your feedback, in at most ${MAX_FEEDBACK_LENGTH.toLocaleString("en-US")} characters.`,
     });
     return true;
   }
@@ -111,11 +84,6 @@ export async function taskFeedbackRoute(
   }
   if (task.pipelineStatus === "in_progress") {
     sendJson(response, 409, { error: "Wait for this task's generation to finish." });
-    return true;
-  }
-  // A variant is compared with the task it changes, so that task must have passed its checks.
-  if (condition && task.pipelineStatus !== "accepted") {
-    sendJson(response, 409, { error: "Only an accepted task can have a variant." });
     return true;
   }
   const scenario = task.sourcePr === undefined && task.title !== undefined;
@@ -152,44 +120,27 @@ export async function taskFeedbackRoute(
   const stage = async (revisionRunId: string): Promise<AuthoredTaskDraft> =>
     uploaded
       ? await stageUploadedDraft(artifacts, revisionRunId, task, uploaded)
-      : condition
-        ? await stageVariantDraft(
-            artifacts,
-            revisionRunId,
-            submitted as AuthoredTaskDraft,
-            condition,
-          )
-        : await stageRevisionDraft(artifacts, revisionRunId, submitted as AuthoredTaskDraft);
-  const revision = {
-    from: task.id,
+      : await stageRevisionDraft(artifacts, revisionRunId, submitted as AuthoredTaskDraft);
+  // The revision is a task row of its own, linked to the task and the feedback it addresses.
+  const reserve = (row: TaskStart) =>
+    tasks.reserveStarted({ ...row, revision: { from: task.id, feedback: body.feedback } });
+  const started = await startRevision(options, {
+    repo,
+    task,
+    user,
     feedback: body.feedback,
-    ...(condition ? { variant: condition.label } : {}),
-  };
-  let row: TaskRecord;
-  if (scenario) {
-    // A repository scenario's run clones its commit with the person's token, as a PR's does.
-    const token = task.baseCommit ? await options.users.gitHubToken(user.githubId) : undefined;
-    row = await reviseScenario({
-      ...options,
-      repository: repo,
-      task,
-      startedBy: user.id,
-      revision,
-      stage,
-      ...(generation ? { generation } : {}),
-      ...(token ? { token } : {}),
-    });
-  } else {
-    const started = await revisePullRequest(options, repo, task, user, revision, stage, generation);
-    if ("status" in started) {
-      sendJson(response, started.status, { error: started.error });
-      return true;
-    }
-    row = started.row;
+    stage,
+    reserve,
+    ...(generation ? { generation } : {}),
+  });
+  if ("status" in started) {
+    sendJson(response, started.status, { error: started.error });
+    return true;
   }
+  const row = started.row;
   track(
     user,
-    condition ? "task variant started" : "task revision started",
+    "task revision started",
     {
       ...(generation ? generationProperties(generation.settings) : {}),
       source: scenario ? "scenario" : "pull_request",
@@ -201,16 +152,55 @@ export async function taskFeedbackRoute(
   return true;
 }
 
+/** A new run of a task, as a revision or a variant starts one. */
+interface RevisionStart<Row> {
+  readonly repo: { readonly id: number; readonly fullName: string; readonly defaultBranch: string };
+  readonly task: TaskRecord;
+  readonly user: User;
+  readonly feedback: string;
+  /** Only checks the staged draft, as a variant's run does; otherwise its author revises it. */
+  readonly verifyOnly?: boolean;
+  readonly stage: (runId: string) => Promise<AuthoredTaskDraft>;
+  /** Records the run before its workflow starts, under a run ID it may suffix. */
+  readonly reserve: (row: TaskStart) => Promise<Row>;
+  readonly generation?: Parameters<typeof saveGenerationRecords>[2];
+}
+
+/**
+ * Starts a new run of a PR's or scenario's task from `stage`'s draft: a scenario's keeps the
+ * original scenario, and a PR's reads the PR again with the person's token, on the task's own base.
+ */
+export async function startRevision<Row extends { readonly runId: string }>(
+  options: RevisionRouteOptions,
+  start: RevisionStart<Row>,
+): Promise<{ row: Row } | { status: number; error: string }> {
+  const { repo, task, user } = start;
+  if (task.sourcePr === undefined) {
+    // A repository scenario's run clones its commit with the person's token, as a PR's does.
+    const token = task.baseCommit ? await options.users.gitHubToken(user.githubId) : undefined;
+    const row = await reviseScenario({
+      ...options,
+      repository: repo,
+      task,
+      startedBy: user.id,
+      feedback: start.feedback,
+      ...(start.verifyOnly ? { verifyOnly: true } : {}),
+      reserve: start.reserve,
+      stage: start.stage,
+      ...(start.generation ? { generation: start.generation } : {}),
+      ...(token ? { token } : {}),
+    });
+    return { row };
+  }
+  return await revisePullRequest(options, start);
+}
+
 /** A PR task's revision: the PR read again with the person's token, on the task's own base. */
-async function revisePullRequest(
-  options: Options,
-  repo: { readonly id: number; readonly fullName: string; readonly defaultBranch: string },
-  task: TaskRecord,
-  user: User,
-  revision: { readonly from: number; readonly feedback: string; readonly variant?: string },
-  stage: (runId: string) => Promise<AuthoredTaskDraft>,
-  generation: Parameters<typeof saveGenerationRecords>[2] | undefined,
-): Promise<{ row: TaskRecord } | { status: number; error: string }> {
+async function revisePullRequest<Row extends { readonly runId: string }>(
+  options: RevisionRouteOptions,
+  start: RevisionStart<Row>,
+): Promise<{ row: Row } | { status: number; error: string }> {
+  const { repo, task, user, stage, generation } = start;
   const sourcePr = task.sourcePr as number;
   const token = await options.users.gitHubToken(user.githubId);
   if (!token) throw new GitHubOAuthError("no GitHub token stored for this user", 401);
@@ -236,7 +226,7 @@ async function revisePullRequest(
     ...(originalRequest ? { request: originalRequest } : {}),
     ...(task.baseCommit ? { baseCommit: task.baseCommit } : {}),
   };
-  const row = await options.tasks.reserveStarted({
+  const row = await start.reserve({
     repoId: repo.id,
     runId: taskRevisionRunId(repo.fullName, sourcePr),
     candidateId: task.candidateId,
@@ -247,8 +237,6 @@ async function revisePullRequest(
     difficulty: task.difficulty,
     stage: "authoring",
     startedBy: user.id,
-    revision: { from: revision.from, feedback: revision.feedback },
-    ...(revision.variant ? { variant: revision.variant } : {}),
   });
   await startTaskFromPullRequest({
     config: options.config,
@@ -269,8 +257,8 @@ async function revisePullRequest(
     ...(generation ? { generation } : {}),
     revision: {
       draft: await stage(row.runId),
-      feedback: revision.feedback,
-      ...(revision.variant ? { verifyOnly: true } : {}),
+      feedback: start.feedback,
+      ...(start.verifyOnly ? { verifyOnly: true } : {}),
     },
   });
   return { row };

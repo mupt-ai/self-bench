@@ -49,6 +49,8 @@ A key acts as its owner, with the owner's workspace roles. `read` keys may only 
 | | `PUT`, `DELETE` | `{repo}/tasks/{runId}/{taskId}/review` | Approve or reject, or clear the review |
 | | `POST` | `{repo}/tasks/{runId}/{taskId}/feedback` | Revise it from feedback and edited files |
 | | `POST` | `{repo}/tasks/{runId}/{taskId}/cancel` | Stop its generation |
+| | `GET`, `POST` | `{repo}/tasks/{runId}/{taskId}/variants` | [List or create its variants](/guides/author-scenarios#create-a-variant) |
+| | `POST`, `DELETE` | `{repo}/tasks/{runId}/{taskId}/variants/{variantRunId}` · `/cancel` | Stop or delete a variant |
 | Evaluate | `GET` | `{scope}/evaluations/catalog` | [Models and sandboxes](/api-reference/create-comparison) |
 | | `GET` | `{scope}/evaluations/options` | Tasks a comparison can run |
 | | `GET`, `POST` | `{scope}/evaluations/comparisons` | List or start comparisons |

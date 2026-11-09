@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { GenerationCost } from "../../contracts/index.js";
 import type { RepoStore } from "../../db/repos.js";
-import { isVariant, type TaskState, taskState } from "../../db/task-record.js";
+import { type TaskState, taskState } from "../../db/task-record.js";
 import type { ReviewDecision, TaskRecord, TaskStore } from "../../db/tasks.js";
 import type { User, UserStore } from "../../db/users.js";
 import { candidateArtifacts } from "../../generation/runs/artifacts.js";
@@ -45,8 +45,6 @@ export interface TaskListItem {
   readonly cost?: GenerationCost;
   readonly revisedFrom?: TaskRecord["revisedFrom"];
   readonly feedback?: string;
-  /** A variant's label: the environment change it made to the task it revises. */
-  readonly variant?: string;
 }
 
 export interface TaskRoutesOptions {
@@ -112,9 +110,7 @@ export function createTaskRoutes(options: TaskRoutesOptions): TaskRoutes {
       }
       if (tasksRoute.test(url.pathname) && request.method === "GET") {
         sendJson(response, 200, {
-          tasks: (await tasks.listForRepo(repo.id))
-            .filter((task) => !isVariant(task))
-            .map((task) => taskItem(task)),
+          tasks: (await tasks.listForRepo(repo.id)).map((task) => taskItem(task)),
         });
         return true;
       }
@@ -177,9 +173,7 @@ export function createTaskRoutes(options: TaskRoutesOptions): TaskRoutes {
         const cost = options.cost
           ? await options.cost(runId, tenant.id, task.candidateId, liveCost)
           : undefined;
-        const revisions = (await tasks.revisionsOf(task.id))
-          .filter((revision) => !isVariant(revision))
-          .map((revision) => taskItem(revision));
+        const revisions = (await tasks.revisionsOf(task.id)).map((revision) => taskItem(revision));
         sendJson(response, 200, { task: taskItem(task, cost), revisions });
         return true;
       }
@@ -238,7 +232,6 @@ export function taskItem(task: TaskRecord, cost?: GenerationCost): TaskListItem 
     ...(cost ? { cost } : {}),
     ...(task.revisedFrom ? { revisedFrom: task.revisedFrom } : {}),
     ...(task.feedback ? { feedback: task.feedback } : {}),
-    ...(task.variant ? { variant: task.variant } : {}),
   };
 }
 

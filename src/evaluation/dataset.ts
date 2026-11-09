@@ -1,6 +1,7 @@
 import type { FrozenTask } from "../db/benchmarks.js";
-import { isVariant, runnable } from "../db/task-record.js";
-import type { TaskStore } from "../db/tasks.js";
+import { runnable } from "../db/task-record.js";
+import { type TaskVariantRecord, variantRunnable } from "../db/task-variants.js";
+import type { TaskRecord, TaskStore } from "../db/tasks.js";
 import { type JudgeNeeds, mergeJudgeNeeds } from "../harnesses/harbor/host-variables.js";
 import { repositoryTasks } from "./frozen-tasks.js";
 import type { SummaryTask } from "./model-summary.js";
@@ -17,6 +18,17 @@ export interface DatasetTask extends TaskKey {
   difficulty?: string;
   /** In a repository group, the member repository the task is from. */
   repository?: string;
+  /**
+   * A variant of a task (generation/tasks/variant.ts): its label and the task it changes. Only a
+   * comparison that picks it runs it, and its results are reported beside that task's.
+   */
+  variant?: { label: string; of: TaskKey };
+}
+
+/** A variant results report beside its task: what it is, and the bundle its trials ran. */
+interface VariantSummaryTask extends SummaryTask {
+  label: string;
+  of: TaskKey;
 }
 
 /**
@@ -31,6 +43,8 @@ export interface EvaluationDataset {
   select(picked?: readonly TaskKey[]): Promise<EvaluationTask[]>;
   /** The tasks results count on. */
   summaryTasks(): Promise<SummaryTask[]>;
+  /** The variants of those tasks, which are reported beside them and never counted with them. */
+  variantTasks?(): Promise<VariantSummaryTask[]>;
   /**
    * The runs as lists show them, and a tag that changes when that view does. Only a repository
    * edits its tasks, so only it hides trials of tasks deleted since.
@@ -43,17 +57,37 @@ export interface EvaluationDataset {
   readonly sources?: readonly { scope: EvaluationScope; name: string }[];
 }
 
-/** A repository's approved tasks. */
+/** An approved task's accepted variants, each with the task it changes. */
+async function runnableVariants(
+  tasks: TaskStore,
+  repoId: number,
+  approved: readonly TaskRecord[],
+): Promise<{ variant: TaskVariantRecord; task: TaskRecord }[]> {
+  const byId = new Map(approved.map((task) => [task.id, task]));
+  return (await tasks.variants.listForRepo(repoId)).flatMap((variant) => {
+    const task = byId.get(variant.parentId);
+    return task && variantRunnable(variant) ? [{ variant, task }] : [];
+  });
+}
+
+/** A repository's approved tasks, and their variants for comparisons that pick them. */
 export function repositoryDataset(tasks: TaskStore, repoId: number): EvaluationDataset {
-  const approved = async () =>
-    (await tasks.listForRepo(repoId)).filter(runnable).filter((task) => !isVariant(task));
+  const approved = async () => (await tasks.listForRepo(repoId)).filter(runnable);
   return {
     async options() {
-      const listed = (await approved()).map(({ runId, taskId, difficulty }) => ({
+      const found = await approved();
+      const listed: DatasetTask[] = found.map(({ runId, taskId, difficulty }) => ({
         runId,
         taskId,
         difficulty,
       }));
+      for (const { variant, task } of await runnableVariants(tasks, repoId, found))
+        listed.push({
+          runId: variant.runId,
+          taskId: variant.taskId,
+          difficulty: task.difficulty,
+          variant: { label: variant.label, of: { runId: task.runId, taskId: task.taskId } },
+        });
       return { tasks: listed, judge: mergeJudgeNeeds([]) };
     },
     async select(picked) {
@@ -63,6 +97,16 @@ export function repositoryDataset(tasks: TaskStore, repoId: number): EvaluationD
       return (await approved()).flatMap(({ runId, taskId, bundleKey, difficulty }) =>
         bundleKey ? [{ runId, taskId, bundleKey, difficulty }] : [],
       );
+    },
+    async variantTasks() {
+      return (await runnableVariants(tasks, repoId, await approved())).map(({ variant, task }) => ({
+        runId: variant.runId,
+        taskId: variant.taskId,
+        bundleKey: variant.bundleKey as string,
+        difficulty: task.difficulty,
+        label: variant.label,
+        of: { runId: task.runId, taskId: task.taskId },
+      }));
     },
     visible: (runs) => visibleTrials(tasks, repoId, runs),
   };
@@ -117,8 +161,8 @@ export function groupDataset(
   /** Which member each approved task belongs to, by task key. */
   const owners = async () => {
     const byKey = new Map<string, GroupMemberRepo>();
-    for (const { member } of each)
-      for (const task of (await tasks.listForRepo(member.repoId)).filter(runnable))
+    for (const { member, dataset } of each)
+      for (const task of (await dataset.options()).tasks)
         byKey.set(evaluationTaskKey(task.runId, task.taskId), member);
     return byKey;
   };
@@ -149,6 +193,9 @@ export function groupDataset(
     },
     async summaryTasks() {
       return (await Promise.all(each.map(({ dataset }) => dataset.summaryTasks()))).flat();
+    },
+    async variantTasks() {
+      return (await Promise.all(each.map(({ dataset }) => dataset.variantTasks?.() ?? []))).flat();
     },
     async visible(runs) {
       // A trial is hidden when its task was deleted from the repository it came from.

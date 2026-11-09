@@ -131,5 +131,16 @@ function taskView(report: TaskReport): string {
         `${name(result.configuration)} failed:`,
         result.failureSummary ?? "(not explained yet)",
       );
+  for (const variant of report.variants ?? [])
+    lines.push(
+      "",
+      `Variant ${variant.label} (${variant.runId}): passed by ${variant.passed} of ${variant.scored} configurations`,
+      table(variant.results, [
+        ["CONFIGURATION", (result) => name(result.configuration)],
+        ["RESULT", (result) => (result.passed ? "pass" : "FAIL")],
+        ["COST", (result) => usd(result.costUsd)],
+        ["EVALUATION", (result) => result.evaluationId],
+      ]),
+    );
   return lines.join("\n");
 }

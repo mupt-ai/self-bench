@@ -1,6 +1,8 @@
 import { afterEach, expect, test } from "bun:test";
 import type { ScenarioCandidate } from "../../src/contracts/index.js";
 import { createTaskStore } from "../../src/db/tasks.js";
+import { repositoryDataset } from "../../src/evaluation/dataset.js";
+import { createTaskActivities } from "../../src/generation/tasks/activities.js";
 import { mint } from "../support/api-keys.js";
 import { prFixture } from "../support/pr-fixture.js";
 import type { AuthServer } from "../support/site-fixture.js";
@@ -58,6 +60,7 @@ async function taskWithDraft(accepted: boolean) {
   await createTaskStore(fixture.site.db).settle(task.runId, candidate.candidateId, {
     stage: accepted ? "accepted" : "rejected",
     pipelineStatus: accepted ? "accepted" : "rejected",
+    ...(accepted ? { bundleKey: `runs/${task.runId}/harbor-task.tar.gz` } : {}),
   });
   const variants = (variant: object) =>
     fixture.site.request(`${EVAL}/tasks/${task.runId}/${task.taskId}/variants`, {
@@ -79,9 +82,10 @@ test("a variant reruns an accepted task's checks with only its Dockerfile change
   const { variants, started, artifacts, task } = await taskWithDraft(true);
   const response = await variants(VARIANT);
   expect(response.status).toBe(201);
-  const variant = (await response.json()).task as { runId: string; variant?: string };
-  expect(variant.variant).toBe("Next.js PR Docs");
+  const variant = (await response.json()).variant as { runId: string; label: string };
+  expect(variant).toMatchObject({ label: "Next.js PR Docs", state: "in_progress" });
   expect(variant.runId).not.toBe(task.runId);
+  expect(started.at(-1)?.input.run.runId).toBe(variant.runId);
 
   const input = started.at(-1)?.input;
   expect(input?.revision).toMatchObject({ feedback: "Variant: Next.js PR Docs", verifyOnly: true });
@@ -128,36 +132,97 @@ test("a variant needs an accepted task and refuses values that could escape the 
   expect(started.length).toBe(before);
 });
 
-test("a variant is not listed as a task, counted, or shown as a revision, but stays reachable", async () => {
-  const { variants, task, key, site } = await taskWithDraft(true);
+test("a variant lives under its task, never as a task, and runs only when picked", async () => {
+  const { variants, task, key, site, started, artifacts } = await taskWithDraft(true);
   const created = await variants(VARIANT);
   expect(created.status).toBe(201);
-  const variant = (await created.json()).task as {
-    runId: string;
-    taskId: string;
-    candidateId: string;
-  };
+  const variant = (await created.json()).variant as { runId: string; taskId: string };
+  const candidateId = started.at(-1)?.input.candidate.candidateId ?? "";
+  const path = `${EVAL}/tasks/${task.runId}/${task.taskId}`;
+  const listVariants = async () =>
+    (await (await site.request(`${path}/variants`, { headers: key })).json()).variants as {
+      runId: string;
+      state: string;
+      stage: string;
+      changes?: unknown;
+      of: unknown;
+    }[];
 
+  // Its row is its own: the tasks list, counts, and revisions never show it.
   const listed = (await (await site.request(`${EVAL}/tasks`, { headers: key })).json()).tasks as {
     runId: string;
-    taskId: string;
   }[];
-  expect(listed.map((row) => `${row.runId}/${row.taskId}`)).toEqual([
-    `${task.runId}/${task.taskId}`,
-  ]);
-
+  expect(listed.map((row) => row.runId)).toEqual([task.runId]);
   const counts = (
     await (await site.request("/api/orgs/mupt-ai/task-counts", { headers: key })).json()
   ).counts as Record<string, { total: number }>;
   expect(Object.values(counts).map((count) => count.total)).toEqual([1]);
+  expect((await (await site.request(path, { headers: key })).json()).revisions).toEqual([]);
+  expect(
+    (await site.request(`${EVAL}/tasks/${variant.runId}/${variant.taskId}`, { headers: key }))
+      .status,
+  ).toBe(404);
+  expect(await listVariants()).toMatchObject([
+    {
+      runId: variant.runId,
+      state: "in_progress",
+      changes: { packages: VARIANT.packages, files: VARIANT.files },
+      of: { runId: task.runId, taskId: task.taskId },
+    },
+  ]);
 
-  const original = await site.request(`${EVAL}/tasks/${task.runId}/${task.taskId}`, {
+  // Its workflow writes to its own row, through the same activities a task's uses.
+  const store = createTaskStore(site.db);
+  const activities = createTaskActivities({ tasks: store, artifacts });
+  await activities.recordTaskProgress({
+    runId: variant.runId,
+    candidateId,
+    progress: { candidateId, taskId: task.taskId, difficulty: "medium", status: "verifying" },
+  });
+  expect((await listVariants())[0]?.stage).toBe("verifying");
+  // A running variant cannot be deleted.
+  const early = await site.request(`${path}/variants/${variant.runId}`, {
+    method: "DELETE",
     headers: key,
   });
-  expect((await original.json()).revisions).toEqual([]);
+  expect(early.status).toBe(409);
+  await store.variants.settle(variant.runId, candidateId, {
+    pipelineStatus: "accepted",
+    stage: "accepted",
+    bundleKey: `runs/${variant.runId}/harbor-task.tar.gz`,
+  });
+  expect((await listVariants())[0]?.state).toBe("accepted");
 
-  const direct = await site.request(`${EVAL}/tasks/${variant.runId}/${variant.taskId}`, {
+  // A comparison may pick it once its task is approved; it is never picked by default.
+  const [row] = await store.listForRun(task.runId);
+  const dataset = repositoryDataset(store, row?.repoId ?? 0);
+  const options = async () => (await dataset.options()).tasks;
+  expect((await options()).map((entry) => entry.runId)).toEqual([]);
+  const approved = await site.request(`${path}/review`, {
+    method: "PUT",
+    headers: key,
+    body: JSON.stringify({ decision: "approve" }),
+  });
+  expect(approved.status).toBe(200);
+  expect(await options()).toMatchObject([
+    { runId: task.runId },
+    { runId: variant.runId, variant: { label: "Next.js PR Docs", of: { runId: task.runId } } },
+  ]);
+  expect((await dataset.select()).map((picked) => picked.runId)).toEqual([task.runId]);
+  expect(await dataset.select([variant])).toMatchObject([
+    {
+      runId: variant.runId,
+      taskId: task.taskId,
+      bundleKey: `runs/${variant.runId}/harbor-task.tar.gz`,
+    },
+  ]);
+  expect((await dataset.summaryTasks()).map((counted) => counted.runId)).toEqual([task.runId]);
+
+  const deleted = await site.request(`${path}/variants/${variant.runId}`, {
+    method: "DELETE",
     headers: key,
   });
-  expect(direct.status).toBe(200);
+  expect(deleted.status).toBe(200);
+  expect(await listVariants()).toEqual([]);
+  expect((await options()).map((entry) => entry.runId)).toEqual([task.runId]);
 });

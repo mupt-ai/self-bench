@@ -253,6 +253,13 @@
       "when": 1794076849475,
       "tag": "0035_sandbox_resource_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1794189659606,
+      "tag": "0036_task_variant_records",
+      "breakpoints": true
     }
   ]
 }

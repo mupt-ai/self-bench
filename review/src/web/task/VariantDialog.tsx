@@ -1,6 +1,5 @@
 import { CopyPlus } from "lucide-react";
 import React from "react";
-import { useNavigate } from "react-router";
 import { MAX_VARIANT_LABEL_LENGTH } from "../../../../src/contracts/variants";
 import type { TaskItem } from "../api";
 import { Dialog, DialogFooter, DialogHeader } from "../Dialog";
@@ -9,8 +8,7 @@ import { GenerationSteps } from "../GenerationSteps";
 import { InfoTooltip } from "../primitives/tooltip";
 import { Button, fieldStyles, Input, Notice } from "../ui";
 import { useGenerationSettings } from "../useGenerationSettings";
-import { taskPath } from "./review-queue";
-import { createTaskVariant, type VariantInput } from "./task-variant-api";
+import { createTaskVariant, type VariantInput, type VariantItem } from "./task-variant-api";
 import { VariantChanges } from "./VariantFields";
 
 type PackageRow = VariantInput["packages"][number];
@@ -19,21 +17,22 @@ type FileRow = VariantInput["files"][number];
 /**
  * A variant of an accepted task: the same instruction, hidden tests, and reference solution, with
  * only its environment changed, such as a framework build from a pull request or an AGENTS.md
- * that points agents at docs. It is checked once and accepted if it passes, never re-authored, so
- * the two tasks' results can be compared.
+ * that points agents at docs. It is checked once and accepted if it passes, never re-authored, and
+ * listed under the task, whose results it is compared with; it is never a task of its own.
  */
 function VariantDialog({
   org,
   fullName,
   task,
   onClose,
+  onCreated,
 }: {
   org: string;
   fullName: string;
   task: TaskItem;
   onClose: () => void;
+  onCreated: (variant: VariantItem) => void;
 }) {
-  const navigate = useNavigate();
   const [step, setStep] = React.useState<1 | 2>(1);
   const {
     settings,
@@ -75,7 +74,7 @@ function VariantDialog({
         },
         settings,
       );
-      navigate(taskPath(fullName, variant));
+      onCreated(variant);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
       setBusy(false);
@@ -107,7 +106,7 @@ function VariantDialog({
               <label htmlFor="variant-label" className={fieldStyles}>
                 <span className="flex items-center gap-1.5">
                   Variant Name
-                  <InfoTooltip label="A short name for what this variant changes, so it is easy to tell apart in the task list." />
+                  <InfoTooltip label="A short name for what this variant changes, so it is easy to tell apart from the task and its other variants." />
                 </span>
                 <Input
                   id="variant-label"
@@ -173,7 +172,12 @@ function VariantDialog({
  * Opens the variant dialog for a task that passed its checks, approved or still awaiting review,
  * as the server allows: a variant is compared with it, not reviewed in its place.
  */
-export function CreateVariantButton(props: { org: string; fullName: string; task: TaskItem }) {
+export function CreateVariantButton(props: {
+  org: string;
+  fullName: string;
+  task: TaskItem;
+  onCreated: (variant: VariantItem) => void;
+}) {
   const [open, setOpen] = React.useState(false);
   if (props.task.pipelineStatus !== "accepted" || props.task.state === "rejected") return null;
   return (
@@ -182,7 +186,16 @@ export function CreateVariantButton(props: { org: string; fullName: string; task
         <CopyPlus aria-hidden="true" />
         Create Variant
       </Button>
-      {open && <VariantDialog {...props} onClose={() => setOpen(false)} />}
+      {open && (
+        <VariantDialog
+          {...props}
+          onClose={() => setOpen(false)}
+          onCreated={(variant) => {
+            setOpen(false);
+            props.onCreated(variant);
+          }}
+        />
+      )}
     </>
   );
 }

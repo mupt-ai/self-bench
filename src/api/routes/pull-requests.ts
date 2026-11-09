@@ -15,6 +15,7 @@ import {
   taskRunId,
   type WorkflowStarter,
 } from "../../generation/tasks/start.js";
+import type { TaskWorkflows } from "../../generation/tasks/workflow-client.js";
 import { generationProperties, track } from "../../lib/telemetry/posthog.js";
 import { GitHubOAuthError } from "../../third_party/github/oauth.js";
 import {
@@ -31,6 +32,7 @@ import { scenarioRoute } from "./scenarios.js";
 import { taskDraftRoute } from "./task-draft.js";
 import { taskFeedbackRoute } from "./task-feedback.js";
 import { taskSteeringRoute } from "./task-steering.js";
+import { taskVariantsRoute } from "./task-variants.js";
 import { taskItem } from "./tasks.js";
 
 const route =
@@ -49,6 +51,8 @@ export interface PullRequestRoutesOptions {
   readonly billing?: BillingStore;
   /** Where set, a browser's feedback must come from this origin (trustedMutation). */
   readonly publicUrl?: string;
+  /** Cancels a variant's check; without it, cancelling one answers that it is unavailable. */
+  readonly workflows?: TaskWorkflows;
 }
 
 export interface PullRequestRoutes {
@@ -63,7 +67,8 @@ export interface PullRequestRoutes {
 /**
  * POST …/tasks/from-pr {pr}: one merged PR becomes one task, built by its own workflow. POST
  * …/tasks/from-scenario does the same for a described scenario (scenarios.ts), POST
- * …/tasks/<run>/<task>/feedback revises a task the same way (task-feedback.ts), and GET
+ * …/tasks/<run>/<task>/feedback revises a task the same way (task-feedback.ts), …/variants
+ * changes only its environment (task-variants.ts), and GET
  * …/tasks/<run>/<task>/draft downloads the files a revision would start from (task-draft.ts), and
  * …/tasks/<run>/<task>/steering sends notes to a task still being generated (task-steering.ts).
  */
@@ -73,6 +78,8 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
   return {
     async handle(request, url, response, user) {
       if (await taskFeedbackRoute({ ...options, fetchImpl }, request, url, response, user))
+        return true;
+      if (await taskVariantsRoute({ ...options, fetchImpl }, request, url, response, user))
         return true;
       if (await scenarioRoute(options, request, url, response, user)) return true;
       if (await taskDraftRoute(options, request, url, response, user)) return true;

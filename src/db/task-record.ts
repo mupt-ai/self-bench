@@ -42,16 +42,7 @@ export function taskFrom(row: {
     ...(task.startedAt ? { startedAt: task.startedAt.toISOString() } : {}),
     ...(row.origin ? { revisedFrom: row.origin } : {}),
     ...(task.feedback ? { feedback: task.feedback } : {}),
-    ...(task.variant ? { variant: task.variant } : {}),
   };
-}
-
-/**
- * A variant (generation/tasks/variant.ts) changes an accepted task's environment and is not a task
- * of its own: it stays out of task lists, counts, and the results a repository's tasks are scored on.
- */
-export function isVariant(task: Pick<TaskRecord, "variant">): boolean {
-  return task.variant !== undefined;
 }
 
 /** How a task stands after the pipeline and, when present, a human. */

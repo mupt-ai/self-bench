@@ -20,6 +20,7 @@ import {
 import { GENERATION, generation } from "./generation.js";
 import { print, table } from "./output.js";
 import { taskEvaluationCommand } from "./task-evaluation.js";
+import { variantCommand } from "./variants.js";
 
 const TASK_FLAGS = {
   ...GENERATION,
@@ -89,6 +90,7 @@ export async function taskCommand(args: string[], listing: boolean): Promise<voi
   const [action, ...rest] = listing ? ["list", ...args] : args;
   if (action === "results" || action === "explain" || action === "audit")
     return await taskEvaluationCommand(action, rest);
+  if (action === "variant") return await variantCommand(rest);
   const { values, positionals } = parse(rest, TASK_FLAGS);
   const repository = repositoryPath(values);
   if (action === "list") return await listTasks(values, repository);
