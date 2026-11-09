@@ -31,6 +31,7 @@ export async function prFixture(options: {
     ...(options.pullRequests ? { pullRequests: options.pullRequests } : {}),
   });
   const started: { workflowId: string; input: CandidateWorkflowInput }[] = [];
+  const cancelled: string[] = [];
   const artifacts = new LocalArtifactStore(await mkdtemp(join(tmpdir(), "site-pr-")));
   const server = await startAuthServer({
     ...(options.vault ? { vault: options.vault } : {}),
@@ -40,10 +41,16 @@ export async function prFixture(options: {
     start: async (workflowId, input) => {
       started.push({ workflowId, input });
     },
+    workflows: {
+      cancel: async (workflowId) => {
+        cancelled.push(workflowId);
+      },
+      liveCost: async () => undefined,
+    },
   });
   const headers = await signedIn(server);
   await connectRepo(server, headers);
-  return { site: server, headers, started, artifacts, hub };
+  return { site: server, headers, started, cancelled, artifacts, hub };
 }
 
 export const REPO = "/api/orgs/mupt-ai/repos/Mupt-AI/self-bench";

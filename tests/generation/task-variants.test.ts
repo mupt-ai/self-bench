@@ -146,7 +146,8 @@ test("an environment needs an approved task and refuses values that could escape
 });
 
 test("an environment is never a task, and a condition runs its tasks as their own", async () => {
-  const { environments, task, key, site, started, artifacts, store, repoId } = await evalWithTask();
+  const { environments, task, key, site, started, artifacts, store, repoId, cancelled } =
+    await evalWithTask();
   const created = (await (await environments({ environment: ENVIRONMENT })).json()).environment as {
     id: number;
   };
@@ -205,6 +206,7 @@ test("an environment is never a task, and a condition runs its tasks as their ow
   ]);
 
   // Building again starts nothing while every task is ready; deleting removes it.
+  expect(cancelled).toEqual([]);
   expect((await environments({}, `/${created.id}/build`)).status).toBe(409);
   const deleted = await site.request(`${EVAL}/environments/${created.id}`, {
     method: "DELETE",
@@ -213,6 +215,23 @@ test("an environment is never a task, and a condition runs its tasks as their ow
   expect(deleted.status).toBe(200);
   expect(await list()).toEqual([]);
   expect(await dataset.environment?.(created.id, picked)).toBeUndefined();
+});
+
+test("deleting an environment or a task stops its variants' checks still running", async () => {
+  const { environments, task, key, site, started, cancelled } = await evalWithTask();
+  const first = (await (await environments({ environment: ENVIRONMENT })).json()).environment as {
+    id: number;
+  };
+  const firstCheck = started.at(-1)?.workflowId ?? "";
+  await site.request(`${EVAL}/environments/${first.id}`, { method: "DELETE", headers: key });
+  expect(cancelled).toEqual([firstCheck]);
+  await environments({ environment: { ...ENVIRONMENT, name: "Again" } });
+  const secondCheck = started.at(-1)?.workflowId ?? "";
+  await site.request(`${EVAL}/tasks/${task.runId}/${task.taskId}`, {
+    method: "DELETE",
+    headers: key,
+  });
+  expect(cancelled).toEqual([firstCheck, secondCheck]);
 });
 
 test("deleting a task deletes its variants, so no environment runs it", async () => {

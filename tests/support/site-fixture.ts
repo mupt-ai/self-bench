@@ -208,6 +208,7 @@ export async function startAuthServer(options: AuthServerOptions = {}): Promise<
           tasks,
           artifacts: options.artifacts,
           start: options.start,
+          ...(options.workflows ? { workflows: options.workflows } : {}),
           fetchImpl,
         })
       : undefined;

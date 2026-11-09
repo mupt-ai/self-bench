@@ -4,10 +4,12 @@ import { z } from "zod";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { AuthoredTaskDraft } from "../../contracts/index.js";
 import { MAX_VARIANT_LABEL_LENGTH } from "../../contracts/variants.js";
+import type { TaskVariantRecord } from "../../db/task-variants.js";
 import { extractRegularArchive } from "../../lib/archive.js";
 import { runCommand } from "../../lib/process.js";
 import { withTemporaryDirectory } from "../../sandbox/temporary.js";
 import { revisionPrefix, SOURCE_BUNDLE } from "./revision.js";
+import type { TaskWorkflows } from "./workflow-client.js";
 
 const MAX_FILE_BYTES = 64 * 1024;
 
@@ -149,4 +151,26 @@ export async function stageVariantDraft(
     "application/gzip",
   );
   return { ...draft, sourceBundle };
+}
+
+/**
+ * Stops the checks of `variants` still running, as their environment or task is deleted: a deleted
+ * row's workflow would settle nothing, but keep its sandbox and model spend going until it ended.
+ */
+export async function stopVariantChecks(
+  variants: readonly Pick<TaskVariantRecord, "pipelineStatus" | "workflowId">[],
+  workflows: Pick<TaskWorkflows, "cancel"> | undefined,
+): Promise<void> {
+  if (!workflows) return;
+  await Promise.all(
+    variants.flatMap((variant) =>
+      variant.pipelineStatus === "in_progress" && variant.workflowId
+        ? [
+            workflows.cancel(variant.workflowId).catch((error: unknown) => {
+              console.error(`variant check ${variant.workflowId} was not stopped:`, error);
+            }),
+          ]
+        : [],
+    ),
+  );
 }

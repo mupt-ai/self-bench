@@ -7,6 +7,7 @@ import type { ReviewDecision, TaskRecord, TaskStore } from "../../db/tasks.js";
 import type { User, UserStore } from "../../db/users.js";
 import { candidateArtifacts } from "../../generation/runs/artifacts.js";
 import { TaskNotFoundError, TaskNotSettledError } from "../../generation/tasks/deletion.js";
+import { stopVariantChecks } from "../../generation/tasks/variant.js";
 import type { TaskWorkflows } from "../../generation/tasks/workflow-client.js";
 import type { SandboxCostSnapshot } from "../../sandbox/contracts.js";
 import { tenantFor } from "../auth/tenant.js";
@@ -140,8 +141,17 @@ export function createTaskRoutes(options: TaskRoutesOptions): TaskRoutes {
       }
       if (!leaf && request.method === "DELETE") {
         const existing = await tasks.find(repo.id, runId, taskId);
+        // Its variants are deleted with it; their checks still running stop too.
+        const variants = existing
+          ? (await tasks.variants.listForRepo(repo.id)).filter(
+              (variant) => variant.parentId === existing.id,
+            )
+          : [];
         const result = await tasks.deleteTask(repo.id, runId, taskId);
-        if (result === "deleted" && existing) await reviewChanged(existing.id);
+        if (result === "deleted" && existing) {
+          await reviewChanged(existing.id);
+          await stopVariantChecks(variants, workflows);
+        }
         if (result === "active") {
           sendJson(response, 409, { error: "Task generation is still in progress" });
         } else if (result === "missing") {

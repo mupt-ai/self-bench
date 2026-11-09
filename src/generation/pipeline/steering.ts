@@ -32,6 +32,9 @@ const deliveryKey = (task: SteeringTask, round: number, turn: number) =>
 const json = (value: unknown) => Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
 const parse = <T>(bytes: Uint8Array): T => JSON.parse(Buffer.from(bytes).toString("utf8")) as T;
 
+/** Notes this process has queued, which orders those sent in the same millisecond. */
+let sent = 0;
+
 /** Queues a note for the task's next authoring turn. */
 export async function addSteeringNote(
   store: ArtifactStore,
@@ -39,8 +42,11 @@ export async function addSteeringNote(
   note: { readonly feedback: string; readonly author?: string },
   now = new Date(),
 ): Promise<SteeringNote> {
-  // Sortable by time; the suffix keeps two notes in the same millisecond apart.
-  const id = `${now.toISOString().replace(/[:.]/g, "-")}-${randomBytes(4).toString("hex")}`;
+  // Sortable by time, then by the order this process sent them, so two notes in one millisecond
+  // keep their order; the random suffix keeps notes from two processes apart.
+  sent += 1;
+  const order = String(sent % 1_000_000).padStart(6, "0");
+  const id = `${now.toISOString().replace(/[:.]/g, "-")}-${order}-${randomBytes(4).toString("hex")}`;
   const saved = {
     id,
     feedback: note.feedback,

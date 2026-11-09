@@ -7,6 +7,7 @@ import {
   type EnvironmentSpec,
   environmentRequestSchema,
   stageVariantDraft,
+  stopVariantChecks,
 } from "../../generation/tasks/variant.js";
 import { generationProperties, track } from "../../lib/telemetry/posthog.js";
 import { tenantFor } from "../auth/tenant.js";
@@ -77,6 +78,11 @@ export async function environmentsRoute(
     return true;
   }
   if (environment && method === "DELETE") {
+    const variants = await store.listForRepo(repo.id);
+    await stopVariantChecks(
+      variants.filter((variant) => variant.environmentId === environment.id),
+      options.workflows,
+    );
     await store.deleteEnvironment(repo.id, environment.id);
     sendJson(response, 200, { deleted: true });
     return true;
