@@ -16,6 +16,7 @@ import { dariTrialCost, isDariRun } from "./dari/cost.js";
 import { failureMaterial, keepFailureMaterial } from "./failure-material.js";
 import { gatewayTrialCost, type TrialGateway } from "./gateway-trial.js";
 import {
+  blockedScores,
   collectOutput,
   completeLines,
   environmentSecrets,
@@ -119,8 +120,10 @@ export async function executeTrial(
         () => false,
       ));
     if (retrying) throw failure;
+    // Only the solver's own failures can be a provider's block; setup failures stay unscored.
+    const blocked = solving ? blockedScores(failure.message) : undefined;
     // A timed-out agent's trial can still fail after its scores were read (Harbor's exit status).
-    Object.assign(trial, { status: "failed", error: failure.message });
+    Object.assign(trial, blocked ?? { status: "failed" }, { error: failure.message });
     delete trial.agentTimedOut;
     delete trial.verifierTimedOut;
   } finally {

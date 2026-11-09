@@ -179,6 +179,7 @@ function resultsView(report: ResultsReport): string {
     ["CONFIGURATION", (row) => row.name],
     ["PASS RATE", (row) => percent(row.passRate)],
     ["PASSED", (row) => `${row.passed}/${row.scored}`],
+    ["BLOCKED", (row) => `${row.blocked}/${row.scored}`],
     ["COST / TASK", (row) => usd(row.costPerTaskUsd)],
     ["KEY", (row) => row.key],
   ]);

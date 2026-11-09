@@ -58,6 +58,29 @@ export function timeLimitScores(
     return { rewards, agentTimedOut: true };
   return undefined;
 }
+/**
+ * The errors provider cyber classifiers raise when they block a request: Anthropic's through Claude
+ * Code, and OpenAI's through Codex. Only these phrases count; any other failure stays a failure.
+ */
+const CYBER_BLOCKS = [
+  "Cyber safeguards flagged this message",
+  "flagged for possible cybersecurity risk",
+];
+/** Whether a trial's error is a provider's cyber classifier blocking its request. */
+export function cyberBlocked(error: string): boolean {
+  return CYBER_BLOCKS.some((phrase) => error.includes(phrase));
+}
+/**
+ * The scores of a solver's failure that a provider's cyber classifier blocked: the trial completes
+ * with reward 0, counted apart. Undefined for any other failure, which stays failed and unscored.
+ */
+export function blockedScores(
+  error: string,
+): Pick<EvaluationTrial, "status" | "rewards" | "cyberBlocked"> | undefined {
+  return cyberBlocked(error)
+    ? { status: "completed", rewards: { reward: 0 }, cyberBlocked: true }
+    : undefined;
+}
 export function completeLines(text: string): string {
   return text.slice(0, text.lastIndexOf("\n") + 1);
 }

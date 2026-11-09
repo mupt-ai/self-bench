@@ -127,6 +127,11 @@ export interface EvaluationTrial {
    * erroring, as Harbor scores it: a solution that hangs its tests is the agent's.
    */
   verifierTimedOut?: boolean;
+  /**
+   * A provider's cyber classifier blocked the agent's request (cyberBlocked in output.ts). Such a
+   * trial completes with reward 0, as a failure, and is counted apart from the other failures.
+   */
+  cyberBlocked?: boolean;
   /** Why a completed trial failed its tests, in plain language (failure-summary.ts). */
   failureSummary?: FailureSummary;
   modelVerified?: boolean;

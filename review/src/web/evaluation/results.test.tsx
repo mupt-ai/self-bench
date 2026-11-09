@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { facets, facetValues, matchingFacets, orderedConfigurations } from "./configuration-facets";
 import { at, credentials, errored, NOW, passed, run } from "./results-fixture";
 import { configurationsOf } from "./results-model";
+import { blockedNote } from "./results-presentation";
 
 test("groups runs by release setting, then by run, and counts each task's latest result", () => {
   const first = run("first", { comparisonId: "c1", createdAt: at(300) }, [
@@ -147,4 +148,22 @@ test("a task's latest usable result counts, so a re-run that errors or is runnin
   expect(rerunning?.latest[0]?.run.id).toBe("first");
   expect(rerunning?.underway.map((result) => result.run.id)).toEqual(["running"]);
   expect(rerunning?.status).toBe("running");
+});
+
+test("a blocked trial is a failure, counted beside the pass rate as blocked", () => {
+  const blocked = {
+    taskId: "task-2",
+    status: "completed" as const,
+    rewards: { reward: 0 },
+    cyberBlocked: true,
+    error: "Cyber safeguards flagged this message.",
+  };
+  const one = run("one", {}, [passed("task-1"), blocked]);
+  const [configuration] = configurationsOf([one], credentials, NOW);
+  expect(configuration).toMatchObject({
+    passRate: 50,
+    counts: expect.objectContaining({ failed: 1 }),
+  });
+  expect(blockedNote(configuration?.latest ?? [])).toBe("Blocked: 1/2");
+  expect(blockedNote([])).toBeUndefined();
 });
