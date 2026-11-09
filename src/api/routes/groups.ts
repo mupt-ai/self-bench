@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { z } from "zod";
 import { GroupSlugTaken, type RepositoryGroup } from "../../db/groups.js";
 import { type ConnectedRepo, isGitHubRepo } from "../../db/repos.js";
-import { isVariant, runnable } from "../../db/task-record.js";
+import { runnable } from "../../db/task-record.js";
 import type { User } from "../../db/users.js";
 import { groupDataset } from "../../evaluation/dataset.js";
 import { track } from "../../lib/telemetry/posthog.js";
@@ -67,8 +67,7 @@ export async function groupRoutes(
   // A group gathers GitHub repositories; an eval has none, so it is never a member.
   const connected = (await options.repos.list(tenant.id)).filter(isGitHubRepo);
   const approved = async (repo: ConnectedRepo) =>
-    (await options.tasks.listForRepo(repo.id)).filter(runnable).filter((task) => !isVariant(task))
-      .length;
+    (await options.tasks.listForRepo(repo.id)).filter(runnable).length;
   const viewOf = async (group: RepositoryGroup): Promise<GroupView> => {
     const repositories = await Promise.all(
       group.repositoryIds.map(async (id) => {

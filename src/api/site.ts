@@ -275,6 +275,7 @@ export async function openSite(
       artifacts,
       billing: billingStore,
       publicUrl,
+      workflows: temporalTaskWorkflows(client),
       start: (workflowId, input) =>
         temporalStarter(
           client,

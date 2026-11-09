@@ -45,12 +45,42 @@ export interface TaskResults {
   results: TrialResult[];
 }
 
+/**
+ * A variant's latest scored result per configuration, reported beside the task it changes and
+ * never counted with the tasks: the condition a comparison of the two measures.
+ */
+export interface VariantResults extends TaskResults {
+  label: string;
+  of: { runId: string; taskId: string };
+}
+
 /** What the Results page shows, as data: each configuration's score and each task's results. */
 export interface ResultsReport {
   /** Tasks results count on: a repository's accepted tasks, or a benchmark's. */
   tasks: number;
   configurations: ConfigurationResult[];
   taskResults: TaskResults[];
+  /** The tasks' variants with a scored result, by the task they change. */
+  variants?: VariantResults[];
+}
+
+/** Each variant's results, as resultsReport gives a task's; variants with none are left out. */
+export function variantResults(
+  settings: ReadonlyMap<string, SettingResults>,
+  variants: readonly (Pick<SummaryTask, "runId" | "taskId" | "difficulty"> & {
+    label: string;
+    of: { runId: string; taskId: string };
+  })[],
+): VariantResults[] {
+  const byKey = new Map(
+    variants.map((variant) => [evaluationTaskKey(variant.runId, variant.taskId), variant]),
+  );
+  return resultsReport(settings, variants).taskResults.flatMap((results) => {
+    const variant = byKey.get(evaluationTaskKey(results.runId, results.taskId));
+    return variant && results.scored > 0
+      ? [{ ...results, label: variant.label, of: variant.of }]
+      : [];
+  });
 }
 
 /**

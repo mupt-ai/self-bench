@@ -46,6 +46,15 @@ Review
   self-bench task steering RUN_ID TASK_ID --repo R   notes sent, and which turn received each
   self-bench task unreview|cancel|delete RUN_ID TASK_ID --repo R
 
+Variants
+  self-bench task variant create RUN_ID TASK_ID --repo R --label L
+      [--package NAME@SPEC ...] [--directory DIR] [--file DEST=SOURCE ...] [--replace]
+      or --variant JSON|@FILE                        the accepted task with only its
+                                                     environment changed, checked once
+  self-bench task variant list RUN_ID TASK_ID --repo R
+  self-bench task variant cancel|delete RUN_ID TASK_ID VARIANT_RUN --repo R
+  Run one with compare --task VARIANT_RUN/TASK_ID; task results shows it beside its task.
+
 Evaluate
   self-bench catalog --repo R                        models evaluations can use
   self-bench compare --repo R --model ID [--model ID ...] [--harness pi|codex|claude-code|...]

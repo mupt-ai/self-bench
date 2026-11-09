@@ -267,6 +267,13 @@
       "when": 1794190656523,
       "tag": "0037_benchmark_releases",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1794250347006,
+      "tag": "0038_task_variant_records",
+      "breakpoints": true
     }
   ]
 }

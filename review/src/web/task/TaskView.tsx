@@ -8,20 +8,22 @@ import { EnvironmentSheet } from "../../sheets/EnvironmentSheet";
 import type { TaskSource } from "../../sources/types";
 import type { TaskFiles, TaskRow } from "../../types";
 
-type Tab = "file" | "environment" | "pipeline" | "feedback";
+type Tab = "file" | "environment" | "pipeline" | "feedback" | "variants";
 
 /**
- * The file review: bundle tree on the left, file / environment / pipeline on the right, and
- * feedback where the page can revise the task.
+ * The file review: bundle tree on the left, file / environment / pipeline on the right,
+ * feedback where the page can revise the task, and the task's variants once it has any.
  */
 export function TaskView({
   source,
   row,
   feedback,
+  variants,
 }: {
   source: TaskSource;
   row: TaskRow;
   feedback?: React.ReactNode;
+  variants?: { readonly count: number; readonly sheet: React.ReactNode };
 }) {
   const [files, setFiles] = React.useState<TaskFiles | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -46,7 +48,9 @@ export function TaskView({
         } else {
           loadedKey.current = null;
           setFiles({ taskId: row.id, files: [] });
-          setTab("pipeline");
+          // Each status poll re-reads the artifacts; only the empty File tab moves to Pipeline,
+          // so a tab the person opened stays open.
+          setTab((current) => (current === "file" ? "pipeline" : current));
         }
       } catch (cause) {
         if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause));
@@ -91,6 +95,7 @@ export function TaskView({
     ["environment", "Environment"],
     ["pipeline", "Pipeline"],
     ...(feedback ? ([["feedback", "Feedback"]] as [Tab, string][]) : []),
+    ...(variants?.count ? ([["variants", `Variants · ${variants.count}`]] as [Tab, string][]) : []),
   ];
 
   return (
@@ -139,6 +144,8 @@ export function TaskView({
         </div>
         {tab === "feedback" && feedback ? (
           feedback
+        ) : tab === "variants" && variants?.count ? (
+          variants.sheet
         ) : error && tab !== "pipeline" ? (
           <p className={`${notice} !text-destructive`}>{error}</p>
         ) : tab === "pipeline" ? (
