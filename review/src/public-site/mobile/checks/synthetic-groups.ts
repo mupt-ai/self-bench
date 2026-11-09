@@ -1,5 +1,7 @@
 import type { PublicGroup, PublicGroupMember, PublicSetting } from "../../contract";
+import type { MemoryTasks } from "../../source";
 import { setting } from "../../test-fixture";
+import { OPENED_TASK, syntheticTasks } from "./synthetic-tasks";
 
 type Repository = PublicGroupMember["repository"];
 
@@ -57,8 +59,9 @@ const LOGO = `data:image/svg+xml;base64,${btoa(
 )}`;
 
 /**
- * Released repository groups: one with many settings, an uploaded logo, and a name long enough to
- * wrap, and one with a single setting, the default logo, and a member whose name is hard to break.
+ * Released repository groups: one with many settings, an uploaded logo, published tasks and
+ * trials, and a name long enough to wrap, and one with a single setting, the default logo, and a
+ * member whose name is hard to break.
  */
 export function syntheticGroups(): PublicGroup[] {
   const vendor = (id: string, label: string, vendorName: string) => ({
@@ -67,49 +70,54 @@ export function syntheticGroups(): PublicGroup[] {
     label,
   });
   return [
-    group(
-      "widget-toolkits",
-      "Widget Toolkits and Every Model Vendor Worth Comparing on Them",
-      "Two widget toolkits evaluated together as one dataset.",
-      [
-        [{ id: 1001, fullName: "example-org/widgets", stars: 48_200 }, 36],
-        [{ id: 1005, fullName: "example-org/many-models", stars: 12_400 }, 40],
-      ],
-      [
-        setting({
-          id: "alpha",
-          model: vendor("alpha", "Alpha 5", "openai"),
-          accuracy: 92,
-          costPerTaskUsd: 3.1,
-        }),
-        setting({
-          id: "beta",
-          model: vendor("beta", "Beta Sonnet", "anthropic"),
-          harness: "claude-code",
-          provider: "anthropic",
-          accuracy: 84,
-          costPerTaskUsd: 1.7,
-        }),
-        setting({
-          id: "gamma",
-          model: vendor("gamma", "Gamma Flash", "google"),
-          harness: "pi",
-          provider: "openrouter",
-          accuracy: 61,
-          costPerTaskUsd: 0.2,
-        }),
-        setting({
-          id: "delta",
-          model: vendor("delta", "Delta V4", "deepseek"),
-          harness: "pi",
-          provider: "openrouter",
-          accuracy: 66,
-          costPerTaskUsd: 0.9,
-          onFrontier: false,
-        }),
-      ],
-      LOGO,
-    ),
+    {
+      ...group(
+        "widget-toolkits",
+        "Widget Toolkits and Every Model Vendor Worth Comparing on Them",
+        "Two widget toolkits evaluated together as one dataset.",
+        [
+          [{ id: 1001, fullName: "example-org/widgets", stars: 48_200 }, 36],
+          [{ id: 1005, fullName: "example-org/many-models", stars: 12_400 }, 40],
+        ],
+        [
+          setting({
+            id: "alpha",
+            model: vendor("alpha", "Alpha 5", "openai"),
+            accuracy: 92,
+            costPerTaskUsd: 3.1,
+          }),
+          setting({
+            id: "beta",
+            model: vendor("beta", "Beta Sonnet", "anthropic"),
+            harness: "claude-code",
+            provider: "anthropic",
+            accuracy: 84,
+            costPerTaskUsd: 1.7,
+          }),
+          setting({
+            id: "gamma",
+            model: vendor("gamma", "Gamma Flash", "google"),
+            harness: "pi",
+            provider: "openrouter",
+            accuracy: 61,
+            costPerTaskUsd: 0.2,
+          }),
+          setting({
+            id: "delta",
+            model: vendor("delta", "Delta V4", "deepseek"),
+            harness: "pi",
+            provider: "openrouter",
+            accuracy: 66,
+            costPerTaskUsd: 0.9,
+            onFrontier: false,
+          }),
+        ],
+        LOGO,
+      ),
+      // Its tasks and their trials published, as a repository's can be.
+      tasksPublished: true,
+      trialsPublished: true,
+    },
     group(
       "solo-setting",
       "One Setting",
@@ -129,10 +137,27 @@ export function syntheticGroups(): PublicGroup[] {
   ];
 }
 
+/** The tasks and trials of each group that published them, as a member's would be. */
+export function syntheticGroupTasks(): MemoryTasks {
+  return Object.assign(
+    {},
+    ...syntheticGroups()
+      .filter((group) => group.tasksPublished)
+      .map((group) =>
+        syntheticTasks(
+          group.settings.map((entry) => entry.id),
+          group.releaseId,
+          "example-org/widgets",
+        ),
+      ),
+  );
+}
+
 /** Each group's page, and the address of one that does not exist. */
 export function syntheticGroupRoutes(): string[] {
   return [
     ...syntheticGroups().map((each) => `/groups/${each.publisher.login}/${each.slug}`),
+    `/groups/acme-labs/widget-toolkits?task=${OPENED_TASK}`,
     "/groups/acme-labs/no-such-group",
   ];
 }

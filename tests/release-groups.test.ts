@@ -133,6 +133,11 @@ test("a group page's head, text and sitemap entry name it at its one address", (
   for (const heading of ["Model Tradeoffs", "All Settings", "Repositories"])
     expect(body).toContain(`<h2>${heading}</h2>`);
   expect(body).toContain('href="https://github.com/a/one"');
+  // Nothing beyond its scores unless it published it; then, as a repository's page says so.
+  expect(body).not.toContain("<h2>Tasks</h2>");
+  const published = groupBody({ ...released, tasksPublished: true, trialsPublished: true });
+  for (const heading of ["Results by Task", "Tasks"])
+    expect(published).toContain(`<h2>${heading}</h2>`);
   const empty = groupBody({ ...released, settings: [], frontier: [] });
   expect(empty).not.toContain("<h2>All Settings</h2>");
   const sitemap = sitemapOf("https://selfbench.dev", [], [released]);

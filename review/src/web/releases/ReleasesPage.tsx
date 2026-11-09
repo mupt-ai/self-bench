@@ -23,6 +23,7 @@ import {
   releaseRequest,
   releasesUrl,
 } from "./api";
+import type { ReleaseSubject } from "./PublishOptions";
 import { ReleaseDialog } from "./ReleaseDialog";
 
 /** What a Releases tab releases: a repository, or a repository group. */
@@ -34,6 +35,8 @@ export interface ReleaseTarget {
   repo?: string;
   /** What the release dialog says it publishes, for a target that is not a repository or group. */
   releaseSummary?: string;
+  /** What the release is of, as its privacy note names it; a repository by default. */
+  subject?: ReleaseSubject;
   /** Its public page on selfbench.dev. */
   pageUrl(site: string, release: ReleaseSummary): string;
   description: string;
@@ -186,6 +189,7 @@ export function Releases({ target }: { target: ReleaseTarget }) {
           url={url}
           {...(target.repo ? { repo: target.repo } : {})}
           {...(target.releaseSummary ? { summary: target.releaseSummary } : {})}
+          {...(target.subject ? { subject: target.subject } : {})}
           workspace={org}
           onClose={() => setReleasing(false)}
           onReleased={(release, unchanged) => {

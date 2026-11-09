@@ -2,6 +2,7 @@ import type { DirectoryCard } from "../../../src/public/directory";
 import type { GroupCard, GroupMember, PublishedGroup } from "../../../src/public/release-groups";
 import type {
   PublishedRelease,
+  PublishedResults,
   PublishedTask,
   PublishedTaskFiles,
   PublishedTrial,
@@ -20,6 +21,11 @@ export type PublicPublisher = ReleasePublisher;
 export type PublicSetting = ReleaseSetting;
 /** One release of one repository by one publisher: the unit a repository page shows. */
 export type PublicRelease = PublishedRelease;
+/**
+ * What a page's model summaries, results by task, and tasks read of its release: a
+ * repository's, a public benchmark's, or a group's.
+ */
+export type PublicResults = PublishedResults;
 /** A task of a release whose publisher published the tasks. */
 export type PublicTask = PublishedTask;
 /** A published task's files: small text files with their contents, the rest by size. */

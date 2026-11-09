@@ -2,10 +2,8 @@ import type { RefObject } from "react";
 import { Link, useNavigate } from "react-router";
 import { resultsName } from "../../../../src/public/paths";
 import { Avatar } from "../components/Avatar";
-import { ModelSummaries } from "../components/ModelSummaries";
-import { ResultsGrid } from "../components/ResultsGrid";
+import { ReleaseSections } from "../components/ReleaseSections";
 import { SettingsPanels } from "../components/SettingsPanels";
-import { TaskList } from "../components/TaskList";
 import type { PublicRepoPage } from "../contract";
 import { revealGroup } from "../effects/marks";
 import { plainClick } from "../effects/page-reveal";
@@ -63,9 +61,7 @@ export function RepoBody({
         onRowHover={onRowHover}
       />
 
-      <ModelSummaries release={release} activeId={activeId ?? rowId} />
-      {release.trialsPublished && <ResultsGrid release={release} activeId={activeId ?? rowId} />}
-      {release.tasksPublished && <TaskList release={release} />}
+      <ReleaseSections release={release} activeId={activeId ?? rowId} />
 
       {page.lines.length > 1 && (
         <section ref={lines} className="flex flex-col gap-3" data-morph="lines" {...revealGroup}>

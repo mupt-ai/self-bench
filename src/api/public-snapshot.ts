@@ -1,7 +1,7 @@
 import { directoryOf } from "../public/directory.js";
 import { resultsName } from "../public/paths.js";
 import { groupCardOf, groupLogoHref, type PublishedGroup } from "../public/release-groups.js";
-import type { PublishedLine, PublishedRelease } from "../public/release-types.js";
+import type { PublishedLine, PublishedRelease, ReleasePublished } from "../public/release-types.js";
 import { type TaggedBody, tagged } from "./tagged.js";
 
 /**
@@ -13,8 +13,11 @@ import { type TaggedBody, tagged } from "./tagged.js";
 export interface Snapshot {
   /** Current lines by lower-case `resultsName` (`owner/name`, `evals/org/name`), newest first. */
   byRepository: Map<string, PublishedLine[]>;
-  /** Current releases by id. */
-  byRelease: Map<string, PublishedRelease>;
+  /**
+   * Current releases by id, a group's too, with what each published beyond its scores: the
+   * public task routes serve only what a current release published.
+   */
+  byRelease: Map<string, Pick<PublishedRelease, "releaseId"> & ReleasePublished>;
   /** Every group's current release, newest first. */
   groups: PublishedGroup[];
   releases: () => TaggedBody;
@@ -77,7 +80,12 @@ export function snapshotOf(lines: PublishedLine[], released: PublishedGroup[] = 
   const group = (publisher: string, slug: string) => byGroup.get(groupKey(publisher, slug));
   return {
     byRepository,
-    byRelease: new Map(lines.map((line) => [line.release.releaseId, line.release])),
+    byRelease: new Map(
+      [...lines.map((line) => line.release), ...groups].map((release) => [
+        release.releaseId,
+        release,
+      ]),
+    ),
     groups,
     releases: once(() => tagged(JSON.stringify({ lines }))),
     directory: once(() =>

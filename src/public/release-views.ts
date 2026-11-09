@@ -42,8 +42,7 @@ export function summaryOf(
   row: ReleaseRow<LinePayload>,
   rows: readonly ReleaseRow<LinePayload>[],
 ): ReleaseSummary {
-  // A group's release publishes its scores only.
-  const published = "repository" in row.payload ? row.payload : undefined;
+  const published = row.payload;
   return {
     id: row.id,
     releasedAt: row.releasedAt,
@@ -54,9 +53,9 @@ export function summaryOf(
     publisher: row.publisherLogin,
     tasks: row.payload.tasks,
     settings: row.payload.settings.length,
-    tasksPublished: published?.tasksPublished === true,
-    trialsPublished: published?.trialsPublished === true,
-    summariesPublished: published?.modelSummaries !== undefined,
+    tasksPublished: published.tasksPublished === true,
+    trialsPublished: published.trialsPublished === true,
+    summariesPublished: published.modelSummaries !== undefined,
     current: currentOf(rows)?.id === row.id,
     head: headOf(rows)?.id === row.id,
   };

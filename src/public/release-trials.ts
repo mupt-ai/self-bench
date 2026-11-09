@@ -1,4 +1,4 @@
-import type { ReleaseLine } from "../db/releases.js";
+import type { AnyLine } from "../db/releases.js";
 import { evaluationTaskKey } from "../evaluation/models.js";
 import { transcriptSteps } from "../evaluation/transcript.js";
 import type { EvaluationRun, EvaluationTrial, SolverStep } from "../evaluation/types.js";
@@ -12,9 +12,9 @@ export interface ReleasedResult {
   trialIndex?: number;
 }
 
-/** A release's results by setting key, then task key, with the line whose repository holds them. */
+/** A release's results by setting key, then task key, with the line whose runs hold them. */
 export interface ReleasedResults {
-  line: ReleaseLine;
+  line: AnyLine;
   results: Record<string, Record<string, ReleasedResult>>;
   /** The hosts of the custom endpoints its settings used, which stay private. */
   endpointHosts: string[];
@@ -42,9 +42,9 @@ export function endpointHostsOf(settingsDetail: unknown): string[] {
 
 /** Where a release's trials are read from: their runs, and the files each run kept. */
 export interface TrialSource {
-  run(line: ReleaseLine, evaluationId: string): Promise<EvaluationRun | undefined>;
+  run(line: AnyLine, evaluationId: string): Promise<EvaluationRun | undefined>;
   /** One of a run's artifacts by its name in `trial.artifacts`, as text. */
-  artifact(line: ReleaseLine, evaluationId: string, name: string): Promise<string | undefined>;
+  artifact(line: AnyLine, evaluationId: string, name: string): Promise<string | undefined>;
 }
 
 /**

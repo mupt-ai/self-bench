@@ -206,23 +206,24 @@ export function createReleaseStore(db: Database, options: { now?: () => Date } =
     },
     /**
      * Each setting's result on each task of a release (`detail.results`), with the line, whose
-     * repository holds the trials; undefined when there is no such row. Private: callers serve
-     * only what a release that published its trials allows.
+     * runs hold the trials; undefined when there is no such row. Private: callers serve only what
+     * a release that published its trials allows.
      */
     async releasedResults(id: string): Promise<ReleasedResults | undefined> {
       const [row] = await db
         .select({
           orgId: releases.orgId,
           githubRepoId: releases.githubRepoId,
+          groupId: releases.groupId,
+          benchmarkId: releases.benchmarkId,
           results: sql<unknown>`${releases.detail} -> 'results'`,
           settingsDetail: sql<unknown>`${releases.detail} -> 'settingsDetail'`,
         })
         .from(releases)
         .where(eq(releases.id, id));
-      // A group's release publishes no trials.
-      if (!row || row.githubRepoId === null) return undefined;
+      if (!row) return undefined;
       return {
-        line: { orgId: row.orgId, githubRepoId: row.githubRepoId },
+        line: lineOfRow(row),
         results:
           row.results && typeof row.results === "object"
             ? (row.results as ReleasedResults["results"])

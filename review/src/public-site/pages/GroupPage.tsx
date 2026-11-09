@@ -4,6 +4,7 @@ import { useParams } from "react-router";
 import { mostAccurate } from "../../../../src/public/release-groups";
 import { Avatar } from "../components/Avatar";
 import { GroupLogo } from "../components/GroupLogo";
+import { ReleaseSections, ReleaseViewers } from "../components/ReleaseSections";
 import { ResultHead } from "../components/ResultHead";
 import { SettingsPanels, useSettingMarks } from "../components/SettingsPanels";
 import type { PublicGroup, PublicGroupCard, PublicGroupMember } from "../contract";
@@ -55,7 +56,8 @@ const headOfCard = (card: PublicGroupCard): GroupHead => ({
 /**
  * A repository group's release: several repositories evaluated together. Its chart and table
  * score each setting over every member's tasks; the Repositories table shows how the setting
- * under the pointer (or each member's own best) did on each one. It opens from its card as a
+ * under the pointer (or each member's own best) did on each one; and what it published beyond
+ * its scores (model summaries, results by task, tasks) follows as on a repository's page. It opens from its card as a
  * repository page does: the title is drawn from the card at once, so it can fly into place, and
  * the body follows once its data is in and the flight has landed.
  * The server writes the same headings for readers that run no scripts (src/api/site-group.ts).
@@ -128,6 +130,8 @@ function Group({ line, head, group }: { line: string; head: GroupHead; group?: P
           <Members group={group} shownId={shown} />
         </section>
       )}
+      {group && <ReleaseSections release={group} activeId={shown} />}
+      {group && <ReleaseViewers release={group} />}
     </article>
   );
 }

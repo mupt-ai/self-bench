@@ -1,4 +1,4 @@
-import type { ReleaseLine } from "../../db/releases.js";
+import type { AnyLine } from "../../db/releases.js";
 import type { EvaluationRun } from "../../evaluation/types.js";
 import {
   fullerSteps,
@@ -42,9 +42,9 @@ function cached<T>(
   return reading;
 }
 
-/** One published trial: the release's record of it, and the line whose repository ran it. */
+/** One published trial: the release's record of it, and the line whose runs hold it. */
 export interface ChosenTrial {
-  line: ReleaseLine;
+  line: AnyLine;
   settingKey: string;
   settingId: string;
   taskKey: string;
