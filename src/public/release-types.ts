@@ -125,7 +125,7 @@ export type ReleasePublished = Pick<
  * repository's or public benchmark's (`PublishedRelease`), or a group's, which has no repository.
  */
 export type PublishedResults = ReleasePublished &
-  Pick<PublishedRelease, "releaseId" | "settings" | "tasks"> & {
+  Pick<PublishedRelease, "releaseId" | "settings" | "tasks" | "benchmark"> & {
     repository?: Pick<ReleaseRepository, "fullName">;
   };
 

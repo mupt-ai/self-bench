@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, getTableColumns, isNotNull, isNull, or, type SQL, sql } from "drizzle-orm";
-import type { GroupReleasePayload, PublishedGroup } from "../public/release-groups.js";
+import type { GroupMember, GroupReleasePayload, PublishedGroup } from "../public/release-groups.js";
 import type { ReleaseTask } from "../public/release-rule.js";
 import { endpointHostsOf, type ReleasedResults } from "../public/release-trials.js";
 import type { PublishedLine, PublishedRelease, ReleasePayload } from "../public/release-types.js";
@@ -216,14 +216,19 @@ export function createReleaseStore(db: Database, options: { now?: () => Date } =
           githubRepoId: releases.githubRepoId,
           groupId: releases.groupId,
           benchmarkId: releases.benchmarkId,
+          members: sql<unknown>`${releases.payload} -> 'members'`,
           results: sql<unknown>`${releases.detail} -> 'results'`,
           settingsDetail: sql<unknown>`${releases.detail} -> 'settingsDetail'`,
         })
         .from(releases)
         .where(eq(releases.id, id));
       if (!row) return undefined;
+      // A group's release records its members, whose own runs it counted.
+      const members = Array.isArray(row.members)
+        ? (row.members as GroupMember[]).map((member) => member.repository.id)
+        : undefined;
       return {
-        line: lineOfRow(row),
+        line: { ...lineOfRow(row), ...(members ? { members } : {}) },
         results:
           row.results && typeof row.results === "object"
             ? (row.results as ReleasedResults["results"])

@@ -70,7 +70,15 @@ test("a group publishes its tasks and trials as a repository does, each task nam
     ["t1~2", "django/django"],
     ["t2~2", "django/django"],
   ]);
-  // A trial from the group's own run, and one from a member's own run.
+  // A trial from the group's own run, and one from a member's own run: still, after the group
+  // drops a member, whose runs the release counted.
+  const groups = createGroupStore(fixture.database.db);
+  const current = await groups.find(fixture.orgId, "python-web");
+  if (current) {
+    const { slug, name, description } = current;
+    const fields = { slug, name, description, repositoryIds: [11] };
+    await groups.update(fixture.orgId, slug, fields, { login: "priya" });
+  }
   for (const task of ["t1", "t1~2"]) {
     for (const settingId of Object.keys(listed[0]?.passed ?? {})) {
       const trial = await request(`${tasks}/${task}/trials/${settingId}`);

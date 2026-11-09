@@ -12,9 +12,15 @@ export interface ReleasedResult {
   trialIndex?: number;
 }
 
+/**
+ * Where a release's trials are: its line, and for a group's release the members it recorded
+ * (their GitHub ids), whose own runs it counted, however the group has changed since.
+ */
+export type TrialLine = AnyLine & { members?: readonly number[] };
+
 /** A release's results by setting key, then task key, with the line whose runs hold them. */
 export interface ReleasedResults {
-  line: AnyLine;
+  line: TrialLine;
   results: Record<string, Record<string, ReleasedResult>>;
   /** The hosts of the custom endpoints its settings used, which stay private. */
   endpointHosts: string[];
@@ -42,9 +48,9 @@ export function endpointHostsOf(settingsDetail: unknown): string[] {
 
 /** Where a release's trials are read from: their runs, and the files each run kept. */
 export interface TrialSource {
-  run(line: AnyLine, evaluationId: string): Promise<EvaluationRun | undefined>;
+  run(line: TrialLine, evaluationId: string): Promise<EvaluationRun | undefined>;
   /** One of a run's artifacts by its name in `trial.artifacts`, as text. */
-  artifact(line: AnyLine, evaluationId: string, name: string): Promise<string | undefined>;
+  artifact(line: TrialLine, evaluationId: string, name: string): Promise<string | undefined>;
 }
 
 /**

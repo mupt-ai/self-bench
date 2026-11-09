@@ -71,11 +71,13 @@ export default function TaskViewer({
   const files = current?.files?.files ?? [];
   const path = chosen?.taskId === taskId ? chosen.path : firstFile(files)?.path;
   const file = files.find((entry) => entry.path === path);
-  // A group's task is its member repository's; a public benchmark's has no pull request.
-  const repository = task?.repository ?? release.repository?.fullName ?? "";
+  // A group's task is its member repository's; a public benchmark's name is the registry's, not a
+  // repository on GitHub, so its tasks have none here.
+  const repository =
+    task?.repository ?? (release.benchmark ? undefined : release.repository?.fullName);
   const prUrl =
     task?.sourceUrl ??
-    (task?.sourcePr !== undefined
+    (task?.sourcePr !== undefined && repository
       ? `https://github.com/${repository}/pull/${task.sourcePr}`
       : undefined);
 

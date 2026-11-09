@@ -2,8 +2,8 @@ import { and, eq } from "drizzle-orm";
 import type { ArtifactStore } from "../artifacts/index.js";
 import type { Database } from "../db/client.js";
 import { credentialAuths } from "../db/credentials.js";
-import { type AnyLine, currentOf, headOf, type ReleaseRow } from "../db/releases.js";
-import { credentials, repos, repositoryGroups } from "../db/schema.js";
+import { currentOf, headOf, type ReleaseRow } from "../db/releases.js";
+import { credentials, repos } from "../db/schema.js";
 import { runnable, taskState } from "../db/task-record.js";
 import { createTaskStore } from "../db/tasks.js";
 import { evaluationTaskKey } from "../evaluation/models.js";
@@ -15,7 +15,7 @@ import { apiHeaders, GitHubOAuthError } from "../third_party/github/oauth.js";
 import type { ReleaseInputs } from "./release-build.js";
 import type { CredentialFacts } from "./release-results.js";
 import type { ReleaseTask } from "./release-rule.js";
-import type { TrialSource } from "./release-trials.js";
+import type { TrialLine, TrialSource } from "./release-trials.js";
 import type { ReleaseRepository } from "./release-types.js";
 
 /**
@@ -157,18 +157,13 @@ export function releasedTrials(db: Database, artifacts: ArtifactStore): TrialSou
     if (repo) repoIds.set(key, repo.id);
     return repo?.id;
   };
-  /** Where a line's runs may be: a group's own, then each member's, as its release counted them. */
-  const scopesOf = async (line: AnyLine): Promise<EvaluationScope[]> => {
+  /**
+   * Where a line's runs may be: a benchmark's own; a repository's; or a group's own, then each
+   * member its release recorded, as it counted them.
+   */
+  const scopesOf = async (line: TrialLine): Promise<EvaluationScope[]> => {
     if ("benchmarkId" in line) return [{ benchmarkId: line.benchmarkId }];
-    const githubIds =
-      "groupId" in line
-        ? ((
-            await db
-              .select({ ids: repositoryGroups.repositoryIds })
-              .from(repositoryGroups)
-              .where(eq(repositoryGroups.id, line.groupId))
-          )[0]?.ids ?? [])
-        : [line.githubRepoId];
+    const githubIds = "groupId" in line ? (line.members ?? []) : [line.githubRepoId];
     const members = await Promise.all(githubIds.map((id) => repoIdOf(line.orgId, id)));
     return [
       ...("groupId" in line ? [{ groupId: line.groupId }] : []),
@@ -180,7 +175,7 @@ export function releasedTrials(db: Database, artifacts: ArtifactStore): TrialSou
    * never reads the run again: a run holds every trial, so it is large.
    */
   const kept = new Map<string, EvaluationScope>();
-  const located = async (line: AnyLine, evaluationId: string) => {
+  const located = async (line: TrialLine, evaluationId: string) => {
     for (const scope of await scopesOf(line)) {
       const run = await getEvaluation(artifacts, scope, evaluationId);
       if (!run) continue;
