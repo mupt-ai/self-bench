@@ -1,5 +1,11 @@
 import { ChevronDown, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
-import { MAX_CONDITIONS, SKILL_HARNESSES, skillSource } from "../../../../src/contracts/conditions";
+import {
+  MAX_CONDITIONS,
+  MAX_SKILL_LENGTH,
+  MAX_SKILLS,
+  SKILL_HARNESSES,
+  skillSource,
+} from "../../../../src/contracts/conditions";
 import { harnessLabels } from "../../../../src/evaluation/models";
 import { cn } from "../primitives/cn";
 import { InfoTooltip } from "../primitives/tooltip";
@@ -19,6 +25,7 @@ export function conditionsProblem(draft: RunDraft): string | undefined {
     const skills = condition.skills.filter((skill) => skill.trim());
     if (!skills.length && !condition.instructions?.trim())
       return `${name} needs a skill or instructions.`;
+    if (skills.length > MAX_SKILLS) return `${name} can add at most ${MAX_SKILLS} skills.`;
     if (skills.some((skill) => !skillSource(skill)))
       return `${name}: write each skill as a GitHub org/repo, org/repo@ref, or URL.`;
     const unsupported = draft.models
@@ -142,6 +149,7 @@ export function RunConditionsPanel({
                   <Input
                     aria-label={`Skill ${at + 1}`}
                     className="font-mono"
+                    maxLength={MAX_SKILL_LENGTH}
                     placeholder="vercel/next.js@canary"
                     value={skill}
                     onChange={(event) =>
@@ -163,15 +171,17 @@ export function RunConditionsPanel({
                   </Button>
                 </div>
               ))}
-              <div>
-                <Button
-                  size="small"
-                  onClick={() => update(index, { skills: [...condition.skills, ""] })}
-                >
-                  <Plus aria-hidden="true" />
-                  Add Skill
-                </Button>
-              </div>
+              {condition.skills.length < MAX_SKILLS && (
+                <div>
+                  <Button
+                    size="small"
+                    onClick={() => update(index, { skills: [...condition.skills, ""] })}
+                  >
+                    <Plus aria-hidden="true" />
+                    Add Skill
+                  </Button>
+                </div>
+              )}
             </div>
             <label className={fieldStyles}>
               <span className="flex items-center gap-1.5">

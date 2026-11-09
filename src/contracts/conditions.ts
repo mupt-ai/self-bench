@@ -10,6 +10,9 @@ import type { Harness } from "../evaluation/models.js";
 export const SKILL_HARNESSES: readonly Harness[] = ["claude-code", "codex", "pi"];
 
 export const MAX_CONDITIONS = 4;
+export const MAX_SKILLS = 10;
+/** The longest skill source a condition takes: a GitHub URL with a ref. */
+export const MAX_SKILL_LENGTH = 300;
 const MAX_INSTRUCTIONS = 4_000;
 
 const part = "[A-Za-z0-9._-]+";
@@ -39,10 +42,11 @@ export const conditionSchema = z
       .array(
         z
           .string()
+          .max(MAX_SKILL_LENGTH)
           .refine((value) => skillSource(value) !== undefined, "a GitHub org/repo[@ref] or URL")
           .transform((value) => skillSource(value) as string),
       )
-      .max(10)
+      .max(MAX_SKILLS)
       .default([]),
     instructions: z.string().trim().max(MAX_INSTRUCTIONS).optional(),
   })

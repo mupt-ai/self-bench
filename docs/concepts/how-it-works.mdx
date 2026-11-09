@@ -1,0 +1,71 @@
+---
+title: "How It Works"
+description: "How merged pull requests and described scenarios become verified tasks, and how results are counted."
+icon: "gears"
+---
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcSet="/media/how-it-works-dark.gif" />
+  <img src="/media/how-it-works-light.gif" alt="A merged PR becomes a verified task; agents then attempt it and their accuracy is plotted against cost." />
+</picture>
+
+## Pipeline
+
+1. **Provenance.** A batch lists up to 500 merged PRs from non-bot authors, with their exact title and body. Common credential forms are redacted.
+2. **Discovery.** A batch proposes PRs to meet its counts. **Add PRs** skips this and authors each PR you pick.
+3. **Authoring.** An agent starts from the commit before the change. It writes the instruction, the reference patch (`gold.patch`), held-out tests, a Dockerfile, and `smoke.sh` and `run-tests.sh`, then calls `verify`.
+4. **Gates.** Each check must pass: build, smoke (the environment works for an agent), nop (new tests fail on the base commit), oracle (the reference patch passes), and determinism (the tests pass again).
+5. **Review.** An independent reviewer accepts, rejects, or sends the task back. Three failed rounds reject the candidate; nothing is backfilled.
+6. **You review.** Only tasks you approve are evaluated.
+
+## Difficulty
+
+A task takes the hardest tier its reference patch reaches, up to the tier you asked for.
+
+| Tier | Reference patch |
+| --- | --- |
+| easy | 20+ changed lines across 1 implementation path |
+| medium | 50+ changed lines across 2 implementation paths |
+| hard | 100+ changed lines across 3 implementation paths |
+
+Hidden tests must share no files with the reference patch, and they may not import its private helpers or pin internal details. They exercise a public API, command, or persistence boundary.
+
+## What the Agent Sees
+
+The agent gets the base snapshot, the instruction, and its environment. It never sees the held-out tests or the reference solution. Its network reaches only its model's host. The verifier applies its patch to a clean copy, then restores the held-out test files, so tampering can only produce a tree it could have written directly.
+
+## Scenarios
+
+A scenario starts from a description instead of a PR.
+
+- A **repository scenario** starts from the repository at a commit you choose (a SHA, a branch, or `HEAD`). It is pinned to that commit and can be released with its repository.
+- A **workspace scenario** lives in an **eval**, a collection of your own tasks with no repository behind it. The author writes the starting files, and the tests read only what the agent leaves in `/app`. Evals are never released.
+
+Name the mistake the agent made and what a careful person would do. Attach real files where you can. One scenario is one data point, so write several.
+
+## Variants
+
+A variant tests an environment change on an accepted task: a package build, docs, or an `AGENTS.md`. It keeps the instruction, tests, and reference solution byte for byte, and no author runs. Run the task and its variant with the same models, several times each, and compare pass rates.
+
+## Run Conditions
+
+A run condition changes how agents run without changing the tasks, so it applies to every task at once. Add it on the Run page's **Conditions** panel, and every model and harness also runs every task under it, beside the **Baseline**, the tasks as they are.
+
+| Field | Does |
+| --- | --- |
+| Skills | GitHub repositories whose `skills/` folder Harbor installs for the agent: `org/repo`, `org/repo@ref`, or a URL. Claude Code, Codex, and Pi load them. |
+| Extra Instructions | Appended to every task's instruction |
+
+Results show each condition as its own row, and the **Condition** filter narrows to one. Releases publish only the baseline.
+
+## Results
+
+- Results count only **counted tasks**: a repository's accepted tasks, or a benchmark's tasks.
+- Each configuration's **latest scored result** on each task counts. A trial is scored when it completed, its model was verified, and it has a reward and a cost.
+- Costs are the provider's reported charge where it reports one, else the model's list price.
+
+## Sharing Tasks
+
+Tasks, hidden tests, and reference solutions are private. Exports include them unencrypted; keep them private. A customer who runs tasks themselves gets a registry grant for specific tasks: `self-bench grant create` ([CLI](/cli#operator)).
+
+Publishing a release can make tasks public, and per-task results too. Both are off by default. Only aggregate scores are public otherwise.

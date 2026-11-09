@@ -60,7 +60,7 @@ Everything happens in the web app at [app.selfbench.dev](https://app.selfbench.d
 5. **Results**: compare accuracy against cost, and open any trial's transcript and scores.
 6. **Releases**: publish a public repository's results to [selfbench.dev](https://selfbench.dev).
 
-Models and sandboxes run on your organization's own keys under **Credentials**. Read released results through the [Public Results API](docs/api-reference/overview.mdx), or automate your workspace with an [API key](docs/api-reference/workspace.mdx).
+Models and sandboxes run on your organization's own keys under **Credentials**. Automate the same workflows with the [CLI](docs/cli.mdx) or the [API](docs/api.mdx). Read released results without a key through the [Public API](docs/public-api.mdx).
 
 ## Self-hosting
 
@@ -96,10 +96,9 @@ For frontend work, `bun run dev:site` runs the API and Vite with hot reload (sec
 
 ## Documentation
 
-- [Mintlify docs](docs/): guides, the CLI, and the API (`cd docs && npm ci && npm run dev`)
-- [CLI](docs/cli/overview.mdx) · [CLI Commands](docs/cli/commands.mdx)
-- [How it works](docs/concepts/task-generation.mdx): the pipeline and what makes a task valid
-- [Public Results API](docs/api-reference/overview.mdx) · [Workspace API](docs/api-reference/workspace.mdx)
+- [Mintlify docs](docs/): quickstart, concepts, CLI, and API (`cd docs && npm ci && npm run dev`)
+- [CLI](docs/cli.mdx) · [API](docs/api.mdx) · [Public API](docs/public-api.mdx)
+- [How it works](docs/concepts/how-it-works.mdx): the pipeline and what makes a task valid
 - [Infrastructure](infra/README.md)
 
 ## License

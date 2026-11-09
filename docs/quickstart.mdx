@@ -1,29 +1,42 @@
 ---
 title: "Quickstart"
-description: "Connect a repository, generate tasks, and compare coding agents."
+description: "Install the CLI, connect a repository, and run your first comparison."
 icon: "bolt"
 ---
 
-Use [app.selfbench.dev](https://app.selfbench.dev) to run your first private benchmark, or follow the same steps from the terminal with the [CLI](/cli/overview). You need a GitHub account with access to the repository and an organization admin to configure credentials.
+## 1. Install the CLI
 
-## 1. Sign In and Connect a Repository
+Needs Node.js 22 or later.
 
-Sign in with GitHub, choose your workspace, and connect a repository from **Repositories**. SelfBench uses merged pull requests as the source of benchmark tasks.
+```bash
+curl -fsSL https://raw.githubusercontent.com/mupt-ai/self-bench/main/scripts/install-cli.sh | sh
+self-bench login
+```
+
+The installer puts `self-bench` in `~/.local/bin`, and says so if that folder isn't on your `PATH`. Re-run it to upgrade, or set `SELFBENCH_CLI_VERSION=0.3.15` to pin a version. If you installed with npm before, run `npm uninstall -g self-bench` so the new copy runs. `login` opens your browser to approve the CLI and pick a workspace.
 
 ## 2. Connect Credentials
 
-Open **Credentials** (or **Finish Setup**). Connect a model credential such as a ChatGPT sign-in or a model API key, and a sandbox credential such as Modal or E2B. A Claude sign-in can run Claude Code evaluations, and a Meta sign-in Muse Code evaluations, but neither can generate tasks. Credentials belong to the workspace; only admins can manage them. Your own keys run models and sandboxes unless the deployment offers managed usage.
+Workspace admins connect a model and a sandbox under **Credentials**, or with `self-bench credential add`. See [Credentials](/concepts/credentials).
 
-## 3. Build and Review Tasks
+## 3. Run It
 
-From the repository, start **Batch Generation** and choose counts for easy, medium, and hard tasks. Alternatively, use **Add PRs** on **Dataset** to select individual merged PRs. Batches continue after you close the page and can take hours.
+Each step works in the app or the CLI. Use the same repository name, `acme/app`, throughout.
 
-On **Dataset**, inspect the instruction, environment, hidden tests, reference patch, and verification artifacts. Approve the tasks you want to evaluate; reject tasks that do not represent the change you intended to measure. See [Generate Tasks](/guides/generate-tasks).
+| Step | In the app | With the CLI |
+| --- | --- | --- |
+| Connect a repository | **Repositories → Connect** | `self-bench repo connect acme/app` |
+| Generate tasks | **Batch Generation** | `self-bench generate --repo acme/app --easy 2 --medium 4 --hard 2` |
+| Review | **Dataset**: inspect, approve, reject | `self-bench tasks --repo acme/app --state needs_review`, then `task approve BATCH TASK --repo acme/app` |
+| Revise | **Feedback** on a task | `self-bench task revise BATCH TASK --repo acme/app --feedback "…"` |
+| Evaluate | **Run** | `self-bench compare --repo acme/app --model gpt-6.1-sol --harness pi` |
+| Read results | **Results** | `self-bench results --repo acme/app` |
+| Explain or audit | **Explain Failure**, **Audit Task** | `self-bench task explain BATCH TASK --repo acme/app --wait` |
+| Publish | **Releases** (public repositories) | `self-bench release preview --repo acme/app`, then `release publish` |
 
-## 4. Run a Comparison
+Tasks are approved before they can be evaluated, and a comparison runs every approved task unless you name some. For the full command list, see [CLI](/cli).
 
-On **Run**, select approved tasks, models and harnesses, then a sandbox. **Run Full Comparison** runs every selected task for each model/harness pair; **Run Missing Tasks** skips pairs with completed results. On **Results**, compare accuracy against model API cost and inspect individual trial transcripts. See [Run Evaluations](/guides/run-evaluations).
+## Next
 
-## 5. Share Results (Optional)
-
-For a public GitHub repository, use **Releases** to select settings and publish aggregate results on [selfbench.dev](https://selfbench.dev). Private task contents and per-task trial results are not published by default. See [Publish Results](/guides/publish-results).
+- [How It Works](/concepts/how-it-works): the pipeline, difficulty tiers, and what agents see.
+- [Public Results API](/public-api): read released results without a key.

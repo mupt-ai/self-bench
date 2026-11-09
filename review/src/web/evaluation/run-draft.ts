@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_SKILL_LENGTH, MAX_SKILLS } from "../../../../src/contracts/conditions";
 import { thinkingLevels } from "../../../../src/contracts/models";
 import { harnessIds } from "../../../../src/evaluation/models";
 import { evaluationRequestId } from "./api";
@@ -34,7 +35,7 @@ const draftStateSchema = z.object({
       .array(
         z.object({
           name: z.string().max(60),
-          skills: z.array(z.string().max(300)).max(10),
+          skills: z.array(z.string().max(MAX_SKILL_LENGTH)).max(MAX_SKILLS),
           instructions: z.string().max(4000).optional(),
         }),
       )
