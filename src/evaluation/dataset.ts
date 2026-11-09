@@ -1,5 +1,5 @@
 import type { FrozenTask } from "../db/benchmarks.js";
-import { runnable } from "../db/task-record.js";
+import { isVariant, runnable } from "../db/task-record.js";
 import type { TaskStore } from "../db/tasks.js";
 import { type JudgeNeeds, mergeJudgeNeeds } from "../harnesses/harbor/host-variables.js";
 import { repositoryTasks } from "./frozen-tasks.js";
@@ -45,7 +45,8 @@ export interface EvaluationDataset {
 
 /** A repository's approved tasks. */
 export function repositoryDataset(tasks: TaskStore, repoId: number): EvaluationDataset {
-  const approved = async () => (await tasks.listForRepo(repoId)).filter(runnable);
+  const approved = async () =>
+    (await tasks.listForRepo(repoId)).filter(runnable).filter((task) => !isVariant(task));
   return {
     async options() {
       const listed = (await approved()).map(({ runId, taskId, difficulty }) => ({

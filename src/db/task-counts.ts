@@ -21,7 +21,7 @@ export async function taskCountsForRepos(db: Database, repoIds: readonly number[
       lastPr: sql<number | null>`max(${tasks.sourcePr})`,
     })
     .from(tasks)
-    .where(and(inArray(tasks.repoId, [...repoIds]), isNull(tasks.deletedAt)))
+    .where(and(inArray(tasks.repoId, [...repoIds]), isNull(tasks.deletedAt), isNull(tasks.variant)))
     .groupBy(tasks.repoId);
   return rows.map((row) => ({
     repoId: row.repoId,

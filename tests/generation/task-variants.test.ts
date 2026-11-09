@@ -127,3 +127,37 @@ test("a variant needs an accepted task and refuses values that could escape the 
   expect(await malformed?.json()).toEqual({ error: "Send the variant as JSON." });
   expect(started.length).toBe(before);
 });
+
+test("a variant is not listed as a task, counted, or shown as a revision, but stays reachable", async () => {
+  const { variants, task, key, site } = await taskWithDraft(true);
+  const created = await variants(VARIANT);
+  expect(created.status).toBe(201);
+  const variant = (await created.json()).task as {
+    runId: string;
+    taskId: string;
+    candidateId: string;
+  };
+
+  const listed = (await (await site.request(`${EVAL}/tasks`, { headers: key })).json()).tasks as {
+    runId: string;
+    taskId: string;
+  }[];
+  expect(listed.map((row) => `${row.runId}/${row.taskId}`)).toEqual([
+    `${task.runId}/${task.taskId}`,
+  ]);
+
+  const counts = (
+    await (await site.request("/api/orgs/mupt-ai/task-counts", { headers: key })).json()
+  ).counts as Record<string, { total: number }>;
+  expect(Object.values(counts).map((count) => count.total)).toEqual([1]);
+
+  const original = await site.request(`${EVAL}/tasks/${task.runId}/${task.taskId}`, {
+    headers: key,
+  });
+  expect((await original.json()).revisions).toEqual([]);
+
+  const direct = await site.request(`${EVAL}/tasks/${variant.runId}/${variant.taskId}`, {
+    headers: key,
+  });
+  expect(direct.status).toBe(200);
+});
