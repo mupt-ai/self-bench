@@ -25,7 +25,8 @@ type ServerEvent =
   | "release published"
   | "repository group created"
   | "repository group deleted"
-  | "group release published";
+  | "group release published"
+  | "benchmark release published";
 
 let client: PostHog | undefined;
 let environment = "local";

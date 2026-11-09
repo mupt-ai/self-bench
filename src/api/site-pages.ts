@@ -1,5 +1,6 @@
-import { groupPath, repositoryPath, segmentsOf } from "../public/paths.js";
+import { BENCHMARKS, groupPath, pathName, repositoryPath, segmentsOf } from "../public/paths.js";
 import { groupHref } from "../public/release-groups.js";
+import { directoryViewAt } from "../public/seo.js";
 import type { PublicReleaseRoutes } from "./routes/public-releases.js";
 import { homeBody, notFoundBody, pageData, repositoryBody } from "./site-body.js";
 import { groupBody, groupHead } from "./site-group.js";
@@ -19,21 +20,22 @@ export interface SitePage {
 
 export function sitePages(origin: string, publicRoutes: PublicReleaseRoutes) {
   /**
-   * The page's head and text, with 200 for the directory and released repositories and 404 for
+   * The page's head and text, with 200 for the directory's views and released repositories and 404 for
    * anything the site cannot show. A path that cannot name a repository is refused without a
    * lookup. Both read the snapshot of released lines, never the database. `partial` marks a home
    * page written without its directory, because the snapshot could not be read: it is still
    * served, but never cached, so the CDN never keeps a directory with nothing in it.
    */
   return async (pathname: string): Promise<SitePage> => {
-    if (pathname === "/") {
+    const view = directoryViewAt(pathname);
+    if (view) {
       const repositories = await publicRoutes.repositories().catch(() => undefined);
       const groups = repositories && (await publicRoutes.groups().catch(() => undefined));
       const directory = repositories && (await publicRoutes.directoryBody().catch(() => undefined));
       return {
         status: 200,
-        head: homeHead(origin),
-        body: homeBody(repositories ?? [], groups ?? []),
+        head: homeHead(origin, view),
+        body: homeBody(repositories ?? [], groups ?? [], view),
         data: pageData("/api/public/results", directory),
         partial: !repositories,
       };
@@ -54,12 +56,12 @@ export function sitePages(origin: string, publicRoutes: PublicReleaseRoutes) {
     }
     const path = repositoryPath(segments);
     if (!path) return { status: 404, head: notFoundHead(), body: notFoundBody() };
-    const fullName = `${path.owner}/${path.name}`;
+    const fullName = pathName(path);
     const lines = await publicRoutes.linesFor(fullName).catch(() => []);
     const head = repositoryHead(origin, lines, path.publisher);
     const body = repositoryBody(lines, path.publisher);
     // Addressed as the site asks for it: the path's own spelling, each part encoded.
-    const api = `/api/public/results/${encodeURIComponent(path.owner)}/${encodeURIComponent(path.name)}`;
+    const api = `/api/public/results/${path.benchmark ? `${BENCHMARKS}/` : ""}${encodeURIComponent(path.owner)}/${encodeURIComponent(path.name)}`;
     const data = pageData(api, await publicRoutes.repositoryBody(fullName).catch(() => undefined));
     return head && body
       ? { status: 200, head, body, data }

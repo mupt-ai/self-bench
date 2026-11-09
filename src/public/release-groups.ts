@@ -1,4 +1,12 @@
-import { picks, type SettingPick } from "./directory.js";
+import {
+  type CardSetting,
+  cardSetting,
+  frontierSettings,
+  offFrontier,
+  PREVIEW_LINES,
+  picks,
+  type SettingPick,
+} from "./directory.js";
 import { GROUP_SLUG_MAX } from "./paths.js";
 import type { ReleasePublisher, ReleaseRepository, ReleaseSetting } from "./release-types.js";
 
@@ -35,6 +43,8 @@ export interface GroupReleasePayload {
   slug: string;
   name: string;
   description?: string;
+  /** The group's logo as a data URL; absent for the default mark. */
+  logo?: string;
   members: GroupMember[];
   /** Every member's released tasks together. */
   tasks: number;
@@ -55,12 +65,44 @@ export interface GroupCard {
   slug: string;
   name: string;
   description?: string;
+  logo?: string;
   updatedAt: string;
   repositories: string[];
   tasks: number;
   settings: number;
-  picks: SettingPick<Pick<ReleaseSetting, "id" | "model" | "accuracy" | "costPerTaskUsd">>[];
+  picks: SettingPick<CardSetting>[];
+  /** Every frontier setting, cheapest first, for the card's hover preview. */
+  frontier: CardSetting[];
+  /** The most accurate settings off the frontier, for the preview lines the frontier leaves. */
+  others: CardSetting[];
 }
+
+/** The mark a group shows until its publisher uploads a logo. */
+export const DEFAULT_GROUP_LOGO = "/dari-logo.svg";
+
+/**
+ * A group's logo: a small image as a data URL, served inline with the release. Images only,
+ * under 48 KB, so the release stays small.
+ */
+export const GROUP_LOGO = {
+  maxBytes: 48 * 1024,
+  types: ["image/png", "image/jpeg", "image/webp", "image/svg+xml"] as const,
+};
+
+/** Whether a value is a data URL of an allowed image type, small enough to store and serve. */
+export function isGroupLogo(value: string): boolean {
+  const match = /^data:(image\/[a-z+]+);base64,([A-Za-z0-9+/]+=*)$/.exec(value);
+  if (!match || !(GROUP_LOGO.types as readonly string[]).includes(match[1] ?? "")) return false;
+  return Math.floor(((match[2]?.length ?? 0) * 3) / 4) <= GROUP_LOGO.maxBytes;
+}
+
+/**
+ * Where a released group's logo is served (public-releases.ts), so pages carry this short
+ * address rather than the image: a directory of many groups would otherwise carry every image.
+ * The release id in it changes with the logo, so an old one is never shown in its place.
+ */
+export const groupLogoHref = (group: Pick<PublishedGroup, "publisher" | "slug" | "releaseId">) =>
+  `/api/public${groupHref(group.publisher.login, group.slug)}/logo?v=${encodeURIComponent(group.releaseId)}`;
 
 /** A group's address on selfbench.dev, in its publisher's own spelling. */
 export const groupHref = (publisher: string, slug: string) =>
@@ -155,18 +197,13 @@ export function groupCardOf(group: PublishedGroup): GroupCard {
     slug: group.slug,
     name: group.name,
     ...(group.description ? { description: group.description } : {}),
+    ...(group.logo ? { logo: group.logo } : {}),
     updatedAt: group.updatedAt,
     repositories: group.members.map((member) => member.repository.fullName),
     tasks: group.tasks,
     settings: group.settings.length,
-    picks: picks(group.settings).map((pick) => ({
-      roles: pick.roles,
-      setting: {
-        id: pick.setting.id,
-        model: pick.setting.model,
-        accuracy: pick.setting.accuracy,
-        costPerTaskUsd: pick.setting.costPerTaskUsd,
-      },
-    })),
+    picks: picks(group.settings).map((pick) => ({ ...pick, setting: cardSetting(pick.setting) })),
+    frontier: frontierSettings(group.settings).map(cardSetting),
+    others: offFrontier(group.settings).slice(0, PREVIEW_LINES).map(cardSetting),
   };
 }

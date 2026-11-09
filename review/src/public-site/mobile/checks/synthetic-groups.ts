@@ -14,6 +14,7 @@ function group(
   description: string,
   members: readonly [Repository, number][],
   settings: PublicSetting[],
+  logo?: string,
 ): PublicGroup {
   const tasks = members.reduce((sum, [, count]) => sum + count, 0);
   return {
@@ -23,6 +24,7 @@ function group(
     slug,
     name,
     ...(description ? { description } : {}),
+    ...(logo ? { logo } : {}),
     tasks,
     settings,
     frontier: settings.filter((each) => each.onFrontier).map((each) => each.id),
@@ -49,9 +51,14 @@ function group(
   };
 }
 
+/** An uploaded logo: a small SVG, as the group dialog stores one. */
+const LOGO = `data:image/svg+xml;base64,${btoa(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#3b6fd8"/></svg>',
+)}`;
+
 /**
- * Released repository groups: one with many settings and a name long enough to wrap, and one
- * with a single setting and a member whose name is hard to break.
+ * Released repository groups: one with many settings, an uploaded logo, and a name long enough to
+ * wrap, and one with a single setting, the default logo, and a member whose name is hard to break.
  */
 export function syntheticGroups(): PublicGroup[] {
   const vendor = (id: string, label: string, vendorName: string) => ({
@@ -101,6 +108,7 @@ export function syntheticGroups(): PublicGroup[] {
           onFrontier: false,
         }),
       ],
+      LOGO,
     ),
     group(
       "solo-setting",

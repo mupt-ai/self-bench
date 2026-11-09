@@ -32,6 +32,8 @@ export interface ReleaseTarget {
   label: string;
   /** A repository's `owner/name`, for links to its tasks; none for a group. */
   repo?: string;
+  /** What the release dialog says it publishes, for a target that is not a repository or group. */
+  releaseSummary?: string;
   /** Its public page on selfbench.dev. */
   pageUrl(site: string, release: ReleaseSummary): string;
   description: string;
@@ -183,6 +185,7 @@ export function Releases({ target }: { target: ReleaseTarget }) {
         <ReleaseDialog
           url={url}
           {...(target.repo ? { repo: target.repo } : {})}
+          {...(target.releaseSummary ? { summary: target.releaseSummary } : {})}
           workspace={org}
           onClose={() => setReleasing(false)}
           onReleased={(release, unchanged) => {

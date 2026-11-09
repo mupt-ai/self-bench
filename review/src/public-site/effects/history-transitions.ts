@@ -1,4 +1,4 @@
-import { repositoryOf, saveHomeNow } from "../home-view";
+import { isDirectoryPath, repositoryOf, saveHomeNow } from "../home-view";
 import { touchInput } from "../mobile/device";
 import { scrollArea } from "../scroll-area";
 import { lineOf, select } from "./marks";
@@ -33,15 +33,15 @@ export function installHistoryTransitions(): void {
     if (!area) return;
     const repository = repositoryOf(to);
     // Records where the home page was before leaving it, with or without a transition.
-    if (from === "/" && repository) saveHomeNow(repository);
+    if (isDirectoryPath(from) && repository) saveHomeNow(repository);
     if (touchInput()) return;
     const scroller = area.content;
-    if (repositoryOf(from) && to === "/") {
+    if (repositoryOf(from) && isDirectoryPath(to)) {
       const line = lineOf(scroller.querySelector(select.shownLine) ?? scroller);
       returnHome(line, () => {});
       return;
     }
-    if (from === "/" && repository) {
+    if (isDirectoryPath(from) && repository) {
       if (!transitionsOn()) return;
       const card = select.cardFor(scroller, to.split("/").filter(Boolean).join("/"));
       const rect = card?.getBoundingClientRect();

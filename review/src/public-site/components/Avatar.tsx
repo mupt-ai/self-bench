@@ -1,3 +1,4 @@
+import { Gauge } from "lucide-react";
 import { useState } from "react";
 
 /** GitHub's mark (Octicons, MIT), for accounts whose avatar is missing or fails to load. */
@@ -57,5 +58,30 @@ export function Avatar({ src, size = 20 }: { src?: string; size?: number }) {
     >
       <path d={GITHUB_MARK} />
     </svg>
+  );
+}
+
+/**
+ * A results line's mark: its repository owner's avatar, or for a public benchmark, which has no
+ * owner on GitHub, the gauge the app marks Public Benchmarks with.
+ */
+export function LineMark({
+  benchmark,
+  src,
+  size,
+}: {
+  benchmark: boolean;
+  src?: string | undefined;
+  size: number;
+}) {
+  if (!benchmark) return <Avatar {...(src ? { src } : {})} size={size} />;
+  return (
+    <Gauge
+      aria-hidden="true"
+      width={size}
+      height={size}
+      strokeWidth={1.75}
+      className="shrink-0 text-foreground/70"
+    />
   );
 }

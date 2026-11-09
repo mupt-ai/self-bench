@@ -30,6 +30,8 @@ export const repositoryGroups = pgTable(
     slug: text("slug").notNull(),
     name: text("name").notNull(),
     description: text("description").notNull().default(""),
+    /** A small image as a data URL, shown instead of the default mark; null for the default. */
+    logo: text("logo"),
     /** Members' GitHub repository ids, in the order pages list them. */
     repositoryIds: jsonb("repository_ids").$type<number[]>().notNull(),
     updatedByLogin: text("updated_by_login").notNull(),

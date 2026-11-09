@@ -1,5 +1,6 @@
 import { directoryOf } from "../public/directory.js";
-import { groupCardOf, type PublishedGroup } from "../public/release-groups.js";
+import { resultsName } from "../public/paths.js";
+import { groupCardOf, groupLogoHref, type PublishedGroup } from "../public/release-groups.js";
 import type { PublishedLine, PublishedRelease } from "../public/release-types.js";
 import { type TaggedBody, tagged } from "./tagged.js";
 
@@ -10,7 +11,7 @@ import { type TaggedBody, tagged } from "./tagged.js";
  * already holding a response is answered with a bodyless 304.
  */
 export interface Snapshot {
-  /** Current lines by lower-case repository name, newest first. */
+  /** Current lines by lower-case `resultsName` (`owner/name`, `evals/org/name`), newest first. */
   byRepository: Map<string, PublishedLine[]>;
   /** Current releases by id. */
   byRelease: Map<string, PublishedRelease>;
@@ -18,12 +19,14 @@ export interface Snapshot {
   groups: PublishedGroup[];
   releases: () => TaggedBody;
   directory: () => TaggedBody;
-  /** One repository's response, or undefined when nothing is released for it. */
-  repository: (fullName: string) => TaggedBody | undefined;
+  /** One repository's or benchmark's response, by `resultsName`, or undefined when none. */
+  repository: (name: string) => TaggedBody | undefined;
   /** One group, or undefined when it has nothing to show. */
   group: (publisher: string, slug: string) => PublishedGroup | undefined;
   /** One group's response, or undefined when it has nothing to show. */
   groupBody: (publisher: string, slug: string) => TaggedBody | undefined;
+  /** One group's logo as its publisher uploaded it (a data URL), or undefined when it has none. */
+  logo: (publisher: string, slug: string) => string | undefined;
 }
 
 /** `build`, run once on first use. */
@@ -55,14 +58,18 @@ export function snapshotOf(lines: PublishedLine[], released: PublishedGroup[] = 
   let groups = released;
   const byRepository = new Map<string, PublishedLine[]>();
   for (const line of lines) {
-    const key = line.release.repository.fullName.toLowerCase();
+    const key = resultsName(line.release).toLowerCase();
     byRepository.set(key, [...(byRepository.get(key) ?? []), line]);
   }
-  // A deleted group's address can be reused; only the newest release at an address is shown.
+  // A deleted group's address can be reused; only the newest release at an address is shown. Its
+  // logo is served on its own (`logo`), so what is served of the group names only its address.
   const byGroup = new Map<string, PublishedGroup>();
+  const logos = new Map<string, string>();
   for (const group of groups) {
     const key = groupKey(group.publisher.login, group.slug);
-    if (!byGroup.has(key)) byGroup.set(key, group);
+    if (byGroup.has(key)) continue;
+    if (group.logo) logos.set(key, group.logo);
+    byGroup.set(key, group.logo ? { ...group, logo: groupLogoHref(group) } : group);
   }
   groups = [...byGroup.values()];
   const repositoryBodies = keptBodies<{ lines: PublishedLine[] }>();
@@ -76,12 +83,13 @@ export function snapshotOf(lines: PublishedLine[], released: PublishedGroup[] = 
     directory: once(() =>
       tagged(JSON.stringify({ cards: directoryOf(lines), groups: groups.map(groupCardOf) })),
     ),
-    repository(fullName) {
-      const key = fullName.toLowerCase();
+    repository(name) {
+      const key = name.toLowerCase();
       const found = byRepository.get(key);
       return repositoryBodies(key, found && { lines: found });
     },
     group,
+    logo: (publisher, slug) => logos.get(groupKey(publisher, slug)),
     groupBody(publisher, slug) {
       const found = group(publisher, slug);
       return groupBodies(groupKey(publisher, slug), found && { group: found });

@@ -63,8 +63,11 @@ export interface EvaluationRoutesOptions {
   registryCatalog?: () => Promise<RegistryDataset[]>;
   /** The org's repository groups; without them, no group routes. */
   groups?: GroupStore;
-  /** Group releases, which deleting a group withdraws, and who is told the pages it changed. */
-  groupReleases?: {
+  /**
+   * Public release lines, which deleting a group or benchmark withdraws, and who is told the
+   * pages that changed.
+   */
+  publicLines?: {
     store: Pick<ReleaseStore, "withdrawLine">;
     changed?: (paths: string[]) => void;
   };

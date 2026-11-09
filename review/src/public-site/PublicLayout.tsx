@@ -1,5 +1,6 @@
 import { type ComponentType, lazy, Suspense, useEffect, useRef } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
+import { BENCHMARKS } from "../../../src/public/paths";
 import { Lockup } from "../web/Lockup";
 import { GITHUB_MARK } from "./components/Avatar";
 import { OutLink } from "./components/OutLink";
@@ -12,6 +13,7 @@ import { WaterBackground, WaterBands } from "./effects/WaterBackground";
 import { EDGE_FRAME, FRAME, RULER_WIDTH } from "./frame";
 import { followJourney, homeView, journeyFrom, repositoryOf } from "./home-view";
 import { RulerScrollbar } from "./RulerScrollbar";
+import { DIRECTORY_VIEWS } from "./seo";
 import { ThemeToggle } from "./ThemeToggle";
 
 /** The app's origin: set by the server that serves the site, prod's app otherwise. */
@@ -56,18 +58,22 @@ export function PublicLayout() {
     previousKey.current = location.key;
   }, [location.key, location.pathname]);
 
-  // From a repository page, the logo plays the return. If the visitor came from the home
-  // page on this trip, it goes back to that home view (search and scroll); otherwise to the top.
+  // From a repository page, the logo plays the return. If the visitor came from the directory
+  // on this trip, it goes back to that view (tab, search, and scroll); otherwise to the top of
+  // the view that lists the page: Evals for an eval, else Repositories.
   const goHome = (event: React.MouseEvent) => {
     const repository = repositoryOf(location.pathname);
     if (!repository || !plainClick(event)) return;
     event.preventDefault();
     const entry = journeyFrom(location.key, repository);
-    const query = homeView(entry)?.query;
+    const left = homeView(entry);
+    const pathname =
+      left?.path ??
+      DIRECTORY_VIEWS[repository.startsWith(`${BENCHMARKS}/`) ? "benchmarks" : "repositories"].path;
     const shown = document.querySelector(select.shownLine);
     returnHome(shown ? lineOf(shown) : repository, () =>
       navigate(
-        { pathname: "/", search: query ? `?q=${encodeURIComponent(query)}` : "" },
+        { pathname, search: left?.query ? `?q=${encodeURIComponent(left.query)}` : "" },
         { state: entry ? { restoreFrom: entry } : undefined },
       ),
     );

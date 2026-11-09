@@ -1,9 +1,14 @@
+import { BENCHMARKS } from "../../../src/public/paths";
+import { directoryViewAt } from "./seo";
+
 /**
  * Where the home page was when someone left it for a repository, so coming back puts them
  * exactly there. Kept in session storage, keyed by the home page's history entry, so it
  * survives a reload of that tab but not a new visit.
  */
 export interface HomeView {
+  /** Which directory view it was: `/`, or `/evals`. */
+  path?: string;
   scrollTop: number;
   query: string;
   /** The card that was opened and where it sat on screen, to scroll back to exactly. */
@@ -96,8 +101,18 @@ export function saveHomeNow(leavingFor?: string): void {
   saveShownHome?.(leavingFor);
 }
 
-/** The repository ("owner/name") a path points at, if it is a repository page. */
+/** Whether a path is one of the directory's views, which cards open from and return to. */
+export const isDirectoryPath = (path: string) => directoryViewAt(path) !== undefined;
+
+/**
+ * What a path's page shows, if it is a results page: a repository ("owner/name"), a public
+ * benchmark ("evals/org/name"), or a repository group ("groups/publisher/slug"), as its cards and
+ * title name it.
+ */
 export function repositoryOf(path: string): string | undefined {
-  const [owner, name] = path.split("/").filter(Boolean);
+  const [owner, name, slug] = path.split("/").filter(Boolean);
+  // A group's and a public benchmark's own pages name three parts: `groups/…`, `evals/org/name`.
+  if (owner === "groups" || owner === BENCHMARKS)
+    return name && slug ? `${owner}/${name}/${slug}` : undefined;
   return owner && name ? `${owner}/${name}` : undefined;
 }

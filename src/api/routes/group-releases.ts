@@ -154,7 +154,7 @@ export function createGroupReleaseRoutes(options: GroupReleaseRoutesOptions) {
         hash: sha256(
           canonicalJson({
             scores: built.hash,
-            group: [group.slug, group.name, group.description],
+            group: [group.slug, group.name, group.description, group.logo],
             members: checked.map(({ id, fullName }) => [id, fullName]),
           }),
         ),
@@ -167,6 +167,7 @@ export function createGroupReleaseRoutes(options: GroupReleaseRoutesOptions) {
           slug: group.slug,
           name: group.name,
           ...(group.description ? { description: group.description } : {}),
+          ...(group.logo ? { logo: group.logo } : {}),
           members: membersOf(checked, owner, keyed, results),
           tasks,
           settings,

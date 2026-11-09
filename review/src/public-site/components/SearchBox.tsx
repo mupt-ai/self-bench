@@ -4,15 +4,18 @@ import { usePitchforks } from "../effects/easter-eggs/PitchforkMob";
 import { summonsMob } from "../effects/easter-eggs/pitchforks";
 
 /**
- * The repository search. Typing stays centred. The icon and label fade out together as soon as
+ * The directory's search. Typing stays centred. The icon and label fade out together as soon as
  * the box is clicked into, and fade back in, in place, once it is left empty. Typing
  * "/pitchforks" sends a small mob marching along the top of the bar.
  */
 export function SearchBox({
   query,
+  label,
   onChange,
 }: {
   query: string;
+  /** What it searches, as its placeholder and accessible name: "Search Repositories". */
+  label: string;
   onChange: (query: string) => void;
 }) {
   const [focused, setFocused] = useState(false);
@@ -32,7 +35,7 @@ export function SearchBox({
         onChange={(event) => change(event.target.value)}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        aria-label="Search Repositories"
+        aria-label={label}
         className="h-full w-full bg-transparent px-9 text-center font-mono text-sm outline-none [&::-webkit-search-cancel-button]:appearance-none"
       />
       <span
@@ -42,7 +45,7 @@ export function SearchBox({
         }`}
       >
         <Search className="size-4 text-foreground/70" />
-        Search Repositories
+        {label}
       </span>
       <button
         type="button"

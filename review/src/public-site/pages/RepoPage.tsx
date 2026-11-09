@@ -2,7 +2,8 @@ import { Star } from "lucide-react";
 import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
 import { useLocation, useNavigationType, useParams } from "react-router";
-import { Avatar } from "../components/Avatar";
+import { pathName, resultsName } from "../../../../src/public/paths";
+import { LineMark } from "../components/Avatar";
 import {
   LayoutToggle,
   type ResultsLayout,
@@ -11,13 +12,14 @@ import {
 } from "../components/LayoutToggle";
 import { OpenTask } from "../components/OpenTask";
 import { OpenTrace } from "../components/OpenTrace";
+import { ResultHead } from "../components/ResultHead";
 import type { PublicPublisher, PublicRepoPage, PublicRepoSummary } from "../contract";
-import { flightTo, pageBody, revealFade, shownLine } from "../effects/marks";
+import { pageBody, shownLine } from "../effects/marks";
 import { bodyHeld, watchBodyHold } from "../effects/transition-run";
-import { ago, cleanDescription, compactNumber, publisherName } from "../format";
+import { cleanDescription, compactNumber } from "../format";
 import { motionOff } from "../motion";
 import { APP_URL } from "../PublicLayout";
-import { cardOf, pageKey, takeRead, visitedPages } from "../page-preload";
+import { pageKey, repoPages } from "../page-preload";
 import { scrollArea } from "../scroll-area";
 import { repositoryTitle } from "../seo";
 import { useSource } from "../source-context";
@@ -37,9 +39,12 @@ interface PageHead {
   tasks: number;
   settings: number;
   endorsed: boolean;
+  /** Set on a public benchmark's page, which has no repository to link to. */
+  benchmark?: { ref: string };
 }
 
 const headOf = (page: PublicRepoPage): PageHead => ({
+  ...(page.release.benchmark ? { benchmark: page.release.benchmark } : {}),
   repository: page.release.repository,
   ownerAvatarUrl: page.release.repository.ownerAvatarUrl,
   publisher: page.release.publisher,
@@ -50,6 +55,7 @@ const headOf = (page: PublicRepoPage): PageHead => ({
 });
 
 const headOfCard = (card: PublicRepoSummary): PageHead => ({
+  ...(card.benchmark ? { benchmark: card.benchmark } : {}),
   repository: card.repository,
   ownerAvatarUrl: card.repository.ownerAvatarUrl,
   publisher: card.publisher,
@@ -59,20 +65,25 @@ const headOfCard = (card: PublicRepoSummary): PageHead => ({
   endorsed: card.endorsed,
 });
 
-export function RepoPage() {
+/**
+ * A repository's results page, `/owner/name[/publisher]`, or with `benchmark` a public
+ * benchmark's, `/evals/org/name[/publisher]`: the same page, by its registry name.
+ */
+export function RepoPage({ benchmark = false }: { benchmark?: boolean }) {
   const { owner = "", name = "", publisher } = useParams();
   const source = useSource();
   const fullName = `${owner}/${name}`;
-  const key = pageKey(fullName, publisher);
+  const address = pathName({ owner, name, ...(benchmark ? { benchmark } : {}) });
+  const key = pageKey(address, publisher);
   const state = useLoad(
     key,
     // A read its card started as it was pressed, if there is one (page-preload.ts).
     () =>
-      takeRead(key) ??
-      (publisher ? source.getLine(owner, name, publisher) : source.getRepo(owner, name)),
+      repoPages.take(key) ??
+      (publisher ? source.getLine(address, publisher) : source.getRepo(address)),
     // Runs of one repository share a group, so switching between them keeps the page up.
-    fullName.toLowerCase(),
-    visitedPages,
+    address.toLowerCase(),
+    repoPages.visited,
   );
   // While an opening flight is in the air, the body waits (transition-run.ts `holdBody`).
   const held = useSyncExternalStore(watchBodyHold, bodyHeld, () => false);
@@ -85,7 +96,7 @@ export function RepoPage() {
   const page = state.status === "ready" ? state.value : undefined;
   if (state.status === "error" || (state.status === "ready" && !page))
     return <NoResults fullName={fullName} />;
-  const card = cardOf(key);
+  const card = repoPages.card(key);
   const head = page ? headOf(page) : card ? headOfCard(card) : undefined;
   if (!head) return <p className="text-muted-foreground">Loading…</p>;
   return <Results head={head} page={held ? undefined : page} />;
@@ -108,6 +119,7 @@ function Results({ head, page }: { head: PageHead; page?: PublicRepoPage }) {
   }, [release?.releaseId]);
   const { repository } = head;
   const [owner, name] = repository.fullName.split("/");
+  const address = resultsName(head);
   // The chart's pointer and vendor chips mark the same settings in the table, and the table
   // row under the pointer lights up its point.
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -163,16 +175,18 @@ function Results({ head, page }: { head: PageHead; page?: PublicRepoPage }) {
           ? "min-[90rem]:mx-[calc(50%_-_min(100vw_-_2*var(--edge)_-_2*var(--gutter),110rem)/2)]"
           : ""
       }`}
-      {...shownLine(`${repository.fullName}/${head.publisher.login}`)}
+      {...shownLine(`${address}/${head.publisher.login}`)}
     >
-      <header className="flex flex-col gap-3" data-morph="title">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="flex shrink-0" {...flightTo("avatar")}>
-            <Avatar src={head.ownerAvatarUrl} size={32} />
-          </span>
-          {/* The page's heading, as in the page text the server writes (src/api/site-body.ts):
-              without it, a crawler that runs the page finds no h1 once this replaces that text. */}
-          <h1 className="min-w-0 font-mono text-2xl font-medium" {...flightTo("name")}>
+      <ResultHead
+        avatar={<LineMark benchmark={!!head.benchmark} src={head.ownerAvatarUrl} size={32} />}
+        title={
+          // A public benchmark is the registry's: there is no repository to link to.
+          head.benchmark ? (
+            <span className="block">
+              {owner}/<wbr />
+              {name}
+            </span>
+          ) : (
             <a
               href={`https://github.com/${repository.fullName}`}
               target="_blank"
@@ -183,43 +197,28 @@ function Results({ head, page }: { head: PageHead; page?: PublicRepoPage }) {
               {owner}/<wbr />
               {name}
             </a>
-          </h1>
-          {repository.stars !== undefined && (
-            <span
-              className="flex items-center gap-1 font-mono text-sm text-muted-foreground"
-              {...flightTo("stars")}
-            >
-              <Star className="size-3.5 fill-current" aria-hidden="true" />
-              {compactNumber(repository.stars)}
-            </span>
-          )}
-          <span className="ml-auto self-center" data-morph="toggle">
-            <LayoutToggle layout={layout} onChange={chooseLayout} />
-          </span>
-        </div>
-        {repository.description && (
-          <p className="line-clamp-2 max-w-3xl text-muted-foreground" {...flightTo("description")}>
-            {cleanDescription(repository.description)}
-          </p>
-        )}
-        {/* Fades in whole when the page is revealed after a card click, rather than assembling. */}
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm" {...revealFade}>
-          <span className="flex items-center gap-1.5">
-            <Avatar src={head.publisher.avatarUrl} size={16} />
-            Run by <strong className="font-medium">{publisherName(head.publisher)}</strong>
-          </span>
-          <span className="text-muted-foreground">· Released {ago(head.releasedAt)}</span>
-          <span className="text-muted-foreground">·</span>
-          <span className="font-mono">{head.tasks} tasks</span>
-          <span className="text-muted-foreground">·</span>
-          <span className="font-mono">{head.settings} settings</span>
-          {head.endorsed && (
-            <span className="border border-border px-1.5 py-0.5 text-xs">
-              Endorsed by Maintainers
-            </span>
-          )}
-        </p>
-      </header>
+          )
+        }
+        monoTitle
+        {...(repository.stars === undefined
+          ? {}
+          : {
+              badge: (
+                <>
+                  <Star className="size-3.5 fill-current" aria-hidden="true" />
+                  {compactNumber(repository.stars)}
+                </>
+              ),
+            })}
+        aside={<LayoutToggle layout={layout} onChange={chooseLayout} />}
+        {...(repository.description
+          ? { description: cleanDescription(repository.description) }
+          : {})}
+        publisher={head.publisher}
+        releasedAt={head.releasedAt}
+        facts={[`${head.tasks} tasks`, `${head.settings} settings`]}
+        endorsed={head.endorsed}
+      />
 
       {page && (
         <RepoBody

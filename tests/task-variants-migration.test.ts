@@ -23,7 +23,7 @@ test("variants made as task rows move to task_variants as they stood", async () 
   const client = new PGlite();
   try {
     await client.waitReady;
-    await migrate(client, undefined, "0035_sandbox_resource_limits");
+    await migrate(client, undefined, "0037_benchmark_releases");
     const db = drizzle(client, { schema });
     const users = createUserStore(db, { secret: testAuthConfig.sessionSecret });
     const user = await users.upsert({
@@ -70,7 +70,7 @@ test("variants made as task rows move to task_variants as they stood", async () 
         VALUES (4, ${ids.repo}, 'run-revision', 'cand', 'fix-it', 'easy', 'in_progress', 'authoring', 2,
         'Tighten the tests');
     `);
-    await migrate(client, "0035_sandbox_resource_limits", "0036_task_variant_records");
+    await migrate(client, "0037_benchmark_releases", "0038_task_variant_records");
 
     const tasks = await client.query<{ id: number; revised_from: number | null }>(
       "SELECT id, revised_from FROM tasks ORDER BY id",

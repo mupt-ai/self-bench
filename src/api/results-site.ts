@@ -1,15 +1,16 @@
 import { readFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { resolve, sep } from "node:path";
-import { repositoryPath, segmentsOf } from "../public/paths.js";
+import { pathName, repositoryPath, segmentsOf } from "../public/paths.js";
 import type { PublishedRelease } from "../public/release-types.js";
 import { contentType, escapeAttribute, sendJson } from "./http.js";
 import { INDEXNOW_KEY_PATH, sendIndexNowKey } from "./indexnow.js";
 import { cardPng } from "./link-card.js";
 import { clientIp, type RateLimiter } from "./rate-limit.js";
 import type { PublicReleaseRoutes } from "./routes/public-releases.js";
-import { headTags, lineAt, type PageHead, sitemapOf } from "./site-head.js";
+import { headTags, lineAt, type PageHead } from "./site-head.js";
 import { sitePages } from "./site-pages.js";
+import { sitemapOf } from "./sitemap.js";
 import { sendTagged, type TaggedBody, tagged } from "./tagged.js";
 
 export interface ResultsSiteOptions {
@@ -169,7 +170,7 @@ export function createResultsSite(options: ResultsSiteOptions) {
       if (card) {
         const path = repositoryPath(segmentsOf(card[1] ?? ""));
         const lines = path
-          ? await options.publicRoutes.linesFor(`${path.owner}/${path.name}`).catch(() => [])
+          ? await options.publicRoutes.linesFor(pathName(path)).catch(() => [])
           : [];
         const release = path ? lineAt(lines, path.publisher)?.release : undefined;
         if (!release) {

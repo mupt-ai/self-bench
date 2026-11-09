@@ -1,9 +1,10 @@
-import { groupHref, type PublishedGroup } from "../public/release-groups.js";
+import { resultsName } from "../public/paths.js";
 import type { PublishedLine } from "../public/release-types.js";
 import {
+  DIRECTORY_VIEWS,
+  type DirectoryView,
   defaultLineOf,
   HOME_DESCRIPTION,
-  HOME_TITLE,
   repositoryDescription,
   repositoryTitle,
   SITE_NAME,
@@ -33,12 +34,14 @@ export interface PageHead {
   image?: { url: string; alt: string };
 }
 
-export function homeHead(origin: string): PageHead {
+/** A directory view's head: the home page's, with the site's own data, or the evals page's. */
+export function homeHead(origin: string, view: DirectoryView = "repositories"): PageHead {
+  const { title, description, path } = DIRECTORY_VIEWS[view];
   return {
-    title: HOME_TITLE,
-    description: HOME_DESCRIPTION,
-    canonical: `${origin}/`,
-    structuredData: siteStructuredData(origin),
+    title,
+    description,
+    canonical: `${origin}${path}`,
+    ...(view === "repositories" ? { structuredData: siteStructuredData(origin) } : {}),
   };
 }
 
@@ -55,8 +58,9 @@ export function repositoryHead(
   const line = lineAt(lines, publisher);
   if (!line) return undefined;
   const { fullName } = line.release.repository;
+  const address = resultsName(line.release);
   const own = line === defaultLineOf(lines) ? undefined : line.release.publisher.login;
-  const canonical = own ? `${origin}/${fullName}/${own}` : `${origin}/${fullName}`;
+  const canonical = own ? `${origin}/${address}/${own}` : `${origin}/${address}`;
   return {
     title: repositoryTitle(fullName),
     description: repositoryDescription(line),
@@ -64,15 +68,17 @@ export function repositoryHead(
     structuredData: repositoryStructuredData(origin, line, canonical, own),
     // The release in the address, so a new release's card is fetched afresh, not an old copy.
     image: {
-      url: `${origin}${cardPath(fullName, own)}?v=${encodeURIComponent(line.release.releaseId)}`,
+      url: `${origin}${cardPath(address, own)}?v=${encodeURIComponent(line.release.releaseId)}`,
       alt: `Accuracy against cost per task for each model setting on ${fullName}`,
     },
   };
 }
 
-/** How SelfBench measures, for the Dataset of a repository or a group. */
+/** How SelfBench measures, for the Dataset of a repository or a group, or a public benchmark. */
 const MEASUREMENT_TECHNIQUE =
   "Tasks built from the repository's merged pull requests, each scored by hidden tests";
+const BENCHMARK_TECHNIQUE =
+  "The public benchmark's own tasks, as published in its registry, each scored by its own tests";
 
 /** What a page's results are, as schema.org data: a repository's, or a group's. */
 export interface ResultsData {
@@ -88,6 +94,8 @@ export interface ResultsData {
   repositories: string[];
   /** The public API address its numbers download from. */
   contentUrl: string;
+  /** A public benchmark's results, measured on its own tasks rather than built ones. */
+  benchmark?: true;
 }
 
 /**
@@ -131,8 +139,8 @@ export function resultsStructuredData(data: ResultsData): Record<string, unknown
         ...data.date,
         isAccessibleForFree: true,
         keywords: ["coding agents", "AI models", "benchmark", "evals", ...data.repositories],
-        about: about.length === 1 ? about[0] : about,
-        measurementTechnique: MEASUREMENT_TECHNIQUE,
+        ...(about.length > 0 ? { about: about.length === 1 ? about[0] : about } : {}),
+        measurementTechnique: data.benchmark ? BENCHMARK_TECHNIQUE : MEASUREMENT_TECHNIQUE,
         variableMeasured: [
           { "@type": "PropertyValue", name: "Accuracy", unitText: "percent" },
           { "@type": "PropertyValue", name: "Cost per task", unitText: "USD" },
@@ -156,19 +164,30 @@ function repositoryStructuredData(
 ): Record<string, unknown> {
   const { release } = line;
   const { fullName } = release.repository;
+  const address = resultsName(release);
   return resultsStructuredData({
     origin,
     canonical,
     crumbs: [
-      { name: fullName, item: `${origin}/${fullName}` },
+      ...(release.benchmark
+        ? [
+            {
+              name: DIRECTORY_VIEWS.benchmarks.tab,
+              item: `${origin}${DIRECTORY_VIEWS.benchmarks.path}`,
+            },
+          ]
+        : []),
+      { name: fullName, item: `${origin}/${address}` },
       ...(own ? [{ name: `Run by ${own}`, item: canonical }] : []),
     ],
     name: `${fullName} coding agent benchmark results${own ? ` run by ${own}` : ""}`,
     description: repositoryDescription(line, Number.POSITIVE_INFINITY),
     publisher: release.publisher,
     date: { datePublished: release.releasedAt },
-    repositories: [fullName],
-    contentUrl: `${origin}/api/public/results/${fullName}`,
+    // A public benchmark has no repository behind it to name.
+    repositories: release.benchmark ? [] : [fullName],
+    contentUrl: `${origin}/api/public/results/${address}`,
+    ...(release.benchmark ? { benchmark: true as const } : {}),
   });
 }
 
@@ -229,62 +248,4 @@ export function headTags(head: PageHead, origin: string): string {
   ]
     .map((tag) => `    ${tag}\n`)
     .join("");
-}
-
-const escapeXml = (value: string) =>
-  value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-
-const newest = (dates: readonly string[]) =>
-  dates.reduce<string | undefined>(
-    (latest, date) => (!latest || date > latest ? date : latest),
-    undefined,
-  );
-
-/**
- * Every page the site can show, for search engines: the home page, each repository's page, each
- * other publisher's line, and each repository group, at their canonical addresses, each dated by its newest release.
- * Built from the released lines, so a new release is listed without any step of its own.
- */
-export function sitemapOf(
-  origin: string,
-  repositories: readonly (readonly PublishedLine[])[],
-  groups: readonly PublishedGroup[] = [],
-): string {
-  const pages: { loc: string; lastmod: string | undefined }[] = groups.map((group) => ({
-    loc: `${origin}${groupHref(group.publisher.login, group.slug)}`,
-    lastmod: group.updatedAt,
-  }));
-  for (const lines of repositories) {
-    const fallback = defaultLineOf(lines);
-    if (!fallback) continue;
-    const { fullName } = fallback.release.repository;
-    pages.push({
-      loc: `${origin}/${fullName}`,
-      lastmod: newest(lines.map((line) => line.release.releasedAt)),
-    });
-    for (const line of lines) {
-      if (line === fallback) continue;
-      pages.push({
-        loc: `${origin}/${fullName}/${line.release.publisher.login}`,
-        lastmod: line.release.releasedAt,
-      });
-    }
-  }
-  pages.sort((left, right) => left.loc.localeCompare(right.loc));
-  const home = {
-    loc: `${origin}/`,
-    lastmod: newest([
-      ...repositories.flat().map((line) => line.release.releasedAt),
-      ...groups.map((group) => group.updatedAt),
-    ]),
-  };
-  const urls = [home, ...pages].map(
-    ({ loc, lastmod }) =>
-      `  <url><loc>${escapeXml(loc)}</loc>${lastmod ? `<lastmod>${escapeXml(lastmod)}</lastmod>` : ""}</url>\n`,
-  );
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join("")}</urlset>\n`;
 }

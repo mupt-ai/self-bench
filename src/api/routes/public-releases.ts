@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { ReleaseStore } from "../../db/releases.js";
-import { groupPath, repositoryPath, segmentsOf } from "../../public/paths.js";
+import { groupPath, pathName, repositoryPath, segmentsOf } from "../../public/paths.js";
 import type { PublishedGroup } from "../../public/release-groups.js";
 import type { PublishedLine } from "../../public/release-types.js";
 import { sendJson } from "../http.js";
@@ -21,6 +21,11 @@ const SNAPSHOT_MS = 5_000;
  */
 const CACHED = "public, max-age=0, s-maxage=10";
 const JSON_TYPE = "application/json; charset=utf-8";
+/**
+ * A logo's address carries its release, so a browser may keep it; the CDN keeps it only a minute,
+ * so a withdrawn group's logo goes with it.
+ */
+const LOGO_CACHE = "public, max-age=86400, s-maxage=60";
 
 export interface PublicReleaseRoutesOptions {
   /** Refuses callers over their share; the routes are anonymous. */
@@ -102,9 +107,9 @@ export function createPublicReleaseRoutes(
     refresh() {
       reading = undefined;
     },
-    /** The current lines of one repository, for the page status of selfbench.dev. */
-    async linesFor(fullName: string): Promise<PublishedLine[]> {
-      return (await snapshot()).byRepository.get(fullName.toLowerCase()) ?? [];
+    /** The current lines of one repository or benchmark, by `resultsName`, for page status. */
+    async linesFor(name: string): Promise<PublishedLine[]> {
+      return (await snapshot()).byRepository.get(name.toLowerCase()) ?? [];
     },
     /** Every repository's current lines, for selfbench.dev's sitemap. */
     async repositories(): Promise<PublishedLine[][]> {
@@ -117,9 +122,9 @@ export function createPublicReleaseRoutes(
     async directoryBody(): Promise<string> {
       return (await snapshot()).directory().body;
     },
-    /** The body /api/public/repos/<owner>/<name> answers, or undefined when nothing is released. */
-    async repositoryBody(fullName: string): Promise<string | undefined> {
-      return (await snapshot()).repository(fullName)?.body;
+    /** The body /api/public/results/<name> answers, or undefined when nothing is released. */
+    async repositoryBody(name: string): Promise<string | undefined> {
+      return (await snapshot()).repository(name)?.body;
     },
     /** Every group with something to show, for the home page and the sitemap. */
     async groups(): Promise<PublishedGroup[]> {
@@ -180,6 +185,32 @@ export function createPublicReleaseRoutes(
         });
         return true;
       }
+      // A group's logo, as an image of its own: only ever the type the upload checked, and
+      // never able to run anything here, an SVG included, even opened on its own.
+      const logoOf =
+        route === "groups" && rest[2] === "logo"
+          ? groupPath([route, ...rest.slice(0, 2)])
+          : undefined;
+      if (logoOf) {
+        const image = /^data:(image\/[a-z+]+);base64,(.+)$/.exec(
+          (await snapshot()).logo(logoOf.publisher, logoOf.slug) ?? "",
+        );
+        if (!image?.[1] || !image[2]) {
+          uncached();
+          sendJson(response, 404, { error: "This group has no logo" });
+          return true;
+        }
+        const bytes = Buffer.from(image[2], "base64");
+        response.writeHead(200, {
+          "content-type": image[1],
+          "content-length": bytes.byteLength,
+          "cache-control": LOGO_CACHE,
+          "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+          "x-content-type-options": "nosniff",
+        });
+        response.end(request.method === "HEAD" ? undefined : bytes);
+        return true;
+      }
       const group = route === "groups" ? groupPath([route, ...rest]) : undefined;
       if (group) {
         const body = (await snapshot()).groupBody(group.publisher, group.slug);
@@ -194,12 +225,11 @@ export function createPublicReleaseRoutes(
         }
         return true;
       }
-      const repository =
-        (route === "results" || route === "repos") && rest.length === 2
-          ? repositoryPath(rest)
-          : undefined;
+      // A repository's results, `<owner>/<name>`, or a public benchmark's, `evals/<org>/<name>`.
+      const path = route === "results" || route === "repos" ? repositoryPath(rest) : undefined;
+      const repository = path && !path.publisher ? path : undefined;
       if (repository) {
-        const body = (await snapshot()).repository(`${repository.owner}/${repository.name}`);
+        const body = (await snapshot()).repository(pathName(repository));
         if (body) {
           sendTagged(request, response, body, {
             "cache-control": CACHED,

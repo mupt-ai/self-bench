@@ -9,6 +9,8 @@ export interface RepositoryGroup {
   readonly slug: string;
   readonly name: string;
   readonly description: string;
+  /** A data URL image shown instead of the default mark; null for the default. */
+  readonly logo: string | null;
   /** Members' GitHub repository ids, in the order pages list them. */
   readonly repositoryIds: readonly number[];
   readonly updatedBy: string;
@@ -21,6 +23,8 @@ export interface GroupFields {
   readonly slug: string;
   readonly name: string;
   readonly description: string;
+  /** Left out (undefined) keeps the group's logo as it is. */
+  readonly logo?: string | null | undefined;
   readonly repositoryIds: readonly number[];
 }
 
@@ -33,6 +37,7 @@ const groupFrom = (row: typeof repositoryGroups.$inferSelect): RepositoryGroup =
   slug: row.slug,
   name: row.name,
   description: row.description,
+  logo: row.logo,
   repositoryIds: row.repositoryIds,
   updatedBy: row.updatedByLogin,
   createdAt: row.createdAt.toISOString(),
@@ -107,6 +112,7 @@ export function createGroupStore(db: Database, options: { now?: () => Date } = {
           .update(repositoryGroups)
           .set({
             ...fields,
+            ...(fields.logo === undefined ? {} : { logo: fields.logo }),
             repositoryIds: [...fields.repositoryIds],
             updatedByLogin: by.login,
             updatedAt: now(),
