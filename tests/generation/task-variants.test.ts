@@ -226,3 +226,31 @@ test("a variant lives under its task, never as a task, and runs only when picked
   expect(await listVariants()).toEqual([]);
   expect((await options()).map((entry) => entry.runId)).toEqual([task.runId]);
 });
+
+test("deleting a task deletes its variants, so a retry drops them as it drops the task", async () => {
+  const { variants, task, key, site, started } = await taskWithDraft(true);
+  const variant = (await (await variants(VARIANT)).json()).variant as { runId: string };
+  const candidateId = started.at(-1)?.input.candidate.candidateId ?? "";
+  const store = createTaskStore(site.db);
+  await store.variants.settle(variant.runId, candidateId, {
+    pipelineStatus: "accepted",
+    stage: "accepted",
+    bundleKey: `runs/${variant.runId}/harbor-task.tar.gz`,
+  });
+  const path = `${EVAL}/tasks/${task.runId}/${task.taskId}`;
+  await site.request(`${path}/review`, {
+    method: "PUT",
+    headers: key,
+    body: JSON.stringify({ decision: "approve" }),
+  });
+  const [row] = await store.listForRun(task.runId);
+  const repoId = row?.repoId ?? 0;
+  expect((await site.request(path, { method: "DELETE", headers: key })).status).toBe(200);
+
+  expect((await store.variants.listDeleted(repoId)).map((gone) => gone.runId)).toEqual([
+    variant.runId,
+  ]);
+  await expect(
+    repositoryDataset(store, repoId).select([{ runId: variant.runId, taskId: task.taskId }]),
+  ).rejects.toThrow("No selected tasks remain");
+});

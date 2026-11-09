@@ -64,6 +64,14 @@ test("variants made as task rows move to task_variants as they stood", async () 
         stage, revised_from, feedback, variant)
         VALUES (5, ${ids.repo}, 'run-nested', 'cand', 'fix-it', 'easy', 'accepted', 'accepted', 2,
         'Variant: Docs and Next', 'Docs and Next');
+      -- A variant of a deleted task moves deleted.
+      INSERT INTO tasks (id, repo_id, run_id, candidate_id, task_id, difficulty, pipeline_status,
+        stage, deleted_at)
+        VALUES (6, ${ids.repo}, 'run-gone', 'cand', 'fix-it', 'easy', 'accepted', 'accepted', now());
+      INSERT INTO tasks (id, repo_id, run_id, candidate_id, task_id, difficulty, pipeline_status,
+        stage, revised_from, feedback, variant)
+        VALUES (7, ${ids.repo}, 'run-orphan', 'cand', 'fix-it', 'easy', 'accepted', 'accepted', 6,
+        'Variant: Orphan', 'Orphan');
       -- A revision made from a variant keeps its row, without the link.
       INSERT INTO tasks (id, repo_id, run_id, candidate_id, task_id, difficulty, pipeline_status,
         stage, revised_from, feedback)
@@ -78,6 +86,7 @@ test("variants made as task rows move to task_variants as they stood", async () 
     expect(tasks.rows.map((row) => [Number(row.id), row.revised_from])).toEqual([
       [1, null],
       [4, null],
+      [6, null],
     ]);
     const variants = await client.query<{
       parent_id: number;
@@ -102,6 +111,16 @@ test("variants made as task rows move to task_variants as they stood", async () 
         bundle_key: null,
         started_by: null,
         deleted: false,
+      },
+      {
+        parent_id: 6,
+        label: "Orphan",
+        run_id: "run-orphan",
+        task_id: "fix-it",
+        pipeline_status: "accepted",
+        bundle_key: null,
+        started_by: null,
+        deleted: true,
       },
       {
         parent_id: 1,

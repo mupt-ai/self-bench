@@ -29,6 +29,8 @@ test("review migrations preserve batch ownership, tasks, reviews and tombstones"
       "0030_task_scenario_title.sql",
       "0033_repo_evals.sql",
       "0034_task_variants.sql",
+      // Deleting a task also deletes its variants, which live in their own table.
+      "0038_task_variant_records.sql",
     ]) {
       await client.exec(await readFile(join(migrationsFolder(), file), "utf8"));
     }

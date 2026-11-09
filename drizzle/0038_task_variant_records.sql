@@ -29,7 +29,8 @@ CREATE INDEX "task_variants_parent_id" ON "task_variants" USING btree ("parent_i
 CREATE INDEX "task_variants_repo_id" ON "task_variants" USING btree ("repo_id");--> statement-breakpoint
 -- Variants made before this table were task rows revising their task: move each here, as it stood,
 -- under the nearest task that is not itself a variant (a variant of a variant changes that task
--- too). A variant a person rejected leaves with it; one with no such task stays a task.
+-- too). A variant a person rejected, or of a deleted task, moves deleted; one with no such task
+-- stays a task.
 INSERT INTO "task_variants" (
 	"parent_id", "repo_id", "label", "run_id", "candidate_id", "task_id", "pipeline_status", "stage",
 	"reason", "bundle_key", "images", "workflow_id", "started_by", "started_at", "deleted_at",
@@ -46,7 +47,12 @@ SELECT
 	"lineage"."ancestor", "v"."repo_id", "v"."variant", "v"."run_id", "v"."candidate_id", "v"."task_id",
 	"v"."pipeline_status", "v"."stage", "v"."reason", "v"."bundle_key", "v"."images", "v"."workflow_id",
 	"v"."started_by", "v"."started_at",
-	CASE WHEN "v"."review_decision" = 'reject' THEN coalesce("v"."deleted_at", now()) ELSE "v"."deleted_at" END,
+	-- A variant leaves with a deleted task, as variants of a task deleted from now on do.
+	coalesce(
+		"v"."deleted_at",
+		"root"."deleted_at",
+		CASE WHEN "v"."review_decision" = 'reject' THEN now() END
+	),
 	"v"."synced_at", "v"."created_at"
 FROM "lineage"
 JOIN "tasks" "root" ON "root"."id" = "lineage"."ancestor" AND "root"."variant" IS NULL
