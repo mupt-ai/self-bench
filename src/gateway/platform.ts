@@ -205,6 +205,10 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
     },
     async writePrefixState() {},
     async writePendingLease() {},
+    async readSessionPin() {
+      return null;
+    },
+    async writeSessionPin() {},
     async markSubscriptionUnavailable() {
       return false;
     },
