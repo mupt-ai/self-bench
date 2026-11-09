@@ -87,7 +87,7 @@ async def check():
     assert gateway._build_effective_config("https://gateway.example/v1")["features"] == {"view_image": False}
     gateway.options.view_image = True
     assert "openai_base_url" not in config
-    assert config["model_reasoning_summary"] == "none" and config["web_search"] == "disabled"  # the gateway refuses both (web search off OpenAI's own models)
+    assert "model_reasoning_summary" not in config and config["web_search"] == "disabled"  # the gateway refuses web search off OpenAI's own models
     for model, search in (("openai/gpt-6-sol", None), ("openrouter/openai/gpt-6-sol", "disabled"), ("meta/muse-spark-1.3", "disabled"), ("custom/acme", "disabled")):
         gateway.model_name = f"openai/dari/model/{model}"; assert gateway._build_effective_config("https://gateway.example/v1").get("web_search") == search, model
     assert config["model_providers"][config["model_provider"]] == {

@@ -41,8 +41,8 @@ export type Credential = keyof typeof CREDENTIALS;
 
 /**
  * Codex's Responses call, to the URL its environment names, with the fields Codex 0.163 sends on a
- * turn as GatewayCodex configures it: no reasoning summary, and no hosted web search off OpenAI's
- * own models. `extra` replaces any of them.
+ * turn as GatewayCodex configures it: no hosted web search off OpenAI's own models. `extra`
+ * replaces any of them.
  */
 export const responses = (
   env: NodeJS.ProcessEnv,
