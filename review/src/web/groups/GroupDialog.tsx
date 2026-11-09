@@ -8,6 +8,7 @@ import { Tick } from "../releases/SettingsPicker";
 import { Button, controlStyles, fieldStyles, Input, Notice, SearchInput } from "../ui";
 import { matchesQuery } from "../word-search";
 import { type GroupInput, type GroupList, type GroupView, groupRequest, groupsUrl } from "./api";
+import { GroupLogoField } from "./GroupLogoField";
 
 /**
  * Creates or edits a repository group: its name, its address, and which of the workspace's
@@ -34,6 +35,8 @@ export function GroupDialog({
   // A new group's address follows its name until the address is typed in.
   const [slugEdited, setSlugEdited] = React.useState(group !== undefined);
   const [description, setDescription] = React.useState(group?.description ?? "");
+  // Null shows the default mark.
+  const [logo, setLogo] = React.useState<string | null>(group?.logo ?? null);
   const [chosen, setChosen] = React.useState<number[]>(
     group?.repositories.map((repository) => repository.id) ?? [],
   );
@@ -71,7 +74,13 @@ export function GroupDialog({
   const save = async () => {
     setBusy(true);
     setError("");
-    const body: GroupInput = { name: name.trim(), slug, description, repositoryIds: chosen };
+    const body: GroupInput = {
+      name: name.trim(),
+      slug,
+      description,
+      logo,
+      repositoryIds: chosen,
+    };
     try {
       const saved = await groupRequest<{ group: GroupView }>(
         groupsUrl(org, group?.slug),
@@ -148,6 +157,15 @@ export function GroupDialog({
             onChange={(event) => setDescription(event.target.value)}
           />
         </label>
+        <GroupLogoField
+          logo={logo}
+          disabled={busy}
+          onChange={(next) => {
+            setError("");
+            setLogo(next);
+          }}
+          onError={setError}
+        />
         <fieldset className="grid min-w-0 gap-2">
           <legend className="mb-2 text-sm font-semibold">Repositories</legend>
           {listed.length < 2 ? (

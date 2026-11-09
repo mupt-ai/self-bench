@@ -146,7 +146,7 @@ export function groupSuite() {
         tasks,
         artifacts: fixture.artifacts,
         groups,
-        groupReleases: { store: groupReleases, changed: () => publicRoutes.refresh() },
+        publicLines: { store: groupReleases, changed: () => publicRoutes.refresh() },
         publicUrl: origin,
         start: async () => {},
         stop: async () => {},

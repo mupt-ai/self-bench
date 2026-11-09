@@ -5,6 +5,7 @@ import type { Benchmark, BenchmarkStore } from "../../db/benchmarks.js";
 import type { User } from "../../db/users.js";
 import { benchmarkDataset } from "../../evaluation/dataset.js";
 import { expandBundle } from "../../generation/runs/bundle.js";
+import { BENCHMARKS } from "../../public/paths.js";
 import { readBody } from "../http.js";
 import { EVALUATIONS_PATH, handleScopedEvaluations } from "./evaluation-scope.js";
 import type { EvaluationRoutesOptions } from "./evaluations.js";
@@ -48,6 +49,8 @@ export async function benchmarkRoutes(
   const match = listing ?? route.exec(url.pathname);
   if (!match?.[1]) return false;
   const [, login, name, rest = ""] = match;
+  // A benchmark's releases are answered by benchmark-releases.ts.
+  if (rest === "/releases" || rest.startsWith("/releases/")) return false;
   const store = options.benchmarks;
   const opened = await openOrgScope(options, request, response, user, login, !!store);
   if ("sent" in opened || !store) return true;
@@ -183,11 +186,25 @@ async function member(context: Context, benchmark: Benchmark, rest: string): Pro
 
 /**
  * Removes a benchmark once none of its comparisons is unfinished: its runs are followed and
- * cancelled only through it.
+ * cancelled only through it. Its public results go with it, as a group's do: nothing would be
+ * left to withdraw them from, and adding it again starts a new line.
  */
-async function remove({ options, store, tenant }: Context, benchmark: Benchmark): Promise<Reply> {
+async function remove(
+  { options, store, tenant, user }: Context,
+  benchmark: Benchmark,
+): Promise<Reply> {
   const refused = await unfinishedRuns(options, { benchmarkId: benchmark.id }, "benchmark");
   if (refused) return refused;
+  const withdrawn = await options.publicLines?.store.withdrawLine(
+    { orgId: tenant.id, benchmarkId: benchmark.id },
+    user.login,
+  );
+  if (withdrawn)
+    options.publicLines?.changed?.([
+      `/${BENCHMARKS}`,
+      `/${BENCHMARKS}/${benchmark.name}`,
+      `/${BENCHMARKS}/${benchmark.name}/${tenant.login}`,
+    ]);
   await store.remove(tenant.id, benchmark.name);
   return [200, { ok: true }];
 }

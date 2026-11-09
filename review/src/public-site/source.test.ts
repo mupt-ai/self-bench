@@ -29,14 +29,14 @@ test("the directory lists one card per repository, newest release first", async 
 });
 
 test("a repository page shows the newest line and lists every line", async () => {
-  const found = await source.getRepo("Vercel", "Next.js");
+  const found = await source.getRepo("Vercel/Next.js");
   expect(found?.release.releaseId).toBe("acme-2");
   expect(found?.lines.map((line) => line.publisher.login)).toEqual(["acme-labs", "lena-oss"]);
 });
 
 test("an endorsed line is the default for the page and the directory alike, even when older", async () => {
   const endorsed = memorySource([acme, { ...lena, endorsed: true }, vite]);
-  expect((await endorsed.getRepo("vercel", "next.js"))?.release.releaseId).toBe("lena-1");
+  expect((await endorsed.getRepo("vercel/next.js"))?.release.releaseId).toBe("lena-1");
   const cards = await endorsed.listRepos();
   const nextCard = cards.find((card) => card.repository.fullName === "vercel/next.js");
   expect(nextCard?.releaseId).toBe("lena-1");
@@ -47,7 +47,7 @@ test("an endorsed line is the default for the page and the directory alike, even
 });
 
 test("a publisher's line resolves by login and unknown names return nothing", async () => {
-  expect((await source.getLine("vercel", "next.js", "LENA-OSS"))?.release.releaseId).toBe("lena-1");
-  expect(await source.getLine("vercel", "next.js", "nobody")).toBeUndefined();
-  expect(await source.getRepo("django", "django")).toBeUndefined();
+  expect((await source.getLine("vercel/next.js", "LENA-OSS"))?.release.releaseId).toBe("lena-1");
+  expect(await source.getLine("vercel/next.js", "nobody")).toBeUndefined();
+  expect(await source.getRepo("django/django")).toBeUndefined();
 });

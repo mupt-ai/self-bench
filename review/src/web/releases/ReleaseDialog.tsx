@@ -19,11 +19,14 @@ import { selectionOf } from "./selection";
 export function ReleaseDialog({
   url,
   repo,
+  summary,
   workspace,
   onReleased,
   onClose,
 }: {
   url: string;
+  /** What the release publishes, under the title, when it is not a repository's or a group's. */
+  summary?: string;
   /** The repository's full name, for links to its tasks; a group has none and publishes scores only. */
   repo?: string;
   /** The publishing workspace: a GitHub org, or the person's own account. */
@@ -129,9 +132,10 @@ export function ReleaseDialog({
             Release Results
           </h2>
           <p id="release-description" className="mt-0.5 text-sm text-muted-foreground">
-            {repo
-              ? "Publish this repository's results on selfbench.dev, where anyone can see them."
-              : "Publish this group's results on selfbench.dev, where anyone can see them: each setting's accuracy and cost, over the group and on each repository."}
+            {summary ??
+              (repo
+                ? "Publish this repository's results on selfbench.dev, where anyone can see them."
+                : "Publish this group's results on selfbench.dev, where anyone can see them: each setting's accuracy and cost, over the group and on each repository.")}
           </p>
         </div>
         <button

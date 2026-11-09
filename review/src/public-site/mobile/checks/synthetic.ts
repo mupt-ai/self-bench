@@ -1,28 +1,12 @@
+import { resultsName } from "../../../../../src/public/paths";
 import type { PublicRepoPage, PublicSetting } from "../../contract";
 import { memorySource, type PublicSource } from "../../source";
 import { page, setting } from "../../test-fixture";
 import { syntheticGroupRoutes, syntheticGroups } from "./synthetic-groups";
+import { anthropic, type Model, openai, routed } from "./synthetic-models";
 import { OPENED_SETTING, OPENED_TASK, syntheticTasks } from "./synthetic-tasks";
 
-type Model = PublicSetting["model"];
-
-const openai = (id: string, label: string): Model => ({
-  catalogId: id,
-  name: `openai/${id}`,
-  label,
-});
-const anthropic = (id: string, label: string): Model => ({
-  catalogId: id,
-  name: `anthropic/${id}`,
-  label,
-});
 const LONG = "Review its edge cases: it tends to cover the main path and miss the rest. ".repeat(3);
-/** An OpenRouter model, named "vendor/model" as the catalog names them. */
-const routed = (name: string, label: string): Model => ({
-  catalogId: name.split("/")[1] ?? name,
-  name,
-  label,
-});
 
 /**
  * A setting that passed `passed` of 40 tasks at `cost` per task, run the way its vendor's
@@ -254,6 +238,13 @@ function syntheticPages(): PublicRepoPage[] {
       },
       true,
     ),
+    // A public benchmark: a registry dataset, listed apart from repositories, at /evals/….
+    page({
+      releaseId: "synthetic-benchmark",
+      releasedAt: "2026-09-17T10:00:00Z",
+      repository: { id: 2001, fullName: "laude-institute/terminal-bench" },
+      benchmark: { ref: "2.0" },
+    }),
     page({
       releaseId: "synthetic-shared-community",
       releasedAt: "2026-09-18T10:00:00Z",
@@ -271,13 +262,13 @@ export function syntheticSource(): PublicSource {
 }
 
 /**
- * A path to every kind of page, over the synthetic data: home, a search, each repository's
+ * A path to every kind of page, over the synthetic data: home, a search, the evals view, each repository's
  * default line, each other publisher's line, a task open in the viewer, a trace open in its
  * viewer, a repository with nothing released, and each repository group and one that is not.
  */
 export function syntheticRoutes(): string[] {
   const pages = syntheticPages();
-  const repositories = [...new Set(pages.map((entry) => entry.release.repository.fullName))];
+  const repositories = [...new Set(pages.map((entry) => resultsName(entry.release)))];
   const otherLines = pages
     .filter(
       (entry) =>
@@ -286,10 +277,11 @@ export function syntheticRoutes(): string[] {
           (other) => other.endorsed && other.release.repository.id === entry.release.repository.id,
         ),
     )
-    .map((entry) => `${entry.release.repository.fullName}/${entry.release.publisher.login}`);
+    .map((entry) => `${resultsName(entry.release)}/${entry.release.publisher.login}`);
   return [
     "/",
     "/?q=widgets",
+    "/evals",
     ...repositories.map((name) => `/${name}`),
     ...otherLines.map((line) => `/${line}`),
     `/example-org/widgets?task=${OPENED_TASK}`,

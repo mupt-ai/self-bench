@@ -6,6 +6,7 @@ import { BatchesPage } from "./batches/BatchesPage";
 import { BatchPage } from "./batches/BatchPage";
 import { BenchmarkDatasetPage } from "./benchmarks/BenchmarkDatasetPage";
 import { BenchmarkLayout } from "./benchmarks/BenchmarkLayout";
+import { BenchmarkReleasesPage } from "./benchmarks/BenchmarkReleasesPage";
 import { BenchmarksPage } from "./benchmarks/BenchmarksPage";
 import { BenchmarkTaskPage } from "./benchmarks/BenchmarkTaskPage";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -110,6 +111,7 @@ export function WebApp() {
                     <Route index element={<BenchmarkDatasetPage />} />
                     <Route path="run" element={<RunPage />} />
                     <Route path="results" element={<EvaluationPage />} />
+                    <Route path="releases" element={<BenchmarkReleasesPage />} />
                     <Route
                       path="comparisons/:comparisonId"
                       element={<Navigate to="../results" replace />}

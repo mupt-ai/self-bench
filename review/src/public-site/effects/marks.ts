@@ -59,10 +59,14 @@ export const select = {
   scrollRoot: `[${SCROLL_ROOT}]`,
   siteEdge: (side: "top" | "bottom") => `[${EDGE}="${side}"]`,
   card: `[${CARD}]`,
-  /** A card for this run if there is one, else any card for its repository. */
+  /**
+   * A card for this run if there is one, else any card for what it shows: `line` is a run
+   * ("owner/name/publisher", "evals/org/name/publisher"), or a page's own name ("owner/name").
+   */
   cardFor: (root: ParentNode, line: string) =>
     root.querySelector<HTMLElement>(`[${CARD_LINE}="${line}"]`) ??
-    root.querySelector<HTMLElement>(`[${CARD}="${line.split("/").slice(0, 2).join("/")}"]`),
+    root.querySelector<HTMLElement>(`[${CARD}="${line}"]`) ??
+    root.querySelector<HTMLElement>(`[${CARD}="${line.split("/").slice(0, -1).join("/")}"]`),
   shownLine: `[${LINE}]`,
   flightFrom: (part?: string) => (part ? `[${FLIGHT}="${part}"]` : `[${FLIGHT}]`),
   flightTo: (part: string) => `[${FLIGHT_TARGET}="${part}"]`,

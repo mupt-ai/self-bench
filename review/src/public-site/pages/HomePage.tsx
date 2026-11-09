@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useLocation, useNavigationType, useSearchParams } from "react-router";
+import { Link, useLocation, useNavigationType, useSearchParams } from "react-router";
+import { resultsName } from "../../../../src/public/paths";
 import { GroupCard } from "../components/GroupCard";
 import { RepoCard } from "../components/RepoCard";
 import { SearchBox } from "../components/SearchBox";
@@ -8,8 +9,9 @@ import { select } from "../effects/marks";
 import { publisherName } from "../format";
 import { homeView, onSaveHome, saveHomeView, startJourney } from "../home-view";
 import { APP_URL } from "../PublicLayout";
+import { groupKey } from "../page-preload";
 import { scrollArea } from "../scroll-area";
-import { HOME_HEADING, HOME_TITLE } from "../seo";
+import { DIRECTORY_VIEWS, type DirectoryView, listedIn } from "../seo";
 import type { PublicSource } from "../source";
 import { useSource } from "../source-context";
 import { useTitle } from "../use-title";
@@ -37,7 +39,7 @@ function useHomeData(source: PublicSource) {
     let live = true;
     Promise.all([source.listRepos(), source.listLines(), source.listGroups()]).then(
       ([repos, lines, groups]) => {
-        const next = { repos: repos.slice(0, HOME_LIMIT), lines, groups };
+        const next = { repos, lines, groups };
         if (!live || JSON.stringify(next) === JSON.stringify(kept)) return;
         kept = next;
         setData(next);
@@ -51,8 +53,13 @@ function useHomeData(source: PublicSource) {
   return { data, failed: failed && !data };
 }
 
-export function HomePage() {
-  useTitle(HOME_TITLE);
+/**
+ * The directory: one of its views (seo.ts `DIRECTORY_VIEWS`), repositories with their groups at
+ * `/` or evals at `/evals`, each a tab of the same page, with the same grid, search, and cards.
+ */
+export function HomePage({ view }: { view: DirectoryView }) {
+  const shown = DIRECTORY_VIEWS[view];
+  useTitle(shown.title);
   const { data, failed } = useHomeData(useSource());
   const location = useLocation();
   const [params, setParams] = useSearchParams();
@@ -86,92 +93,131 @@ export function HomePage() {
   const save = useCallback(
     (leavingFor?: string) => {
       saveHomeView(location.key, {
+        path: location.pathname,
         scrollTop: window.scrollY,
         query,
         anchor: undefined,
       });
       if (leavingFor) startJourney(location.key, leavingFor);
     },
-    [location.key, query],
+    [location.key, location.pathname, query],
   );
   useEffect(() => {
     onSaveHome(save);
     return () => onSaveHome(undefined);
   }, [save]);
 
-  // Records the view, and which card was opened, when a card is clicked.
-  const opened = (card: PublicRepoSummary, element: HTMLElement) => {
-    const line = `${card.repository.fullName}/${card.publisher.login}`;
+  // Records the view, and which card was opened, when a card is clicked: the run it shows,
+  // and what its page shows (home-view.ts `repositoryOf`), for the trip back.
+  const opened = (line: string, subject: string, element: HTMLElement) => {
     saveHomeView(location.key, {
+      path: location.pathname,
       scrollTop: window.scrollY,
       query,
       anchor: { line, top: element.getBoundingClientRect().top },
     });
-    startJourney(location.key, card.repository.fullName);
+    startJourney(location.key, subject);
   };
 
   return (
     <div className="flex flex-col gap-10">
+      <Tabs view={view} query={query} />
       {/*
         The heading stays on one line on any screen: the line is just under 16em wide, so its
         size follows the section's width (cqi), up to 1.5rem.
       */}
       <section className="@container mx-auto flex w-full max-w-2xl flex-col items-center gap-4 text-center">
         <h1 className="text-[length:min(1.5rem,100cqi/16)] leading-[calc(2/1.5)] font-semibold tracking-tight">
-          {HOME_HEADING}
+          {shown.heading}
         </h1>
-        <SearchBox query={query} onChange={setQuery} />
+        <SearchBox query={query} label={shown.search} onChange={setQuery} />
       </section>
 
       {!data && !failed && <p className="text-center text-muted-foreground">Loading…</p>}
       {failed && <p className="text-center text-muted-foreground">Results could not be loaded.</p>}
-      {data && <Directory data={data} needle={needle} query={query} onOpen={opened} />}
+      {data && <Directory data={data} view={view} needle={needle} query={query} onOpen={opened} />}
     </div>
   );
 }
 
 /**
- * The repository groups, then the repositories: each repository's default line, or with a
- * search, every line and group that matches it.
+ * The directory's views as tabs along the top of the page, quiet beside the heading and search:
+ * each its own address, and a search goes along to the other. A fixed set (seo.ts
+ * `DIRECTORY_VIEWS`): a new view is one entry there.
+ */
+function Tabs({ view, query }: { view: DirectoryView; query: string }) {
+  return (
+    <nav aria-label="Directory" className="-mb-4 flex gap-5 border-b border-border text-sm">
+      {(Object.keys(DIRECTORY_VIEWS) as DirectoryView[]).map((each) => (
+        <Link
+          key={each}
+          to={{
+            pathname: DIRECTORY_VIEWS[each].path,
+            search: query ? `?q=${encodeURIComponent(query)}` : "",
+          }}
+          aria-current={each === view ? "page" : undefined}
+          className={`hit relative -mb-px border-b-[1.5px] pb-2 transition-colors ${
+            each === view
+              ? "border-foreground text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {DIRECTORY_VIEWS[each].tab}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
+/**
+ * One grid of the view's cards, every card alike: for repositories, the repository groups, then
+ * each repository's default line; for evals, each eval's. With a search, every line and group
+ * that matches it.
  */
 function Directory({
   data,
+  view,
   needle,
   query,
   onOpen,
 }: {
   data: HomeData;
+  view: DirectoryView;
   needle: string;
   query: string;
-  onOpen: (card: PublicRepoSummary, element: HTMLElement) => void;
+  onOpen: (line: string, subject: string, element: HTMLElement) => void;
 }) {
-  const groups = needle ? data.groups.filter((card) => groupMatches(card, needle)) : data.groups;
-  const cards = needle ? data.lines.filter((card) => matches(card, needle)) : data.repos;
-  // A search that finds only groups shows them alone, not "no evals" beneath them.
-  const empty = groups.length > 0 ? null : <NoMatch query={needle ? query.trim() : undefined} />;
-  const grid = <Grid cards={cards} byLine={!!needle} onOpen={onOpen} empty={empty} />;
+  const groups =
+    view !== "repositories"
+      ? []
+      : needle
+        ? data.groups.filter((card) => groupMatches(card, needle))
+        : data.groups;
+  const cards = (needle ? data.lines.filter((card) => matches(card, needle)) : data.repos)
+    .filter((card) => listedIn(view, card))
+    .slice(0, needle ? undefined : HOME_LIMIT);
+  if (groups.length === 0 && cards.length === 0)
+    return <NoMatch query={needle ? query.trim() : undefined} />;
+  // One grid for both: a group is a card like any repository.
+  // One column on a phone, sized to the screen: without a template, the column would stretch
+  // to fit the longest line any card holds, even one the card truncates.
   return (
-    <>
-      {groups.length > 0 && (
-        <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-medium">Repository Groups</h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {groups.map((card) => (
-              <GroupCard key={`${card.publisher.login}/${card.slug}`} card={card} />
-            ))}
-          </div>
-        </section>
-      )}
-      {groups.length > 0 && cards.length > 0 ? (
-        // Named only beside the groups, which would otherwise read as part of the grid.
-        <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-medium">Repositories</h2>
-          {grid}
-        </section>
-      ) : (
-        grid
-      )}
-    </>
+    <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {groups.map((card) => {
+        const key = groupKey(card.publisher.login, card.slug);
+        return <GroupCard key={key} card={card} onOpen={(element) => onOpen(key, key, element)} />;
+      })}
+      {cards.map((card) => (
+        <RepoCard
+          key={card.releaseId}
+          card={card}
+          byLine={!!needle}
+          onOpen={(element) =>
+            onOpen(`${resultsName(card)}/${card.publisher.login}`, resultsName(card), element)
+          }
+        />
+      ))}
+    </section>
   );
 }
 
@@ -186,34 +232,6 @@ function groupMatches(card: PublicGroupCard, needle: string): boolean {
 function matches(card: PublicRepoSummary, needle: string): boolean {
   return [card.repository.fullName, card.publisher.login, publisherName(card.publisher)].some(
     (text) => text.toLowerCase().includes(needle),
-  );
-}
-
-function Grid({
-  cards,
-  byLine = false,
-  onOpen,
-  empty,
-}: {
-  cards: PublicRepoSummary[];
-  byLine?: boolean;
-  onOpen: (card: PublicRepoSummary, element: HTMLElement) => void;
-  empty: React.ReactNode;
-}) {
-  if (cards.length === 0) return empty;
-  return (
-    // One column on a phone, sized to the screen: without a template, the column would stretch
-    // to fit the longest line any card holds, even one the card truncates.
-    <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {cards.map((card) => (
-        <RepoCard
-          key={card.releaseId}
-          card={card}
-          byLine={byLine}
-          onOpen={(element) => onOpen(card, element)}
-        />
-      ))}
-    </section>
   );
 }
 

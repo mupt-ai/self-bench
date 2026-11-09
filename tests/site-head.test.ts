@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { headTags, repositoryHead, sitemapOf } from "../src/api/site-head.js";
+import { headTags, repositoryHead } from "../src/api/site-head.js";
+import { sitemapOf } from "../src/api/sitemap.js";
 import type { PublishedLine, ReleaseSetting } from "../src/public/release-types.js";
 import { defaultLineOf, repositoryDescription } from "../src/public/seo.js";
 

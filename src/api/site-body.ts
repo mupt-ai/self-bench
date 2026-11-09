@@ -2,12 +2,14 @@ import { knownCostLabel } from "../evaluation/cost-total.js";
 import { harnessLabels } from "../evaluation/models.js";
 import { gateways, isGateway } from "../gateways/index.js";
 import { directoryOf } from "../public/directory.js";
+import { resultsName } from "../public/paths.js";
 import { groupHref, type PublishedGroup } from "../public/release-groups.js";
 import type { PublishedLine, ReleaseSetting } from "../public/release-types.js";
 import {
+  DIRECTORY_VIEWS,
+  type DirectoryView,
   defaultLineOf,
-  HOME_DESCRIPTION,
-  HOME_HEADING,
+  listedIn,
   repositoryDescription,
 } from "../public/seo.js";
 import { escapeAttribute, escapeText } from "./http.js";
@@ -37,29 +39,37 @@ export const HOME_LINK = `<p>${link("/", "All Repositories on SelfBench")}</p>`;
 export const main = (kind: "home" | "repository" | "group" | "missing", parts: readonly string[]) =>
   `<main class="page-text" data-page="${kind}">${parts.join("")}</main>`;
 
-/** The home page's repository groups, most recently changed first, as the page lists them. */
-function groupsText(groups: readonly PublishedGroup[]): string[] {
-  if (groups.length === 0) return [];
-  const items = groups.map((group) => {
+const listOf = (items: readonly string[]): string[] =>
+  items.length > 0 ? [`<ul>${items.join("")}</ul>`] : [];
+
+/** The home page's repository groups, most recently changed first, as list items. */
+function groupItems(groups: readonly PublishedGroup[]): string[] {
+  return groups.map((group) => {
     const names = group.members.map((member) => member.repository.fullName).join(", ");
     const summary = `${group.members.length} repositories (${names}), ${plural(group.tasks, "task")}, ${plural(group.settings.length, "setting")}, run by ${group.publisher.login}.`;
     return `<li>${link(groupHref(group.publisher.login, group.slug), group.name)} <span>${escapeText(summary)}</span></li>`;
   });
-  return ["<h2>Repository Groups</h2>", `<ul>${items.join("")}</ul>`];
 }
 
+/** The directory's tabs, as links, so a crawler finds each view. */
+const tabs = () =>
+  `<nav>${Object.values(DIRECTORY_VIEWS)
+    .map((each) => link(each.path, each.tab))
+    .join(" ")}</nav>`;
+
 /**
- * The directory's heading, the repository groups, and every repository's default line, newest
- * first, as the page lists them.
+ * A directory view's heading and tabs, then one list, as the page lists it: for repositories, the
+ * repository groups, then every repository's default line; for evals, every eval's. Newest first.
  */
 export function homeBody(
   repositories: readonly (readonly PublishedLine[])[],
   groups: readonly PublishedGroup[] = [],
+  view: DirectoryView = "repositories",
 ): string {
   const cards = directoryOf(repositories.flat())
-    .filter((card) => card.defaultLine)
+    .filter((card) => card.defaultLine && listedIn(view, card))
     .slice(0, HOME_LIMIT);
-  const items = cards.map((card) => {
+  const repositoryItems = cards.map((card) => {
     // The repository's two picks, as its description names them: the most accurate setting and
     // the next on the frontier, the most accurate of those that cost less.
     const [best, next] = [...card.frontier].sort(
@@ -75,15 +85,14 @@ export function homeBody(
       best ? `Most accurate: ${best.model.label}, ${scored(best)} per task.` : "",
       next ? `Best for less: ${next.model.label}, ${scored(next)}.` : "",
     ];
-    return `<li>${link(`/${card.repository.fullName}`, card.repository.fullName)} <span>${escapeText(facts.filter(Boolean).join(" "))}</span></li>`;
+    return `<li>${link(`/${resultsName(card)}`, card.repository.fullName)} <span>${escapeText(facts.filter(Boolean).join(" "))}</span></li>`;
   });
+  const { heading, description } = DIRECTORY_VIEWS[view];
   return main("home", [
-    `<h1>${escapeText(HOME_HEADING)}</h1>`,
-    `<p>${escapeText(HOME_DESCRIPTION)}</p>`,
-    ...groupsText(groups),
-    // Under their own heading only beside the groups', as on the page.
-    groups.length > 0 && items.length > 0 ? "<h2>Repositories</h2>" : "",
-    items.length > 0 ? `<ul>${items.join("")}</ul>` : "",
+    `<h1>${escapeText(heading)}</h1>`,
+    `<p>${escapeText(description)}</p>`,
+    tabs(),
+    ...listOf([...(view === "repositories" ? groupItems(groups) : []), ...repositoryItems]),
   ]);
 }
 
@@ -194,7 +203,8 @@ export function repositoryBody(
     .map((other) => {
       // Each line at its canonical address: the default line's is the repository's.
       const { tasks, settings, publisher: by, releasedAt } = other.release;
-      const href = other === fallback ? `/${fullName}` : `/${fullName}/${by.login}`;
+      const address = resultsName(other.release);
+      const href = other === fallback ? `/${address}` : `/${address}/${by.login}`;
       const summary = `${plural(tasks, "task")}, ${plural(settings.length, "setting")}, released ${day(releasedAt)}.`;
       return `<li>${link(href, by.login)} <span>${escapeText(summary)}</span></li>`;
     });

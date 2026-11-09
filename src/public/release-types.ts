@@ -84,6 +84,11 @@ export interface ReleasePayload {
   trialsPublished?: true;
   /** Set when the publisher chose to publish the latest Model Summaries report for its settings. */
   modelSummaries?: ReleaseModelSummaries;
+  /**
+   * Set on a public benchmark's release (a Harbor registry dataset, such as Terminal-Bench), whose
+   * `repository` is then the benchmark: its registry name, and the version its tasks were frozen at.
+   */
+  benchmark?: { ref: string };
 }
 
 /**

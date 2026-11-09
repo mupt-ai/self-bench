@@ -8,7 +8,7 @@ import { groupDataset } from "../../evaluation/dataset.js";
 import { track } from "../../lib/telemetry/posthog.js";
 import type { GroupList, GroupView } from "../../public/group-views.js";
 import { GROUP_SLUG, GROUP_SLUG_MAX } from "../../public/paths.js";
-import { groupHref } from "../../public/release-groups.js";
+import { groupHref, isGroupLogo } from "../../public/release-groups.js";
 import { readBody } from "../http.js";
 import { EVALUATIONS_PATH, handleScopedEvaluations } from "./evaluation-scope.js";
 import type { EvaluationRoutesOptions } from "./evaluations.js";
@@ -25,6 +25,11 @@ const groupRequest = z
     name: z.string().trim().min(1).max(80),
     slug: z.string().max(GROUP_SLUG_MAX).regex(GROUP_SLUG),
     description: z.string().trim().max(300).default(""),
+    logo: z
+      .string()
+      .refine(isGroupLogo, "The logo must be a PNG, JPEG, WebP, or SVG image under 48 KB")
+      .nullable()
+      .optional(),
     repositoryIds: z
       .array(z.number().int().positive())
       .min(MEMBERS.min)
@@ -80,6 +85,7 @@ export async function groupRoutes(
       slug: group.slug,
       name: group.name,
       description: group.description,
+      logo: group.logo,
       repositories,
       tasks: repositories.reduce((sum, each) => sum + each.tasks, 0),
       updatedAt: group.updatedAt,
@@ -88,7 +94,7 @@ export async function groupRoutes(
   };
   /** Parses a save, refusing members that are not connected here. */
   const fieldsOf = async () => {
-    const body = groupRequest.parse(JSON.parse((await readBody(request, 64 * 1024)).toString()));
+    const body = groupRequest.parse(JSON.parse((await readBody(request, 128 * 1024)).toString()));
     const unknown = body.repositoryIds.filter(
       (id) => !connected.some((repo) => repo.githubId === id),
     );
@@ -191,11 +197,11 @@ export async function groupRoutes(
     const refused = await unfinishedRuns(options, { groupId: group.id }, "group");
     if (refused) return send(refused);
     // Its page goes with it: nothing would be left to withdraw it from.
-    const withdrawn = await options.groupReleases?.store.withdrawLine(
+    const withdrawn = await options.publicLines?.store.withdrawLine(
       { orgId: tenant.id, groupId: group.id },
       user.login,
     );
-    if (withdrawn) options.groupReleases?.changed?.(["/", groupHref(tenant.login, group.slug)]);
+    if (withdrawn) options.publicLines?.changed?.(["/", groupHref(tenant.login, group.slug)]);
     await store.remove(tenant.id, group.slug);
     track(user, "repository group deleted", {}, tenant);
     return send([200, { ok: true }]);

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { groupBody, groupHead } from "../src/api/site-group.js";
-import { sitemapOf } from "../src/api/site-head.js";
+import { sitemapOf } from "../src/api/sitemap.js";
 import { groupPath, repositoryPath, segmentsOf } from "../src/public/paths.js";
 import {
   groupCardOf,

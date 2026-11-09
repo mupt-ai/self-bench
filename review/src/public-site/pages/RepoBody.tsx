@@ -1,5 +1,6 @@
 import type { RefObject } from "react";
 import { Link, useNavigate } from "react-router";
+import { resultsName } from "../../../../src/public/paths";
 import { Avatar } from "../components/Avatar";
 import { ModelSummaries } from "../components/ModelSummaries";
 import { ResultsGrid } from "../components/ResultsGrid";
@@ -47,7 +48,6 @@ export function RepoBody({
   onRowHover: (id: string | null) => void;
 }) {
   const { release } = page;
-  const { repository } = release;
   const navigate = useNavigate();
   return (
     <>
@@ -76,13 +76,13 @@ export function RepoBody({
               return (
                 <li key={line.releaseId}>
                   <Link
-                    to={`/${repository.fullName}/${line.publisher.login}`}
+                    to={`/${resultsName(page.release)}/${line.publisher.login}`}
                     aria-current={current ? "page" : undefined}
                     onClick={(event) => {
                       const linesTop = lines.current?.getBoundingClientRect().top;
                       if (linesTop === undefined || !plainClick(event)) return;
                       event.preventDefault();
-                      navigate(`/${repository.fullName}/${line.publisher.login}`, {
+                      navigate(`/${resultsName(page.release)}/${line.publisher.login}`, {
                         state: { linesTop } satisfies PinnedLines,
                       });
                     }}

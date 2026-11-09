@@ -84,6 +84,7 @@ test("a group is a card on the list, linking to its own page", () => {
             slug: "python-web",
             name: "Python Web",
             description: "",
+            logo: null,
             repositories: [{ id: 1, fullName: "example/api", connected: false, tasks: 3 }],
             tasks: 3,
             updatedAt: "2026-09-18T00:00:00.000Z",

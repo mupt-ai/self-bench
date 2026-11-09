@@ -20,7 +20,7 @@ export interface SettingPick<S> {
 }
 
 /** What a card shows of a setting: its name and its two numbers. */
-interface CardSetting {
+export interface CardSetting {
   id: string;
   model: { label: string };
   accuracy: number;
@@ -28,8 +28,8 @@ interface CardSetting {
   costedTasks?: number;
 }
 
-/** How many lines a card's hover preview has (RepoCard's PREVIEW_LINES). */
-const PREVIEW_LINES = 5;
+/** How many lines a card's hover preview has (ResultCard's PREVIEW_LINES). */
+export const PREVIEW_LINES = 5;
 
 /** One release line, reduced to its card. */
 export interface DirectoryCard {
@@ -54,6 +54,8 @@ export interface DirectoryCard {
   endorsed: boolean;
   /** The line the repository shows by default: its endorsed line, else its newest. */
   defaultLine: boolean;
+  /** Set when the line is a public benchmark's (`ReleasePayload.benchmark`). */
+  benchmark?: { ref: string };
 }
 
 type Ranked = Pick<ReleaseSetting, "id" | "accuracy" | "costPerTaskUsd" | "onFrontier">;
@@ -105,7 +107,7 @@ export function offFrontier<S extends Ranked>(settings: readonly S[]): S[] {
     );
 }
 
-const cardSetting = (setting: ReleaseSetting): CardSetting => ({
+export const cardSetting = (setting: ReleaseSetting): CardSetting => ({
   id: setting.id,
   model: { label: setting.model.label },
   accuracy: setting.accuracy,
@@ -134,6 +136,7 @@ function cardOf(line: PublishedLine, defaultLine: boolean): DirectoryCard {
     others: offFrontier(release.settings).slice(0, PREVIEW_LINES).map(cardSetting),
     endorsed: line.endorsed,
     defaultLine,
+    ...(release.benchmark ? { benchmark: release.benchmark } : {}),
   };
 }
 
@@ -148,11 +151,14 @@ export function directoryOf(lines: readonly PublishedLine[]): DirectoryCard[] {
       right.release.releasedAt.localeCompare(left.release.releasedAt) ||
       left.release.releaseId.localeCompare(right.release.releaseId),
   );
-  const defaults = new Map<number, PublishedLine>();
+  // A repository's lines share its GitHub id, across renames; a public benchmark's, its registry
+  // name, whose publishers each have their own row, and so their own id.
+  const defaults = new Map<string, PublishedLine>();
   for (const line of ordered) {
-    const id = line.release.repository.id;
-    const chosen = defaults.get(id);
-    if (!chosen || (line.endorsed && !chosen.endorsed)) defaults.set(id, line);
+    const { id, fullName } = line.release.repository;
+    const key = line.release.benchmark ? `benchmark/${fullName.toLowerCase()}` : `github/${id}`;
+    const chosen = defaults.get(key);
+    if (!chosen || (line.endorsed && !chosen.endorsed)) defaults.set(key, line);
   }
   const chosen = new Set(defaults.values());
   return ordered.map((line) => cardOf(line, chosen.has(line)));

@@ -1,4 +1,5 @@
 import { frontierSettings } from "./directory.js";
+import { BENCHMARKS } from "./paths.js";
 import type { PublishedGroup } from "./release-groups.js";
 import type { PublishedLine, ReleaseSetting } from "./release-types.js";
 
@@ -11,7 +12,7 @@ import type { PublishedLine, ReleaseSetting } from "./release-types.js";
 
 export const SITE_NAME = "SelfBench";
 
-export const HOME_TITLE = "SelfBench: Benchmark Coding Agents on Your Own Repository";
+const HOME_TITLE = "SelfBench: Benchmark Coding Agents on Your Own Repository";
 
 /**
  * Written with a typographic apostrophe (’): some search engines show an ASCII one in a
@@ -22,6 +23,44 @@ export const HOME_DESCRIPTION =
 
 /** The home page's heading, which the server also writes for readers that run no scripts. */
 export const HOME_HEADING = "Find the best models for your repo";
+
+/**
+ * The directory's views, each a page of its own: repositories and their groups at `/`, and public
+ * benchmarks (Harbor registry datasets such as Terminal-Bench) at `/evals`. The server writes each one's
+ * head and text, and the site its tabs, title, heading, and search, from these.
+ */
+export const DIRECTORY_VIEWS = {
+  repositories: {
+    path: "/",
+    tab: "Repositories",
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
+    heading: HOME_HEADING,
+    search: "Search Repositories",
+  },
+  benchmarks: {
+    path: `/${BENCHMARKS}`,
+    tab: "Public Benchmarks",
+    title: `Public Benchmarks: Coding Agents on Terminal-Bench and More · ${SITE_NAME}`,
+    description:
+      "Coding agent and model results on public benchmarks such as Terminal-Bench, run and published by SelfBench users: accuracy and cost per task. By dari.dev.",
+    heading: "Find the best models on benchmarks",
+    search: "Search Benchmarks",
+  },
+} as const;
+
+export type DirectoryView = keyof typeof DIRECTORY_VIEWS;
+
+/** The directory view a path shows, if it is one. */
+export function directoryViewAt(path: string): DirectoryView | undefined {
+  return (Object.keys(DIRECTORY_VIEWS) as DirectoryView[]).find(
+    (view) => DIRECTORY_VIEWS[view].path === path,
+  );
+}
+
+/** Whether a line, a repository's or a public benchmark's, is listed in `view`. */
+export const listedIn = (view: DirectoryView, line: { benchmark?: unknown }) =>
+  !!line.benchmark === (view === "benchmarks");
 
 export function repositoryTitle(fullName: string): string {
   return `${fullName}: Coding Agent Benchmark · ${SITE_NAME}`;
@@ -101,7 +140,7 @@ export function repositoryDescription(line: PublishedLine, limit = DESCRIPTION_L
     release.repository.fullName,
     release.settings,
     release.tasks,
-    "from its merged pull requests",
+    release.benchmark ? "from the benchmark" : "from its merged pull requests",
     limit,
   );
 }

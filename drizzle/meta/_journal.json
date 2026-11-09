@@ -253,6 +253,20 @@
       "when": 1794076849475,
       "tag": "0035_sandbox_resource_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1794168202606,
+      "tag": "0036_group_logo",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1794190656523,
+      "tag": "0037_benchmark_releases",
+      "breakpoints": true
     }
   ]
 }
