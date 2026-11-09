@@ -1,14 +1,9 @@
 import type { ArtifactStore } from "../../artifacts/index.js";
 import { buildCommit } from "../../contracts/config/build-metadata.js";
 import type { Database } from "../../db/client.js";
-import type { EvalLine, ReleaseLine, ReleaseStore } from "../../db/releases.js";
-import {
-  type ConnectedRepo,
-  type GitHubRepo,
-  isGitHubRepo,
-  type RepoStore,
-} from "../../db/repos.js";
-import type { Org, UserStore } from "../../db/users.js";
+import type { ReleaseLine, ReleaseStore } from "../../db/releases.js";
+import { type GitHubRepo, isGitHubRepo, type RepoStore } from "../../db/repos.js";
+import type { UserStore } from "../../db/users.js";
 import { catalogVersion } from "../../evaluation/catalog.js";
 import { readModelSummaries } from "../../evaluation/model-summary.js";
 import { track } from "../../lib/telemetry/posthog.js";
@@ -18,23 +13,8 @@ import {
   lookupRepositoryById,
   releaseInputs,
 } from "../../public/release-sources.js";
-import type { ReleaseRepository } from "../../public/release-types.js";
 import { GitHubOAuthError } from "../../third_party/github/oauth.js";
-import {
-  createLineRoutes,
-  type LineKind,
-  type ReleaseRequest,
-  type Reply,
-} from "./release-line.js";
-
-/**
- * What is being released, checked live: the repository's or eval's card metadata, and what the
- * release's private detail records about it.
- */
-interface Subject {
-  repository: ReleaseRepository;
-  detail: Record<string, unknown>;
-}
+import { createLineRoutes, type LineKind } from "./release-line.js";
 
 const NAME = "[A-Za-z0-9_.-]+";
 /** `[org, owner/name, section?, action?]`. */
@@ -67,63 +47,23 @@ export interface PublicChange {
 }
 
 /**
- * A connected repository's or eval's releases on selfbench.dev: its results for the settings the
- * releaser ticks, and optionally its Model Summaries and, for a repository, its tasks and each
- * setting's trial on them.
+ * A connected repository's releases on selfbench.dev: its results for the settings the releaser
+ * ticks, and optionally its tasks, each setting's trial on them, and its Model Summaries.
  */
 export function createReleaseRoutes(options: ReleaseRoutesOptions) {
   const fetchImpl = options.fetchImpl ?? fetch;
-  const line = (repo: ConnectedRepo): ReleaseLine | EvalLine =>
-    isGitHubRepo(repo)
-      ? { orgId: repo.orgId, githubRepoId: repo.githubId }
-      : { orgId: repo.orgId, evalRepoId: repo.id };
-  /** A connected repository, checked live on GitHub: public, and its card metadata. */
-  const github = async (repo: GitHubRepo, token: string): Promise<Subject | Reply> => {
-    let found: GitHubRepository | undefined;
-    try {
-      found = await lookupRepositoryById(options.githubApiUrl, token, repo.githubId, fetchImpl);
-    } catch (error) {
-      if (!(error instanceof GitHubOAuthError)) throw error;
-      return [
-        503,
-        { error: "GitHub could not confirm that the repository is public. Try again in a moment." },
-      ];
-    }
-    // Checked live: the repository may have turned private since it was connected.
-    if (!found || found.private)
-      return [400, { error: "Only public repositories can be released." }];
-    const { private: isPrivate, archived, ...repository } = found;
-    return { repository, detail: { repositoryFlags: { private: isPrivate, archived } } };
-  };
-  /**
-   * An eval, under its `evals/<slug>` name, marked with its publisher's avatar. Its tasks are
-   * scenarios with no public repository behind them, so they and their trials stay private. Its
-   * name is its address on selfbench.dev, so one publisher holds each.
-   */
-  const evalSubject = async (
-    tenant: Org,
-    repo: ConnectedRepo,
-    body: ReleaseRequest,
-  ): Promise<Subject | Reply> => {
-    if (body.publishTasks || body.publishTrials)
-      return [400, { error: "An eval's tasks stay private: release its scores alone." }];
-    const taken = (await options.releases.currentLinesFor(repo.fullName)).find(
-      (other) => other.release.publisher.login.toLowerCase() !== tenant.login.toLowerCase(),
-    );
-    if (taken)
-      return [
-        409,
-        {
-          error: `${taken.release.publisher.login} already publishes an eval named ${repo.fullName} on selfbench.dev. Create the eval under another name to release it.`,
-        },
-      ];
-    const avatar = tenant.avatarUrl ? { ownerAvatarUrl: tenant.avatarUrl } : {};
-    return { repository: { id: repo.id, fullName: repo.fullName, ...avatar }, detail: {} };
-  };
-  const kind: LineKind<ConnectedRepo> = {
+  const line = (repo: GitHubRepo): ReleaseLine => ({
+    orgId: repo.orgId,
+    githubRepoId: repo.githubId,
+  });
+  const kind: LineKind<GitHubRepo> = {
     route,
     notFound: "Repository is not connected here",
-    find: (tenant, fullName) => options.repos.find(tenant.id, fullName),
+    // An eval has no repository on GitHub, so it is never released to selbench.dev.
+    find: async (tenant, fullName) => {
+      const repo = await options.repos.find(tenant.id, fullName);
+      return repo && isGitHubRepo(repo) ? repo : undefined;
+    },
     lineOf: (_tenant, repo) => line(repo),
     async gather(tenant, repo, rows) {
       const [inputs, { report }] = await Promise.all([
@@ -133,10 +73,21 @@ export function createReleaseRoutes(options: ReleaseRoutesOptions) {
       return { inputs, ...(report ? { report } : {}) };
     },
     async build({ tenant, subject: repo, token, body, gathered }) {
-      const subject = isGitHubRepo(repo)
-        ? await github(repo, token)
-        : await evalSubject(tenant, repo, body);
-      if (!("repository" in subject)) return subject;
+      let github: GitHubRepository | undefined;
+      try {
+        github = await lookupRepositoryById(options.githubApiUrl, token, repo.githubId, fetchImpl);
+      } catch (error) {
+        if (!(error instanceof GitHubOAuthError)) throw error;
+        return [
+          503,
+          {
+            error: "GitHub could not confirm that the repository is public. Try again in a moment.",
+          },
+        ];
+      }
+      // Checked live: the repository may have turned private since it was connected.
+      if (!github || github.private)
+        return [400, { error: "Only public repositories can be released." }];
       const { report } = gathered;
       if (body.publishSummaries && !report)
         return [
@@ -146,11 +97,10 @@ export function createReleaseRoutes(options: ReleaseRoutesOptions) {
               "There are no model summaries to publish. Summarize models on the Results page first.",
           },
         ];
-      const { repository } = subject;
       let built: BuiltRelease;
       try {
         built = buildRelease(gathered.inputs, body.settings, {
-          repository: { id: repository.id, fullName: repository.fullName },
+          repository: { id: github.id, fullName: github.fullName },
           publisher: { login: tenant.login, kind: tenant.kind },
           publishTasks: body.publishTasks === true,
           publishTrials: body.publishTrials === true,
@@ -160,8 +110,9 @@ export function createReleaseRoutes(options: ReleaseRoutesOptions) {
         if (!(error instanceof ReleaseRefused)) throw error;
         return [400, { error: error.message }];
       }
+      const { private: isPrivate, archived, ...repository } = github;
       return {
-        fullName: repository.fullName,
+        fullName: github.fullName,
         hash: built.hash,
         payload: {
           ...built.payload,
@@ -174,7 +125,7 @@ export function createReleaseRoutes(options: ReleaseRoutesOptions) {
         detail: {
           ...built.detail,
           provenance: { selfbenchBuild: buildCommit, catalogVersion },
-          ...subject.detail,
+          repositoryFlags: { private: isPrivate, archived },
         },
       };
     },

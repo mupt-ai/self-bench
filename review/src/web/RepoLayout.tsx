@@ -6,7 +6,7 @@ import { useOrg } from "./SiteLayout";
 
 /**
  * A repository's pages: a benchmark's, plus the tabs that generate, publish, and tune its tasks.
- * An eval has no pull requests to batch, so it has no Batch Generation; it is released like one.
+ * An eval has no pull requests to batch and is never released, so it keeps only Settings.
  */
 export function RepoLayout() {
   const { owner, name } = useParams();
@@ -18,7 +18,7 @@ export function RepoLayout() {
       <ScopeLayout
         afterDataset={evalScope ? [] : [{ path: "/batches", label: "Batch Generation" }]}
         afterResults={[
-          { path: "/releases", label: "Releases" },
+          ...(evalScope ? [] : [{ path: "/releases", label: "Releases" }]),
           { path: "/settings", label: "Settings" },
         ]}
       />

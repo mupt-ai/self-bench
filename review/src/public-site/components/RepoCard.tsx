@@ -1,12 +1,13 @@
 import { Star } from "lucide-react";
+import { resultsName } from "../../../../src/public/paths";
 import type { PublicRepoSummary } from "../contract";
 import { cleanDescription, compactNumber } from "../format";
 import { preloadPage } from "../page-preload";
 import { useSource } from "../source-context";
-import { Avatar } from "./Avatar";
+import { LineMark } from "./Avatar";
 import { ResultCard } from "./ResultCard";
 
-/** A repository's (or an eval's) card: one line of its results, opening its page. */
+/** A repository's (or a public benchmark's) card: one line of its results, opening its page. */
 export function RepoCard({
   card,
   byLine = false,
@@ -19,14 +20,13 @@ export function RepoCard({
 }) {
   const source = useSource();
   const { repository } = card;
+  // Its address: a repository's `/owner/name`, a public benchmark's `/evals/org/name`.
+  const name = resultsName(card);
   return (
     <ResultCard
-      href={byLine ? `/${repository.fullName}/${card.publisher.login}` : `/${repository.fullName}`}
-      marks={{
-        subject: repository.fullName,
-        line: `${repository.fullName}/${card.publisher.login}`,
-      }}
-      avatar={<Avatar src={repository.ownerAvatarUrl} size={24} />}
+      href={byLine ? `/${name}/${card.publisher.login}` : `/${name}`}
+      marks={{ subject: name, line: `${name}/${card.publisher.login}` }}
+      avatar={<LineMark benchmark={!!card.benchmark} src={repository.ownerAvatarUrl} size={24} />}
       title={repository.fullName}
       monoTitle
       {...(repository.stars === undefined

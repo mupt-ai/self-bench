@@ -48,45 +48,37 @@ function scopeNote(workspace: { login: string; kind: "org" | "user" }, publish: 
 export function PublishOptions({
   publish,
   disabled,
-  privateTasks = false,
   summaries,
   onChange,
 }: {
   publish: Publish;
   disabled: boolean;
-  /** An eval's tasks stay private, so it offers neither tasks nor results by task. */
-  privateTasks?: boolean;
   /** The latest report: how many of the ticked settings it covers, and when it was written. */
   summaries?: { covered: number; ticked: number; summarizedAt: string };
   onChange(publish: Publish): void;
 }) {
   return (
     <div className="space-y-2">
-      {!privateTasks && (
-        <>
-          <Option
-            id="release-publish-tasks"
-            label="Publish Tasks"
-            checked={publish.tasks}
-            disabled={disabled}
-            onChange={(tasks) => onChange({ ...publish, tasks })}
-          >
-            Anyone can browse and download each task's instruction, tests, and solution on
-            selfbench.dev.
-          </Option>
-          <Option
-            id="release-publish-trials"
-            label="Publish Results by Task"
-            checked={publish.tasks && publish.trials}
-            disabled={disabled || !publish.tasks}
-            onChange={(trials) => onChange({ ...publish, trials })}
-          >
-            Anyone can see whether each setting passed each task, how it was graded, and its test
-            output and transcript, with secrets redacted. The rest of Harbor's logs and artifacts
-            stay private.
-          </Option>
-        </>
-      )}
+      <Option
+        id="release-publish-tasks"
+        label="Publish Tasks"
+        checked={publish.tasks}
+        disabled={disabled}
+        onChange={(tasks) => onChange({ ...publish, tasks })}
+      >
+        Anyone can browse and download each task's instruction, tests, and solution on
+        selfbench.dev.
+      </Option>
+      <Option
+        id="release-publish-trials"
+        label="Publish Results by Task"
+        checked={publish.tasks && publish.trials}
+        disabled={disabled || !publish.tasks}
+        onChange={(trials) => onChange({ ...publish, trials })}
+      >
+        Anyone can see whether each setting passed each task, how it was graded, and its test output
+        and transcript, with secrets redacted. The rest of Harbor's logs and artifacts stay private.
+      </Option>
       {summaries && (
         <Option
           id="release-publish-summaries"

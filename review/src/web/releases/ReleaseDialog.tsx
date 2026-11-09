@@ -1,6 +1,5 @@
 import { CircleAlert, X } from "lucide-react";
 import React from "react";
-import { isEvalName } from "../../../../src/contracts/evals";
 import { formatAgo, plural } from "../api";
 import { Dialog, DialogBody } from "../Dialog";
 import { ListSkeleton } from "../LoadingSkeleton";
@@ -20,11 +19,14 @@ import { selectionOf } from "./selection";
 export function ReleaseDialog({
   url,
   repo,
+  summary,
   workspace,
   onReleased,
   onClose,
 }: {
   url: string;
+  /** What the release publishes, under the title, when it is not a repository's or a group's. */
+  summary?: string;
   /** The repository's full name, for links to its tasks; a group has none and publishes scores only. */
   repo?: string;
   /** The publishing workspace: a GitHub org, or the person's own account. */
@@ -35,10 +37,7 @@ export function ReleaseDialog({
   const cancel = React.useRef<HTMLButtonElement>(null);
   const [view, setView] = React.useState<ReleaseView>();
   const [ticked, setTicked] = React.useState<Set<string>>(new Set());
-  // An eval's tasks are its own scenarios, with no public repository behind them: they stay private.
-  const privateTasks = repo !== undefined && isEvalName(repo);
-  const publishDefaults = privateTasks ? { ...PUBLISH_DEFAULTS, tasks: false } : PUBLISH_DEFAULTS;
-  const [publish, setPublish] = React.useState(publishDefaults);
+  const [publish, setPublish] = React.useState(PUBLISH_DEFAULTS);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
   const [notice, setNotice] = React.useState("");
@@ -74,9 +73,9 @@ export function ReleaseDialog({
   );
   const unchanged =
     query === "" &&
-    publish.tasks === publishDefaults.tasks &&
-    publish.trials === publishDefaults.trials &&
-    publish.summaries === publishDefaults.summaries &&
+    publish.tasks === PUBLISH_DEFAULTS.tasks &&
+    publish.trials === PUBLISH_DEFAULTS.trials &&
+    publish.summaries === PUBLISH_DEFAULTS.summaries &&
     ticked.size === defaults.size &&
     [...ticked].every((key) => defaults.has(key));
   // How many of the ticked settings the latest Model Summaries report covers.
@@ -97,11 +96,11 @@ export function ReleaseDialog({
         settings: [...ticked],
         head: view.head?.id ?? null,
         fingerprint: view.preview.fingerprint,
-        // A group publishes its scores only; an eval its scores and summaries.
+        // A group publishes its scores only.
         ...(repo
           ? {
-              publishTasks: !privateTasks && publish.tasks,
-              publishTrials: !privateTasks && publish.tasks && publish.trials,
+              publishTasks: publish.tasks,
+              publishTrials: publish.tasks && publish.trials,
               publishSummaries,
             }
           : {}),
@@ -133,11 +132,10 @@ export function ReleaseDialog({
             Release Results
           </h2>
           <p id="release-description" className="mt-0.5 text-sm text-muted-foreground">
-            {privateTasks
-              ? "Publish this eval's results on selfbench.dev, where anyone can see them: each setting's accuracy and cost. Its tasks stay private."
-              : repo
+            {summary ??
+              (repo
                 ? "Publish this repository's results on selfbench.dev, where anyone can see them."
-                : "Publish this group's results on selfbench.dev, where anyone can see them: each setting's accuracy and cost, over the group and on each repository."}
+                : "Publish this group's results on selfbench.dev, where anyone can see them: each setting's accuracy and cost, over the group and on each repository.")}
           </p>
         </div>
         <button
@@ -185,7 +183,6 @@ export function ReleaseDialog({
               <PublishOptions
                 publish={publish}
                 disabled={busy}
-                privateTasks={privateTasks}
                 {...(summarized ? { summaries: summarized } : {})}
                 onChange={setPublish}
               />
@@ -203,7 +200,7 @@ export function ReleaseDialog({
                 onClick={() => {
                   setQuery("");
                   setTicked(new Set(defaults));
-                  setPublish(publishDefaults);
+                  setPublish(PUBLISH_DEFAULTS);
                 }}
               >
                 Reset
@@ -224,11 +221,9 @@ export function ReleaseDialog({
                   <InfoTooltip
                     label={privacyNote(
                       workspace,
-                      privateTasks
-                        ? { tasks: false, trials: false, summaries: publishSummaries }
-                        : repo
-                          ? { ...publish, summaries: publishSummaries }
-                          : { tasks: false, trials: false, summaries: false },
+                      repo
+                        ? { ...publish, summaries: publishSummaries }
+                        : { tasks: false, trials: false, summaries: false },
                     )}
                     contentClassName="border border-border bg-card text-foreground"
                   />

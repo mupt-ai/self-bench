@@ -43,17 +43,19 @@ import { releasedTrials } from "../public/release-sources.js";
 import type { AuthConfig } from "./auth/config.js";
 import { createIndexNow } from "./indexnow.js";
 import { createRateLimiter } from "./rate-limit.js";
+import { releaseLineRoutes } from "./release-lines.js";
 import { createResultsSite, type ResultsSite } from "./results-site.js";
 import { type ApiKeyRoutes, createApiKeyRoutes } from "./routes/api-keys.js";
 import { createSiteAuth, type SiteAuth } from "./routes/auth.js";
 import { type BatchRoutes, createBatchRoutes } from "./routes/batches.js";
+import type { BenchmarkReleaseRoutes } from "./routes/benchmark-releases.js";
 import { type BillingRoutes, createBillingRoutes } from "./routes/billing.js";
 import { createEvaluationRoutes } from "./routes/evaluations.js";
 import { createGitHubRepoRoutes, type GitHubRepoRoutes } from "./routes/github-repos.js";
-import { createGroupReleaseRoutes, type GroupReleaseRoutes } from "./routes/group-releases.js";
+import type { GroupReleaseRoutes } from "./routes/group-releases.js";
 import { createPublicReleaseRoutes, type PublicReleaseRoutes } from "./routes/public-releases.js";
 import { createPullRequestRoutes, type PullRequestRoutes } from "./routes/pull-requests.js";
-import { createReleaseRoutes, type ReleaseRoutes } from "./routes/releases.js";
+import type { ReleaseRoutes } from "./routes/releases.js";
 import { type ConnectedRepoRoutes, createConnectedRepoRoutes } from "./routes/repos.js";
 import { createTaskRoutes, type TaskRoutes } from "./routes/tasks.js";
 
@@ -71,6 +73,7 @@ interface Site {
   readonly billing?: BillingRoutes;
   readonly releases: ReleaseRoutes;
   readonly groupReleases: GroupReleaseRoutes;
+  readonly benchmarkReleases: BenchmarkReleaseRoutes;
   /** Routes that need no sign-in; selfbench.dev reads published releases from them. */
   readonly publicReleases: PublicReleaseRoutes;
   /** selfbench.dev itself, answered on its own host by this same server, when configured. */
@@ -122,11 +125,7 @@ export async function openSite(
     artifacts,
     trials: releasedTrials(database.db, artifacts),
   });
-  /** What both repositories' and groups' release routes read. */
-  const releaseDeps = {
-    ...{ db: database.db, artifacts, users, repos, publicUrl, resultsSiteUrl },
-    githubApiUrl: auth.githubApiUrl,
-  };
+  const benchmarks = createBenchmarkStore(database.db);
   /** Reads the public lines afresh and tells search engines which pages changed. */
   const publicChanged = (paths: string[]) => {
     publicReleases.refresh();
@@ -181,7 +180,7 @@ export async function openSite(
             },
           }
         : {}),
-      benchmarks: createBenchmarkStore(database.db),
+      benchmarks,
       groups,
       groupReleases: { store: releases, changed: publicChanged },
       tasks,
@@ -197,18 +196,9 @@ export async function openSite(
       githubApiUrl: auth.githubApiUrl,
     }),
     github: createGitHubRepoRoutes({ config: auth, users }),
-    releases: createReleaseRoutes({
-      ...releaseDeps,
-      releases,
-      // The repository's page, the publisher's line, and the home page's directory.
-      onPublicChange: ({ fullName, publisher }) =>
-        publicChanged(["/", `/${fullName}`, `/${fullName}/${publisher}`]),
-    }),
-    groupReleases: createGroupReleaseRoutes({
-      ...releaseDeps,
-      groups,
-      releases,
-      onPublicChange: publicChanged,
+    ...releaseLineRoutes({
+      ...{ db: database.db, artifacts, users, repos, groups, benchmarks, releases },
+      ...{ publicUrl, resultsSiteUrl, githubApiUrl: auth.githubApiUrl, publicChanged },
     }),
     publicReleases,
     ...(resultsSiteUrl

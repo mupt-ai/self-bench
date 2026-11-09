@@ -1,4 +1,4 @@
-import { isEvalName } from "../contracts/evals.js";
+import { resultsName } from "../public/paths.js";
 import { groupHref, type PublishedGroup } from "../public/release-groups.js";
 import type { PublishedLine } from "../public/release-types.js";
 import { DIRECTORY_VIEWS, defaultLineOf } from "../public/seo.js";
@@ -34,15 +34,15 @@ export function sitemapOf(
   for (const lines of repositories) {
     const fallback = defaultLineOf(lines);
     if (!fallback) continue;
-    const { fullName } = fallback.release.repository;
+    const address = resultsName(fallback.release);
     pages.push({
-      loc: `${origin}/${fullName}`,
+      loc: `${origin}/${address}`,
       lastmod: newest(lines.map((line) => line.release.releasedAt)),
     });
     for (const line of lines) {
       if (line === fallback) continue;
       pages.push({
-        loc: `${origin}/${fullName}/${line.release.publisher.login}`,
+        loc: `${origin}/${address}/${line.release.publisher.login}`,
         lastmod: line.release.releasedAt,
       });
     }
@@ -57,9 +57,9 @@ export function sitemapOf(
   };
   const evals = repositories
     .flat()
-    .filter((line) => isEvalName(line.release.repository.fullName))
+    .filter((line) => line.release.benchmark)
     .map((line) => line.release.releasedAt);
-  const evalsPage = { loc: `${origin}${DIRECTORY_VIEWS.evals.path}`, lastmod: newest(evals) };
+  const evalsPage = { loc: `${origin}${DIRECTORY_VIEWS.benchmarks.path}`, lastmod: newest(evals) };
   const urls = [home, ...(evals.length > 0 ? [evalsPage] : []), ...pages].map(
     ({ loc, lastmod }) =>
       `  <url><loc>${escapeXml(loc)}</loc>${lastmod ? `<lastmod>${escapeXml(lastmod)}</lastmod>` : ""}</url>\n`,

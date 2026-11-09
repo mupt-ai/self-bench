@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { ReleaseStore } from "../../db/releases.js";
-import { groupPath, repositoryPath, segmentsOf } from "../../public/paths.js";
+import { groupPath, pathName, repositoryPath, segmentsOf } from "../../public/paths.js";
 import type { PublishedGroup } from "../../public/release-groups.js";
 import type { PublishedLine } from "../../public/release-types.js";
 import { sendJson } from "../http.js";
@@ -102,9 +102,9 @@ export function createPublicReleaseRoutes(
     refresh() {
       reading = undefined;
     },
-    /** The current lines of one repository, for the page status of selfbench.dev. */
-    async linesFor(fullName: string): Promise<PublishedLine[]> {
-      return (await snapshot()).byRepository.get(fullName.toLowerCase()) ?? [];
+    /** The current lines of one repository or benchmark, by `resultsName`, for page status. */
+    async linesFor(name: string): Promise<PublishedLine[]> {
+      return (await snapshot()).byRepository.get(name.toLowerCase()) ?? [];
     },
     /** Every repository's current lines, for selfbench.dev's sitemap. */
     async repositories(): Promise<PublishedLine[][]> {
@@ -117,9 +117,9 @@ export function createPublicReleaseRoutes(
     async directoryBody(): Promise<string> {
       return (await snapshot()).directory().body;
     },
-    /** The body /api/public/repos/<owner>/<name> answers, or undefined when nothing is released. */
-    async repositoryBody(fullName: string): Promise<string | undefined> {
-      return (await snapshot()).repository(fullName)?.body;
+    /** The body /api/public/results/<name> answers, or undefined when nothing is released. */
+    async repositoryBody(name: string): Promise<string | undefined> {
+      return (await snapshot()).repository(name)?.body;
     },
     /** Every group with something to show, for the home page and the sitemap. */
     async groups(): Promise<PublishedGroup[]> {
@@ -194,12 +194,11 @@ export function createPublicReleaseRoutes(
         }
         return true;
       }
-      const repository =
-        (route === "results" || route === "repos") && rest.length === 2
-          ? repositoryPath(rest)
-          : undefined;
+      // A repository's results, `<owner>/<name>`, or a public benchmark's, `evals/<org>/<name>`.
+      const path = route === "results" || route === "repos" ? repositoryPath(rest) : undefined;
+      const repository = path && !path.publisher ? path : undefined;
       if (repository) {
-        const body = (await snapshot()).repository(`${repository.owner}/${repository.name}`);
+        const body = (await snapshot()).repository(pathName(repository));
         if (body) {
           sendTagged(request, response, body, {
             "cache-control": CACHED,

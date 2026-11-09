@@ -1,5 +1,5 @@
-import { isEvalName } from "../contracts/evals.js";
 import { frontierSettings } from "./directory.js";
+import { BENCHMARKS } from "./paths.js";
 import type { PublishedGroup } from "./release-groups.js";
 import type { PublishedLine, ReleaseSetting } from "./release-types.js";
 
@@ -25,8 +25,8 @@ export const HOME_DESCRIPTION =
 export const HOME_HEADING = "Find the best models for your repo";
 
 /**
- * The directory's two views, each a page of its own: repositories and their groups at `/`, and
- * evals (a publisher's own scenarios, `evals/<slug>`) at `/evals`. The server writes each one's
+ * The directory's views, each a page of its own: repositories and their groups at `/`, and public
+ * benchmarks (Harbor registry datasets such as Terminal-Bench) at `/evals`. The server writes each one's
  * head and text, and the site its tabs, title, heading, and search, from these.
  */
 export const DIRECTORY_VIEWS = {
@@ -38,16 +38,14 @@ export const DIRECTORY_VIEWS = {
     heading: HOME_HEADING,
     search: "Search Repositories",
   },
-  evals: {
-    path: "/evals",
-    // Custom, as against a repository's: built from a publisher's own scenarios, not mined from a
-    // repository's pull requests. Everything on the site is public, so "public" would say nothing.
-    tab: "Custom Evals",
-    title: `Custom Evals: Benchmark Coding Agents on Your Own Scenarios · ${SITE_NAME}`,
+  benchmarks: {
+    path: `/${BENCHMARKS}`,
+    tab: "Public Benchmarks",
+    title: `Public Benchmarks: Coding Agents on Terminal-Bench and More · ${SITE_NAME}`,
     description:
-      "Coding agent and model results on evals publishers build from their own scenarios: accuracy and cost per task, side by side. By dari.dev.",
-    heading: "Find the best models for evals",
-    search: "Search Custom Evals",
+      "Coding agent and model results on public benchmarks such as Terminal-Bench, run and published by SelfBench users: accuracy and cost per task. By dari.dev.",
+    heading: "Find the best models on benchmarks",
+    search: "Search Benchmarks",
   },
 } as const;
 
@@ -60,9 +58,9 @@ export function directoryViewAt(path: string): DirectoryView | undefined {
   );
 }
 
-/** Whether a repository or eval, by its `owner/name`, is listed in `view`. */
-export const listedIn = (view: DirectoryView, fullName: string) =>
-  isEvalName(fullName) === (view === "evals");
+/** Whether a line, a repository's or a public benchmark's, is listed in `view`. */
+export const listedIn = (view: DirectoryView, line: { benchmark?: unknown }) =>
+  !!line.benchmark === (view === "benchmarks");
 
 export function repositoryTitle(fullName: string): string {
   return `${fullName}: Coding Agent Benchmark · ${SITE_NAME}`;
@@ -142,9 +140,7 @@ export function repositoryDescription(line: PublishedLine, limit = DESCRIPTION_L
     release.repository.fullName,
     release.settings,
     release.tasks,
-    isEvalName(release.repository.fullName)
-      ? "from its own scenarios"
-      : "from its merged pull requests",
+    release.benchmark ? "from the benchmark" : "from its merged pull requests",
     limit,
   );
 }

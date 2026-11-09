@@ -1,4 +1,5 @@
 import { directoryOf } from "../public/directory.js";
+import { resultsName } from "../public/paths.js";
 import { groupCardOf, type PublishedGroup } from "../public/release-groups.js";
 import type { PublishedLine, PublishedRelease } from "../public/release-types.js";
 import { type TaggedBody, tagged } from "./tagged.js";
@@ -10,7 +11,7 @@ import { type TaggedBody, tagged } from "./tagged.js";
  * already holding a response is answered with a bodyless 304.
  */
 export interface Snapshot {
-  /** Current lines by lower-case repository name, newest first. */
+  /** Current lines by lower-case `resultsName` (`owner/name`, `evals/org/name`), newest first. */
   byRepository: Map<string, PublishedLine[]>;
   /** Current releases by id. */
   byRelease: Map<string, PublishedRelease>;
@@ -18,8 +19,8 @@ export interface Snapshot {
   groups: PublishedGroup[];
   releases: () => TaggedBody;
   directory: () => TaggedBody;
-  /** One repository's response, or undefined when nothing is released for it. */
-  repository: (fullName: string) => TaggedBody | undefined;
+  /** One repository's or benchmark's response, by `resultsName`, or undefined when none. */
+  repository: (name: string) => TaggedBody | undefined;
   /** One group, or undefined when it has nothing to show. */
   group: (publisher: string, slug: string) => PublishedGroup | undefined;
   /** One group's response, or undefined when it has nothing to show. */
@@ -55,7 +56,7 @@ export function snapshotOf(lines: PublishedLine[], released: PublishedGroup[] = 
   let groups = released;
   const byRepository = new Map<string, PublishedLine[]>();
   for (const line of lines) {
-    const key = line.release.repository.fullName.toLowerCase();
+    const key = resultsName(line.release).toLowerCase();
     byRepository.set(key, [...(byRepository.get(key) ?? []), line]);
   }
   // A deleted group's address can be reused; only the newest release at an address is shown.
@@ -76,8 +77,8 @@ export function snapshotOf(lines: PublishedLine[], released: PublishedGroup[] = 
     directory: once(() =>
       tagged(JSON.stringify({ cards: directoryOf(lines), groups: groups.map(groupCardOf) })),
     ),
-    repository(fullName) {
-      const key = fullName.toLowerCase();
+    repository(name) {
+      const key = name.toLowerCase();
       const found = byRepository.get(key);
       return repositoryBodies(key, found && { lines: found });
     },

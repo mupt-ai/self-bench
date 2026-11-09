@@ -1,9 +1,9 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { releases } from "./schema.js";
 
 /**
  * The lines of releases: whose releases a row belongs to. A row sets exactly one of its line
- * columns (the `releases_line` check): a GitHub repository's id, an eval's, or a group's.
+ * columns (the `releases_line` check): a GitHub repository's id, a benchmark's, or a group's.
  */
 
 /** One workspace's releases of one GitHub repository. */
@@ -19,23 +19,24 @@ interface GroupLine {
 }
 
 /**
- * One workspace's releases of one of its evals, by the eval's `repos` id (it has no GitHub id).
- * Its rows carry a repository's payload, so selfbench.dev lists and shows it as one.
+ * One workspace's releases of one of its public benchmarks (`benchmarks`): a Harbor registry
+ * dataset such as Terminal-Bench. Its rows carry a repository's payload, marked `benchmark`, so
+ * selfbench.dev shows it as a repository, under /evals.
  */
-export interface EvalLine {
+interface BenchmarkLine {
   readonly orgId: number;
-  readonly evalRepoId: number;
+  readonly benchmarkId: number;
 }
 
-/** A line of releases: a repository's, an eval's, or a repository group's. */
-export type AnyLine = ReleaseLine | EvalLine | GroupLine;
+/** A line of releases: a repository's, a public benchmark's, or a repository group's. */
+export type AnyLine = ReleaseLine | BenchmarkLine | GroupLine;
 
 /** A line's identity, for grouping rows by line. */
 export const lineKey = (line: AnyLine) =>
   "groupId" in line
     ? `group/${line.groupId}`
-    : "evalRepoId" in line
-      ? `eval/${line.evalRepoId}`
+    : "benchmarkId" in line
+      ? `benchmark/${line.benchmarkId}`
       : `${line.orgId}/${line.githubRepoId}`;
 
 /** A stored row's line, from whichever of its line columns is set. */
@@ -43,22 +44,18 @@ export const lineOfRow = (row: {
   orgId: number;
   githubRepoId: number | null;
   groupId: number | null;
-  evalRepoId: number | null;
+  benchmarkId: number | null;
 }): AnyLine =>
   row.groupId !== null
     ? { orgId: row.orgId, groupId: row.groupId }
-    : row.evalRepoId !== null
-      ? { orgId: row.orgId, evalRepoId: row.evalRepoId }
+    : row.benchmarkId !== null
+      ? { orgId: row.orgId, benchmarkId: row.benchmarkId }
       : { orgId: row.orgId, githubRepoId: row.githubRepoId ?? 0 };
 
 /** The rows of one line. */
 export const ofLine = (line: AnyLine) =>
   "groupId" in line
     ? and(eq(releases.orgId, line.orgId), eq(releases.groupId, line.groupId))
-    : "evalRepoId" in line
-      ? and(eq(releases.orgId, line.orgId), eq(releases.evalRepoId, line.evalRepoId))
-      : and(
-          eq(releases.orgId, line.orgId),
-          eq(releases.githubRepoId, line.githubRepoId),
-          isNull(releases.groupId),
-        );
+    : "benchmarkId" in line
+      ? and(eq(releases.orgId, line.orgId), eq(releases.benchmarkId, line.benchmarkId))
+      : and(eq(releases.orgId, line.orgId), eq(releases.githubRepoId, line.githubRepoId));

@@ -48,6 +48,8 @@ export async function benchmarkRoutes(
   const match = listing ?? route.exec(url.pathname);
   if (!match?.[1]) return false;
   const [, login, name, rest = ""] = match;
+  // A benchmark's releases are answered by benchmark-releases.ts.
+  if (rest === "/releases" || rest.startsWith("/releases/")) return false;
   const store = options.benchmarks;
   const opened = await openOrgScope(options, request, response, user, login, !!store);
   if ("sent" in opened || !store) return true;

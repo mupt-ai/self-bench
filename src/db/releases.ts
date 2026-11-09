@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, getTableColumns, isNull, or, type SQL, sql } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, isNotNull, isNull, or, type SQL, sql } from "drizzle-orm";
 import type { GroupReleasePayload, PublishedGroup } from "../public/release-groups.js";
 import type { ReleaseTask } from "../public/release-rule.js";
 import { endpointHostsOf, type ReleasedResults } from "../public/release-trials.js";
@@ -10,7 +10,7 @@ import { type AnyLine, lineKey, lineOfRow, ofLine } from "./release-lines.js";
 import { releases } from "./schema.js";
 
 export { currentOf, headOf } from "./release-chain.js";
-export type { AnyLine, EvalLine, ReleaseLine } from "./release-lines.js";
+export type { AnyLine, ReleaseLine } from "./release-lines.js";
 
 /** What a line's rows store in `payload`: a repository's or eval's release, or a group's. */
 export type LinePayload = ReleasePayload | GroupReleasePayload;
@@ -103,7 +103,8 @@ function currentAmong<Row extends ReleaseRow<LinePayload>>(rows: readonly Row[])
 
 export function createReleaseStore(db: Database, options: { now?: () => Date } = {}) {
   const now = options.now ?? (() => new Date());
-  const repositoryRows = isNull(releases.groupId);
+  /** A GitHub repository's rows. */
+  const repositoryRows = isNotNull(releases.githubRepoId);
   const newestFirst = [desc(releases.releasedAt), desc(releases.id)];
   const rowsWhere = async (where?: SQL) =>
     (
@@ -147,8 +148,8 @@ export function createReleaseStore(db: Database, options: { now?: () => Date } =
             orgId: release.line.orgId,
             ...("groupId" in release.line
               ? { groupId: release.line.groupId }
-              : "evalRepoId" in release.line
-                ? { evalRepoId: release.line.evalRepoId }
+              : "benchmarkId" in release.line
+                ? { benchmarkId: release.line.benchmarkId }
                 : { githubRepoId: release.line.githubRepoId }),
             fullName: release.fullName,
             publisherLogin: release.publisherLogin,
@@ -229,9 +230,12 @@ export function createReleaseStore(db: Database, options: { now?: () => Date } =
         endpointHosts: endpointHostsOf(row.settingsDetail),
       };
     },
-    /** Every line's current release, newest first. */
+    /**
+     * Every repository's and public benchmark's line's current release, newest first: both carry
+     * a repository's payload, a benchmark's marked `benchmark`.
+     */
     async currentLines(): Promise<PublishedLine[]> {
-      return asLines(currentAmong(await publicRowsWhere(repositoryRows)));
+      return asLines(currentAmong(await publicRowsWhere(isNull(releases.groupId))));
     },
     /** Every repository group's current release, newest first. */
     async currentGroups(): Promise<PublishedGroup[]> {
@@ -246,16 +250,14 @@ export function createReleaseStore(db: Database, options: { now?: () => Date } =
       // A renamed repository's line is found under any name it released with, then shown
       // only under the name its current release carries.
       const named = await db
-        .selectDistinct({
-          orgId: releases.orgId,
-          githubRepoId: releases.githubRepoId,
-          groupId: releases.groupId,
-          evalRepoId: releases.evalRepoId,
-        })
+        .selectDistinct({ orgId: releases.orgId, githubRepoId: releases.githubRepoId })
         .from(releases)
         .where(and(eq(sql`lower(${releases.fullName})`, wanted), repositoryRows));
       if (named.length === 0) return [];
-      const lines = named.map(lineOfRow);
+      const lines = named.map(({ orgId, githubRepoId }) => ({
+        orgId,
+        githubRepoId: githubRepoId ?? 0,
+      }));
       const current = currentAmong(await publicRowsWhere(or(...lines.map(ofLine))));
       return asLines(current.filter((row) => row.fullName.toLowerCase() === wanted));
     },

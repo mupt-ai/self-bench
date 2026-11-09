@@ -1,4 +1,3 @@
-import { isEvalName } from "../contracts/evals.js";
 import type {
   PublishedLine,
   ReleasePublisher,
@@ -55,6 +54,8 @@ export interface DirectoryCard {
   endorsed: boolean;
   /** The line the repository shows by default: its endorsed line, else its newest. */
   defaultLine: boolean;
+  /** Set when the line is a public benchmark's (`ReleasePayload.benchmark`). */
+  benchmark?: { ref: string };
 }
 
 type Ranked = Pick<ReleaseSetting, "id" | "accuracy" | "costPerTaskUsd" | "onFrontier">;
@@ -135,6 +136,7 @@ function cardOf(line: PublishedLine, defaultLine: boolean): DirectoryCard {
     others: offFrontier(release.settings).slice(0, PREVIEW_LINES).map(cardSetting),
     endorsed: line.endorsed,
     defaultLine,
+    ...(release.benchmark ? { benchmark: release.benchmark } : {}),
   };
 }
 
@@ -149,12 +151,12 @@ export function directoryOf(lines: readonly PublishedLine[]): DirectoryCard[] {
       right.release.releasedAt.localeCompare(left.release.releasedAt) ||
       left.release.releaseId.localeCompare(right.release.releaseId),
   );
-  // A repository's lines share its GitHub id, across renames. An eval's id is its own row's, which
-  // may equal some repository's GitHub id, so evals go by name: one publisher holds each.
+  // A repository's lines share its GitHub id, across renames; a public benchmark's, its registry
+  // name, whose publishers each have their own row, and so their own id.
   const defaults = new Map<string, PublishedLine>();
   for (const line of ordered) {
     const { id, fullName } = line.release.repository;
-    const key = isEvalName(fullName) ? `eval/${fullName.toLowerCase()}` : `github/${id}`;
+    const key = line.release.benchmark ? `benchmark/${fullName.toLowerCase()}` : `github/${id}`;
     const chosen = defaults.get(key);
     if (!chosen || (line.endorsed && !chosen.endorsed)) defaults.set(key, line);
   }

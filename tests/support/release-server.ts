@@ -44,8 +44,6 @@ interface FakeRepository {
 export async function releaseServer(
   shared?: TestDatabase,
   resultsSiteUrl: string | null = "https://selfbench.example",
-  /** What is released: the connected repository, or the workspace's eval `evals/terminal`. */
-  subject: "repository" | "eval" = "repository",
 ) {
   const directory = await mkdtemp(join(tmpdir(), "release-routes-"));
   const artifacts = new LocalArtifactStore(directory);
@@ -78,10 +76,7 @@ export async function releaseServer(
       private: false,
       connectedBy: priya.id,
     });
-  const createEval = async () =>
-    (await repos.createEval({ orgId: tenant.id, slug: "terminal", createdBy: priya.id })) ??
-    Promise.reject(new Error("eval not created"));
-  let repo = subject === "eval" ? await createEval() : await connect();
+  let repo = await connect();
   const tasks = createTaskStore(database.db);
   const releases = createReleaseStore(database.db);
   await database.db.insert(credentials).values([
@@ -165,7 +160,7 @@ export async function releaseServer(
       publicRoutes.refresh();
     },
   });
-  const base = `/api/orgs/acme/repos/${repo.fullName}/releases`;
+  const base = "/api/orgs/acme/repos/vercel/next.js/releases";
   const request = sessionFetch(() => publicUrl);
   return {
     db: database.db,
@@ -179,10 +174,7 @@ export async function releaseServer(
       return repo;
     },
     credentialId: credential.id,
-    line:
-      subject === "eval"
-        ? { orgId: tenant.id, evalRepoId: repo.id }
-        : { orgId: tenant.id, githubRepoId: 70107786 },
+    line: { orgId: tenant.id, githubRepoId: 70107786 },
     base,
     request,
     /** Approves tasks `names` of generation run "gen" on the connected repository. */
@@ -270,7 +262,7 @@ export type ReleaseServer = Awaited<ReturnType<typeof releaseServer>>;
  * One shared database per test file and a fresh release server per test, with tasks t1-t3
  * approved and a full run of each of `models` saved.
  */
-export function releaseServerPerTest(models: readonly string[], subject?: "repository" | "eval") {
+export function releaseServerPerTest(models: readonly string[]) {
   let database: TestDatabase;
   let server: ReleaseServer;
   beforeAll(async () => {
@@ -280,7 +272,7 @@ export function releaseServerPerTest(models: readonly string[], subject?: "repos
     await database.close();
   });
   beforeEach(async () => {
-    server = await releaseServer(database, undefined, subject);
+    server = await releaseServer(database);
     await server.approve(names(1, 3));
     for (const model of models) await server.save(full(model, names(1, 3)));
   });

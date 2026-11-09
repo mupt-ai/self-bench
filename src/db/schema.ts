@@ -246,8 +246,8 @@ export const generationBatches = pgTable("generation_batches", {
 });
 
 /**
- * Public releases: append-only snapshots a workspace published for a public repository, an eval,
- * or a repository group: its line (release-lines.ts). A line's current release is its newest row
+ * Public releases: append-only snapshots a workspace published for a public repository, a public
+ * benchmark, or a repository group: its line (release-lines.ts). A line's current release is its newest row
  * not withdrawn. No foreign keys, so disconnecting a repository or deleting tasks never touches
  * what was published. `payload` is what the public API serves; `detail` is private.
  */
@@ -260,9 +260,9 @@ export const releases = pgTable(
     githubRepoId: bigint("github_repo_id", { mode: "number" }),
     /** The repository group a group's line releases (repository_groups); null otherwise. */
     groupId: bigint("group_id", { mode: "number" }),
-    /** The eval an eval's line releases (its `repos` row, which has no GitHub id); null otherwise. */
-    evalRepoId: bigint("eval_repo_id", { mode: "number" }),
-    /** The repository's or eval's `owner/name`, or the group's address. */
+    /** The public benchmark a benchmark's line releases (benchmarks); null otherwise. */
+    benchmarkId: bigint("benchmark_id", { mode: "number" }),
+    /** The repository's `owner/name`, the benchmark's registry `org/name`, or the group's address. */
     fullName: text("full_name").notNull(),
     publisherLogin: text("publisher_login").notNull(),
     /** The line's head when this row was written; null for a line's first release. */
@@ -282,12 +282,12 @@ export const releases = pgTable(
     index("releases_full_name").on(sql`lower(${table.fullName})`),
     // Only one successor per row, and only one first release per line.
     unique("releases_line_predecessor")
-      .on(table.orgId, table.githubRepoId, table.groupId, table.evalRepoId, table.predecessorId)
+      .on(table.orgId, table.githubRepoId, table.groupId, table.benchmarkId, table.predecessorId)
       .nullsNotDistinct(),
     index("releases_group").on(table.groupId),
     check(
       "releases_line",
-      sql`num_nonnulls(${table.githubRepoId}, ${table.groupId}, ${table.evalRepoId}) = 1`,
+      sql`num_nonnulls(${table.githubRepoId}, ${table.groupId}, ${table.benchmarkId}) = 1`,
     ),
   ],
 );

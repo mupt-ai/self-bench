@@ -2,6 +2,7 @@ import { knownCostLabel } from "../evaluation/cost-total.js";
 import { harnessLabels } from "../evaluation/models.js";
 import { gateways, isGateway } from "../gateways/index.js";
 import { directoryOf } from "../public/directory.js";
+import { resultsName } from "../public/paths.js";
 import { groupHref, type PublishedGroup } from "../public/release-groups.js";
 import type { PublishedLine, ReleaseSetting } from "../public/release-types.js";
 import {
@@ -66,7 +67,7 @@ export function homeBody(
   view: DirectoryView = "repositories",
 ): string {
   const cards = directoryOf(repositories.flat())
-    .filter((card) => card.defaultLine && listedIn(view, card.repository.fullName))
+    .filter((card) => card.defaultLine && listedIn(view, card))
     .slice(0, HOME_LIMIT);
   const repositoryItems = cards.map((card) => {
     // The repository's two picks, as its description names them: the most accurate setting and
@@ -84,7 +85,7 @@ export function homeBody(
       best ? `Most accurate: ${best.model.label}, ${scored(best)} per task.` : "",
       next ? `Best for less: ${next.model.label}, ${scored(next)}.` : "",
     ];
-    return `<li>${link(`/${card.repository.fullName}`, card.repository.fullName)} <span>${escapeText(facts.filter(Boolean).join(" "))}</span></li>`;
+    return `<li>${link(`/${resultsName(card)}`, card.repository.fullName)} <span>${escapeText(facts.filter(Boolean).join(" "))}</span></li>`;
   });
   const { heading, description } = DIRECTORY_VIEWS[view];
   return main("home", [
@@ -202,7 +203,8 @@ export function repositoryBody(
     .map((other) => {
       // Each line at its canonical address: the default line's is the repository's.
       const { tasks, settings, publisher: by, releasedAt } = other.release;
-      const href = other === fallback ? `/${fullName}` : `/${fullName}/${by.login}`;
+      const address = resultsName(other.release);
+      const href = other === fallback ? `/${address}` : `/${address}/${by.login}`;
       const summary = `${plural(tasks, "task")}, ${plural(settings.length, "setting")}, released ${day(releasedAt)}.`;
       return `<li>${link(href, by.login)} <span>${escapeText(summary)}</span></li>`;
     });

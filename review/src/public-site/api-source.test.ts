@@ -44,7 +44,7 @@ test("a repository page reads only its repository and lists every line", async (
   const calls = serve({
     [`/api/public/results/${owner}/${name}`]: { body: { lines: [line(acme), line(dari)] } },
   });
-  const shown = await apiSource().getLine(owner, name, acme.release.publisher.login);
+  const shown = await apiSource().getLine(`${owner}/${name}`, acme.release.publisher.login);
   expect(calls).toEqual([`/api/public/results/${owner}/${name}`]);
   expect(shown?.release.releaseId).toBe(acme.release.releaseId);
   expect(shown?.lines.map((entry) => entry.publisher.login)).toEqual([
@@ -64,7 +64,7 @@ test("concurrent directory reads share one request; later reads fetch again", as
 
 test("nothing released is undefined; a server error is an error", async () => {
   serve({ "/api/public/results": { status: 503 } });
-  expect(await apiSource().getRepo("nobody", "nothing")).toBeUndefined();
+  expect(await apiSource().getRepo("nobody/nothing")).toBeUndefined();
   await expect(apiSource().listRepos()).rejects.toThrow("503");
 });
 
@@ -83,9 +83,9 @@ test("a repository page takes its carried lines only for its own repository", as
   const url = `/api/public/results/${owner}/${name}`;
   const calls = serve({ [url]: { body: { lines: [line(acme)] } } });
   const source = apiSource("", new Map([[url, { lines: [line(acme), line(dari)] }]]));
-  expect((await source.getRepo(owner, name))?.lines).toHaveLength(2);
+  expect((await source.getRepo(`${owner}/${name}`))?.lines).toHaveLength(2);
   expect(calls).toHaveLength(0);
-  expect(await source.getRepo("nobody", "nothing")).toBeUndefined();
+  expect(await source.getRepo("nobody/nothing")).toBeUndefined();
   expect(calls).toEqual(["/api/public/results/nobody/nothing"]);
 });
 

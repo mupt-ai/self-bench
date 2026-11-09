@@ -1,5 +1,5 @@
 {
-  "id": "27188d4b-326f-40ef-9680-ecbffe0d2e10",
+  "id": "819088e3-d69b-4cc8-8b86-0261f7eebf2d",
   "prevId": "e8e09237-3960-4067-8408-ca2aa209954d",
   "version": "7",
   "dialect": "postgresql",
@@ -510,8 +510,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "eval_repo_id": {
-          "name": "eval_repo_id",
+        "benchmark_id": {
+          "name": "benchmark_id",
           "type": "bigint",
           "primaryKey": false,
           "notNull": false
@@ -653,7 +653,7 @@
             "org_id",
             "github_repo_id",
             "group_id",
-            "eval_repo_id",
+            "benchmark_id",
             "predecessor_id"
           ]
         }
@@ -662,7 +662,7 @@
       "checkConstraints": {
         "releases_line": {
           "name": "releases_line",
-          "value": "num_nonnulls(\"releases\".\"github_repo_id\", \"releases\".\"group_id\", \"releases\".\"eval_repo_id\") = 1"
+          "value": "num_nonnulls(\"releases\".\"github_repo_id\", \"releases\".\"group_id\", \"releases\".\"benchmark_id\") = 1"
         }
       },
       "isRLSEnabled": false

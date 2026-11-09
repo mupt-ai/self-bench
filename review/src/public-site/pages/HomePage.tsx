@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigationType, useSearchParams } from "react-router";
+import { resultsName } from "../../../../src/public/paths";
 import { GroupCard } from "../components/GroupCard";
 import { RepoCard } from "../components/RepoCard";
 import { SearchBox } from "../components/SearchBox";
@@ -193,7 +194,7 @@ function Directory({
         ? data.groups.filter((card) => groupMatches(card, needle))
         : data.groups;
   const cards = (needle ? data.lines.filter((card) => matches(card, needle)) : data.repos)
-    .filter((card) => listedIn(view, card.repository.fullName))
+    .filter((card) => listedIn(view, card))
     .slice(0, needle ? undefined : HOME_LIMIT);
   if (groups.length === 0 && cards.length === 0)
     return <NoMatch query={needle ? query.trim() : undefined} />;
@@ -212,11 +213,7 @@ function Directory({
           card={card}
           byLine={!!needle}
           onOpen={(element) =>
-            onOpen(
-              `${card.repository.fullName}/${card.publisher.login}`,
-              card.repository.fullName,
-              element,
-            )
+            onOpen(`${resultsName(card)}/${card.publisher.login}`, resultsName(card), element)
           }
         />
       ))}

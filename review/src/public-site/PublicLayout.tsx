@@ -1,5 +1,6 @@
 import { type ComponentType, lazy, Suspense, useEffect, useRef } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
+import { BENCHMARKS } from "../../../src/public/paths";
 import { Lockup } from "../web/Lockup";
 import { GITHUB_MARK } from "./components/Avatar";
 import { OutLink } from "./components/OutLink";
@@ -12,7 +13,7 @@ import { WaterBackground, WaterBands } from "./effects/WaterBackground";
 import { EDGE_FRAME, FRAME, RULER_WIDTH } from "./frame";
 import { followJourney, homeView, journeyFrom, repositoryOf } from "./home-view";
 import { RulerScrollbar } from "./RulerScrollbar";
-import { DIRECTORY_VIEWS, listedIn } from "./seo";
+import { DIRECTORY_VIEWS } from "./seo";
 import { ThemeToggle } from "./ThemeToggle";
 
 /** The app's origin: set by the server that serves the site, prod's app otherwise. */
@@ -67,7 +68,8 @@ export function PublicLayout() {
     const entry = journeyFrom(location.key, repository);
     const left = homeView(entry);
     const pathname =
-      left?.path ?? DIRECTORY_VIEWS[listedIn("evals", repository) ? "evals" : "repositories"].path;
+      left?.path ??
+      DIRECTORY_VIEWS[repository.startsWith(`${BENCHMARKS}/`) ? "benchmarks" : "repositories"].path;
     const shown = document.querySelector(select.shownLine);
     returnHome(shown ? lineOf(shown) : repository, () =>
       navigate(

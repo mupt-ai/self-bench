@@ -1,4 +1,4 @@
-import { isEvalName } from "../contracts/evals.js";
+import { resultsName } from "../public/paths.js";
 import type { PublishedLine } from "../public/release-types.js";
 import {
   DIRECTORY_VIEWS,
@@ -58,8 +58,9 @@ export function repositoryHead(
   const line = lineAt(lines, publisher);
   if (!line) return undefined;
   const { fullName } = line.release.repository;
+  const address = resultsName(line.release);
   const own = line === defaultLineOf(lines) ? undefined : line.release.publisher.login;
-  const canonical = own ? `${origin}/${fullName}/${own}` : `${origin}/${fullName}`;
+  const canonical = own ? `${origin}/${address}/${own}` : `${origin}/${address}`;
   return {
     title: repositoryTitle(fullName),
     description: repositoryDescription(line),
@@ -67,7 +68,7 @@ export function repositoryHead(
     structuredData: repositoryStructuredData(origin, line, canonical, own),
     // The release in the address, so a new release's card is fetched afresh, not an old copy.
     image: {
-      url: `${origin}${cardPath(fullName, own)}?v=${encodeURIComponent(line.release.releaseId)}`,
+      url: `${origin}${cardPath(address, own)}?v=${encodeURIComponent(line.release.releaseId)}`,
       alt: `Accuracy against cost per task for each model setting on ${fullName}`,
     },
   };
@@ -159,20 +160,21 @@ function repositoryStructuredData(
 ): Record<string, unknown> {
   const { release } = line;
   const { fullName } = release.repository;
+  const address = resultsName(release);
   return resultsStructuredData({
     origin,
     canonical,
     crumbs: [
-      { name: fullName, item: `${origin}/${fullName}` },
+      { name: fullName, item: `${origin}/${address}` },
       ...(own ? [{ name: `Run by ${own}`, item: canonical }] : []),
     ],
     name: `${fullName} coding agent benchmark results${own ? ` run by ${own}` : ""}`,
     description: repositoryDescription(line, Number.POSITIVE_INFINITY),
     publisher: release.publisher,
     date: { datePublished: release.releasedAt },
-    // An eval has no repository behind it to name.
-    repositories: isEvalName(fullName) ? [] : [fullName],
-    contentUrl: `${origin}/api/public/results/${fullName}`,
+    // A public benchmark has no repository behind it to name.
+    repositories: release.benchmark ? [] : [fullName],
+    contentUrl: `${origin}/api/public/results/${address}`,
   });
 }
 

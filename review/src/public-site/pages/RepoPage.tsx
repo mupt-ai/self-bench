@@ -2,8 +2,8 @@ import { Star } from "lucide-react";
 import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
 import { useLocation, useNavigationType, useParams } from "react-router";
-import { isEvalName } from "../../../../src/contracts/evals";
-import { Avatar } from "../components/Avatar";
+import { pathName, resultsName } from "../../../../src/public/paths";
+import { LineMark } from "../components/Avatar";
 import {
   LayoutToggle,
   type ResultsLayout,
@@ -39,9 +39,12 @@ interface PageHead {
   tasks: number;
   settings: number;
   endorsed: boolean;
+  /** Set on a public benchmark's page, which has no repository to link to. */
+  benchmark?: { ref: string };
 }
 
 const headOf = (page: PublicRepoPage): PageHead => ({
+  ...(page.release.benchmark ? { benchmark: page.release.benchmark } : {}),
   repository: page.release.repository,
   ownerAvatarUrl: page.release.repository.ownerAvatarUrl,
   publisher: page.release.publisher,
@@ -52,6 +55,7 @@ const headOf = (page: PublicRepoPage): PageHead => ({
 });
 
 const headOfCard = (card: PublicRepoSummary): PageHead => ({
+  ...(card.benchmark ? { benchmark: card.benchmark } : {}),
   repository: card.repository,
   ownerAvatarUrl: card.repository.ownerAvatarUrl,
   publisher: card.publisher,
@@ -61,19 +65,24 @@ const headOfCard = (card: PublicRepoSummary): PageHead => ({
   endorsed: card.endorsed,
 });
 
-export function RepoPage() {
+/**
+ * A repository's results page, `/owner/name[/publisher]`, or with `benchmark` a public
+ * benchmark's, `/evals/org/name[/publisher]`: the same page, by its registry name.
+ */
+export function RepoPage({ benchmark = false }: { benchmark?: boolean }) {
   const { owner = "", name = "", publisher } = useParams();
   const source = useSource();
   const fullName = `${owner}/${name}`;
-  const key = pageKey(fullName, publisher);
+  const address = pathName({ owner, name, ...(benchmark ? { benchmark } : {}) });
+  const key = pageKey(address, publisher);
   const state = useLoad(
     key,
     // A read its card started as it was pressed, if there is one (page-preload.ts).
     () =>
       repoPages.take(key) ??
-      (publisher ? source.getLine(owner, name, publisher) : source.getRepo(owner, name)),
+      (publisher ? source.getLine(address, publisher) : source.getRepo(address)),
     // Runs of one repository share a group, so switching between them keeps the page up.
-    fullName.toLowerCase(),
+    address.toLowerCase(),
     repoPages.visited,
   );
   // While an opening flight is in the air, the body waits (transition-run.ts `holdBody`).
@@ -110,6 +119,7 @@ function Results({ head, page }: { head: PageHead; page?: PublicRepoPage }) {
   }, [release?.releaseId]);
   const { repository } = head;
   const [owner, name] = repository.fullName.split("/");
+  const address = resultsName(head);
   // The chart's pointer and vendor chips mark the same settings in the table, and the table
   // row under the pointer lights up its point.
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -165,13 +175,13 @@ function Results({ head, page }: { head: PageHead; page?: PublicRepoPage }) {
           ? "min-[90rem]:mx-[calc(50%_-_min(100vw_-_2*var(--edge)_-_2*var(--gutter),110rem)/2)]"
           : ""
       }`}
-      {...shownLine(`${repository.fullName}/${head.publisher.login}`)}
+      {...shownLine(`${address}/${head.publisher.login}`)}
     >
       <ResultHead
-        avatar={<Avatar src={head.ownerAvatarUrl} size={32} />}
+        avatar={<LineMark benchmark={!!head.benchmark} src={head.ownerAvatarUrl} size={32} />}
         title={
-          // An eval is its publisher's own scenarios: there is no repository to link to.
-          isEvalName(repository.fullName) ? (
+          // A public benchmark is the registry's: there is no repository to link to.
+          head.benchmark ? (
             <span className="block">
               {owner}/<wbr />
               {name}

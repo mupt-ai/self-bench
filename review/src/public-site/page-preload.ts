@@ -1,3 +1,4 @@
+import { resultsName } from "../../../src/public/paths";
 import type { PublicGroup, PublicGroupCard, PublicRepoPage, PublicRepoSummary } from "./contract";
 import type { PublicSource } from "./source";
 import { type LoadMemory, loadMemory } from "./use-load";
@@ -56,7 +57,7 @@ export const repoPages = preloads<PublicRepoSummary, PublicRepoPage>();
 /** Group pages, keyed by `groupKey`. */
 export const groupPages = preloads<PublicGroupCard, PublicGroup>();
 
-/** A repository page's key, from its address: the repository, and the publisher if named. */
+/** A repository page's key, from its address: its `resultsName`, and the publisher if named. */
 export const pageKey = (fullName: string, publisher?: string) => `${fullName}/${publisher ?? ""}`;
 
 /** A group page's key, as its cards and its page name it: also its line (marks.ts). */
@@ -65,9 +66,9 @@ export const groupKey = (publisher: string, slug: string) => `groups/${publisher
 /** Reads a repository card's page ahead: its default line, or the card's own with `byLine`. */
 export function preloadPage(source: PublicSource, card: PublicRepoSummary, byLine: boolean): void {
   const publisher = byLine ? card.publisher.login : undefined;
-  const [owner = "", name = ""] = card.repository.fullName.split("/");
-  repoPages.preload(pageKey(card.repository.fullName, publisher), card, () =>
-    publisher ? source.getLine(owner, name, publisher) : source.getRepo(owner, name),
+  const name = resultsName(card);
+  repoPages.preload(pageKey(name, publisher), card, () =>
+    publisher ? source.getLine(name, publisher) : source.getRepo(name),
   );
 }
 

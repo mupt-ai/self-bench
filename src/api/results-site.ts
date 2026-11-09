@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { resolve, sep } from "node:path";
-import { repositoryPath, segmentsOf } from "../public/paths.js";
+import { pathName, repositoryPath, segmentsOf } from "../public/paths.js";
 import type { PublishedRelease } from "../public/release-types.js";
 import { contentType, escapeAttribute, sendJson } from "./http.js";
 import { INDEXNOW_KEY_PATH, sendIndexNowKey } from "./indexnow.js";
@@ -170,7 +170,7 @@ export function createResultsSite(options: ResultsSiteOptions) {
       if (card) {
         const path = repositoryPath(segmentsOf(card[1] ?? ""));
         const lines = path
-          ? await options.publicRoutes.linesFor(`${path.owner}/${path.name}`).catch(() => [])
+          ? await options.publicRoutes.linesFor(pathName(path)).catch(() => [])
           : [];
         const release = path ? lineAt(lines, path.publisher)?.release : undefined;
         if (!release) {

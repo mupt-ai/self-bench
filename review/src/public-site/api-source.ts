@@ -80,12 +80,11 @@ export function apiSource(base = "", carried = carriedData()): PublicSource {
     }
     return directory;
   };
-  const repository = async (owner: string, name: string) =>
+  // `owner/name`, or a public benchmark's `evals/org/name`, each part encoded.
+  const repository = async (name: string) =>
     memorySource(
       await linesFrom(
-        answer(
-          `${base}/api/public/results/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`,
-        ),
+        answer(`${base}/api/public/results/${name.split("/").map(encodeURIComponent).join("/")}`),
       ),
     );
   const tasksOf = (releaseId: string) =>
@@ -97,9 +96,8 @@ export function apiSource(base = "", carried = carriedData()): PublicSource {
     getGroup: async (publisher, slug) =>
       (await answer<{ group: PublicGroup }>(`${base}/api/public${groupHref(publisher, slug)}`))
         ?.group,
-    getRepo: async (owner, name) => (await repository(owner, name)).getRepo(owner, name),
-    getLine: async (owner, name, publisher) =>
-      (await repository(owner, name)).getLine(owner, name, publisher),
+    getRepo: async (name) => (await repository(name)).getRepo(name),
+    getLine: async (name, publisher) => (await repository(name)).getLine(name, publisher),
     // A release's tasks never change, so each answer is kept for the visit.
     getTasks: (releaseId) =>
       kept(

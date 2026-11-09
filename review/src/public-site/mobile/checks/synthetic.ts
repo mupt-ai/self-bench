@@ -1,3 +1,4 @@
+import { resultsName } from "../../../../../src/public/paths";
 import type { PublicRepoPage, PublicSetting } from "../../contract";
 import { memorySource, type PublicSource } from "../../source";
 import { page, setting } from "../../test-fixture";
@@ -237,11 +238,12 @@ function syntheticPages(): PublicRepoPage[] {
       },
       true,
     ),
-    // An eval: a workspace's own scenarios, released as a repository is, with no GitHub behind it.
+    // A public benchmark: a registry dataset, listed apart from repositories, at /evals/….
     page({
-      releaseId: "synthetic-eval",
+      releaseId: "synthetic-benchmark",
       releasedAt: "2026-09-17T10:00:00Z",
-      repository: { id: 2001, fullName: "evals/terminal-scenarios" },
+      repository: { id: 2001, fullName: "laude-institute/terminal-bench" },
+      benchmark: { ref: "2.0" },
     }),
     page({
       releaseId: "synthetic-shared-community",
@@ -266,7 +268,7 @@ export function syntheticSource(): PublicSource {
  */
 export function syntheticRoutes(): string[] {
   const pages = syntheticPages();
-  const repositories = [...new Set(pages.map((entry) => entry.release.repository.fullName))];
+  const repositories = [...new Set(pages.map((entry) => resultsName(entry.release)))];
   const otherLines = pages
     .filter(
       (entry) =>
@@ -275,7 +277,7 @@ export function syntheticRoutes(): string[] {
           (other) => other.endorsed && other.release.repository.id === entry.release.repository.id,
         ),
     )
-    .map((entry) => `${entry.release.repository.fullName}/${entry.release.publisher.login}`);
+    .map((entry) => `${resultsName(entry.release)}/${entry.release.publisher.login}`);
   return [
     "/",
     "/?q=widgets",

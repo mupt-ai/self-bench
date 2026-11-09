@@ -1,4 +1,4 @@
-import { groupPath, repositoryPath, segmentsOf } from "../public/paths.js";
+import { BENCHMARKS, groupPath, pathName, repositoryPath, segmentsOf } from "../public/paths.js";
 import { groupHref } from "../public/release-groups.js";
 import { directoryViewAt } from "../public/seo.js";
 import type { PublicReleaseRoutes } from "./routes/public-releases.js";
@@ -56,12 +56,12 @@ export function sitePages(origin: string, publicRoutes: PublicReleaseRoutes) {
     }
     const path = repositoryPath(segments);
     if (!path) return { status: 404, head: notFoundHead(), body: notFoundBody() };
-    const fullName = `${path.owner}/${path.name}`;
+    const fullName = pathName(path);
     const lines = await publicRoutes.linesFor(fullName).catch(() => []);
     const head = repositoryHead(origin, lines, path.publisher);
     const body = repositoryBody(lines, path.publisher);
     // Addressed as the site asks for it: the path's own spelling, each part encoded.
-    const api = `/api/public/results/${encodeURIComponent(path.owner)}/${encodeURIComponent(path.name)}`;
+    const api = `/api/public/results/${path.benchmark ? `${BENCHMARKS}/` : ""}${encodeURIComponent(path.owner)}/${encodeURIComponent(path.name)}`;
     const data = pageData(api, await publicRoutes.repositoryBody(fullName).catch(() => undefined));
     return head && body
       ? { status: 200, head, body, data }

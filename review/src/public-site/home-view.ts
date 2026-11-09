@@ -1,3 +1,4 @@
+import { BENCHMARKS } from "../../../src/public/paths";
 import { directoryViewAt } from "./seo";
 
 /**
@@ -104,11 +105,14 @@ export function saveHomeNow(leavingFor?: string): void {
 export const isDirectoryPath = (path: string) => directoryViewAt(path) !== undefined;
 
 /**
- * What a path's page shows, if it is a results page: a repository ("owner/name"), or a
- * repository group ("groups/publisher/slug", which its cards and title name it by too).
+ * What a path's page shows, if it is a results page: a repository ("owner/name"), a public
+ * benchmark ("evals/org/name"), or a repository group ("groups/publisher/slug"), as its cards and
+ * title name it.
  */
 export function repositoryOf(path: string): string | undefined {
   const [owner, name, slug] = path.split("/").filter(Boolean);
-  if (owner === "groups") return name && slug ? `groups/${name}/${slug}` : undefined;
+  // A group's and a public benchmark's own pages name three parts: `groups/…`, `evals/org/name`.
+  if (owner === "groups" || owner === BENCHMARKS)
+    return name && slug ? `${owner}/${name}/${slug}` : undefined;
   return owner && name ? `${owner}/${name}` : undefined;
 }

@@ -1,4 +1,5 @@
 import { directoryOf } from "../../../src/public/directory";
+import { resultsName } from "../../../src/public/paths";
 import { groupCardOf } from "../../../src/public/release-groups";
 import type {
   PublicGroup,
@@ -19,10 +20,13 @@ export interface PublicSource {
   listRepos(): Promise<PublicRepoSummary[]>;
   /** Every release line as a card, newest first. Search shows one result per line. */
   listLines(): Promise<PublicRepoSummary[]>;
-  /** A repository's default line, or undefined when nothing has been released for it. */
-  getRepo(owner: string, name: string): Promise<PublicRepoPage | undefined>;
-  /** One publisher's line of a repository. */
-  getLine(owner: string, name: string, publisher: string): Promise<PublicRepoPage | undefined>;
+  /**
+   * A repository's (or public benchmark's) default line, by its address name (`resultsName`:
+   * `owner/name`, or `evals/org/name`), or undefined when nothing has been released for it.
+   */
+  getRepo(name: string): Promise<PublicRepoPage | undefined>;
+  /** One publisher's line of a repository or public benchmark. */
+  getLine(name: string, publisher: string): Promise<PublicRepoPage | undefined>;
   /** A release's tasks, or undefined when its publisher did not publish them. */
   getTasks(releaseId: string): Promise<PublicTask[] | undefined>;
   /** One published task's files, or undefined when the release has no such task. */
@@ -67,10 +71,8 @@ export function memorySource(
     [...candidates].sort((left, right) =>
       right.release.releasedAt.localeCompare(left.release.releasedAt),
     );
-  const linesOf = (owner: string, name: string) =>
-    newestFirst(
-      pages.filter((page) => sameName(page.release.repository.fullName, `${owner}/${name}`)),
-    );
+  const linesOf = (name: string) =>
+    newestFirst(pages.filter((page) => sameName(resultsName(page.release), name)));
   const defaultLine = (lines: readonly PublicRepoPage[]) =>
     lines.find((line) => line.endorsed) ?? lines[0];
   const withLines = (page: PublicRepoPage, lines: PublicRepoPage[]): PublicRepoPage => ({
@@ -94,13 +96,13 @@ export function memorySource(
     async listLines() {
       return cards();
     },
-    async getRepo(owner, name) {
-      const lines = linesOf(owner, name);
+    async getRepo(name) {
+      const lines = linesOf(name);
       const page = defaultLine(lines);
       return page ? withLines(page, lines) : undefined;
     },
-    async getLine(owner, name, publisher) {
-      const lines = linesOf(owner, name);
+    async getLine(name, publisher) {
+      const lines = linesOf(name);
       const page = lines.find((line) => sameName(line.release.publisher.login, publisher));
       return page ? withLines(page, lines) : undefined;
     },
