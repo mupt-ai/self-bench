@@ -3,8 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { FileTree } from "../../components/FileTree";
 import { firstFile } from "../../lib/task-model";
 import { FilePane } from "../components/TaskFileView";
-import { difficultyLabel } from "../components/TaskList";
-import type { PublicRelease, PublicTask, PublicTaskFiles } from "../contract";
+import { Difficulty } from "../components/TaskList";
+import type { PublicResults, PublicTask, PublicTaskFiles } from "../contract";
 import { useSource } from "../source-context";
 import { ViewerDialog } from "./ViewerDialog";
 import "./task-viewer.css";
@@ -21,7 +21,7 @@ export default function TaskViewer({
   onClose,
   onSwitch,
 }: {
-  release: PublicRelease;
+  release: PublicResults;
   taskId: string;
   onClose(): void;
   /** Shows another task of the release in the viewer's place. */
@@ -71,10 +71,13 @@ export default function TaskViewer({
   const files = current?.files?.files ?? [];
   const path = chosen?.taskId === taskId ? chosen.path : firstFile(files)?.path;
   const file = files.find((entry) => entry.path === path);
-  const repository = release.repository.fullName;
+  // A group's task is its member repository's; a public benchmark's name is the registry's, not a
+  // repository on GitHub, so its tasks have none here.
+  const repository =
+    task?.repository ?? (release.benchmark ? undefined : release.repository?.fullName);
   const prUrl =
     task?.sourceUrl ??
-    (task?.sourcePr !== undefined
+    (task?.sourcePr !== undefined && repository
       ? `https://github.com/${repository}/pull/${task.sourcePr}`
       : undefined);
 
@@ -91,7 +94,7 @@ export default function TaskViewer({
           <h2 id="task-title" className="min-w-0 font-mono text-base font-medium wrap-anywhere">
             {taskId}
           </h2>
-          {task && <span className="text-xs text-muted-foreground">{difficultyLabel(task)}</span>}
+          {task && <Difficulty task={task} />}
           {prUrl && (
             <a
               href={prUrl}

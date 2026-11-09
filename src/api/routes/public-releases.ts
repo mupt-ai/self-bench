@@ -147,6 +147,16 @@ export function createPublicReleaseRoutes(
         sendJson(response, 405, { error: "Method not allowed" });
         return true;
       }
+      const [, , route, ...rest] = segmentsOf(url.pathname);
+      const releaseTasks = route === "releases" && rest[1] === "tasks";
+      // The aggregate results are the same for everyone and carry no session, so a page on any
+      // site may read them, refusals included: a page must be able to tell a withdrawn release
+      // (404) or its own excess (429) from a failed request. A release's tasks stay readable
+      // only from this site, as they stay out of crawls.
+      if (!releaseTasks) {
+        response.setHeader("access-control-allow-origin", "*");
+        response.setHeader("access-control-expose-headers", "ETag, Retry-After");
+      }
       const verdict = options.limiter?.take(clientIp(request)) ?? { ok: true };
       if (!verdict.ok) {
         uncached();
@@ -154,10 +164,9 @@ export function createPublicReleaseRoutes(
         sendJson(response, 429, { error: "Too many requests; try again shortly" });
         return true;
       }
-      const [, , route, ...rest] = segmentsOf(url.pathname);
       // A release's tasks, served only while it is a current release that published them, and
       // its trials only while it also published those.
-      if (route === "releases" && rest[1] === "tasks") {
+      if (releaseTasks) {
         const release = (await snapshot()).byRelease.get(rest[0] ?? "");
         if (tasks && release?.tasksPublished) {
           await tasks.handle(request, response, release, rest.slice(2));

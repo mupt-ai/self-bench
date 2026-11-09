@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, getTableColumns, isNotNull, isNull, or, type SQL, sql } from "drizzle-orm";
-import type { GroupReleasePayload, PublishedGroup } from "../public/release-groups.js";
+import type { GroupMember, GroupReleasePayload, PublishedGroup } from "../public/release-groups.js";
 import type { ReleaseTask } from "../public/release-rule.js";
 import { endpointHostsOf, type ReleasedResults } from "../public/release-trials.js";
 import type { PublishedLine, PublishedRelease, ReleasePayload } from "../public/release-types.js";
@@ -206,23 +206,29 @@ export function createReleaseStore(db: Database, options: { now?: () => Date } =
     },
     /**
      * Each setting's result on each task of a release (`detail.results`), with the line, whose
-     * repository holds the trials; undefined when there is no such row. Private: callers serve
-     * only what a release that published its trials allows.
+     * runs hold the trials; undefined when there is no such row. Private: callers serve only what
+     * a release that published its trials allows.
      */
     async releasedResults(id: string): Promise<ReleasedResults | undefined> {
       const [row] = await db
         .select({
           orgId: releases.orgId,
           githubRepoId: releases.githubRepoId,
+          groupId: releases.groupId,
+          benchmarkId: releases.benchmarkId,
+          members: sql<unknown>`${releases.payload} -> 'members'`,
           results: sql<unknown>`${releases.detail} -> 'results'`,
           settingsDetail: sql<unknown>`${releases.detail} -> 'settingsDetail'`,
         })
         .from(releases)
         .where(eq(releases.id, id));
-      // A group's release publishes no trials.
-      if (!row || row.githubRepoId === null) return undefined;
+      if (!row) return undefined;
+      // A group's release records its members, whose own runs it counted.
+      const members = Array.isArray(row.members)
+        ? (row.members as GroupMember[]).map((member) => member.repository.id)
+        : undefined;
       return {
-        line: { orgId: row.orgId, githubRepoId: row.githubRepoId },
+        line: { ...lineOfRow(row), ...(members ? { members } : {}) },
         results:
           row.results && typeof row.results === "object"
             ? (row.results as ReleasedResults["results"])

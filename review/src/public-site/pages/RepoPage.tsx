@@ -10,8 +10,7 @@ import {
   readResultsLayout,
   rememberResultsLayout,
 } from "../components/LayoutToggle";
-import { OpenTask } from "../components/OpenTask";
-import { OpenTrace } from "../components/OpenTrace";
+import { ReleaseViewers } from "../components/ReleaseSections";
 import { ResultHead } from "../components/ResultHead";
 import type { PublicPublisher, PublicRepoPage, PublicRepoSummary } from "../contract";
 import { pageBody, shownLine } from "../effects/marks";
@@ -233,8 +232,7 @@ function Results({ head, page }: { head: PageHead; page?: PublicRepoPage }) {
           onRowHover={setRowId}
         />
       )}
-      {release?.tasksPublished && <OpenTask release={release} />}
-      {release?.trialsPublished && <OpenTrace release={release} />}
+      {release && <ReleaseViewers release={release} />}
     </article>
   );
 }

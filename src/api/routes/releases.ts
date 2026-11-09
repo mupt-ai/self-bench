@@ -7,14 +7,19 @@ import type { UserStore } from "../../db/users.js";
 import { catalogVersion } from "../../evaluation/catalog.js";
 import { readModelSummaries } from "../../evaluation/model-summary.js";
 import { track } from "../../lib/telemetry/posthog.js";
-import { type BuiltRelease, buildRelease, ReleaseRefused } from "../../public/release-build.js";
 import {
   type GitHubRepository,
   lookupRepositoryById,
   releaseInputs,
 } from "../../public/release-sources.js";
 import { GitHubOAuthError } from "../../third_party/github/oauth.js";
-import { createLineRoutes, type LineKind } from "./release-line.js";
+import {
+  buildRequested,
+  createLineRoutes,
+  isReply,
+  type LineKind,
+  publisherOf,
+} from "./release-line.js";
 
 const NAME = "[A-Za-z0-9_.-]+";
 /** `[org, owner/name, section?, action?]`. */
@@ -88,28 +93,11 @@ export function createReleaseRoutes(options: ReleaseRoutesOptions) {
       // Checked live: the repository may have turned private since it was connected.
       if (!github || github.private)
         return [400, { error: "Only public repositories can be released." }];
-      const { report } = gathered;
-      if (body.publishSummaries && !report)
-        return [
-          400,
-          {
-            error:
-              "There are no model summaries to publish. Summarize models on the Results page first.",
-          },
-        ];
-      let built: BuiltRelease;
-      try {
-        built = buildRelease(gathered.inputs, body.settings, {
-          repository: { id: github.id, fullName: github.fullName },
-          publisher: { login: tenant.login, kind: tenant.kind },
-          publishTasks: body.publishTasks === true,
-          publishTrials: body.publishTrials === true,
-          ...(body.publishSummaries && report ? { summaries: report } : {}),
-        });
-      } catch (error) {
-        if (!(error instanceof ReleaseRefused)) throw error;
-        return [400, { error: error.message }];
-      }
+      const built = buildRequested(gathered, body, {
+        repository: { id: github.id, fullName: github.fullName },
+        publisher: { login: tenant.login, kind: tenant.kind },
+      });
+      if (isReply(built)) return built;
       const { private: isPrivate, archived, ...repository } = github;
       return {
         fullName: github.fullName,
@@ -117,10 +105,7 @@ export function createReleaseRoutes(options: ReleaseRoutesOptions) {
         payload: {
           ...built.payload,
           repository: { ...repository, ...built.payload.repository },
-          publisher: {
-            ...built.payload.publisher,
-            ...(tenant.avatarUrl ? { avatarUrl: tenant.avatarUrl } : {}),
-          },
+          publisher: publisherOf(tenant),
         },
         detail: {
           ...built.detail,

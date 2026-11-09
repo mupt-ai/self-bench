@@ -1,6 +1,6 @@
 import { type RefObject, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
-import type { PublicRelease, PublicTask } from "../contract";
+import type { PublicResults, PublicTask } from "../contract";
 import { revealGroup } from "../effects/marks";
 import { PANEL } from "../frame";
 import { canHover } from "../mobile/device";
@@ -21,9 +21,16 @@ export interface OpenedTask {
   fromList: true;
 }
 
-/** "Easy", "Medium", or "Hard". */
-export const difficultyLabel = (task: Pick<PublicTask, "difficulty">) =>
-  task.difficulty.charAt(0).toUpperCase() + task.difficulty.slice(1);
+/** A task's difficulty, "Easy", "Medium", or "Hard"; nothing for a public benchmark's task. */
+export function Difficulty({ task }: { task: Pick<PublicTask, "difficulty"> }) {
+  const { difficulty } = task;
+  if (!difficulty) return null;
+  return (
+    <span className="text-xs text-muted-foreground">
+      {difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}
+    </span>
+  );
+}
 
 /** Whether `element` is on screen or within `AHEAD` of it; true from then on. */
 export function useNear(element: RefObject<HTMLElement | null>): boolean {
@@ -51,7 +58,7 @@ export function useNear(element: RefObject<HTMLElement | null>): boolean {
  * A release's tasks, read once `enabled` (the section is near the screen). They stay with their
  * release, so another release's page never shows them; `retry` asks again after a failure.
  */
-export function useReleaseTasks(release: PublicRelease, enabled: boolean) {
+export function useReleaseTasks(release: PublicResults, enabled: boolean) {
   const source = useSource();
   const [read, setRead] = useState<{
     releaseId: string;
@@ -85,7 +92,7 @@ export function useReleaseTasks(release: PublicRelease, enabled: boolean) {
  * shows its files and offers it as a download. Nothing is read until the list nears the screen,
  * and a task's files are read as it is pointed at, pressed, or focused, before it is opened.
  */
-export function TaskList({ release }: { release: PublicRelease }) {
+export function TaskList({ release }: { release: PublicResults }) {
   const source = useSource();
   const section = useRef<HTMLElement>(null);
   const { tasks, failed, retry } = useReleaseTasks(release, useNear(section));
@@ -132,10 +139,11 @@ export function TaskList({ release }: { release: PublicRelease }) {
                     className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm hover:bg-muted touch:py-3"
                   >
                     <span className="min-w-0 font-mono font-medium wrap-anywhere">{task.id}</span>
-                    <span className="text-xs text-muted-foreground">{difficultyLabel(task)}</span>
+                    <Difficulty task={task} />
                     {task.sourcePr !== undefined && (
-                      <span className="ml-auto font-mono text-xs text-muted-foreground">
-                        PR #{task.sourcePr}
+                      <span className="ml-auto font-mono text-xs text-muted-foreground wrap-anywhere">
+                        {/* A group's task names its member, whose pull request it is. */}
+                        {task.repository ? `${task.repository} ` : ""}PR #{task.sourcePr}
                       </span>
                     )}
                   </Link>

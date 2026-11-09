@@ -7,6 +7,7 @@ import {
   isScenarioTask,
   isSnapshot,
   snapshotCommand,
+  sourceRepository,
   type TaskFile,
 } from "../task-files";
 
@@ -19,7 +20,8 @@ export function FilePane({
 }: {
   file: TaskFile;
   files: readonly TaskFile[];
-  repository: string;
+  /** The repository the page's tasks build from; none for a public benchmark's. */
+  repository: string | undefined;
   taskId: string;
 }) {
   return (
@@ -39,7 +41,7 @@ function NotShown({
 }: {
   file: TaskFile;
   files: readonly TaskFile[];
-  repository: string;
+  repository: string | undefined;
   taskId: string;
 }) {
   if (!isSnapshot(file.path))
@@ -61,6 +63,8 @@ function NotShown({
       </div>
     );
   const commit = baseCommit(files);
+  // The repository the task names itself, else the page's: a public benchmark's has none to name.
+  const source = sourceRepository(files) ?? repository;
   return (
     <div className="flex flex-col gap-3 px-4 py-3">
       <p className="max-w-3xl">
@@ -68,7 +72,7 @@ function NotShown({
         {formatBytes(file.sizeBytes)}). Both of its copies, in environment/ and tests/, are left out
         of the download; this command, run where you unpacked it, recreates them exactly.
       </p>
-      {commit && <Command text={snapshotCommand(repository, commit, taskId)} />}
+      {commit && source && <Command text={snapshotCommand(source, commit, taskId)} />}
     </div>
   );
 }

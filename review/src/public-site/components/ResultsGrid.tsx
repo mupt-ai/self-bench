@@ -4,7 +4,7 @@ import { ResultsMatrix, type ResultsMatrixRow } from "../../web/ResultsMatrix";
 
 export { resultMark } from "../../web/ResultsMatrix";
 
-import type { PublicRelease } from "../contract";
+import type { PublicResults } from "../contract";
 import { revealGroup } from "../effects/marks";
 import { harnessLabel, reasoningLabel, settingLabel, vendorColor } from "../format";
 import { resultsGrid } from "../results-grid";
@@ -28,7 +28,7 @@ export function ResultsGrid({
   release,
   activeId = null,
 }: {
-  release: PublicRelease;
+  release: PublicResults;
   /** The setting the chart or the settings table is pointing at, marked here too. */
   activeId?: string | null;
 }) {

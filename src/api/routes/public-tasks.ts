@@ -51,7 +51,8 @@ export function publishedTasks(
         key: task.key,
         task: {
           id: count === 1 ? task.taskId : `${task.taskId}~${count}`,
-          difficulty: task.difficulty,
+          ...(task.difficulty ? { difficulty: task.difficulty } : {}),
+          ...(task.repository ? { repository: task.repository } : {}),
           ...(task.sourcePr !== undefined ? { sourcePr: task.sourcePr } : {}),
           ...(task.sourceUrl ? { sourceUrl: task.sourceUrl } : {}),
         },

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { baseCommit, isSnapshot, snapshotCommand } from "./task-files";
+import { baseCommit, isSnapshot, snapshotCommand, sourceRepository } from "./task-files";
 
 const files = [
   { path: "environment/Dockerfile", sizeBytes: 10, text: "FROM node\n" },
@@ -32,4 +32,14 @@ test("the snapshot command fetches the base commit and archives it into both pla
   expect(numbered).toContain("git init -q 'nextjs-pr-1~2/.snapshot' && ");
   expect(numbered).toContain("  rm -rf 'nextjs-pr-1~2/.snapshot'");
   expect(baseCommit([])).toBeUndefined();
+});
+
+test("a task names the repository it builds from in its task.toml, when it does", () => {
+  const toml = (text: string) => [{ path: "task.toml", sizeBytes: text.length, text }];
+  expect(sourceRepository(toml('[metadata]\nrepo = "example-org/widgets"\n'))).toBe(
+    "example-org/widgets",
+  );
+  // A registry task need not: its page then offers no command to rebuild a snapshot.
+  expect(sourceRepository(toml('[task]\nname = "terminal-bench/hello"\n'))).toBeUndefined();
+  expect(sourceRepository([])).toBeUndefined();
 });

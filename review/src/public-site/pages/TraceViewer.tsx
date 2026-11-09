@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { TrialDetails } from "../../web/evaluation/TrialDetails";
 import { resultMark } from "../components/ResultsGrid";
 import { TrialGrading } from "../components/TrialGrading";
-import type { PublicRelease, PublicTrial } from "../contract";
+import type { PublicResults, PublicTrial } from "../contract";
 import { dollars, harnessLabel, reasoningLabel, settingLabel } from "../format";
 import { useSource } from "../source-context";
 import { ViewerDialog } from "./ViewerDialog";
@@ -21,7 +21,7 @@ export default function TraceViewer({
   onClose,
   onOpenTask,
 }: {
-  release: PublicRelease;
+  release: PublicResults;
   taskId: string;
   settingId: string;
   onClose(): void;

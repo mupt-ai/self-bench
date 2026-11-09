@@ -17,6 +17,7 @@ import { credentials } from "../src/db/schema.js";
 import { createTaskStore } from "../src/db/tasks.js";
 import { createUserStore } from "../src/db/users.js";
 import { saveEvaluation } from "../src/evaluation/store.js";
+import { releasedTrials } from "../src/public/release-sources.js";
 import { full, names } from "./support/release-fixture.js";
 import { sessionFetch } from "./support/session-fetch.js";
 import { type TestDatabase, testAuthConfig, testDatabase } from "./support/site-fixture.js";
@@ -58,7 +59,10 @@ beforeAll(async () => {
     await saveEvaluation(artifacts, { ...run, benchmarkId: benchmark.id });
   }
   const releases = createReleaseStore(database.db);
-  const publicRoutes = createPublicReleaseRoutes(releases);
+  const publicRoutes = createPublicReleaseRoutes(releases, {
+    artifacts,
+    trials: releasedTrials(database.db, artifacts),
+  });
   let routes: ReturnType<typeof createBenchmarkReleaseRoutes> | undefined;
   let evaluations: ReturnType<typeof createEvaluationRoutes> | undefined;
   const auth = createSiteAuth({
@@ -118,14 +122,9 @@ async function release(extra: Record<string, unknown> = {}) {
   return request(base, { method: "POST", body: JSON.stringify({ ...body, ...extra }) });
 }
 
-test("a public benchmark publishes its scores alone", async () => {
-  const refused = await release({ publishTasks: true });
-  expect(refused.status).toBe(400);
-  expect((await refused.json()).error).toBe("A public benchmark publishes its scores only.");
-});
-
-test("a public benchmark is released and served under /evals, marked as one", async () => {
-  const response = await release();
+test("a public benchmark is released with its tasks and trials, under /evals, marked as one", async () => {
+  // Its tasks and each setting's trial on them, as a repository's release publishes them.
+  const response = await release({ publishTasks: true, publishTrials: true });
   expect(response.status).toBe(201);
   expect((await response.json()).release).toMatchObject({ tasks: 3, settings: 2, current: true });
   expect(changed.at(-1)).toEqual(["/evals", `/evals/${NAME}`, `/evals/${NAME}/acme`]);
@@ -139,7 +138,17 @@ test("a public benchmark is released and served under /evals, marked as one", as
     benchmark: { ref: "2.0" },
     tasks: 3,
   });
-  expect(line.release.tasksPublished).toBeUndefined();
+  expect(line.release).toMatchObject({ tasksPublished: true, trialsPublished: true });
+  const tasks = `/api/public/releases/${line.release.releaseId}/tasks`;
+  const listed = (await (await request(tasks, {}, null)).json()).tasks;
+  // A registry task has no difficulty, and every setting passed each one.
+  expect(listed.map((task: { id: string }) => task.id)).toEqual(["t1", "t2", "t3"]);
+  expect(listed[0].difficulty).toBeUndefined();
+  expect(Object.values(listed[0].passed)).toEqual([true, true]);
+  const [setting] = Object.keys(listed[0].passed);
+  const trial = await request(`${tasks}/t1/trials/${setting}`, {}, null);
+  expect(trial.status).toBe(200);
+  expect(await trial.json()).toMatchObject({ taskId: "t1", settingId: setting, passed: true });
   // Not a repository's page, though a repository could have the same name.
   expect((await request(`/api/public/results/${NAME}`, {}, null)).status).toBe(404);
   const directory = await (await request("/api/public/results", {}, null)).json();

@@ -11,7 +11,13 @@ import {
 } from "../../db/releases.js";
 import type { Org, User, UserStore } from "../../db/users.js";
 import type { ModelSummaryReport } from "../../evaluation/model-summary.js";
-import { previewRelease, type ReleaseInputs } from "../../public/release-build.js";
+import {
+  type BuiltRelease,
+  buildRelease,
+  previewRelease,
+  type ReleaseInputs,
+  ReleaseRefused,
+} from "../../public/release-build.js";
 import { type ReleaseList, summaryOf, viewOf } from "../../public/release-views.js";
 import { GitHubOAuthError } from "../../third_party/github/oauth.js";
 import { tenantFor } from "../auth/tenant.js";
@@ -88,7 +94,47 @@ export interface LineRoutesOptions {
   readonly resultsSiteUrl: string | null;
 }
 
-const isReply = (value: Built | Reply): value is Reply => Array.isArray(value);
+/** Whether a step answered with a reply that ends the release, rather than its result. */
+export const isReply = <T extends object>(value: T | Reply): value is Reply => Array.isArray(value);
+
+/**
+ * Builds the release of the ticked settings with what the request asks to publish beyond them:
+ * the tasks, their trials, and the latest Model Summaries report's sections. Every kind of line
+ * builds it the same way, then adds its own card metadata; a request it cannot meet is refused.
+ */
+export function buildRequested(
+  gathered: Gathered,
+  body: ReleaseRequest,
+  context: Pick<Parameters<typeof buildRelease>[2], "repository" | "publisher">,
+): BuiltRelease | Reply {
+  const { report } = gathered;
+  if (body.publishSummaries && !report)
+    return [
+      400,
+      {
+        error:
+          "There are no model summaries to publish. Summarize models on the Results page first.",
+      },
+    ];
+  try {
+    return buildRelease(gathered.inputs, body.settings, {
+      ...context,
+      publishTasks: body.publishTasks === true,
+      publishTrials: body.publishTrials === true,
+      ...(body.publishSummaries && report ? { summaries: report } : {}),
+    });
+  } catch (error) {
+    if (!(error instanceof ReleaseRefused)) throw error;
+    return [400, { error: error.message }];
+  }
+}
+
+/** The publisher as a release names it: the workspace, with its avatar when it has one. */
+export const publisherOf = (tenant: Org) => ({
+  login: tenant.login,
+  kind: tenant.kind,
+  ...(tenant.avatarUrl ? { avatarUrl: tenant.avatarUrl } : {}),
+});
 
 /**
  * A line's Releases tab: its list, the preview a release must match, the release itself, and

@@ -16,27 +16,45 @@ export interface Publish {
  */
 export const PUBLISH_DEFAULTS: Publish = { tasks: true, trials: false, summaries: false };
 
+/**
+ * What a release is of, as its privacy note names it: a repository, a group and its repositories,
+ * or a public benchmark, whose tasks have no pull requests.
+ */
+export interface ReleaseSubject {
+  name: string;
+  pullRequests: boolean;
+}
+
+export const REPOSITORY_SUBJECT: ReleaseSubject = { name: "the repository", pullRequests: true };
+
 /** What becomes public and what stays private, shown on the info icon beside the summary. */
 export function privacyNote(
   workspace: { login: string; kind: "org" | "user" },
   publish: Publish,
+  subject: ReleaseSubject = REPOSITORY_SUBJECT,
 ): string {
-  const note = scopeNote(workspace, publish);
+  const note = scopeNote(workspace, publish, subject);
   return publish.summaries
     ? `${note} Also public: a model's summary of each covered setting's strengths and failures.`
     : note;
 }
 
-function scopeNote(workspace: { login: string; kind: "org" | "user" }, publish: Publish): string {
+function scopeNote(
+  workspace: { login: string; kind: "org" | "user" },
+  publish: Publish,
+  subject: ReleaseSubject,
+): string {
   const publisher =
     workspace.kind === "user"
       ? `you as publisher, under your GitHub username ${workspace.login}`
       : `the ${workspace.login} workspace as publisher`;
+  const scored = `Public: ${subject.name}, ${publisher}, each setting's model, harness, accuracy, and cost`;
+  const tasks = `each task with its ${subject.pullRequests ? "pull request, " : ""}instruction, tests, and solution`;
   if (publish.tasks && publish.trials)
-    return `Public: the repository, ${publisher}, each setting's model, harness, accuracy, and cost, each task with its pull request, instruction, tests, and solution, and each setting's result, grading, test output, and transcript on each task, with secrets redacted. Private: the rest of Harbor's logs, artifacts, endpoint hosts, and who pressed Release.`;
+    return `${scored}, ${tasks}, and each setting's result, grading, test output, and transcript on each task, with secrets redacted. Private: the rest of Harbor's logs, artifacts, endpoint hosts, and who pressed Release.`;
   return publish.tasks
-    ? `Public: the repository, ${publisher}, each setting's model, harness, accuracy, and cost, and each task with its pull request, instruction, tests, and solution. Private: per-task results, transcripts, endpoint hosts, and who pressed Release.`
-    : `Public: the repository, ${publisher}, and each setting's model, harness, accuracy, and cost. Private: which tasks and pull requests were used, per-task results, transcripts, endpoint hosts, and who pressed Release.`;
+    ? `${scored}, and ${tasks}. Private: per-task results, transcripts, endpoint hosts, and who pressed Release.`
+    : `${scored}. Private: which tasks${subject.pullRequests ? " and pull requests" : ""} were used, per-task results, transcripts, endpoint hosts, and who pressed Release.`;
 }
 
 /**
