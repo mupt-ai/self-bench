@@ -115,6 +115,8 @@ test("a public benchmark's page links its lines, and names no repository", () =>
   expect(head?.canonical).toBe(`${origin}/evals/laude-institute/terminal-bench/marco`);
   const data = JSON.stringify(head?.structuredData);
   expect(data).not.toContain("codeRepository");
+  expect(data).not.toContain("pull requests");
+  expect(data).toContain('"name":"Public Benchmarks","item":"https://selfbench.dev/evals"');
   // The full description, which the 160-character one shortens.
   expect(data).toContain("scored on 4 tasks from the benchmark.");
   const body = repositoryBody([acme, marco], "marco") ?? "";
@@ -132,4 +134,8 @@ test("the sitemap lists the benchmarks' pages, and their view once there is one"
   expect(sitemap).toContain(`<loc>${origin}/evals/laude-institute/terminal-bench</loc>`);
   expect(sitemap).toContain(`<loc>${origin}/evals/laude-institute/terminal-bench/marco</loc>`);
   expect(sitemap).toContain(`<loc>${origin}/laude-institute/terminal-bench</loc>`);
+  // The home page lists the repository alone, so it is dated by the repository's release.
+  expect(sitemap).toContain(
+    `<url><loc>${origin}/</loc><lastmod>2026-09-02T00:00:00Z</lastmod></url>`,
+  );
 });

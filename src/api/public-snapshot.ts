@@ -1,6 +1,6 @@
 import { directoryOf } from "../public/directory.js";
 import { resultsName } from "../public/paths.js";
-import { groupCardOf, type PublishedGroup } from "../public/release-groups.js";
+import { groupCardOf, groupLogoHref, type PublishedGroup } from "../public/release-groups.js";
 import type { PublishedLine, PublishedRelease } from "../public/release-types.js";
 import { type TaggedBody, tagged } from "./tagged.js";
 
@@ -25,6 +25,8 @@ export interface Snapshot {
   group: (publisher: string, slug: string) => PublishedGroup | undefined;
   /** One group's response, or undefined when it has nothing to show. */
   groupBody: (publisher: string, slug: string) => TaggedBody | undefined;
+  /** One group's logo as its publisher uploaded it (a data URL), or undefined when it has none. */
+  logo: (publisher: string, slug: string) => string | undefined;
 }
 
 /** `build`, run once on first use. */
@@ -59,11 +61,15 @@ export function snapshotOf(lines: PublishedLine[], released: PublishedGroup[] = 
     const key = resultsName(line.release).toLowerCase();
     byRepository.set(key, [...(byRepository.get(key) ?? []), line]);
   }
-  // A deleted group's address can be reused; only the newest release at an address is shown.
+  // A deleted group's address can be reused; only the newest release at an address is shown. Its
+  // logo is served on its own (`logo`), so what is served of the group names only its address.
   const byGroup = new Map<string, PublishedGroup>();
+  const logos = new Map<string, string>();
   for (const group of groups) {
     const key = groupKey(group.publisher.login, group.slug);
-    if (!byGroup.has(key)) byGroup.set(key, group);
+    if (byGroup.has(key)) continue;
+    if (group.logo) logos.set(key, group.logo);
+    byGroup.set(key, group.logo ? { ...group, logo: groupLogoHref(group) } : group);
   }
   groups = [...byGroup.values()];
   const repositoryBodies = keptBodies<{ lines: PublishedLine[] }>();
@@ -83,6 +89,7 @@ export function snapshotOf(lines: PublishedLine[], released: PublishedGroup[] = 
       return repositoryBodies(key, found && { lines: found });
     },
     group,
+    logo: (publisher, slug) => logos.get(groupKey(publisher, slug)),
     groupBody(publisher, slug) {
       const found = group(publisher, slug);
       return groupBodies(groupKey(publisher, slug), found && { group: found });

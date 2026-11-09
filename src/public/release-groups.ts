@@ -96,6 +96,14 @@ export function isGroupLogo(value: string): boolean {
   return Math.floor(((match[2]?.length ?? 0) * 3) / 4) <= GROUP_LOGO.maxBytes;
 }
 
+/**
+ * Where a released group's logo is served (public-releases.ts), so pages carry this short
+ * address rather than the image: a directory of many groups would otherwise carry every image.
+ * The release id in it changes with the logo, so an old one is never shown in its place.
+ */
+export const groupLogoHref = (group: Pick<PublishedGroup, "publisher" | "slug" | "releaseId">) =>
+  `/api/public${groupHref(group.publisher.login, group.slug)}/logo?v=${encodeURIComponent(group.releaseId)}`;
+
 /** A group's address on selfbench.dev, in its publisher's own spelling. */
 export const groupHref = (publisher: string, slug: string) =>
   `/groups/${encodeURIComponent(publisher)}/${encodeURIComponent(slug)}`;

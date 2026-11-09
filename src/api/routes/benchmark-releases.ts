@@ -113,7 +113,8 @@ export function createBenchmarkReleaseRoutes(options: BenchmarkReleaseRoutesOpti
     },
     changed(tenant, row, user, released) {
       const page = `/${BENCHMARKS}/${row.fullName}`;
-      options.onPublicChange?.(["/", `/${BENCHMARKS}`, page, `${page}/${row.publisherLogin}`]);
+      // Its page, the publisher's line, and the Public Benchmarks view; the home page lists none.
+      options.onPublicChange?.([`/${BENCHMARKS}`, page, `${page}/${row.publisherLogin}`]);
       if (released) track(user, "benchmark release published", { benchmark: row.fullName }, tenant);
     },
   };

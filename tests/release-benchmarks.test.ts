@@ -6,12 +6,15 @@ import { join } from "node:path";
 import { sendApiError } from "../src/api/http.js";
 import { createSiteAuth } from "../src/api/routes/auth.js";
 import { createBenchmarkReleaseRoutes } from "../src/api/routes/benchmark-releases.js";
+import { createEvaluationRoutes } from "../src/api/routes/evaluations.js";
 import { createPublicReleaseRoutes } from "../src/api/routes/public-releases.js";
 import { LocalArtifactStore } from "../src/artifacts/index.js";
 import { createApiKeyStore } from "../src/db/api-keys.js";
 import { createBenchmarkStore } from "../src/db/benchmarks.js";
 import { createReleaseStore } from "../src/db/releases.js";
+import { createRepoStore } from "../src/db/repos.js";
 import { credentials } from "../src/db/schema.js";
+import { createTaskStore } from "../src/db/tasks.js";
 import { createUserStore } from "../src/db/users.js";
 import { saveEvaluation } from "../src/evaluation/store.js";
 import { full, names } from "./support/release-fixture.js";
@@ -57,6 +60,7 @@ beforeAll(async () => {
   const releases = createReleaseStore(database.db);
   const publicRoutes = createPublicReleaseRoutes(releases);
   let routes: ReturnType<typeof createBenchmarkReleaseRoutes> | undefined;
+  let evaluations: ReturnType<typeof createEvaluationRoutes> | undefined;
   const auth = createSiteAuth({
     config: testAuthConfig,
     users,
@@ -68,8 +72,9 @@ beforeAll(async () => {
       const url = new URL(incoming.url ?? "/", origin);
       if (await publicRoutes.handle(incoming, url, response)) return;
       const user = await auth.authenticate(incoming);
-      if (!user || !routes) return void response.writeHead(401).end();
-      if (!(await routes.handle(incoming, url, response, user))) response.writeHead(404).end();
+      if (!user || !routes || !evaluations) return void response.writeHead(401).end();
+      if (await routes.handle(incoming, url, response, user)) return;
+      if (!(await evaluations.handle(incoming, url, response, user))) response.writeHead(404).end();
     } catch (error) {
       sendApiError(response, error);
     }
@@ -85,6 +90,17 @@ beforeAll(async () => {
     onPublicChange: (paths) => {
       changed.push(paths);
       publicRoutes.refresh();
+    },
+  });
+  evaluations = createEvaluationRoutes({
+    ...{ users, repos: createRepoStore(database.db), tasks: createTaskStore(database.db) },
+    ...{ artifacts, benchmarks, publicUrl: origin, start: async () => {}, stop: async () => {} },
+    publicLines: {
+      store: releases,
+      changed: (paths) => {
+        changed.push(paths);
+        publicRoutes.refresh();
+      },
     },
   });
 });
@@ -112,7 +128,7 @@ test("a public benchmark is released and served under /evals, marked as one", as
   const response = await release();
   expect(response.status).toBe(201);
   expect((await response.json()).release).toMatchObject({ tasks: 3, settings: 2, current: true });
-  expect(changed.at(-1)).toEqual(["/", "/evals", `/evals/${NAME}`, `/evals/${NAME}/acme`]);
+  expect(changed.at(-1)).toEqual(["/evals", `/evals/${NAME}`, `/evals/${NAME}/acme`]);
 
   const served = await request(`/api/public/results/evals/${NAME}`, {}, null);
   expect(served.status).toBe(200);
@@ -129,4 +145,12 @@ test("a public benchmark is released and served under /evals, marked as one", as
   const directory = await (await request("/api/public/results", {}, null)).json();
   expect(directory.cards).toHaveLength(1);
   expect(directory.cards[0]).toMatchObject({ benchmark: { ref: "2.0" }, defaultLine: true });
+});
+
+test("deleting a public benchmark takes its results off selfbench.dev", async () => {
+  expect((await request(`/api/public/results/evals/${NAME}`, {}, null)).status).toBe(200);
+  const deleted = await request(`/api/orgs/acme/benchmarks/${NAME}`, { method: "DELETE" });
+  expect(deleted.status).toBe(200);
+  expect(changed.at(-1)).toEqual(["/evals", `/evals/${NAME}`, `/evals/${NAME}/acme`]);
+  expect((await request(`/api/public/results/evals/${NAME}`, {}, null)).status).toBe(404);
 });

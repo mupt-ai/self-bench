@@ -74,9 +74,11 @@ export function repositoryHead(
   };
 }
 
-/** How SelfBench measures, for the Dataset of a repository or a group. */
+/** How SelfBench measures, for the Dataset of a repository or a group, or a public benchmark. */
 const MEASUREMENT_TECHNIQUE =
   "Tasks built from the repository's merged pull requests, each scored by hidden tests";
+const BENCHMARK_TECHNIQUE =
+  "The public benchmark's own tasks, as published in its registry, each scored by its own tests";
 
 /** What a page's results are, as schema.org data: a repository's, or a group's. */
 export interface ResultsData {
@@ -92,6 +94,8 @@ export interface ResultsData {
   repositories: string[];
   /** The public API address its numbers download from. */
   contentUrl: string;
+  /** A public benchmark's results, measured on its own tasks rather than built ones. */
+  benchmark?: true;
 }
 
 /**
@@ -136,7 +140,7 @@ export function resultsStructuredData(data: ResultsData): Record<string, unknown
         isAccessibleForFree: true,
         keywords: ["coding agents", "AI models", "benchmark", "evals", ...data.repositories],
         ...(about.length > 0 ? { about: about.length === 1 ? about[0] : about } : {}),
-        measurementTechnique: MEASUREMENT_TECHNIQUE,
+        measurementTechnique: data.benchmark ? BENCHMARK_TECHNIQUE : MEASUREMENT_TECHNIQUE,
         variableMeasured: [
           { "@type": "PropertyValue", name: "Accuracy", unitText: "percent" },
           { "@type": "PropertyValue", name: "Cost per task", unitText: "USD" },
@@ -165,6 +169,14 @@ function repositoryStructuredData(
     origin,
     canonical,
     crumbs: [
+      ...(release.benchmark
+        ? [
+            {
+              name: DIRECTORY_VIEWS.benchmarks.tab,
+              item: `${origin}${DIRECTORY_VIEWS.benchmarks.path}`,
+            },
+          ]
+        : []),
       { name: fullName, item: `${origin}/${address}` },
       ...(own ? [{ name: `Run by ${own}`, item: canonical }] : []),
     ],
@@ -175,6 +187,7 @@ function repositoryStructuredData(
     // A public benchmark has no repository behind it to name.
     repositories: release.benchmark ? [] : [fullName],
     contentUrl: `${origin}/api/public/results/${address}`,
+    ...(release.benchmark ? { benchmark: true as const } : {}),
   });
 }
 

@@ -21,6 +21,11 @@ const SNAPSHOT_MS = 5_000;
  */
 const CACHED = "public, max-age=0, s-maxage=10";
 const JSON_TYPE = "application/json; charset=utf-8";
+/**
+ * A logo's address carries its release, so a browser may keep it; the CDN keeps it only a minute,
+ * so a withdrawn group's logo goes with it.
+ */
+const LOGO_CACHE = "public, max-age=86400, s-maxage=60";
 
 export interface PublicReleaseRoutesOptions {
   /** Refuses callers over their share; the routes are anonymous. */
@@ -178,6 +183,32 @@ export function createPublicReleaseRoutes(
           "cache-control": CACHED,
           "content-type": JSON_TYPE,
         });
+        return true;
+      }
+      // A group's logo, as an image of its own: only ever the type the upload checked, and
+      // never able to run anything here, an SVG included, even opened on its own.
+      const logoOf =
+        route === "groups" && rest[2] === "logo"
+          ? groupPath([route, ...rest.slice(0, 2)])
+          : undefined;
+      if (logoOf) {
+        const image = /^data:(image\/[a-z+]+);base64,(.+)$/.exec(
+          (await snapshot()).logo(logoOf.publisher, logoOf.slug) ?? "",
+        );
+        if (!image?.[1] || !image[2]) {
+          uncached();
+          sendJson(response, 404, { error: "This group has no logo" });
+          return true;
+        }
+        const bytes = Buffer.from(image[2], "base64");
+        response.writeHead(200, {
+          "content-type": image[1],
+          "content-length": bytes.byteLength,
+          "cache-control": LOGO_CACHE,
+          "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+          "x-content-type-options": "nosniff",
+        });
+        response.end(request.method === "HEAD" ? undefined : bytes);
         return true;
       }
       const group = route === "groups" ? groupPath([route, ...rest]) : undefined;

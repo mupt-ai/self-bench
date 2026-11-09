@@ -182,7 +182,7 @@ export async function openSite(
         : {}),
       benchmarks,
       groups,
-      groupReleases: { store: releases, changed: publicChanged },
+      publicLines: { store: releases, changed: publicChanged },
       tasks,
       artifacts,
       publicUrl,

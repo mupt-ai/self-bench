@@ -1,7 +1,7 @@
 import { resultsName } from "../public/paths.js";
 import { groupHref, type PublishedGroup } from "../public/release-groups.js";
 import type { PublishedLine } from "../public/release-types.js";
-import { DIRECTORY_VIEWS, defaultLineOf } from "../public/seo.js";
+import { DIRECTORY_VIEWS, type DirectoryView, defaultLineOf, listedIn } from "../public/seo.js";
 
 const escapeXml = (value: string) =>
   value
@@ -48,19 +48,22 @@ export function sitemapOf(
     }
   }
   pages.sort((left, right) => left.loc.localeCompare(right.loc));
+  // Each directory view is dated by the newest release it lists.
+  const released = (view: DirectoryView) =>
+    repositories
+      .flat()
+      .filter((line) => listedIn(view, line.release))
+      .map((line) => line.release.releasedAt);
   const home = {
     loc: `${origin}/`,
-    lastmod: newest([
-      ...repositories.flat().map((line) => line.release.releasedAt),
-      ...groups.map((group) => group.updatedAt),
-    ]),
+    lastmod: newest([...released("repositories"), ...groups.map((group) => group.updatedAt)]),
   };
-  const evals = repositories
-    .flat()
-    .filter((line) => line.release.benchmark)
-    .map((line) => line.release.releasedAt);
-  const evalsPage = { loc: `${origin}${DIRECTORY_VIEWS.benchmarks.path}`, lastmod: newest(evals) };
-  const urls = [home, ...(evals.length > 0 ? [evalsPage] : []), ...pages].map(
+  const benchmarks = released("benchmarks");
+  const listed = {
+    loc: `${origin}${DIRECTORY_VIEWS.benchmarks.path}`,
+    lastmod: newest(benchmarks),
+  };
+  const urls = [home, ...(benchmarks.length > 0 ? [listed] : []), ...pages].map(
     ({ loc, lastmod }) =>
       `  <url><loc>${escapeXml(loc)}</loc>${lastmod ? `<lastmod>${escapeXml(lastmod)}</lastmod>` : ""}</url>\n`,
   );

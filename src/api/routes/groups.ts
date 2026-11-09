@@ -196,11 +196,11 @@ export async function groupRoutes(
     const refused = await unfinishedRuns(options, { groupId: group.id }, "group");
     if (refused) return send(refused);
     // Its page goes with it: nothing would be left to withdraw it from.
-    const withdrawn = await options.groupReleases?.store.withdrawLine(
+    const withdrawn = await options.publicLines?.store.withdrawLine(
       { orgId: tenant.id, groupId: group.id },
       user.login,
     );
-    if (withdrawn) options.groupReleases?.changed?.(["/", groupHref(tenant.login, group.slug)]);
+    if (withdrawn) options.publicLines?.changed?.(["/", groupHref(tenant.login, group.slug)]);
     await store.remove(tenant.id, group.slug);
     track(user, "repository group deleted", {}, tenant);
     return send([200, { ok: true }]);
