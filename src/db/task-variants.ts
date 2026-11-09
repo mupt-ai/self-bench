@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { candidateWorkflowId, type TaskImages } from "../contracts/index.js";
 import type { VariantChanges } from "../contracts/variants.js";
 import type { Database } from "./client.js";
@@ -70,6 +70,8 @@ export interface TaskVariantStore {
     repoId: number,
     of: { readonly environmentId: number } | { readonly parentId: number },
   ): Promise<TaskVariantRecord[]>;
+  /** Settles checks a deletion stopped, deleted rows included, so none is stopped twice. */
+  markStopped(ids: readonly number[]): Promise<void>;
   reserve(row: VariantStart): Promise<TaskVariantRecord>;
   /** False when no running variant has this run and candidate, so the row is a task's. */
   progress(runId: string, candidateId: string, patch: TaskProgressPatch): Promise<boolean>;
@@ -158,6 +160,20 @@ export function createTaskVariantStore(db: Database, now: () => Date): TaskVaria
           ),
         );
       return rows.map(variantFrom);
+    },
+    async markStopped(ids) {
+      if (ids.length === 0) return;
+      await db
+        .update(taskVariants)
+        .set({
+          pipelineStatus: "infrastructure_failed",
+          stage: "cancelled",
+          reason: "Stopped when its environment or task was deleted.",
+          syncedAt: now(),
+        })
+        .where(
+          and(inArray(taskVariants.id, [...ids]), eq(taskVariants.pipelineStatus, "in_progress")),
+        );
     },
     reserve: (row) =>
       db.transaction(async (tx) => {

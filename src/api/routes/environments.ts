@@ -79,7 +79,7 @@ export async function environmentsRoute(
       return true;
     }
     const running = await store.runningChecks(repo.id, { environmentId: Number(id) });
-    const unstopped = await stopVariantChecks(running, options.workflows);
+    const unstopped = await stopVariantChecks(running, options.workflows, store);
     if (unstopped > 0) {
       sendJson(response, 502, {
         error: `Deleted, but ${unstopped} running ${unstopped === 1 ? "check" : "checks"} did not stop. Delete it again to retry.`,

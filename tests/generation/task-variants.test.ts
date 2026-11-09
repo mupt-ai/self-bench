@@ -236,7 +236,6 @@ test("deleting an environment or a task stops its checks, and says when one did 
   stuck.delete(firstCheck);
   expect((await remove()).status).toBe(200);
   expect(cancelled).toEqual([firstCheck]);
-  // A deleted environment starts no more checks.
   const [row] = await store.listForRun(task.runId);
   await expect(
     store.variants.reserve({
@@ -256,7 +255,8 @@ test("deleting an environment or a task stops its checks, and says when one did 
     method: "DELETE",
     headers: key,
   });
-  expect(cancelled).toContain(secondCheck);
+  // The first check was settled as stopped, so only the second is stopped now.
+  expect(cancelled).toEqual([firstCheck, secondCheck]);
 });
 
 test("deleting a task deletes its variants, so no environment runs it", async () => {

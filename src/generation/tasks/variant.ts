@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { AuthoredTaskDraft } from "../../contracts/index.js";
 import { MAX_VARIANT_LABEL_LENGTH } from "../../contracts/variants.js";
-import type { TaskVariantRecord } from "../../db/task-variants.js";
+import type { TaskVariantRecord, TaskVariantStore } from "../../db/task-variants.js";
 import { extractRegularArchive } from "../../lib/archive.js";
 import { runCommand } from "../../lib/process.js";
 import { withTemporaryDirectory } from "../../sandbox/temporary.js";
@@ -156,11 +156,13 @@ export async function stageVariantDraft(
 /**
  * Stops the checks of `variants` still running, as their environment or task is deleted: a deleted
  * row's workflow would settle nothing, but keep its sandbox and model spend going until it ended.
- * Returns how many did not stop, so the deletion can say so and be repeated.
+ * Each one stopped is settled as stopped (`markStopped`), so a later deletion skips it. Returns how
+ * many did not stop, so the deletion can say so and be repeated.
  */
 export async function stopVariantChecks(
-  variants: readonly Pick<TaskVariantRecord, "pipelineStatus" | "workflowId">[],
+  variants: readonly Pick<TaskVariantRecord, "id" | "pipelineStatus" | "workflowId">[],
   workflows: Pick<TaskWorkflows, "cancel"> | undefined,
+  store: Pick<TaskVariantStore, "markStopped">,
 ): Promise<number> {
   if (!workflows) return 0;
   const results = await Promise.all(
@@ -168,15 +170,17 @@ export async function stopVariantChecks(
       variant.pipelineStatus === "in_progress" && variant.workflowId
         ? [
             workflows.cancel(variant.workflowId).then(
-              () => true,
+              () => variant.id,
               (error: unknown) => {
                 console.error(`variant check ${variant.workflowId} did not stop:`, error);
-                return false;
+                return undefined;
               },
             ),
           ]
         : [],
     ),
   );
-  return results.filter((stopped) => !stopped).length;
+  const stopped = results.filter((id): id is number => id !== undefined);
+  await store.markStopped(stopped);
+  return results.length - stopped.length;
 }

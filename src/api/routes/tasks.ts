@@ -155,6 +155,7 @@ export function createTaskRoutes(options: TaskRoutesOptions): TaskRoutes {
           ? await stopVariantChecks(
               await tasks.variants.runningChecks(repo.id, { parentId: row.id }),
               workflows,
+              tasks.variants,
             )
           : 0;
         if (unstopped > 0) {

@@ -1,4 +1,4 @@
-import type { Client } from "@temporalio/client";
+import { type Client, WorkflowNotFoundError } from "@temporalio/client";
 import type { CandidateWorkflowInput } from "../../contracts/index.js";
 import type { SandboxCostSnapshot } from "../../sandbox/contracts.js";
 import { heartbeatCost } from "../batches/activity.js";
@@ -26,7 +26,14 @@ export function temporalTaskWorkflows(client: Client): TaskWorkflows {
       try {
         await handle.cancel();
       } catch (error) {
-        const status = await handle.describe().then((value) => value.status.name);
+        // A workflow Temporal no longer knows, or never started, is not running either.
+        const status = await handle.describe().then(
+          (value) => value.status.name,
+          (missing: unknown) => {
+            if (missing instanceof WorkflowNotFoundError) return "NOT_FOUND";
+            throw missing;
+          },
+        );
         if (status === "RUNNING") throw error;
       }
     },
