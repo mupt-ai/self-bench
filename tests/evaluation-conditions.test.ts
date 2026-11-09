@@ -44,6 +44,10 @@ test("a condition's id follows what it changes, and Harbor gets its skills and i
   const condition = runCondition(parsed);
   expect(condition.skills).toEqual(["https://github.com/vercel/next.js/tree/canary"]);
   expect(runCondition({ ...parsed, name: "Renamed" }).id).toBe(condition.id);
+  const pair = { name: "Pair", skills: ["https://github.com/a/one", "https://github.com/a/two"] };
+  expect(runCondition({ ...pair, skills: [...pair.skills].reverse() }).id).toBe(
+    runCondition(pair).id,
+  );
   expect(runCondition({ ...parsed, instructions: "Other." }).id).not.toBe(condition.id);
   expect(() => conditionSchema.parse({ name: "Nothing", skills: [] })).toThrow();
 

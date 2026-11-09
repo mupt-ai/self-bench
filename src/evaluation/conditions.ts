@@ -19,7 +19,8 @@ export interface RunCondition {
 }
 
 export function runCondition(given: z.infer<typeof conditionSchema>): RunCondition {
-  const skills = [...new Set(given.skills)];
+  // A set of skills, in one order, so the same set is the same condition however it was listed.
+  const skills = [...new Set(given.skills)].sort();
   const instructions = given.instructions || undefined;
   const id = createHash("sha256")
     .update(JSON.stringify({ skills, instructions: instructions ?? "" }))
