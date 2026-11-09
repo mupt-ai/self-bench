@@ -202,3 +202,46 @@ test("task audit refuses to run without a model, and a failed explanation surfac
     }),
   ).rejects.toThrow("gave no answer: Its last explanation just ended without one.");
 });
+
+test("results print each configuration's blocked count beside its pass rate", async () => {
+  process.env.SELFBENCH_API_URL = "http://selfbench.test";
+  process.env.SELFBENCH_API_KEY = "sbk_test";
+  const report = {
+    tasks: 2,
+    configurations: [
+      {
+        key: "a",
+        name: "Claude Opus",
+        model: "anthropic/opus",
+        harness: "pi",
+        reasoning: "high",
+        scored: 89,
+        passed: 60,
+        blocked: 7,
+        passRate: 67.4,
+      },
+    ],
+    taskResults: [],
+  };
+  const fetchSpy = spyOn(globalThis, "fetch").mockImplementation((async (
+    input: string | URL | Request,
+  ) => {
+    expect(String(input)).toContain(`${repo}/evaluations/results`);
+    return Response.json(report);
+  }) as typeof fetch);
+  const log = spyOn(console, "log").mockImplementation(() => undefined);
+  // A terminal gets the table; piped output gets JSON.
+  const isTTY = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
+  Object.defineProperty(process.stdout, "isTTY", { value: true, configurable: true });
+  try {
+    await runCli(["results", "--repo", "acme/app"]);
+    const printed = String(log.mock.calls.at(-1)?.[0]);
+    expect(printed).toMatch(/PASSED\s+BLOCKED\s+COST/);
+    expect(printed).toMatch(/60\/89\s+7\/89/);
+  } finally {
+    if (isTTY) Object.defineProperty(process.stdout, "isTTY", isTTY);
+    else Reflect.deleteProperty(process.stdout, "isTTY");
+    log.mockRestore();
+    fetchSpy.mockRestore();
+  }
+});

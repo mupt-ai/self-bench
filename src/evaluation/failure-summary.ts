@@ -29,9 +29,17 @@ export interface FailureSummaryOptions {
   readonly signal?: AbortSignal | undefined;
 }
 
-/** Whether a trial completed, failed its tests, and has no explanation yet. */
+/**
+ * Whether a trial completed, failed its tests, and has no explanation yet. A trial a cyber
+ * classifier blocked is not explained: its error already says why.
+ */
 export function explainable(trial: EvaluationTrial): boolean {
-  return trial.status === "completed" && trial.rewards.reward === 0 && !trial.failureSummary;
+  return (
+    trial.status === "completed" &&
+    trial.rewards.reward === 0 &&
+    !trial.failureSummary &&
+    !trial.cyberBlocked
+  );
 }
 
 /**

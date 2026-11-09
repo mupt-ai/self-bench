@@ -94,6 +94,17 @@ export function minutesLabel(minutes: number | undefined): string {
   return `${Math.floor(minutes / 60)} h ${Math.round(minutes % 60)} min`;
 }
 
+/**
+ * How many of the scored results a provider's cyber classifier blocked, as a count beside the pass
+ * rate. A block is a failure (reward 0), so it counts among the scored; undefined when none did.
+ */
+export function blockedNote(results: readonly TaskResult[]): string | undefined {
+  const blocked = results.filter(({ trial }) => trial.cyberBlocked).length;
+  if (blocked === 0) return undefined;
+  const scored = results.filter(({ outcome }) => outcome === "passed" || outcome === "failed");
+  return `blocked: ${blocked}/${scored.length}`;
+}
+
 /** "36 passed · 3 failed · 1 error": the outcomes among some results, in a fixed order. */
 export function outcomeSummary(results: readonly TaskResult[]): string {
   const words: [Outcome, string, string][] = [

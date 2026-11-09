@@ -12,7 +12,7 @@ import { DoneCell, sortedEntries, TaskHeadings, TaskRow, taskEntries } from "./R
 import { BATCH_CHEVRON, BATCH_INDENT, Elbow, TASK_INDENT, Toggle } from "./ResultsTree";
 import { RetryErroredTasks } from "./RetryErroredTasks";
 import { type Batch, type Outcome, type TaskResult, tally } from "./results-model";
-import { momentLabel, outcomeSummary } from "./results-presentation";
+import { blockedNote, momentLabel, outcomeSummary } from "./results-presentation";
 import type { Sort } from "./results-view";
 
 /** A run's heading: when it started, linking to its expanded table row, and its route. */
@@ -85,6 +85,7 @@ export function ResultGroupRows({
   onRetryStarted?(comparisonId: string): void;
 }) {
   const totals = tally(results);
+  const blocked = blockedNote(results);
   const live = run?.status === "running" || run?.status === "queued";
   const entries = taskEntries(results);
   // A row is one setting's share of its run: one harness.
@@ -119,6 +120,7 @@ export function ResultGroupRows({
         <DoneCell finished={totals.finished} total={results.length} counts={totals.counts} />
         <td className="text-right font-mono tabular-nums">
           {totals.passRate === undefined ? <NoValue width={3} /> : `${totals.passRate.toFixed(0)}%`}
+          {blocked && <span className="block text-xs text-muted-foreground">{blocked}</span>}
         </td>
         <td className="text-right font-mono tabular-nums">
           {totals.costPerTask === undefined ? <NoValue width={6} /> : dollars(totals.costPerTask)}

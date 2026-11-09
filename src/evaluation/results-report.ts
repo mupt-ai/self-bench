@@ -15,6 +15,8 @@ interface ConfigurationResult {
   /** Tasks it has a scored result on, and how many of those passed. */
   scored: number;
   passed: number;
+  /** How many of its scored tasks a provider's cyber classifier blocked (scored as failures). */
+  blocked: number;
   /** Percent of its scored tasks it passed. */
   passRate: number;
   costPerTaskUsd?: number;
@@ -24,6 +26,8 @@ interface ConfigurationResult {
 interface TrialResult {
   configuration: string;
   passed: boolean;
+  /** A provider's cyber classifier blocked it, so it failed without running its tests. */
+  blocked?: true;
   /** The evaluation and harness that ran it, which explaining its failure names. */
   evaluationId: string;
   harness: Harness;
@@ -72,6 +76,7 @@ export function resultsReport(
       reasoning: setting.reasoningLevel,
       scored: trials.length,
       passed,
+      blocked: trials.filter((trial) => trial.cyberBlocked).length,
       passRate: trials.length ? (passed / trials.length) * 100 : 0,
       ...(perTask !== undefined ? { costPerTaskUsd: perTask } : {}),
     });
@@ -81,6 +86,7 @@ export function resultsReport(
       list.push({
         configuration: setting.key,
         passed: trial.rewards.reward === 1,
+        ...(trial.cyberBlocked ? { blocked: true as const } : {}),
         evaluationId: run.id,
         harness: trial.harness,
         ...(trial.apiCostUsd !== undefined ? { costUsd: trial.apiCostUsd } : {}),

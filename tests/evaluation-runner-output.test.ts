@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { cyberBlocked } from "../src/evaluation/output.js";
 import { getEvaluation } from "../src/evaluation/store.js";
 import { HARBOR_VERSION } from "../src/harnesses/harbor/command.js";
 import type { runCommand } from "../src/lib/process.js";
@@ -159,3 +160,109 @@ test("tests that run past their time limit fail the trial instead of erroring it
   });
   expect(trial?.error).toBeUndefined();
 });
+test("a provider's cyber block scores the trial 0, counted apart from its other failures", async () => {
+  const block = "Cyber safeguards flagged this message. Rephrase the request.";
+  const piError = (errorMessage: string) =>
+    `${JSON.stringify({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        provider: "openai",
+        model: "test-model",
+        stopReason: "error",
+        errorMessage,
+      },
+    })}\n`;
+  // Anthropic's block reaches the trial through Pi's last reply.
+  const piBlocked = await runHarnessTrial("pi", { verifier_result: null, exception_info: null }, [
+    ["agent/pi.txt", piError(block)],
+  ]);
+  expect(piBlocked).toMatchObject({
+    status: "completed",
+    rewards: { reward: 0 },
+    cyberBlocked: true,
+  });
+  expect(piBlocked?.error).toBe(`Pi stopped on a model error: ${block}`);
+  // OpenAI's block reaches Codex's trial as Harbor's exception.
+  const codexBlocked = await runHarnessTrial("codex", {
+    verifier_result: null,
+    exception_info: {
+      exception_type: "NonZeroAgentExitCodeError",
+      exception_message:
+        "Codex error: This content was flagged for possible cybersecurity risk. Learn more.",
+    },
+  });
+  expect(codexBlocked).toMatchObject({
+    status: "completed",
+    rewards: { reward: 0 },
+    cyberBlocked: true,
+  });
+});
+test("other failures stay failed and unscored, even when the model or sandbox is at fault", async () => {
+  const piError = (errorMessage: string) =>
+    `${JSON.stringify({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        provider: "openai",
+        model: "test-model",
+        stopReason: "error",
+        errorMessage,
+      },
+    })}\n`;
+  const rateLimited = await runHarnessTrial("pi", { verifier_result: null, exception_info: null }, [
+    ["agent/pi.txt", piError("429 Too Many Requests: rate limit exceeded")],
+  ]);
+  const imageFailed = await runHarnessTrial("codex", {
+    verifier_result: null,
+    exception_info: {
+      exception_type: "EnvironmentStartTimeoutError",
+      exception_message: "E2B image build failed: out of memory",
+    },
+  });
+  for (const trial of [rateLimited, imageFailed]) {
+    expect(trial).toMatchObject({ status: "failed", rewards: {} });
+    expect(trial?.cyberBlocked).toBeUndefined();
+  }
+});
+test("an ordinary wrong answer is still a completed failure, not a blocked one", async () => {
+  const wrong = await runHarnessTrial("pi", {
+    verifier_result: { rewards: { reward: 0 } },
+    exception_info: null,
+  });
+  expect(wrong).toMatchObject({ status: "completed", rewards: { reward: 0 } });
+  expect(wrong?.cyberBlocked).toBeUndefined();
+  expect(wrong?.error).toBeUndefined();
+});
+test("only the provider's cyber classifier messages count as blocks", () => {
+  expect(cyberBlocked("Pi stopped on a model error: Cyber safeguards flagged this message.")).toBe(
+    true,
+  );
+  expect(cyberBlocked("Codex error: flagged for possible cybersecurity risk")).toBe(true);
+  expect(cyberBlocked("Cyber safeguards are enabled for this workspace")).toBe(false);
+  expect(cyberBlocked("API Error: 502 Bad Gateway")).toBe(false);
+});
+
+/**
+ * Runs one trial of a harness whose Harbor result and output files are given, returning the saved
+ * trial. `files` are written beside Harbor's result, by relative path under the trial's folder.
+ */
+async function runHarnessTrial(
+  harness: "pi" | "codex",
+  harbor: Record<string, unknown>,
+  files: [string, string][] = [],
+) {
+  const { store, input, vault } = await runnerFixture(undefined, (input) => {
+    input.harnesses = [harness];
+  });
+  const command: typeof runCommand = async (_name, args) => {
+    if (args[0] === "--version") return { stdout: HARBOR_VERSION, stderr: "", exitCode: 0 };
+    const trial = join(args[args.indexOf("--jobs-dir") + 1] ?? "", "solver", "task__123");
+    await mkdir(join(trial, "agent"), { recursive: true });
+    for (const [name, text] of files) await writeFile(join(trial, name), text);
+    await writeFile(join(trial, "result.json"), JSON.stringify(harbor));
+    return { stdout: "", stderr: "", exitCode: 0 };
+  };
+  await runEvaluation(store, input, { env: {}, vault, command, pollMs: 5, progressMs: 0 });
+  return (await getEvaluation(store, input, input.id))?.trials[0];
+}

@@ -10,7 +10,7 @@ import { DoneCell } from "./ResultsTaskRows";
 import { BATCH_INDENT, CONFIGURATION_CHEVRON, Elbow, Toggle } from "./ResultsTree";
 import { missingTasks, withMissing } from "./results-coverage";
 import type { Configuration, TaskResult } from "./results-model";
-import { configurationName, momentLabel } from "./results-presentation";
+import { blockedNote, configurationName, momentLabel } from "./results-presentation";
 import { nextOrder, type ResultsView } from "./results-view";
 
 /** Runs listed when a configuration opens; more show a few at a time. */
@@ -54,6 +54,7 @@ export function ConfigurationRows({
   const runs = [...configuration.batches].reverse();
   const limit = view.runLimits[configuration.key] ?? FIRST_RUNS;
   const earlier = runs.length - limit;
+  const blocked = blockedNote(configuration.latest);
   // The open state, result filter and sort of one group of results, by its key.
   const group = (key: string) => ({
     open: view.batches.includes(key),
@@ -109,6 +110,7 @@ export function ConfigurationRows({
           ) : (
             `${configuration.passRate.toFixed(0)}%`
           )}
+          {blocked && <span className="block text-xs text-muted-foreground">{blocked}</span>}
         </td>
         <td className="text-right font-mono tabular-nums">
           {configuration.costPerTask === undefined ? (

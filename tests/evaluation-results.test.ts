@@ -110,3 +110,56 @@ test("results score each configuration on accepted tasks, and one task's view ad
     await fixture.close();
   }
 });
+
+test("a trial a cyber classifier blocked is a failure counted apart, and an infra failure is not scored", async () => {
+  const fixture = await evaluationServer(memoryVault());
+  try {
+    const repoId = fixture.repo.id;
+    const blocked = run(repoId, "gpt-blocked", {
+      "task-one": {
+        status: "completed",
+        rewards: { reward: 0 },
+        cyberBlocked: true,
+        modelVerified: false,
+        error: "Cyber safeguards flagged this message.",
+      },
+    });
+    // Its block came before any call was priced, so it has no cost.
+    for (const trial of blocked.trials) delete trial.apiCostUsd;
+    await saveEvaluation(
+      fixture.artifacts,
+      run(repoId, "gpt-guarded", { "task-one": { rewards: { reward: 1 } } }),
+    );
+    await saveEvaluation(fixture.artifacts, blocked);
+    await saveEvaluation(
+      fixture.artifacts,
+      run(repoId, "gpt-imaged", {
+        "task-one": { status: "failed", rewards: {}, error: "E2B image build failed" },
+      }),
+    );
+
+    const report = await (await fixture.request(`${fixture.base}/results`)).json();
+    const guarded = JSON.stringify(["gpt-guarded", "codex", "high"]);
+    const guardedBlocked = JSON.stringify(["gpt-blocked", "codex", "high"]);
+    expect(
+      report.configurations.map(
+        (row: {
+          key: string;
+          passRate: number;
+          scored: number;
+          passed: number;
+          blocked: number;
+        }) => [row.key, row.passRate, row.scored, row.passed, row.blocked],
+      ),
+    ).toEqual([
+      [guarded, 100, 1, 1, 0],
+      [guardedBlocked, 0, 1, 0, 1],
+    ]);
+    expect(report.taskResults[0]).toMatchObject({ scored: 2, passed: 1 });
+    expect(report.taskResults[0].results).toContainEqual(
+      expect.objectContaining({ configuration: guardedBlocked, passed: false, blocked: true }),
+    );
+  } finally {
+    await fixture.close();
+  }
+});
