@@ -2,7 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { candidateWorkflowId, type TaskImages } from "../contracts/index.js";
 import type { VariantChanges } from "../contracts/variants.js";
 import type { Database } from "./client.js";
-import { taskEnvironments, taskVariants, users } from "./schema.js";
+import { taskEnvironments, tasks, taskVariants, users } from "./schema.js";
 import type { TaskProgressPatch, TaskVerdict } from "./task-lifecycle.js";
 
 /** An environment as stored (task-variant-schema.ts): a repository's change to its tasks' files. */
@@ -56,8 +56,20 @@ export interface TaskVariantStore {
   /** A repository's visible environments, oldest first. */
   listEnvironments(repoId: number): Promise<TaskEnvironmentRecord[]>;
   findEnvironment(repoId: number, id: number): Promise<TaskEnvironmentRecord | undefined>;
-  /** Tombstones an environment and its variants; checks still running settle nothing. */
+  /**
+   * Tombstones an environment and its variants; false when it never existed. Repeating it succeeds,
+   * so a deletion whose checks did not all stop can be retried (runningChecks).
+   */
   deleteEnvironment(repoId: number, id: number): Promise<boolean>;
+  /**
+   * Checks still running for an environment or a task, deleted ones included: deleting either stops
+   * them. A reserve waits for a deletion in progress and refuses one that finished, so a check
+   * started meanwhile is either found here or never starts.
+   */
+  runningChecks(
+    repoId: number,
+    of: { readonly environmentId: number } | { readonly parentId: number },
+  ): Promise<TaskVariantRecord[]>;
   reserve(row: VariantStart): Promise<TaskVariantRecord>;
   /** False when no running variant has this run and candidate, so the row is a task's. */
   progress(runId: string, candidateId: string, patch: TaskProgressPatch): Promise<boolean>;
@@ -115,43 +127,72 @@ export function createTaskVariantStore(db: Database, now: () => Date): TaskVaria
     },
     deleteEnvironment: (repoId, id) =>
       db.transaction(async (tx) => {
-        const changed = await tx
+        const [found] = await tx
+          .select({ deletedAt: taskEnvironments.deletedAt })
+          .from(taskEnvironments)
+          .where(and(eq(taskEnvironments.repoId, repoId), eq(taskEnvironments.id, id)))
+          .for("update");
+        if (!found) return false;
+        if (found.deletedAt) return true;
+        await tx
           .update(taskEnvironments)
           .set({ deletedAt: now() })
-          .where(
-            and(
-              eq(taskEnvironments.repoId, repoId),
-              eq(taskEnvironments.id, id),
-              isNull(taskEnvironments.deletedAt),
-            ),
-          )
-          .returning({ id: taskEnvironments.id });
-        if (changed.length === 0) return false;
+          .where(eq(taskEnvironments.id, id));
         await tx
           .update(taskVariants)
           .set({ deletedAt: now() })
           .where(and(eq(taskVariants.environmentId, id), isNull(taskVariants.deletedAt)));
         return true;
       }),
-    async reserve(row) {
-      for (let attempt = 1; ; attempt++) {
-        const runId = `${row.runId}${attempt > 1 ? `-a${attempt}` : ""}`;
-        const [inserted] = await db
-          .insert(taskVariants)
-          .values({
-            ...row,
-            runId,
-            pipelineStatus: "in_progress",
-            stage: "verifying",
-            workflowId: candidateWorkflowId(runId, row.candidateId),
-            startedAt: now(),
-            syncedAt: now(),
-          })
-          .onConflictDoNothing()
-          .returning();
-        if (inserted) return variantFrom(inserted);
-      }
+    async runningChecks(repoId, of) {
+      const rows = await db
+        .select()
+        .from(taskVariants)
+        .where(
+          and(
+            eq(taskVariants.repoId, repoId),
+            eq(taskVariants.pipelineStatus, "in_progress"),
+            "environmentId" in of
+              ? eq(taskVariants.environmentId, of.environmentId)
+              : eq(taskVariants.parentId, of.parentId),
+          ),
+        );
+      return rows.map(variantFrom);
     },
+    reserve: (row) =>
+      db.transaction(async (tx) => {
+        // Shared locks: reserves run side by side, but wait for a deletion of either row, and a
+        // deletion waits for them, so no check starts unseen by the deletion's stop.
+        const [environment] = await tx
+          .select({ deletedAt: taskEnvironments.deletedAt })
+          .from(taskEnvironments)
+          .where(eq(taskEnvironments.id, row.environmentId))
+          .for("share");
+        const [task] = await tx
+          .select({ deletedAt: tasks.deletedAt })
+          .from(tasks)
+          .where(eq(tasks.id, row.parentId))
+          .for("share");
+        if (!environment || environment.deletedAt || !task || task.deletedAt)
+          throw new Error("The environment or its task was deleted.");
+        for (let attempt = 1; ; attempt++) {
+          const runId = `${row.runId}${attempt > 1 ? `-a${attempt}` : ""}`;
+          const [inserted] = await tx
+            .insert(taskVariants)
+            .values({
+              ...row,
+              runId,
+              pipelineStatus: "in_progress",
+              stage: "verifying",
+              workflowId: candidateWorkflowId(runId, row.candidateId),
+              startedAt: now(),
+              syncedAt: now(),
+            })
+            .onConflictDoNothing()
+            .returning();
+          if (inserted) return variantFrom(inserted);
+        }
+      }),
     async progress(runId, candidateId, patch) {
       const changed = await db
         .update(taskVariants)

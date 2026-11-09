@@ -141,18 +141,27 @@ export function createTaskRoutes(options: TaskRoutesOptions): TaskRoutes {
       }
       if (!leaf && request.method === "DELETE") {
         const existing = await tasks.find(repo.id, runId, taskId);
-        // Its variants are deleted with it; their checks still running stop too.
-        const variants = existing
-          ? (await tasks.variants.listForRepo(repo.id)).filter(
-              (variant) => variant.parentId === existing.id,
-            )
-          : [];
         const result = await tasks.deleteTask(repo.id, runId, taskId);
-        if (result === "deleted" && existing) {
-          await reviewChanged(existing.id);
-          await stopVariantChecks(variants, workflows);
-        }
-        if (result === "active") {
+        if (result === "deleted" && existing) await reviewChanged(existing.id);
+        // Its variants were deleted with it, and no check of it can start now; stop any running.
+        // A repeated deletion retries the stop.
+        const row =
+          result === "deleted"
+            ? (await tasks.listWithDeleted(repo.id)).find(
+                (task) => task.runId === runId && task.taskId === taskId,
+              )
+            : undefined;
+        const unstopped = row
+          ? await stopVariantChecks(
+              await tasks.variants.runningChecks(repo.id, { parentId: row.id }),
+              workflows,
+            )
+          : 0;
+        if (unstopped > 0) {
+          sendJson(response, 502, {
+            error: `Deleted, but ${unstopped} running environment ${unstopped === 1 ? "check" : "checks"} did not stop. Delete it again to retry.`,
+          });
+        } else if (result === "active") {
           sendJson(response, 409, { error: "Task generation is still in progress" });
         } else if (result === "missing") {
           sendJson(response, 404, { error: "task not found" });

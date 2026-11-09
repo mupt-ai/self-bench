@@ -156,21 +156,27 @@ export async function stageVariantDraft(
 /**
  * Stops the checks of `variants` still running, as their environment or task is deleted: a deleted
  * row's workflow would settle nothing, but keep its sandbox and model spend going until it ended.
+ * Returns how many did not stop, so the deletion can say so and be repeated.
  */
 export async function stopVariantChecks(
   variants: readonly Pick<TaskVariantRecord, "pipelineStatus" | "workflowId">[],
   workflows: Pick<TaskWorkflows, "cancel"> | undefined,
-): Promise<void> {
-  if (!workflows) return;
-  await Promise.all(
+): Promise<number> {
+  if (!workflows) return 0;
+  const results = await Promise.all(
     variants.flatMap((variant) =>
       variant.pipelineStatus === "in_progress" && variant.workflowId
         ? [
-            workflows.cancel(variant.workflowId).catch((error: unknown) => {
-              console.error(`variant check ${variant.workflowId} was not stopped:`, error);
-            }),
+            workflows.cancel(variant.workflowId).then(
+              () => true,
+              (error: unknown) => {
+                console.error(`variant check ${variant.workflowId} did not stop:`, error);
+                return false;
+              },
+            ),
           ]
         : [],
     ),
   );
+  return results.filter((stopped) => !stopped).length;
 }

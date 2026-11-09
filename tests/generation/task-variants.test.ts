@@ -217,21 +217,46 @@ test("an environment is never a task, and a condition runs its tasks as their ow
   expect(await dataset.environment?.(created.id, picked)).toBeUndefined();
 });
 
-test("deleting an environment or a task stops its variants' checks still running", async () => {
-  const { environments, task, key, site, started, cancelled } = await evalWithTask();
+test("deleting an environment or a task stops its checks, and says when one did not", async () => {
+  const { environments, task, key, site, started, cancelled, stuck, store, repoId } =
+    await evalWithTask();
   const first = (await (await environments({ environment: ENVIRONMENT })).json()).environment as {
     id: number;
   };
   const firstCheck = started.at(-1)?.workflowId ?? "";
-  await site.request(`${EVAL}/environments/${first.id}`, { method: "DELETE", headers: key });
+  // A check that will not stop is reported, and deleting again retries it.
+  stuck.add(firstCheck);
+  const remove = () =>
+    site.request(`${EVAL}/environments/${first.id}`, { method: "DELETE", headers: key });
+  const failed = await remove();
+  expect(failed.status).toBe(502);
+  expect((await failed.json()).error).toBe(
+    "Deleted, but 1 running check did not stop. Delete it again to retry.",
+  );
+  stuck.delete(firstCheck);
+  expect((await remove()).status).toBe(200);
   expect(cancelled).toEqual([firstCheck]);
+  // A deleted environment starts no more checks.
+  const [row] = await store.listForRun(task.runId);
+  await expect(
+    store.variants.reserve({
+      environmentId: first.id,
+      parentId: row?.id ?? 0,
+      repoId,
+      runId: "late",
+      candidateId: "late",
+      taskId: task.taskId,
+      startedBy: 1,
+    }),
+  ).rejects.toThrow("The environment or its task was deleted.");
+
   await environments({ environment: { ...ENVIRONMENT, name: "Again" } });
   const secondCheck = started.at(-1)?.workflowId ?? "";
   await site.request(`${EVAL}/tasks/${task.runId}/${task.taskId}`, {
     method: "DELETE",
     headers: key,
   });
-  expect(cancelled).toEqual([firstCheck, secondCheck]);
+  expect(cancelled).toContain(secondCheck);
 });
 
 test("deleting a task deletes its variants, so no environment runs it", async () => {

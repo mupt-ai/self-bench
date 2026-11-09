@@ -72,19 +72,26 @@ export async function environmentsRoute(
     });
     return true;
   }
+  if (id && method === "DELETE") {
+    // Deleted first, so no build starts a check after the stop below; repeating it retries the stop.
+    if (!(await store.deleteEnvironment(repo.id, Number(id)))) {
+      sendJson(response, 404, { error: "environment not found" });
+      return true;
+    }
+    const running = await store.runningChecks(repo.id, { environmentId: Number(id) });
+    const unstopped = await stopVariantChecks(running, options.workflows);
+    if (unstopped > 0) {
+      sendJson(response, 502, {
+        error: `Deleted, but ${unstopped} running ${unstopped === 1 ? "check" : "checks"} did not stop. Delete it again to retry.`,
+      });
+      return true;
+    }
+    sendJson(response, 200, { deleted: true });
+    return true;
+  }
   const environment = id ? await store.findEnvironment(repo.id, Number(id)) : undefined;
   if (id && !environment) {
     sendJson(response, 404, { error: "environment not found" });
-    return true;
-  }
-  if (environment && method === "DELETE") {
-    const variants = await store.listForRepo(repo.id);
-    await stopVariantChecks(
-      variants.filter((variant) => variant.environmentId === environment.id),
-      options.workflows,
-    );
-    await store.deleteEnvironment(repo.id, environment.id);
-    sendJson(response, 200, { deleted: true });
     return true;
   }
   if (environment && method === "GET") {
