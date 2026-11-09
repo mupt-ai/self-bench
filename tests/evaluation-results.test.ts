@@ -120,17 +120,29 @@ test("a trial a cyber classifier blocked is a failure counted apart, and an infr
         status: "completed",
         rewards: { reward: 0 },
         cyberBlocked: true,
-        modelVerified: false,
         error: "Cyber safeguards flagged this message.",
       },
     });
-    // Its block came before any call was priced, so it has no cost.
-    for (const trial of blocked.trials) delete trial.apiCostUsd;
+    // Its block came before any call was priced or verified, so it has neither.
+    for (const trial of blocked.trials) {
+      delete trial.apiCostUsd;
+      delete trial.modelVerified;
+    }
+    // A block by a model other than the one requested is not that setting's result.
+    const misrouted = run(repoId, "gpt-misrouted", {
+      "task-one": {
+        status: "completed",
+        rewards: { reward: 0 },
+        cyberBlocked: true,
+        modelVerified: false,
+      },
+    });
     await saveEvaluation(
       fixture.artifacts,
       run(repoId, "gpt-guarded", { "task-one": { rewards: { reward: 1 } } }),
     );
     await saveEvaluation(fixture.artifacts, blocked);
+    await saveEvaluation(fixture.artifacts, misrouted);
     await saveEvaluation(
       fixture.artifacts,
       run(repoId, "gpt-imaged", {

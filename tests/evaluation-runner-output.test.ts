@@ -160,19 +160,20 @@ test("tests that run past their time limit fail the trial instead of erroring it
   });
   expect(trial?.error).toBeUndefined();
 });
+/** Pi's last reply, as a model error. */
+const piError = (errorMessage: string) =>
+  `${JSON.stringify({
+    type: "message_end",
+    message: {
+      role: "assistant",
+      provider: "openai",
+      model: "test-model",
+      stopReason: "error",
+      errorMessage,
+    },
+  })}\n`;
 test("a provider's cyber block scores the trial 0, counted apart from its other failures", async () => {
   const block = "Cyber safeguards flagged this message. Rephrase the request.";
-  const piError = (errorMessage: string) =>
-    `${JSON.stringify({
-      type: "message_end",
-      message: {
-        role: "assistant",
-        provider: "openai",
-        model: "test-model",
-        stopReason: "error",
-        errorMessage,
-      },
-    })}\n`;
   // Anthropic's block reaches the trial through Pi's last reply.
   const piBlocked = await runHarnessTrial("pi", { verifier_result: null, exception_info: null }, [
     ["agent/pi.txt", piError(block)],
@@ -199,17 +200,6 @@ test("a provider's cyber block scores the trial 0, counted apart from its other 
   });
 });
 test("other failures stay failed and unscored, even when the model or sandbox is at fault", async () => {
-  const piError = (errorMessage: string) =>
-    `${JSON.stringify({
-      type: "message_end",
-      message: {
-        role: "assistant",
-        provider: "openai",
-        model: "test-model",
-        stopReason: "error",
-        errorMessage,
-      },
-    })}\n`;
   const rateLimited = await runHarnessTrial("pi", { verifier_result: null, exception_info: null }, [
     ["agent/pi.txt", piError("429 Too Many Requests: rate limit exceeded")],
   ]);

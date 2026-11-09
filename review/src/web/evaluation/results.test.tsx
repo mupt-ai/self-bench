@@ -164,6 +164,6 @@ test("a blocked trial is a failure, counted beside the pass rate as blocked", ()
     passRate: 50,
     counts: expect.objectContaining({ failed: 1 }),
   });
-  expect(blockedNote(configuration?.latest ?? [])).toBe("blocked: 1/2");
+  expect(blockedNote(configuration?.latest ?? [])).toBe("Blocked: 1/2");
   expect(blockedNote([])).toBeUndefined();
 });

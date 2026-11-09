@@ -3,13 +3,14 @@ import type { EvaluationTrial } from "./types.js";
 /**
  * A trial whose result can be compared: completed, the model's identity verified, a reward of
  * exactly 0 or 1, and a cost present. The Results chart and public releases count only these.
- * A trial a provider's cyber classifier blocked is compared as its 0 (cyberBlocked): the block
- * came from the model's own request, and it may have made no call to verify or price.
+ * A trial a provider's cyber classifier blocked is compared as its 0 (cyberBlocked), though it may
+ * have made no call to verify or price; a model that was verified to be another one still is not.
  */
 export function eligibleTrial(trial: EvaluationTrial): boolean {
   const reward = trial.rewards.reward;
   const cost = trial.apiCostUsd;
-  if (trial.cyberBlocked) return trial.status === "completed" && reward === 0;
+  if (trial.cyberBlocked)
+    return trial.status === "completed" && reward === 0 && trial.modelVerified !== false;
   return (
     trial.status === "completed" &&
     trial.modelVerified === true &&

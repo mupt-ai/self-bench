@@ -102,7 +102,7 @@ export function blockedNote(results: readonly TaskResult[]): string | undefined 
   const blocked = results.filter(({ trial }) => trial.cyberBlocked).length;
   if (blocked === 0) return undefined;
   const scored = results.filter(({ outcome }) => outcome === "passed" || outcome === "failed");
-  return `blocked: ${blocked}/${scored.length}`;
+  return `Blocked: ${blocked}/${scored.length}`;
 }
 
 /** "36 passed · 3 failed · 1 error": the outcomes among some results, in a fixed order. */
