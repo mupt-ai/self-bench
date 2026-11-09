@@ -58,7 +58,9 @@ test("repositories and evals are separate views of the directory, each its own p
   expect(evals).not.toContain('<a href="/vercel/next.js">');
   // Both link to both, so a crawler finds each view.
   for (const html of [home, evals])
-    expect(html).toContain('<nav><a href="/">Repositories</a> <a href="/evals">Evals</a></nav>');
+    expect(html).toContain(
+      '<nav><a href="/">Repositories</a> <a href="/evals">Custom Evals</a></nav>',
+    );
 });
 
 test("the evals page has its own head, and joins the sitemap once there is an eval", () => {

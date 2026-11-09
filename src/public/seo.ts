@@ -40,12 +40,14 @@ export const DIRECTORY_VIEWS = {
   },
   evals: {
     path: "/evals",
-    tab: "Evals",
-    title: `Evals: Benchmark Coding Agents on Custom Scenarios · ${SITE_NAME}`,
+    // Custom, as against a repository's: built from a publisher's own scenarios, not mined from a
+    // repository's pull requests. Everything on the site is public, so "public" would say nothing.
+    tab: "Custom Evals",
+    title: `Custom Evals: Benchmark Coding Agents on Your Own Scenarios · ${SITE_NAME}`,
     description:
       "Coding agent and model results on evals publishers build from their own scenarios: accuracy and cost per task, side by side. By dari.dev.",
     heading: "Find the best models for evals",
-    search: "Search Evals",
+    search: "Search Custom Evals",
   },
 } as const;
 
