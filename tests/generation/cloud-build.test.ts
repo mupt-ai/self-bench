@@ -203,3 +203,22 @@ test("a step's log is its own lines without Cloud Build's prefix", () => {
     '#7 [3/5] RUN /opt/selfbench-environment/setup.sh\nERROR: process "/bin/sh -c setup.sh" did not complete successfully: exit code: 1',
   );
 });
+
+test("a variant's build reads its task's layer cache too, and writes only its own", async () => {
+  const { store, build: input } = await attempt();
+  const { api, runs } = cloud({
+    status: "SUCCESS",
+    results: { buildStepOutputs: ["", "", output(`${digest("a")}\n`), output(digest("b"))] },
+  });
+  const builder = taskImageBuilder({ repository: REPOSITORY, builder: config }, { cloud: api });
+  if (!builder) throw new Error("Missing builder");
+  await builder.build(store, { ...input, cacheFrom: "task-run" }, new AbortController().signal);
+  const steps = (runs[0]?.steps ?? []) as { id: string; args: string[] }[];
+  const agent = steps.find((step) => step.id === "agent")?.args[1] ?? "";
+  for (const role of ["agent", "verifier"])
+    expect(agent).toContain(
+      `--cache-from type=registry,ref=${config.cache}/task-run/cand/${role}:cache`,
+    );
+  expect(agent).toContain(`--cache-to type=registry,ref=${config.cache}/run-1/cand/agent:cache`);
+  expect(agent).not.toContain("--cache-to type=registry,ref=" + `${config.cache}/task-run`);
+});

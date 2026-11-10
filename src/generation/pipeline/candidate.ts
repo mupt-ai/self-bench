@@ -69,6 +69,7 @@ export async function executeCandidate(
         task: submitted,
         stage: "authoring",
         round: 1,
+        ...(input.revision.cacheFrom ? { cacheFrom: input.revision.cacheFrom } : {}),
       });
       if (verified.report.green && verified.task)
         return {

@@ -29,6 +29,8 @@ export async function reviseScenario<Row extends { readonly runId: string }>(opt
   readonly startedBy: number;
   readonly feedback: string;
   readonly verifyOnly?: boolean;
+  /** For a variant: its task's run, whose image cache its build reads (TaskRevision.cacheFrom). */
+  readonly cacheFrom?: string;
   readonly reserve: (row: TaskStart) => Promise<Row>;
   readonly stage: (runId: string) => Promise<AuthoredTaskDraft>;
   readonly generation?: GenerationReference;
@@ -79,6 +81,7 @@ export async function reviseScenario<Row extends { readonly runId: string }>(opt
       draft: await options.stage(row.runId),
       feedback: options.feedback,
       ...(options.verifyOnly ? { verifyOnly: true } : {}),
+      ...(options.cacheFrom ? { cacheFrom: options.cacheFrom } : {}),
     },
   });
   return row;

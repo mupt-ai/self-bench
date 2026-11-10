@@ -99,7 +99,7 @@ test("an environment builds every approved task with only its Dockerfile changed
   expect(created.tasks).toEqual({ ready: 0, checking: 1, failed: 0, total: 1 });
 
   const input = started.at(-1)?.input;
-  expect(input?.revision).toMatchObject({ verifyOnly: true });
+  expect(input?.revision).toMatchObject({ verifyOnly: true, cacheFrom: task.runId });
   expect(input?.run.runId).not.toBe(task.runId);
   const staged = input?.revision?.draft.sourceBundle;
   if (!staged) throw new Error("no staged draft");

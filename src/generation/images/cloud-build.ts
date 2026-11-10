@@ -74,6 +74,9 @@ export function cloudBuild(
               agent: `${config.cache}/${names.agent}:cache`,
               verifier: `${config.cache}/${names.verifier}:cache`,
             },
+            ...(build.cacheFrom
+              ? { seed: seedCache(config.cache, build.cacheFrom, build.candidateId) }
+              : {}),
           }
         : {}),
       buildkit: config.mirror ? `${config.mirror}/${BUILDKIT}` : BUILDKIT,
@@ -123,12 +126,20 @@ export function cloudBuild(
 const AGENT_STEP = 2;
 const VERIFIER_STEP = 3;
 
+/** The caches another run of the candidate wrote, for a build that reads them too. */
+function seedCache(cache: string, runId: string, candidateId: string) {
+  const names = candidateImageNames(runId, candidateId);
+  return { agent: `${cache}/${names.agent}:cache`, verifier: `${cache}/${names.verifier}:cache` };
+}
+
 /** One task's build: fetch, start BuildKit, then each image (AGENT_STEP and VERIFIER_STEP). */
 export function buildSteps(input: {
   readonly contexts: { readonly url: string; readonly sha256: string };
   readonly snapshot: { readonly url: string; readonly sha256: string };
   readonly images: { readonly agent: string; readonly verifier: string };
   readonly cache?: { readonly agent: string; readonly verifier: string };
+  /** Another run's caches, read but never written (ImageBuild.cacheFrom). */
+  readonly seed?: { readonly agent: string; readonly verifier: string };
   readonly buildkit: string;
   readonly seconds: number;
 }) {
@@ -158,6 +169,12 @@ export function buildSteps(input: {
           ? [
               `--cache-from type=registry,ref=${cache}`,
               ...(other ? [`--cache-from type=registry,ref=${other}`] : []),
+              ...(input.seed
+                ? [
+                    `--cache-from type=registry,ref=${input.seed[role]}`,
+                    `--cache-from type=registry,ref=${input.seed[role === "agent" ? "verifier" : "agent"]}`,
+                  ]
+                : []),
               `--cache-to type=registry,ref=${cache},mode=max,image-manifest=true,oci-mediatypes=true`,
             ]
           : []),

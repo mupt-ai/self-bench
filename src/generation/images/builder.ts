@@ -14,6 +14,11 @@ import { dockerBuild } from "./docker.js";
 export interface ImageBuild {
   readonly runId: string;
   readonly candidateId: string;
+  /**
+   * Another run of the same candidate whose layer cache the build reads too: a variant's, whose
+   * Dockerfile is its task's plus its own steps, reads its task's, so only those steps build.
+   */
+  readonly cacheFrom?: string;
   /** The compiled task without its repository snapshot (gate-task.tar.gz). */
   readonly gate: ArtifactRef;
   /** The snapshot both contexts copy as repo.tar.gz. */

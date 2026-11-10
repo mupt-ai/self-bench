@@ -105,6 +105,11 @@ export interface TaskRevision {
    * changed, so no author runs; it is verified once and accepted if every check passes.
    */
   readonly verifyOnly?: boolean;
+  /**
+   * The run of the task a variant changes. Its images were built from the same Dockerfile steps
+   * before the variant's own, so the variant's build reads that run's layer cache too.
+   */
+  readonly cacheFrom?: string;
 }
 
 /** Authoritative outcome of one candidate child workflow; `task` is present only when accepted. */

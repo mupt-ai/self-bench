@@ -160,6 +160,8 @@ interface RevisionStart<Row> {
   readonly feedback: string;
   /** Only checks the staged draft, as a variant's run does; otherwise its author revises it. */
   readonly verifyOnly?: boolean;
+  /** A run whose image cache the check's build reads too (TaskRevision.cacheFrom). */
+  readonly cacheFrom?: string;
   readonly stage: (runId: string) => Promise<AuthoredTaskDraft>;
   /** Records the run before its workflow starts, under a run ID it may suffix. */
   readonly reserve: (row: TaskStart) => Promise<Row>;
@@ -185,6 +187,7 @@ export async function startRevision<Row extends { readonly runId: string }>(
       startedBy: user.id,
       feedback: start.feedback,
       ...(start.verifyOnly ? { verifyOnly: true } : {}),
+      ...(start.cacheFrom ? { cacheFrom: start.cacheFrom } : {}),
       reserve: start.reserve,
       stage: start.stage,
       ...(start.generation ? { generation: start.generation } : {}),
@@ -259,6 +262,7 @@ async function revisePullRequest<Row extends { readonly runId: string }>(
       draft: await stage(row.runId),
       feedback: start.feedback,
       ...(start.verifyOnly ? { verifyOnly: true } : {}),
+      ...(start.cacheFrom ? { cacheFrom: start.cacheFrom } : {}),
     },
   });
   return { row };

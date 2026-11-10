@@ -191,6 +191,8 @@ export async function environmentsRoute(
           user,
           feedback: `Environment: ${saved.name}`,
           verifyOnly: true,
+          // Its Dockerfile is the task's plus the environment's steps: reuse the task's layers.
+          cacheFrom: task.runId,
           // The variant's own run holds its changed draft, so it never depends on the task's.
           stage: (variantRunId) =>
             stageVariantDraft(options.artifacts, variantRunId, draft, changes),
