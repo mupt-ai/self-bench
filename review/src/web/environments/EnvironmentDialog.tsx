@@ -1,39 +1,33 @@
-import { CopyPlus } from "lucide-react";
 import React from "react";
-import { useNavigate } from "react-router";
 import { MAX_VARIANT_LABEL_LENGTH } from "../../../../src/contracts/variants";
-import type { TaskItem } from "../api";
 import { Dialog, DialogFooter, DialogHeader } from "../Dialog";
 import { GenerationFields } from "../GenerationFields";
 import { GenerationSteps } from "../GenerationSteps";
 import { InfoTooltip } from "../primitives/tooltip";
 import { Button, fieldStyles, Input, Notice } from "../ui";
 import { useGenerationSettings } from "../useGenerationSettings";
-import { taskPath } from "./review-queue";
-import { createTaskVariant, type VariantInput } from "./task-variant-api";
-import { VariantChanges } from "./VariantFields";
+import { EnvironmentChanges } from "./EnvironmentChanges";
+import { createEnvironment, type EnvironmentBuild, type EnvironmentInput } from "./environment-api";
 
-type PackageRow = VariantInput["packages"][number];
-type FileRow = VariantInput["files"][number];
+type PackageRow = EnvironmentInput["packages"][number];
+type FileRow = EnvironmentInput["files"][number];
 
 /**
- * A variant of an accepted task: the same instruction, hidden tests, and reference solution, with
- * only its environment changed, such as a framework build from a pull request or an AGENTS.md
- * that points agents at docs. It is checked once and accepted if it passes, never re-authored, so
- * the two tasks' results can be compared.
+ * A new environment: the same changes to every approved task's files, such as a framework build
+ * from a pull request, or no AGENTS.md. Each task is built and checked once with the generation
+ * settings chosen here, never re-authored, so its instruction and tests stay the task's own.
  */
-function VariantDialog({
+export function EnvironmentDialog({
   org,
   fullName,
-  task,
   onClose,
+  onCreated,
 }: {
   org: string;
   fullName: string;
-  task: TaskItem;
   onClose: () => void;
+  onCreated: (build: EnvironmentBuild) => void;
 }) {
-  const navigate = useNavigate();
   const [step, setStep] = React.useState<1 | 2>(1);
   const {
     settings,
@@ -60,12 +54,11 @@ function VariantDialog({
     setBusy(true);
     setError(null);
     try {
-      const variant = await createTaskVariant(
+      const build = await createEnvironment(
         org,
         fullName,
-        task,
         {
-          label: label.trim(),
+          name: label.trim(),
           packages: packages.map((row) => ({
             name: row.name.trim(),
             spec: row.spec.trim(),
@@ -75,7 +68,7 @@ function VariantDialog({
         },
         settings,
       );
-      navigate(taskPath(fullName, variant));
+      onCreated(build);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
       setBusy(false);
@@ -88,13 +81,13 @@ function VariantDialog({
       onDismiss={onClose}
       busy={busy}
       size="large"
-      aria-labelledby="create-variant-title"
+      aria-labelledby="create-environment-title"
     >
-      <section className="flex min-w-0 flex-col" aria-labelledby="create-variant-title">
+      <section className="flex min-w-0 flex-col" aria-labelledby="create-environment-title">
         <DialogHeader
-          title="Create Variant"
-          titleId="create-variant-title"
-          description={<span className="font-mono">{task.taskId}</span>}
+          title="New Environment"
+          titleId="create-environment-title"
+          description="Builds every approved task with these changes."
           onClose={onClose}
           closeRef={closeButton}
           busy={busy}
@@ -104,25 +97,25 @@ function VariantDialog({
         <div className="grid gap-4 px-4 pb-6 sm:px-6">
           {step === 1 ? (
             <div className="grid gap-6">
-              <label htmlFor="variant-label" className={fieldStyles}>
+              <label htmlFor="environment-name" className={fieldStyles}>
                 <span className="flex items-center gap-1.5">
-                  Variant Name
-                  <InfoTooltip label="A short name for what this variant changes, so it is easy to tell apart in the task list." />
+                  Name
+                  <InfoTooltip label="What this environment changes, as conditions and results will name it." />
                 </span>
                 <Input
-                  id="variant-label"
-                  aria-label="Variant Name"
+                  id="environment-name"
+                  aria-label="Name"
                   autoComplete="off"
                   data-1p-ignore
                   maxLength={MAX_VARIANT_LABEL_LENGTH}
-                  placeholder="Docs Before PR 100191"
+                  placeholder="No AGENTS.md"
                   value={label}
                   disabled={busy}
                   onChange={(event) => setLabel(event.target.value)}
                 />
               </label>
 
-              <VariantChanges
+              <EnvironmentChanges
                 packages={packages}
                 files={files}
                 onPackagesChange={setPackages}
@@ -160,29 +153,11 @@ function VariantDialog({
               disabled={busy || !filled || (step === 2 && !valid)}
               onClick={() => (step === 1 ? setStep(2) : void submit())}
             >
-              {busy ? "Starting…" : step === 1 ? "Continue" : "Create Variant"}
+              {busy ? "Starting…" : step === 1 ? "Continue" : "Build Environment"}
             </Button>
           </div>
         </DialogFooter>
       </section>
     </Dialog>
-  );
-}
-
-/**
- * Opens the variant dialog for a task that passed its checks, approved or still awaiting review,
- * as the server allows: a variant is compared with it, not reviewed in its place.
- */
-export function CreateVariantButton(props: { org: string; fullName: string; task: TaskItem }) {
-  const [open, setOpen] = React.useState(false);
-  if (props.task.pipelineStatus !== "accepted" || props.task.state === "rejected") return null;
-  return (
-    <>
-      <Button variant="ghost" onClick={() => setOpen(true)}>
-        <CopyPlus aria-hidden="true" />
-        Create Variant
-      </Button>
-      {open && <VariantDialog {...props} onClose={() => setOpen(false)} />}
-    </>
   );
 }

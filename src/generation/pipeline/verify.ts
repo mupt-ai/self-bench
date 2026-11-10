@@ -31,6 +31,8 @@ export interface CompileAndVerifyInput {
   readonly round: number;
   /** Set for a `verify` the author asked for mid-round: the turn that asked. */
   readonly turn?: number;
+  /** Another run whose image cache the build reads too (TaskRevision.cacheFrom). */
+  readonly cacheFrom?: string;
 }
 
 const compileResultSchema = z.object({
@@ -179,6 +181,7 @@ export async function verifyCompiled(
                   build: {
                     runId: input.run.runId,
                     candidateId: input.candidate.candidateId,
+                    ...(input.cacheFrom ? { cacheFrom: input.cacheFrom } : {}),
                     gate,
                     snapshot,
                     prefix: compiled.prefix,

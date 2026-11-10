@@ -46,12 +46,23 @@ Review
   self-bench task steering RUN_ID TASK_ID --repo R   notes sent, and which turn received each
   self-bench task unreview|cancel|delete RUN_ID TASK_ID --repo R
 
+Environments (changes to every approved task's files, each task built and checked once)
+  self-bench environments --repo R                   each one and how many tasks are ready
+  self-bench environment create --repo R --name N [--package NAME@SPEC ...] [--directory DIR]
+      [--file DEST=SOURCE ...] [--replace] [--delete PATH ...] | --environment JSON|@FILE
+  self-bench environment show|build|delete ID --repo R
+                                                     build: tasks approved since, or that failed
+  Run one with compare --condition '{"name":"No AGENTS.md","environment":ID}'.
+
 Evaluate
   self-bench catalog --repo R                        models evaluations can use
   self-bench compare --repo R --model ID [--model ID ...] [--harness pi|codex|claude-code|...]
       [--thinking LEVEL] [--credential ID] [--sandbox managed|e2b|modal|daytona]
       [--sandbox-credential ID] [--task RUN_ID/TASK_ID ...] [--skip-completed]
-      [--judge-credential ID] | --selection JSON|@FILE
+      [--judge-credential ID] [--condition JSON|@FILE ...] [--no-baseline]
+      | --selection JSON|@FILE
+      a condition runs every task again with skills or instructions:
+      '{"name":"With Skills","skills":["org/repo"],"instructions":"..."}' 
   self-bench comparisons --repo R | comparison show|resume|cancel ID --repo R
   self-bench runs --repo R | run show|cancel|delete EVALUATION_ID --repo R
 

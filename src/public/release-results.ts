@@ -31,6 +31,8 @@ export interface Setting {
   reasoningLevel: ThinkingLevel;
   provider: ReleaseProvider;
   custom: boolean;
+  /** The run condition its trials ran under (evaluation/conditions.ts); none for the baseline. */
+  condition?: { readonly id: string; readonly name: string };
 }
 
 /**
@@ -56,7 +58,9 @@ function settingOf(
   const typed = custom ? run.modelName.replace(/^openai\//, "") : undefined;
   const model = custom ? `custom/${typed}` : (catalog?.id ?? run.model);
   const reasoningLevel = run.thinking ?? "default";
-  const parts = [model, harness, reasoningLevel];
+  // A condition is a fourth part, so the baseline keeps the key it always had.
+  const condition = run.condition;
+  const parts = [model, harness, reasoningLevel, ...(condition ? [condition.id] : [])];
   return {
     key: JSON.stringify(parts),
     id: parts.join("|"),
@@ -68,6 +72,7 @@ function settingOf(
     // This describes the model's vendor, not the credential route of a selected trial.
     provider: custom ? "custom" : (catalog?.vendor ?? run.credentials.provider),
     custom,
+    ...(condition ? { condition: { id: condition.id, name: condition.name } } : {}),
   };
 }
 

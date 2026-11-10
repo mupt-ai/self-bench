@@ -29,18 +29,21 @@ export function createTaskActivities(options: {
   const { tasks, artifacts } = options;
   return {
     async recordTaskProgress({ runId, candidateId, progress }) {
-      await tasks.progress(runId, candidateId, {
+      const patch = {
         stage: progress.status,
         ...(progress.round !== undefined ? { round: progress.round } : {}),
         ...(progress.taskId !== candidateId ? { taskId: progress.taskId } : {}),
-      });
+      };
+      // A variant's run has no task row: its own (task-variants.ts) records where it is.
+      if (!(await tasks.progress(runId, candidateId, patch)))
+        await tasks.variants?.progress(runId, candidateId, patch);
     },
     async settleTask({ runId, candidateId, result, cancelled }) {
       const { progress, task } = result;
       const status = progress.status;
       if (status !== "accepted" && status !== "rejected" && status !== "infrastructure_failed")
         throw ApplicationFailure.nonRetryable(`candidate ${candidateId} settled while ${status}`);
-      await tasks.settle(runId, candidateId, {
+      const verdict = {
         pipelineStatus: status,
         stage: cancelled
           ? "cancelled"
@@ -53,7 +56,9 @@ export function createTaskActivities(options: {
           ? { reason: cancelled ? progress.reason : verdictReason(status, progress.reason) }
           : {}),
         ...(status === "accepted" && task ? await acceptedTaskFields(artifacts, task) : {}),
-      });
+      };
+      if (!(await tasks.settle(runId, candidateId, verdict)))
+        await tasks.variants?.settle(runId, candidateId, verdict);
     },
   };
 }

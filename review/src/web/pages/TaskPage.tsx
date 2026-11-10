@@ -23,7 +23,6 @@ import { TaskSkeleton } from "../task/TaskSkeleton";
 import { TaskView } from "../task/TaskView";
 import { taskTitle } from "../task/task-title";
 import { taskTechnicalDetails } from "../task/technical-details";
-import { CreateVariantButton } from "../task/VariantDialog";
 import { Breadcrumbs, Button, Notice, PageFrame } from "../ui";
 
 /** Keyed by the route, so a new task never inherits the previous task's state or controls. */
@@ -199,7 +198,6 @@ function TaskPageContent() {
             onRequested={() => void refresh()}
           />
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <CreateVariantButton task={task} org={org.login} fullName={fullName} />
             {task.state !== "in_progress" &&
               task.state !== "failed" &&
               task.state !== "cancelled" && (

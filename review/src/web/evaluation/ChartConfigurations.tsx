@@ -120,7 +120,9 @@ export function ChartConfigurations({
         <SettingsPicker
           settings={options.map(({ configuration, coverage }) => ({
             key: configuration.key,
-            label: configuration.label,
+            label: configuration.condition
+              ? `${configuration.label} · ${configuration.condition.name}`
+              : configuration.label,
             harness: configuration.harness,
             ...(configuration.thinking ? { reasoningLevel: configuration.thinking } : {}),
             covered: coverage.size,

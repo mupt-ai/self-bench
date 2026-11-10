@@ -201,8 +201,6 @@ export const tasks = pgTable(
     revisedFrom: bigint("revised_from", { mode: "number" }).references((): AnyPgColumn => tasks.id),
     /** The feedback this revision addressed. */
     feedback: text("feedback"),
-    /** Set on a variant: the label of the environment change it made to the task it revises. */
-    variant: text("variant"),
     /** Retained across sync and run detachment; artifacts and historical results stay intact. */
     deletedAt: timestamptz("deleted_at"),
     syncedAt: timestamptz("synced_at").notNull().defaultNow(),
@@ -298,3 +296,4 @@ export * from "./evaluation-schema.js";
 export * from "./gateway-schema.js";
 export * from "./group-schema.js";
 export * from "./registry-grant-schema.js";
+export * from "./task-variant-schema.js";

@@ -41,9 +41,11 @@ curl https://app.selfbench.dev/api/me -H "Authorization: Bearer $SELFBENCH_API_K
 | | `GET` | `…/{taskId}/draft` · `…/artifacts` | Its files as `.tar.gz`; its gate and review artifacts |
 | | `PUT`, `DELETE` | `…/{taskId}/review` | Approve or reject, or clear the review |
 | | `POST` | `…/{taskId}/feedback` | Revise from feedback and edited files |
-| | `POST` | `…/{taskId}/variants` | Create a variant of an accepted task |
 | | `POST` | `…/{taskId}/cancel` | Stop its generation |
 | | `GET`, `POST` | `…/{taskId}/steering` | Notes to a task still generating, and those sent |
+| | `GET`, `POST` | `{repo}/environments` | List environments, or create one and build every approved task in it |
+| | `GET`, `DELETE` | `{repo}/environments/{id}` | One environment with each task's check, or delete it |
+| | `POST` | `{repo}/environments/{id}/build` | Build the approved tasks it lacks or that failed |
 | Evaluate | `GET` | `{scope}/evaluations/catalog` | Models and sandboxes |
 | | `GET` | `{scope}/evaluations/options` | Tasks a comparison can run; any judge variables |
 | | `GET`, `POST` | `{scope}/evaluations/comparisons` | List or start comparisons |
@@ -82,9 +84,9 @@ Routes not listed here take no body.
 | `POST {repo}/tasks/from-scenario` | `{ title (≤120), scenario (≤20,000 chars), commit? (repositories only: SHA, branch, or HEAD), difficulty?: easy\|medium\|hard, attachments?: [{ name, content: base64 }] (≤20 files, 20 MB), generation }` |
 | `PUT …/review` | `{ decision: "approve" \| "reject", note? }` (settled tasks only) |
 | `POST …/feedback` | `{ feedback?, draft?: base64 tar.gz (≤22 MB), generation }` returns the revision |
-| `POST …/variants` | `{ variant: { label, packages?: [{ name, spec, directory? }], files?: [{ path, mode: "replace" \| "append", content }] }, generation }` |
+| `POST {repo}/environments` | `{ environment: { name, packages?: [{ name, spec, directory? }], files?: [{ path, mode: "replace" \| "append" \| "delete", content? }] }, generation }` |
 | `POST …/steering` | `{ feedback }` |
-| `POST {scope}/evaluations/comparisons` | `{ id (UUID you generate; retries never start twice), models: [{ catalogId, credentialId, harnesses, thinking? }] (≤12), sandbox, sandboxCredentialId, tasks?: [{ runId, taskId }], skipCompleted?, judgeCredentialId? }` |
+| `POST {scope}/evaluations/comparisons` | `{ id (UUID you generate; retries never start twice), models: [{ catalogId, credentialId, harnesses, thinking? }] (≤12), sandbox, sandboxCredentialId, tasks?: [{ runId, taskId }], skipCompleted?, judgeCredentialId?, conditions?: [{ name, skills?, instructions?, environment? }] (≤4), baseline? }` |
 | `POST {scope}/evaluations/{id}/explain` | `{ runId, taskId, harness, explanation? }` |
 | `POST {scope}/evaluations/audit` | `{ runId, taskId, audit: { credentialId, model } }` |
 | `POST {scope}/evaluations/summaries` | `{ configurations: [keys] (≤12), summary: { credentialId, model } }` |
@@ -99,6 +101,8 @@ Routes not listed here take no body.
 ## Evaluate
 
 `POST {scope}/evaluations/comparisons` starts one **evaluation** per model, running every task on each harness as a trial. If the reply has `submissionError`, resume the same comparison with its `id`; it reuses the same evaluation IDs.
+
+`conditions` runs every task again under each [condition](/concepts/how-it-works#conditions) beside the tasks as they are; `baseline: false` runs only the conditions. A condition's `environment` is an environment's id from `{repo}/environments`. Results report each condition as its own configuration.
 
 Use `GET {scope}/evaluations/results` for scores rather than adding up trials. Results count each configuration's latest scored result on each counted task: a repository's accepted tasks, or a benchmark's tasks. Errors, cancellations, and trials still running don't count.
 

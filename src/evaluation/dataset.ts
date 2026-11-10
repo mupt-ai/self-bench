@@ -1,5 +1,6 @@
 import type { FrozenTask } from "../db/benchmarks.js";
-import { isVariant, runnable } from "../db/task-record.js";
+import { runnable } from "../db/task-record.js";
+import { variantRunnable } from "../db/task-variants.js";
 import type { TaskStore } from "../db/tasks.js";
 import { type JudgeNeeds, mergeJudgeNeeds } from "../harnesses/harbor/host-variables.js";
 import { repositoryTasks } from "./frozen-tasks.js";
@@ -32,6 +33,15 @@ export interface EvaluationDataset {
   /** The tasks results count on. */
   summaryTasks(): Promise<SummaryTask[]>;
   /**
+   * `tasks` as an environment (task-variant-schema.ts) built them: each task's ready variant's
+   * bundle, under the task's own key, so its results count as the task's. Tasks the environment
+   * has no ready variant for are left out; undefined when the scope has no such environment.
+   */
+  environment?(
+    id: number,
+    tasks: readonly EvaluationTask[],
+  ): Promise<{ name: string; tasks: EvaluationTask[] } | undefined>;
+  /**
    * The runs as lists show them, and a tag that changes when that view does. Only a repository
    * edits its tasks, so only it hides trials of tasks deleted since.
    */
@@ -45,8 +55,7 @@ export interface EvaluationDataset {
 
 /** A repository's approved tasks. */
 export function repositoryDataset(tasks: TaskStore, repoId: number): EvaluationDataset {
-  const approved = async () =>
-    (await tasks.listForRepo(repoId)).filter(runnable).filter((task) => !isVariant(task));
+  const approved = async () => (await tasks.listForRepo(repoId)).filter(runnable);
   return {
     async options() {
       const listed = (await approved()).map(({ runId, taskId, difficulty }) => ({
@@ -63,6 +72,38 @@ export function repositoryDataset(tasks: TaskStore, repoId: number): EvaluationD
       return (await approved()).flatMap(({ runId, taskId, bundleKey, difficulty }) =>
         bundleKey ? [{ runId, taskId, bundleKey, difficulty }] : [],
       );
+    },
+    async environment(id, picked) {
+      const environment = await tasks.variants.findEnvironment(repoId, id);
+      if (!environment) return undefined;
+      const [approved, variants] = await Promise.all([
+        tasks.listForRepo(repoId),
+        tasks.variants.listForRepo(repoId),
+      ]);
+      const ready = new Map<string, (typeof variants)[number]>();
+      const byId = new Map(approved.map((task) => [task.id, task]));
+      for (const variant of variants) {
+        const task = byId.get(variant.parentId);
+        if (task && variant.environmentId === id && variantRunnable(variant))
+          ready.set(evaluationTaskKey(task.runId, task.taskId), variant);
+      }
+      return {
+        name: environment.name,
+        tasks: picked.flatMap((task) => {
+          const variant = ready.get(evaluationTaskKey(task.runId, task.taskId));
+          if (!variant?.bundleKey) return [];
+          // The task's key, so its results count as the task's; the variant's bundle and images.
+          return [
+            {
+              runId: task.runId,
+              taskId: task.taskId,
+              bundleKey: variant.bundleKey,
+              ...(task.resources ? { resources: task.resources } : {}),
+              ...(variant.images ? { images: variant.images } : {}),
+            },
+          ];
+        }),
+      };
     },
     visible: (runs) => visibleTrials(tasks, repoId, runs),
   };

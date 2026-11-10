@@ -73,6 +73,14 @@ Workspace admins connect the model access and sandboxes runs use. Secrets never 
 | `task approve\|reject RUN_ID TASK_ID R [--note TEXT]` | Review it; only approved tasks are evaluated |
 | `task unreview\|cancel\|delete RUN_ID TASK_ID R` | Clear the review, stop generation, or delete |
 
+## Environments
+
+| Command | Does |
+| --- | --- |
+| `environments R` | Each environment and how many of its tasks are ready |
+| `environment create R --name N [--package NAME@SPEC ...] [--directory DIR] [--file DEST=SOURCE ...] [--replace] [--delete PATH ...]` | Change every approved task's files and build each; `--environment JSON\|@FILE` gives it whole |
+| `environment show\|build\|delete ID R` | Each task's check; build tasks approved since or that failed; delete it |
+
 ## Evaluate
 
 | Command | Does |
@@ -93,6 +101,8 @@ Workspace admins connect the model access and sandboxes runs use. Secrets never 
 | `--task RUN_ID/TASK_ID` (repeatable) | every approved task |
 | `--skip-completed` | rerun everything |
 | `--judge-credential ID` | required for tasks graded by an LLM judge |
+| `--condition JSON\|@FILE` (repeatable): `{"name": "…", "environment": ID, "skills": ["org/repo"], "instructions": "…"}` | none: only the tasks as they are |
+| `--no-baseline` | the tasks as they are run too |
 | `--selection JSON\|@FILE` | a full [comparison body](/api#evaluate) in place of the flags |
 
 ## Inspect

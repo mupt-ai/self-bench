@@ -2,11 +2,12 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { GenerationCost } from "../../contracts/index.js";
 import type { RepoStore } from "../../db/repos.js";
-import { isVariant, type TaskState, taskState } from "../../db/task-record.js";
+import { type TaskState, taskState } from "../../db/task-record.js";
 import type { ReviewDecision, TaskRecord, TaskStore } from "../../db/tasks.js";
 import type { User, UserStore } from "../../db/users.js";
 import { candidateArtifacts } from "../../generation/runs/artifacts.js";
 import { TaskNotFoundError, TaskNotSettledError } from "../../generation/tasks/deletion.js";
+import { stopVariantChecks } from "../../generation/tasks/variant.js";
 import type { TaskWorkflows } from "../../generation/tasks/workflow-client.js";
 import type { SandboxCostSnapshot } from "../../sandbox/contracts.js";
 import { tenantFor } from "../auth/tenant.js";
@@ -45,8 +46,6 @@ export interface TaskListItem {
   readonly cost?: GenerationCost;
   readonly revisedFrom?: TaskRecord["revisedFrom"];
   readonly feedback?: string;
-  /** A variant's label: the environment change it made to the task it revises. */
-  readonly variant?: string;
 }
 
 export interface TaskRoutesOptions {
@@ -112,9 +111,7 @@ export function createTaskRoutes(options: TaskRoutesOptions): TaskRoutes {
       }
       if (tasksRoute.test(url.pathname) && request.method === "GET") {
         sendJson(response, 200, {
-          tasks: (await tasks.listForRepo(repo.id))
-            .filter((task) => !isVariant(task))
-            .map((task) => taskItem(task)),
+          tasks: (await tasks.listForRepo(repo.id)).map((task) => taskItem(task)),
         });
         return true;
       }
@@ -146,7 +143,26 @@ export function createTaskRoutes(options: TaskRoutesOptions): TaskRoutes {
         const existing = await tasks.find(repo.id, runId, taskId);
         const result = await tasks.deleteTask(repo.id, runId, taskId);
         if (result === "deleted" && existing) await reviewChanged(existing.id);
-        if (result === "active") {
+        // Its variants were deleted with it, and no check of it can start now; stop any running.
+        // A repeated deletion retries the stop.
+        const row =
+          result === "deleted"
+            ? (await tasks.listWithDeleted(repo.id)).find(
+                (task) => task.runId === runId && task.taskId === taskId,
+              )
+            : undefined;
+        const unstopped = row
+          ? await stopVariantChecks(
+              await tasks.variants.runningChecks(repo.id, { parentId: row.id }),
+              workflows,
+              tasks.variants,
+            )
+          : 0;
+        if (unstopped > 0) {
+          sendJson(response, 502, {
+            error: `Deleted, but ${unstopped} running environment ${unstopped === 1 ? "check" : "checks"} did not stop. Delete it again to retry.`,
+          });
+        } else if (result === "active") {
           sendJson(response, 409, { error: "Task generation is still in progress" });
         } else if (result === "missing") {
           sendJson(response, 404, { error: "task not found" });
@@ -177,9 +193,7 @@ export function createTaskRoutes(options: TaskRoutesOptions): TaskRoutes {
         const cost = options.cost
           ? await options.cost(runId, tenant.id, task.candidateId, liveCost)
           : undefined;
-        const revisions = (await tasks.revisionsOf(task.id))
-          .filter((revision) => !isVariant(revision))
-          .map((revision) => taskItem(revision));
+        const revisions = (await tasks.revisionsOf(task.id)).map((revision) => taskItem(revision));
         sendJson(response, 200, { task: taskItem(task, cost), revisions });
         return true;
       }
@@ -238,7 +252,6 @@ export function taskItem(task: TaskRecord, cost?: GenerationCost): TaskListItem 
     ...(cost ? { cost } : {}),
     ...(task.revisedFrom ? { revisedFrom: task.revisedFrom } : {}),
     ...(task.feedback ? { feedback: task.feedback } : {}),
-    ...(task.variant ? { variant: task.variant } : {}),
   };
 }
 

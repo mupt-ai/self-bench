@@ -4,10 +4,12 @@ import { z } from "zod";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { AuthoredTaskDraft } from "../../contracts/index.js";
 import { MAX_VARIANT_LABEL_LENGTH } from "../../contracts/variants.js";
+import type { TaskVariantRecord, TaskVariantStore } from "../../db/task-variants.js";
 import { extractRegularArchive } from "../../lib/archive.js";
 import { runCommand } from "../../lib/process.js";
 import { withTemporaryDirectory } from "../../sandbox/temporary.js";
 import { revisionPrefix, SOURCE_BUNDLE } from "./revision.js";
+import type { TaskWorkflows } from "./workflow-client.js";
 
 const MAX_FILE_BYTES = 64 * 1024;
 
@@ -34,12 +36,12 @@ const appPath = z
   );
 
 /**
- * A variant's condition: the environment changes made to an accepted task, and nothing else. Its
+ * An environment: changes made to each approved task's files, and nothing else. A task's
  * instruction, hidden tests, and reference solution stay byte for byte the original's.
  */
-const variantConditionSchema = z
+const environmentSchema = z
   .object({
-    label: z.string().trim().min(1).max(MAX_VARIANT_LABEL_LENGTH),
+    name: z.string().trim().min(1).max(MAX_VARIANT_LABEL_LENGTH),
     /** Packages installed over the task's own, such as a framework build from a pull request. */
     packages: z
       .array(
@@ -54,42 +56,47 @@ const variantConditionSchema = z
       )
       .max(10)
       .default([]),
-    /** Files written into /app, such as an AGENTS.md block that points agents at docs. */
+    /**
+     * Files in /app: written (replace), added to (append), such as an AGENTS.md block that points
+     * agents at docs, or removed (delete), such as AGENTS.md itself.
+     */
     files: z
       .array(
         z
           .object({
             path: appPath,
-            mode: z.enum(["replace", "append"]),
+            mode: z.enum(["replace", "append", "delete"]),
             content: z
               .string()
-              .refine((text) => Buffer.byteLength(text) <= MAX_FILE_BYTES, "at most 64 KB"),
+              .refine((text) => Buffer.byteLength(text) <= MAX_FILE_BYTES, "at most 64 KB")
+              .default(""),
           })
-          .strict(),
+          .strict()
+          .transform((file) => (file.mode === "delete" ? { ...file, content: "" } : file)),
       )
       .max(10)
       .default([]),
   })
   .strict()
-  .refine((condition) => condition.packages.length + condition.files.length > 0, {
-    message: "a variant changes at least one package or file",
+  .refine((environment) => environment.packages.length + environment.files.length > 0, {
+    message: "an environment changes at least one package or file",
   });
 
-export type VariantCondition = z.infer<typeof variantConditionSchema>;
+export type EnvironmentSpec = z.infer<typeof environmentSchema>;
 
-/** POST …/tasks/<run>/<task>/variants: the change, and the generation settings its checks use. */
-export const variantRequestSchema = z
-  .object({ variant: variantConditionSchema, generation: z.unknown().optional() })
+/** POST {repo}/environments: the changes, and the generation settings each task's check uses. */
+export const environmentRequestSchema = z
+  .object({ environment: environmentSchema, generation: z.unknown().optional() })
   .strict();
 
 /**
- * The Dockerfile steps a condition adds after the author's own. They run before SelfBench commits
+ * The Dockerfile steps an environment adds after the author's own. They run before SelfBench commits
  * the task's starting tree (render.ts), so both images get them and they never reach the agent's
  * diff. Values are validated above and quoted, so none can break out of its shell word.
  */
-function variantDockerfileSteps(condition: VariantCondition): string {
-  const steps = [`# SelfBench variant: ${condition.label.replace(/[\r\n]/g, " ")}`];
-  for (const pkg of condition.packages) {
+function variantDockerfileSteps(environment: EnvironmentSpec): string {
+  const steps = [`# SelfBench environment: ${environment.name.replace(/[\r\n]/g, " ")}`];
+  for (const pkg of environment.packages) {
     const target = `'${pkg.name}@${pkg.spec}'`;
     const dir = pkg.directory ? `/app/${pkg.directory}` : "/app";
     const has = (file: string) => `{ [ -f ${file} ] || [ -f /app/${file} ]; }`;
@@ -101,9 +108,13 @@ function variantDockerfileSteps(condition: VariantCondition): string {
         `else npm install ${target}; fi`,
     );
   }
-  for (const file of condition.files) {
-    const encoded = Buffer.from(file.content).toString("base64");
+  for (const file of environment.files) {
     const path = `/app/${file.path}`;
+    if (file.mode === "delete") {
+      steps.push(`RUN rm -rf -- ${path}`);
+      continue;
+    }
+    const encoded = Buffer.from(file.content).toString("base64");
     steps.push(
       `RUN mkdir -p "$(dirname ${path})" && printf %s '${encoded}' | base64 -d ${file.mode === "append" ? ">>" : ">"} ${path}`,
     );
@@ -113,13 +124,13 @@ function variantDockerfileSteps(condition: VariantCondition): string {
 
 /**
  * Stores the variant's starting draft in its own run: the original's last submission with the
- * condition's steps appended to its Dockerfile, every other file unchanged.
+ * environment's steps appended to its Dockerfile, every other file unchanged.
  */
 export async function stageVariantDraft(
   store: ArtifactStore,
   runId: string,
   draft: AuthoredTaskDraft,
-  condition: VariantCondition,
+  environment: EnvironmentSpec,
 ): Promise<AuthoredTaskDraft> {
   const bytes = await withTemporaryDirectory("selfbench-variant-", async (root) => {
     const archive = join(root, SOURCE_BUNDLE);
@@ -129,7 +140,7 @@ export async function stageVariantDraft(
     await extractRegularArchive(archive, unpacked);
     const dockerfile = join(unpacked, "Dockerfile");
     const authored = await readFile(dockerfile, "utf8");
-    await writeFile(dockerfile, `${authored.trimEnd()}\n\n${variantDockerfileSteps(condition)}`);
+    await writeFile(dockerfile, `${authored.trimEnd()}\n\n${variantDockerfileSteps(environment)}`);
     const repacked = join(root, "variant.tar.gz");
     await runCommand("tar", ["-czf", repacked, "-C", unpacked, ...(await readdir(unpacked))]);
     return await readFile(repacked);
@@ -140,4 +151,36 @@ export async function stageVariantDraft(
     "application/gzip",
   );
   return { ...draft, sourceBundle };
+}
+
+/**
+ * Stops the checks of `variants` still running, as their environment or task is deleted: a deleted
+ * row's workflow would settle nothing, but keep its sandbox and model spend going until it ended.
+ * Each one stopped is settled as stopped (`markStopped`), so a later deletion skips it. Returns how
+ * many did not stop, so the deletion can say so and be repeated.
+ */
+export async function stopVariantChecks(
+  variants: readonly Pick<TaskVariantRecord, "id" | "pipelineStatus" | "workflowId">[],
+  workflows: Pick<TaskWorkflows, "cancel"> | undefined,
+  store: Pick<TaskVariantStore, "markStopped">,
+): Promise<number> {
+  if (!workflows) return 0;
+  const results = await Promise.all(
+    variants.flatMap((variant) =>
+      variant.pipelineStatus === "in_progress" && variant.workflowId
+        ? [
+            workflows.cancel(variant.workflowId).then(
+              () => variant.id,
+              (error: unknown) => {
+                console.error(`variant check ${variant.workflowId} did not stop:`, error);
+                return undefined;
+              },
+            ),
+          ]
+        : [],
+    ),
+  );
+  const stopped = results.filter((id): id is number => id !== undefined);
+  await store.markStopped(stopped);
+  return results.length - stopped.length;
 }

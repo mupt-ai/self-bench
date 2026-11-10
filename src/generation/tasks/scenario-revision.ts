@@ -1,7 +1,7 @@
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { SelfBenchConfig } from "../../contracts/config/index.js";
 import type { AuthoredTaskDraft } from "../../contracts/index.js";
-import type { TaskRecord, TaskStore } from "../../db/tasks.js";
+import type { TaskRecord, TaskStart } from "../../db/tasks.js";
 import type { Vault } from "../../db/vault.js";
 import { saveGenerationRecords } from "../settings/credentials.js";
 import type { GenerationReference } from "../settings/settings.js";
@@ -14,35 +14,34 @@ import {
 import type { WorkflowStarter } from "./start.js";
 
 /**
- * A scenario task's revision: a new task of the same scenario, in a run of its own, that keeps the
- * original's candidate, title, tier, attachments, and for a repository scenario its commit, and
- * starts from `stage`'s draft with the person's feedback.
+ * A scenario task's revision: a new run of the same scenario that keeps the original's candidate,
+ * title, tier, attachments, and for a repository scenario its commit, and starts from `stage`'s
+ * draft with the person's feedback. `reserve` records it before its workflow starts: as a task
+ * row for a revision, or as a variant (variant.ts), whose draft is only checked (`verifyOnly`).
  */
-export async function reviseScenario(options: {
+export async function reviseScenario<Row extends { readonly runId: string }>(options: {
   readonly config: SelfBenchConfig;
   readonly artifacts: ArtifactStore;
-  readonly tasks: TaskStore;
   readonly start: WorkflowStarter;
   readonly vault?: Vault;
   readonly repository: { readonly id: number; readonly fullName: string };
   readonly task: TaskRecord;
   readonly startedBy: number;
-  /** With `variant`, a variant (variant.ts): its draft is only checked, never re-authored. */
-  readonly revision: {
-    readonly from: number;
-    readonly feedback: string;
-    readonly variant?: string;
-  };
+  readonly feedback: string;
+  readonly verifyOnly?: boolean;
+  /** For a variant: its task's run, whose image cache its build reads (TaskRevision.cacheFrom). */
+  readonly cacheFrom?: string;
+  readonly reserve: (row: TaskStart) => Promise<Row>;
   readonly stage: (runId: string) => Promise<AuthoredTaskDraft>;
   readonly generation?: GenerationReference;
   /** The person's GitHub token, which a repository scenario's run keeps to clone its commit. */
   readonly token?: string;
-}): Promise<TaskRecord> {
+}): Promise<Row> {
   const { artifacts, task, repository } = options;
   const title = task.title ?? task.taskId;
   const scenario = await originalScenario(artifacts, task);
   const baseCommit = task.baseCommit;
-  const row = await options.tasks.reserveStarted({
+  const row = await options.reserve({
     repoId: repository.id,
     runId: scenarioRunId(repository.fullName),
     candidateId: task.candidateId,
@@ -52,8 +51,6 @@ export async function reviseScenario(options: {
     ...(baseCommit ? { baseCommit } : {}),
     stage: "authoring",
     startedBy: options.startedBy,
-    revision: { from: options.revision.from, feedback: options.revision.feedback },
-    ...(options.revision.variant ? { variant: options.revision.variant } : {}),
   });
   const attachments = await artifacts.stat(scenarioKeys(task.runId, task.candidateId).attachments);
   const staged = await stageScenario({
@@ -82,8 +79,9 @@ export async function reviseScenario(options: {
     ...(options.generation ? { generation: options.generation } : {}),
     revision: {
       draft: await options.stage(row.runId),
-      feedback: options.revision.feedback,
-      ...(options.revision.variant ? { verifyOnly: true } : {}),
+      feedback: options.feedback,
+      ...(options.verifyOnly ? { verifyOnly: true } : {}),
+      ...(options.cacheFrom ? { cacheFrom: options.cacheFrom } : {}),
     },
   });
   return row;

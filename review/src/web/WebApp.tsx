@@ -10,6 +10,7 @@ import { BenchmarkReleasesPage } from "./benchmarks/BenchmarkReleasesPage";
 import { BenchmarksPage } from "./benchmarks/BenchmarksPage";
 import { BenchmarkTaskPage } from "./benchmarks/BenchmarkTaskPage";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { EnvironmentsPage } from "./environments/EnvironmentsPage";
 import { CredentialsPage } from "./evaluation/CredentialsPage";
 import { DemoRunPage } from "./evaluation/DemoRunPage";
 import { EvaluationPage } from "./evaluation/EvaluationPage";
@@ -132,6 +133,7 @@ export function WebApp() {
                     <Route path="releases" element={<ReleasesPage />} />
                     <Route path="dataset" element={<Navigate to=".." replace />} />
                     <Route path="run" element={<RunPage />} />
+                    <Route path="environments" element={<EnvironmentsPage />} />
                     <Route path="settings" element={<RepoSettingsPage />} />
                     <Route
                       path="settings/credentials"

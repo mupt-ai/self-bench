@@ -190,7 +190,10 @@ export function SortIcon({ order }: { order: "ascending" | "descending" | undefi
   );
 }
 
-/** The vendor's color, the model, and its reasoning, harness and the routes its runs took. */
+/**
+ * The vendor's color, the model and the run condition it ran under, and its reasoning, harness and
+ * the routes its runs took.
+ */
 export function ConfigurationName({ configuration }: { configuration: Configuration }) {
   return (
     <span className="flex min-w-0 items-center gap-2">
@@ -200,7 +203,15 @@ export function ConfigurationName({ configuration }: { configuration: Configurat
         aria-hidden="true"
       />
       <span className="min-w-0">
-        <span className="block truncate font-semibold">{configuration.label}</span>
+        <span className="block truncate font-semibold">
+          {configuration.label}
+          {configuration.condition && (
+            <span className="font-normal text-muted-foreground">
+              {" "}
+              · {configuration.condition.name}
+            </span>
+          )}
+        </span>
         <span
           className="block truncate font-mono text-xs font-normal text-muted-foreground"
           title={configurationDetail(configuration)}

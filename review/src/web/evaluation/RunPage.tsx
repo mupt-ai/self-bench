@@ -1,5 +1,5 @@
 import React from "react";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import type { CatalogModel, HostedSandbox } from "../../../../src/evaluation/catalog";
 import { evaluationTaskKey } from "../../../../src/evaluation/models";
 import type { JudgeNeeds } from "../../../../src/harnesses/harbor/host-variables";
@@ -7,7 +7,7 @@ import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { covered, setupCoverage } from "../setup/readiness";
 import { useOrgCredentials } from "../setup/SetupStatus";
-import { Button, Notice, PageContent, PageHeader } from "../ui";
+import { Notice, PageContent, PageHeader } from "../ui";
 import { type EvaluationOptions, evaluationRequest, evaluationRequestId } from "./api";
 import {
   type ComparisonReceipt,
@@ -16,6 +16,7 @@ import {
   UnsavedComparisonError,
 } from "./comparison-submission";
 import { ResourceWarnings } from "./ResourceWarnings";
+import { conditionsProblem, RunConditionsPanel, submittedConditions } from "./RunConditionsPanel";
 import {
   RunBlockerNotice,
   type RunDraft,
@@ -26,6 +27,7 @@ import {
 import { judgeCredentials, RunJudgePanel } from "./RunJudgePanel";
 import { RunMissing } from "./RunMissing";
 import { RunModelsPanel } from "./RunModelsPanel";
+import { RunSubmitted } from "./RunSubmitted";
 import { RunTaskPicker } from "./RunTaskPicker";
 import { restoreRunDraft } from "./run-draft";
 import { runCredentials, selectionReady } from "./run-readiness";
@@ -141,10 +143,12 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
   const judgeReady =
     !judge?.variables.length ||
     judgeCredentials(credentials ?? []).some((entry) => entry.id === draft.judgeCredentialId);
+  const conditions = conditionsProblem(draft);
   const ready =
     tasksReady &&
     draft.tasks.length > 0 &&
     judgeReady &&
+    !conditions &&
     selectionReady({
       draft,
       models,
@@ -156,7 +160,9 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
   const blocker =
     !judgeReady && tasksReady && !state.submitted
       ? "Select a judge credential to continue."
-      : runBlocker({ draft, ready, submitted: state.submitted, tasksReady, pairs });
+      : conditions && !state.submitted
+        ? conditions
+        : runBlocker({ draft, ready, submitted: state.submitted, tasksReady, pairs });
   const finish = (result: ComparisonReceipt) => {
     if (result.submissionError) return setError(result.submissionError);
     sessionStorage.removeItem(key);
@@ -169,7 +175,7 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
     setError("");
     const frozen = state.submitted
       ? draft
-      : { ...draft, models: selected, skipCompleted: missingOnly };
+      : { ...draft, models: selected, skipCompleted: missingOnly, ...submittedConditions(draft) };
     const pending = { draft: frozen, submitted: true };
     setState(pending);
     try {
@@ -214,31 +220,16 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
         <RunMissing url={url} pages={pages} tasks={availableTasks} />
       )}
       {state.submitted && (
-        <div className="panel mb-5 flex flex-wrap items-center justify-between gap-3 p-4">
-          <p className="text-sm">These settings belong to a submitted request.</p>
-          <div className="flex flex-wrap items-center gap-3">
-            <Link
-              className="text-sm font-semibold text-foreground underline underline-offset-4"
-              to={`${pages}/results`}
-            >
-              View Results
-            </Link>
-            <Button type="button" variant="primary" disabled={busy} onClick={() => void resume()}>
-              {busy ? "Resuming…" : "Resume Submission"}
-            </Button>
-            <Button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                setState({ submitted: false, draft: { ...draft, id: evaluationRequestId() } });
-                setError("");
-                setWarnings([]);
-              }}
-            >
-              New Comparison
-            </Button>
-          </div>
-        </div>
+        <RunSubmitted
+          pages={pages}
+          busy={busy}
+          onResume={() => void resume()}
+          onNew={() => {
+            setState({ submitted: false, draft: { ...draft, id: evaluationRequestId() } });
+            setError("");
+            setWarnings([]);
+          }}
+        />
       )}
       {(error || credentialsError) && <Notice className="mb-5">{error || credentialsError}</Notice>}
       <ResourceWarnings warnings={warnings} onContinue={() => void navigate(`${pages}/results`)} />
@@ -256,6 +247,11 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
           setState((current) => ({ ...current, draft: { ...current.draft, tasks } }))
         }
         disabled={busy || state.submitted}
+      />
+      <RunConditionsPanel
+        draft={draft}
+        disabled={busy || state.submitted}
+        onChange={(value) => setState((current) => ({ ...current, draft: value }))}
       />
       {judge?.variables.length ? (
         <RunJudgePanel

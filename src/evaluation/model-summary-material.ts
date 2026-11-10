@@ -42,6 +42,7 @@ export const configurationName = (setting: Setting) =>
     modelName(setting.label),
     `${setting.reasoningLevel} reasoning`,
     harnessLabels[setting.harness],
+    ...(setting.condition ? [setting.condition.name] : []),
   ].join(" · ");
 
 /** The start of a text, cut at `limit` characters. */

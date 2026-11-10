@@ -1,6 +1,6 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { Database } from "../../db/client.js";
-import { tasks } from "../../db/schema.js";
+import { tasks, taskVariants } from "../../db/schema.js";
 
 export class TaskNotFoundError extends Error {
   constructor() {
@@ -36,6 +36,12 @@ export function tombstoneTask(
       .update(tasks)
       .set({ deletedAt: now() })
       .where(and(eq(tasks.id, task.id), eq(tasks.repoId, repoId)));
+    // Its variants go with it: their trials leave current results as the task's do, and a check
+    // still running settles nothing, since a variant's writes skip deleted rows.
+    await tx
+      .update(taskVariants)
+      .set({ deletedAt: now() })
+      .where(and(eq(taskVariants.parentId, task.id), isNull(taskVariants.deletedAt)));
     return "deleted";
   });
 }

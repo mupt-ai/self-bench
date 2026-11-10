@@ -43,9 +43,19 @@ A scenario starts from a description instead of a PR.
 
 Name the mistake the agent made and what a careful person would do. Attach real files where you can. One scenario is one data point, so write several.
 
-## Variants
+## Conditions
 
-A variant tests an environment change on an accepted task: a package build, docs, or an `AGENTS.md`. It keeps the instruction, tests, and reference solution byte for byte, and no author runs. Run the task and its variant with the same models, several times each, and compare pass rates.
+A condition runs every task again with one thing changed, beside the **Baseline**, the tasks as they are. Add conditions on the Run page's **Conditions** panel, and every model and harness runs every task under each.
+
+| Field | Does |
+| --- | --- |
+| Environment | Runs each task as an environment built it, with its files changed. Tasks it has no ready build for are left out. |
+| Skills | GitHub repositories whose `skills/` folder Harbor installs for the agent: `org/repo`, `org/repo@ref`, or a URL. Claude Code, Codex, and Pi load them. |
+| Extra Instructions | Appended to every task's instruction |
+
+An **environment** changes every approved task's files: a package build installed over the task's own, or a file appended to, replaced, or deleted, such as `AGENTS.md`. Create one on the **Environments** tab. Each task is built and checked once, never re-authored, so its instruction, tests, and reference solution stay the same; **Build Missing Tasks** builds tasks approved since and ones whose check failed.
+
+Results count a condition's runs as the task's own, so each condition is a row beside the baseline, and the **Condition** filter narrows to one. Releases publish only the baseline.
 
 ## Results
 
