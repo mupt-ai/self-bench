@@ -59,7 +59,7 @@ export function FailureExplanationForm({
   const inFlight = useRef(false);
   useEffect(() => {
     let disposed = false;
-    const orgUrl = baseUrl.split(/\/(?:repos|benchmarks)\//)[0];
+    const orgUrl = orgUrlOf(baseUrl);
     Promise.all([
       evaluationRequest<{ credentials: CredentialInfo[] }>(`${orgUrl}/credentials`),
       evaluationRequest<{ models: CatalogModel[] }>(`${baseUrl}/catalog`),
@@ -186,4 +186,12 @@ export function FailureExplanationForm({
       )}
     </section>
   );
+}
+
+/**
+ * The workspace's API address (`/api/orgs/<org>`) from any of its scopes' evaluation addresses:
+ * a repository's, a public benchmark's, or a group's, whose saved keys are the workspace's.
+ */
+export function orgUrlOf(baseUrl: string): string {
+  return /^\/api\/orgs\/[^/]+/.exec(baseUrl)?.[0] ?? baseUrl;
 }
