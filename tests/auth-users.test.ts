@@ -163,6 +163,15 @@ describe("user store", () => {
       "acme",
       "acme-evals",
     ]);
+    // Leaving GitHub's acme doesn't take the creator out of the workspace they made, or the
+    // workspace acme left behind.
+    await signIn(40, "acme-admin", "admin");
+    await store.upsert({ githubId: 40, login: "acme-admin", token: "t", scopes: "", orgs: [] });
+    expect((await store.orgsFor(admin.id)).map((org) => org.login)).toEqual([
+      "acme-admin",
+      "acme",
+      "acme-evals",
+    ]);
   });
 
   test("an invite outlasts GitHub, and a workspace never loses its last admin", async () => {

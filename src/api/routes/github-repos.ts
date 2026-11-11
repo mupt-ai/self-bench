@@ -56,7 +56,8 @@ export function createGitHubRepoRoutes(options: GitHubRepoRoutesOptions): GitHub
   const listRepos = async (user: User, org: string): Promise<RepoSummary[] | undefined> => {
     const tenant = await tenantFor(users, user, org);
     if (!tenant) return undefined;
-    const key = `${user.id}:${tenant.login}`;
+    // Keyed by the connected accounts too, so connecting or moving a GitHub org lists it at once.
+    const key = `${user.id}:${tenant.id}:${tenant.github.map((account) => account.githubId).join(",")}`;
     const cached = cache.get(key);
     if (cached && now().getTime() - cached.at < CACHE_TTL_MS) return cached.repos;
     const token = await users.gitHubToken(user.githubId);

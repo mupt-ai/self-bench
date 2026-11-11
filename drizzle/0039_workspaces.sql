@@ -20,13 +20,28 @@ CREATE TABLE "org_invites" (
 INSERT INTO "github_connections" ("github_id", "org_id", "login", "kind", "created_at", "updated_at")
 SELECT "github_id", "id", "login", "kind", "created_at", "updated_at" FROM "orgs";--> statement-breakpoint
 -- Slugs are unique case-insensitively now; a renamed account could have left two alike. The
--- newest keeps the name, older ones get their id appended.
-UPDATE "orgs" SET "login" = "orgs"."login" || '-' || "orgs"."id"
-FROM (
-	SELECT "id", row_number() OVER (PARTITION BY lower("login") ORDER BY "updated_at" DESC, "id" DESC) AS "n"
-	FROM "orgs"
-) "ranked"
-WHERE "ranked"."id" = "orgs"."id" AND "ranked"."n" > 1;--> statement-breakpoint
+-- newest keeps the name; each older one takes the first free `<login>-<n>`.
+DO $$
+DECLARE
+	dup record;
+	n integer;
+BEGIN
+	FOR dup IN
+		SELECT "id", "login" FROM (
+			SELECT "id", "login", row_number() OVER (
+				PARTITION BY lower("login") ORDER BY "updated_at" DESC, "id" DESC
+			) AS "rank"
+			FROM "orgs"
+		) "ranked"
+		WHERE "rank" > 1
+	LOOP
+		n := 2;
+		WHILE EXISTS (SELECT 1 FROM "orgs" WHERE lower("login") = lower(dup."login" || '-' || n)) LOOP
+			n := n + 1;
+		END LOOP;
+		UPDATE "orgs" SET "login" = dup."login" || '-' || n WHERE "id" = dup."id";
+	END LOOP;
+END $$;--> statement-breakpoint
 ALTER TABLE "orgs" DROP CONSTRAINT "orgs_github_id_unique";--> statement-breakpoint
 DROP INDEX "orgs_login";--> statement-breakpoint
 ALTER TABLE "org_members" ADD COLUMN "source" text DEFAULT 'github' NOT NULL;--> statement-breakpoint

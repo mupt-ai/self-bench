@@ -189,7 +189,7 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
         if (!org) throw new Error("workspace insert returned no row");
         await tx
           .insert(orgMembers)
-          .values({ orgId: org.id, userId, role: "admin", source: "invite" });
+          .values({ orgId: org.id, userId, role: "admin", source: "invite", invited: true });
         return org;
       });
     },
@@ -231,7 +231,7 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
         if (!remaining)
           await tx
             .update(orgMembers)
-            .set({ source: "invite" })
+            .set({ source: "invite", invited: true })
             .where(eq(orgMembers.orgId, connection.orgId));
       });
     },
