@@ -165,6 +165,31 @@ describe("user store", () => {
     ]);
   });
 
+  test("an invite outlasts GitHub, and a workspace never loses its last admin", async () => {
+    const store = createUserStore(database.db, { secret: testAuthConfig.sessionSecret });
+    const signIn = (
+      githubId: number,
+      login: string,
+      orgs: { githubId: number; login: string; role: "admin" | "member" }[],
+    ) => store.upsert({ githubId, login, token: "t", scopes: "", orgs });
+    const lead = await signIn(50, "lead", [{ githubId: 900, login: "crew", role: "admin" }]);
+    const crew = (await store.orgsFor(lead.id)).find((org) => org.login === "crew");
+    if (!crew) throw new Error("crew workspace missing");
+
+    // Invited before joining the GitHub org, then signing in as a member of both.
+    await store.invite(crew.id, "pal", "admin", lead.id);
+    const pal = await signIn(51, "pal", [{ githubId: 900, login: "crew", role: "member" }]);
+    expect((await store.orgsFor(pal.id)).find((org) => org.id === crew.id)?.role).toBe("admin");
+    await signIn(51, "pal", []);
+    expect((await store.orgsFor(pal.id)).some((org) => org.id === crew.id)).toBe(true);
+
+    // The only other admin leaves GitHub: pal already is one, so nothing changes; then pal is
+    // demoted and the lead leaves, so the longest-standing member becomes admin.
+    await store.setRole(crew.id, "pal", "member");
+    await signIn(50, "lead", []);
+    expect((await store.orgsFor(pal.id)).find((org) => org.id === crew.id)?.role).toBe("admin");
+  });
+
   test("a new workspace takes a free slug when its GitHub login is taken", async () => {
     const store = createUserStore(database.db, { secret: testAuthConfig.sessionSecret });
     const user = await store.upsert({

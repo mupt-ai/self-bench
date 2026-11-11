@@ -183,7 +183,7 @@ export function createUserStore(
             });
         }
         // Gone from a connected GitHub org means gone from its workspace; invited members stay.
-        await tx
+        const dropped = await tx
           .delete(orgMembers)
           .where(
             and(
@@ -191,7 +191,28 @@ export function createUserStore(
               eq(orgMembers.source, "github"),
               kept.length ? notInArray(orgMembers.orgId, kept) : undefined,
             ),
-          );
+          )
+          .returning({ orgId: orgMembers.orgId, role: orgMembers.role });
+        // A workspace whose last admin just left keeps one: its longest-standing member.
+        for (const { orgId } of dropped.filter((member) => member.role === "admin")) {
+          const [admin] = await tx
+            .select({ userId: orgMembers.userId })
+            .from(orgMembers)
+            .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.role, "admin")))
+            .limit(1);
+          if (admin) continue;
+          const [next] = await tx
+            .select({ userId: orgMembers.userId })
+            .from(orgMembers)
+            .where(eq(orgMembers.orgId, orgId))
+            .orderBy(asc(orgMembers.userId))
+            .limit(1);
+          if (next)
+            await tx
+              .update(orgMembers)
+              .set({ role: "admin" })
+              .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, next.userId)));
+        }
         // Invitations to this login are accepted on sign-in.
         const invites = await tx
           .delete(orgInvites)
@@ -207,7 +228,15 @@ export function createUserStore(
               source: "invite",
               syncedAt: now(),
             })
-            .onConflictDoNothing();
+            // Already in through GitHub: the invite still counts, so leaving GitHub keeps them,
+            // and an admin invite raises the role but a member invite never lowers it.
+            .onConflictDoUpdate({
+              target: [orgMembers.orgId, orgMembers.userId],
+              set: {
+                source: "invite",
+                role: sql`case when excluded.role = 'admin' then 'admin' else ${orgMembers.role} end`,
+              },
+            });
         }
         return userFrom(row);
       });
