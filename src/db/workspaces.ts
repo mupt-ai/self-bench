@@ -59,6 +59,27 @@ export interface WorkspaceStore {
   rename(orgId: number, name: string | null): Promise<void>;
 }
 
+/** If the workspace has no admin left, makes its longest-standing member one. */
+export async function keepAnAdmin(db: Pick<Database, "select" | "update">, orgId: number) {
+  const [admin] = await db
+    .select({ userId: orgMembers.userId })
+    .from(orgMembers)
+    .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.role, "admin")))
+    .limit(1);
+  if (admin) return;
+  const [next] = await db
+    .select({ userId: orgMembers.userId })
+    .from(orgMembers)
+    .where(eq(orgMembers.orgId, orgId))
+    .orderBy(asc(orgMembers.userId))
+    .limit(1);
+  if (next)
+    await db
+      .update(orgMembers)
+      .set({ role: "admin" })
+      .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, next.userId)));
+}
+
 export function createWorkspaceStore(db: Database): WorkspaceStore {
   const userIdOf = async (login: string) =>
     (

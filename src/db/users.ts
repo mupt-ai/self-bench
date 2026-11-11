@@ -3,7 +3,7 @@ import { createSecretBox, deriveKey } from "../api/auth/crypto.js";
 import type { GitHubProfile, OrgMembership } from "../third_party/github/oauth.js";
 import type { Database } from "./client.js";
 import { githubConnections, orgInvites, orgMembers, orgs, users } from "./schema.js";
-import { createWorkspaceStore, type WorkspaceStore } from "./workspaces.js";
+import { createWorkspaceStore, keepAnAdmin, type WorkspaceStore } from "./workspaces.js";
 
 /** How an API-key request identifies itself; absent on cookie sessions. */
 export interface ApiKeyRef {
@@ -194,25 +194,8 @@ export function createUserStore(
           )
           .returning({ orgId: orgMembers.orgId, role: orgMembers.role });
         // A workspace whose last admin just left keeps one: its longest-standing member.
-        for (const { orgId } of dropped.filter((member) => member.role === "admin")) {
-          const [admin] = await tx
-            .select({ userId: orgMembers.userId })
-            .from(orgMembers)
-            .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.role, "admin")))
-            .limit(1);
-          if (admin) continue;
-          const [next] = await tx
-            .select({ userId: orgMembers.userId })
-            .from(orgMembers)
-            .where(eq(orgMembers.orgId, orgId))
-            .orderBy(asc(orgMembers.userId))
-            .limit(1);
-          if (next)
-            await tx
-              .update(orgMembers)
-              .set({ role: "admin" })
-              .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, next.userId)));
-        }
+        for (const { orgId } of dropped.filter((member) => member.role === "admin"))
+          await keepAnAdmin(tx, orgId);
         // Invitations to this login are accepted on sign-in.
         const invites = await tx
           .delete(orgInvites)
