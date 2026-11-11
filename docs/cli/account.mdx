@@ -1,0 +1,29 @@
+---
+title: "CLI: Account and Credentials"
+sidebarTitle: "Account and Credentials"
+description: "Sign in, pick a workspace, and connect model and sandbox credentials."
+icon: "key"
+---
+
+## Account
+
+| Command | Does |
+| --- | --- |
+| `login [--api-url URL] [--no-browser]` | Sign in through the browser; saves a key and the workspace |
+| `org` · `org use [NAME]` | Show or change the workspace |
+| `whoami` | The account, its workspaces and roles, and the key's scope |
+| `logout` | Revoke the saved key and forget it |
+
+## Credentials
+
+Workspace admins connect the model access and sandboxes runs use. Secrets never go in an argument, so they stay out of shell history.
+
+| Command | Does |
+| --- | --- |
+| `credentials` | Saved credentials, with the IDs flags take |
+| `credential add` | Pick a provider, then paste its key (masked) or sign in |
+| `credential add --kind KIND (--value-env VAR \| --value-stdin) [--name NAME]` | Add a key without prompts |
+| `credential add --sign-in chatgpt\|claude\|meta` | A ChatGPT, Claude, or Meta sign-in |
+| `credential rename ID NAME` · `credential remove ID` | Rename or remove one |
+
+`KIND` is `openai`, `anthropic`, `meta`, `openrouter`, `vercel-ai-gateway`, `dari`, `custom` (with `--endpoint`), `e2b`, `modal` (with `--token-id`), `daytona`, or `vercel` (with `--team-id` and `--project-id`). See [Credentials](/concepts/credentials).

@@ -1,0 +1,23 @@
+---
+title: "API: Benchmarks and Groups"
+sidebarTitle: "Benchmarks and Groups"
+description: "Evaluate Harbor registry datasets, and pool repositories into groups."
+icon: "layer-group"
+---
+
+A benchmark or group is a [scope](/api/overview#conventions) for evaluation and results routes. Benchmarks are never released.
+
+| Method | Route | Does |
+| --- | --- | --- |
+| `GET`, `POST` | `/api/orgs/{org}/benchmarks` | List or add Harbor datasets |
+| `GET`, `DELETE` | `/api/orgs/{org}/benchmarks/{dataset-org}/{dataset}` | Read or remove one |
+| `GET` | `…/{dataset-org}/{dataset}/tasks` · `/registry` | Its tasks; registry datasets to choose from |
+| `GET`, `POST` | `/api/orgs/{org}/groups` | List or create groups |
+| `GET`, `PUT`, `DELETE` | `/api/orgs/{org}/groups/{slug}` | Read, edit, or delete one |
+
+## Request Bodies
+
+| Route | Body |
+| --- | --- |
+| `POST /api/orgs/{org}/benchmarks` | `{ reference: "org/name" or "org/name@ref" }` |
+| `POST /api/orgs/{org}/groups` | `{ name, slug, description?, repositoryIds }` |

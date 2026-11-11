@@ -1,0 +1,26 @@
+---
+title: "CLI: Build Tasks"
+sidebarTitle: "Build Tasks"
+description: "Connect repositories and evals, and generate tasks from merged PRs or described scenarios."
+icon: "hammer"
+---
+
+`R` is `--repo OWNER/NAME`, or another [scope](/cli/overview#conventions).
+
+| Command | Does |
+| --- | --- |
+| `repos` | Connected repositories and evals |
+| `repo connect\|show\|disconnect R` | Connect, read, or disconnect a repository |
+| `repo set R --agent-minutes N` | How long an agent may work on each task |
+| `eval create NAME` | A workspace eval; then use `--repo evals/NAME` |
+| `prs R [--page N]` | Merged pull requests |
+| `generate R --easy N --medium N --hard N [--focus TEXT]` | Start a batch that picks PRs and authors tasks |
+| `task add-pr R --pr NUMBER\|URL` | A task from one merged PR |
+| `scenario create R --title T (--scenario TEXT \| --scenario-file F) [--commit REF] [--attach F ...] [--difficulty D]` | A task from a described scenario |
+| `batches R` · `batch show\|cancel RUN_ID R` | Follow or stop batches |
+
+## Generation Options
+
+`generate`, `task add-pr`, `scenario create`, and `task revise` take `--model`, `--verifier-model`, `--reasoning`, `--model-credential`, `--sandbox`, `--sandbox-credential`, `--harbor`, and `--harbor-credential`, or `--generation JSON|@FILE`. Without them, they use managed models and sandbox.
+
+See [How It Works](/concepts/how-it-works) for what makes a task valid.
