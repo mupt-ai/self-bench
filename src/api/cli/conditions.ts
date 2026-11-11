@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { harborAgentOptions } from "../../contracts/harbor-agent-options.js";
 import { flag, list, type Values } from "./args.js";
 
 /**
@@ -31,9 +32,20 @@ export async function conditionsFromFlags(values: Values): Promise<Record<string
 }
 
 /**
- * `HARNESS.OPTION=VALUE` entries as a condition's harnessOptions. A value is read as JSON when it
- * is JSON (`30`, `true`, `{...}`) and as text otherwise, as Harbor reads its own `--ak`; `@FILE`
- * reads it from a file, such as a settings.json for Claude Code's `config`.
+ * Whether an option is text, so a value such as `2.10` stays as written. Reads the generated list
+ * alone, which keeps the CLI bundle free of the server's validation and model catalog.
+ */
+function textOption(harness: string, name: string): boolean {
+  const options: Record<string, readonly { name: string; kind: string }[]> = harborAgentOptions;
+  const option = options[harness]?.find((entry) => entry.name === name);
+  return option?.kind === "string" || option?.kind === "enum";
+}
+
+/**
+ * `HARNESS.OPTION=VALUE` entries as a condition's harnessOptions. A text option's value is taken
+ * as written; any other is read as JSON when it is JSON (`30`, `true`, `{...}`) and as text
+ * otherwise, as Harbor reads its own `--ak`. `@FILE` reads it from a file, such as a settings.json
+ * for Claude Code's `config`.
  */
 export async function harnessOptionsFromFlags(
   entries: readonly string[],
@@ -46,9 +58,10 @@ export async function harnessOptionsFromFlags(
     const [, harness = "", name = "", raw = ""] = match;
     const text = raw.startsWith("@") ? await readFile(raw.slice(1), "utf8") : raw;
     let value: unknown = text;
-    try {
-      value = JSON.parse(text);
-    } catch {}
+    if (!textOption(harness, name))
+      try {
+        value = JSON.parse(text);
+      } catch {}
     options[harness] = { ...options[harness], [name]: value };
   }
   return options;

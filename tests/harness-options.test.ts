@@ -120,12 +120,17 @@ test("the CLI reads HARNESS.OPTION=VALUE as JSON when it is, as text otherwise, 
         "claude-code.append_system_prompt=Run the tests first.",
         `claude-code.config=@${settings}`,
         "codex.web_search=disabled",
+        // Text options stay as written, though they read as JSON numbers.
+        "claude-code.version=2.10",
+        "claude-code.max_budget_usd=10",
       ]),
     ).toEqual({
       "claude-code": {
         max_turns: 30,
         append_system_prompt: "Run the tests first.",
         config: { env: { A: "1" } },
+        version: "2.10",
+        max_budget_usd: "10",
       },
       codex: { web_search: "disabled" },
     });
