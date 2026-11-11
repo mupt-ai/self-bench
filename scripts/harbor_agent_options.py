@@ -16,6 +16,7 @@ it as a path or address on the worker rather than in the sandbox.
 import json
 import re
 import sys
+import types
 from typing import Any, Literal, Union, get_args, get_origin
 
 import harbor
@@ -76,7 +77,7 @@ def described(text: str | None) -> str:
 def kind_of(annotation: Any) -> tuple[str, list[str] | None] | None:
     """The option's kind as the Run page edits it, or None for a type it can't."""
     origin = get_origin(annotation)
-    if origin is Union or str(origin) == "types.UnionType":
+    if origin in (Union, types.UnionType):
         present = [arg for arg in get_args(annotation) if arg is not type(None)]
         return kind_of(present[0]) if len(present) == 1 else None
     if origin is not None and getattr(origin, "__name__", "") == "Annotated":
