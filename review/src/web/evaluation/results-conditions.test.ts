@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
 import { MAX_SKILLS } from "../../../../src/contracts/conditions";
 import { facets, matchingFacets } from "./configuration-facets";
-import { conditionsProblem } from "./RunConditionsPanel";
 import { credentials, NOW, passed, run } from "./results-fixture";
 import { configurationsOf } from "./results-model";
 import { configurationName } from "./results-presentation";
+import { conditionsProblem } from "./run-conditions";
 import { restoreRunDraft } from "./run-draft";
 
 const condition = { id: "abc123", name: "With Skills", skills: ["https://github.com/a/b"] };

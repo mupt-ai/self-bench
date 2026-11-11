@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import { MAX_SUMMARY_CONFIGURATIONS } from "../../contracts/model-summary-limit.js";
 import type { ResultsReport } from "../../evaluation/results-report.js";
 import type { TaskAudit } from "../../evaluation/task-audit.js";
@@ -14,6 +13,7 @@ import {
   taskRef,
   type Values,
 } from "./args.js";
+import { conditionsFromFlags } from "./conditions.js";
 import { percent, print, table, usd } from "./output.js";
 import { waitFor } from "./wait.js";
 
@@ -28,14 +28,35 @@ const SELECTION = {
   "skip-completed": { type: "boolean", default: false },
   "judge-credential": { type: "string" },
   condition: { type: "string", multiple: true },
+  "harness-option": { type: "string", multiple: true },
+  "options-name": { type: "string" },
   "no-baseline": { type: "boolean", default: false },
   selection: { type: "string" },
 } as const;
 
-/** `catalog`: the models, harnesses' sandboxes, and managed offer evaluations can use. */
+/**
+ * `catalog`: the models, harnesses' sandboxes, and managed offer evaluations can use; with
+ * `--harness H`, the options a condition can set on that harness (`--harness-option`).
+ */
 export async function catalogCommand(args: string[]): Promise<void> {
-  const { values } = parse(args);
+  const { values } = parse(args, { harness: { type: "string" } });
   const reply = await requestJson(`${scopePath(values)}/evaluations/catalog`);
+  const harness = flag(values, "harness");
+  if (harness) {
+    const options = (reply.harnessOptions as Record<string, HarnessOption[]> | undefined)?.[
+      harness
+    ];
+    if (!options) throw new Error(`no harness named ${harness}`);
+    print(values, options, () =>
+      table(options, [
+        ["OPTION", (option) => option.name],
+        ["KIND", (option) => (option.values ? option.values.join("|") : option.kind)],
+        ["DEFAULT", (option) => option.default],
+        ["DESCRIPTION", (option) => option.description],
+      ]),
+    );
+    return;
+  }
   const models = reply.models as { id: string; label: string; vendor?: string }[];
   print(values, reply, () =>
     table(models, [
@@ -44,6 +65,14 @@ export async function catalogCommand(args: string[]): Promise<void> {
       ["VENDOR", (model) => model.vendor],
     ]),
   );
+}
+
+interface HarnessOption {
+  name: string;
+  kind: string;
+  values?: string[];
+  default?: string | number | boolean;
+  description: string;
 }
 
 /**
@@ -81,26 +110,6 @@ export function selectionFromFlags(values: Values): Record<string, unknown> {
     ...(values["skip-completed"] === true ? { skipCompleted: true } : {}),
     ...(tasks.length ? { tasks } : {}),
     ...(judge ? { judgeCredentialId: judge } : {}),
-  };
-}
-
-/**
- * `--condition JSON|@FILE`, repeatable: each an object `{name, skills?, instructions?}`, or a file
- * holding one or a list. `--no-baseline` runs only the conditions.
- */
-async function conditionsFromFlags(values: Values): Promise<Record<string, unknown>> {
-  const conditions = (
-    await Promise.all(
-      list(values, "condition").map(async (given) => {
-        const text = given.startsWith("@") ? await readFile(given.slice(1), "utf8") : given;
-        const parsed: unknown = JSON.parse(text);
-        return Array.isArray(parsed) ? parsed : [parsed];
-      }),
-    )
-  ).flat();
-  return {
-    ...(conditions.length ? { conditions } : {}),
-    ...(values["no-baseline"] === true ? { baseline: false } : {}),
   };
 }
 

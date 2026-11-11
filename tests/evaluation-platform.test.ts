@@ -25,6 +25,10 @@ test("catalog is populated without keys and only exposes supported provider fami
       new Set(["dari", "openai", "anthropic", "meta", "openrouter"]),
     );
     expect(body.sandboxes).not.toContain("docker");
+    // What `catalog --harness` lists, and a condition's harnessOptions may set.
+    expect(
+      body.harnessOptions["claude-code"].map((option: { name: string }) => option.name),
+    ).toContain("append_system_prompt");
     expect((await fixture.request(`${fixture.base}/catalog`, {}, null)).status).toBe(401);
     expect((await fixture.request(credentialsUrl, {}, 2)).status).toBe(404);
   } finally {

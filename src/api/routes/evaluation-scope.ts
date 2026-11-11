@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ArtifactStore } from "../../artifacts/index.js";
+import { harborAgentOptions } from "../../contracts/harbor-agent-options.js";
 import type { ComparisonRecord } from "../../db/comparisons.js";
 import { RecordStoreError } from "../../db/encrypted-records.js";
 import type { User } from "../../db/users.js";
@@ -246,6 +247,8 @@ export async function handleScopedEvaluations(
       sandboxes: hostedSandboxes,
       customHosts: (env.SELFBENCH_CUSTOM_MODEL_HOSTS ?? "").split(",").filter(Boolean),
       managed: { ...managedOffer(env), sandbox: managedHarborEnvironment(env) === "modal" },
+      // What a run condition's harnessOptions may set on each harness (harness-options.ts).
+      harnessOptions: harborAgentOptions,
     });
   } else if (section === "options") {
     sendJson(response, 200, await dataset.options());

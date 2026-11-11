@@ -16,7 +16,7 @@ import {
   UnsavedComparisonError,
 } from "./comparison-submission";
 import { ResourceWarnings } from "./ResourceWarnings";
-import { conditionsProblem, RunConditionsPanel, submittedConditions } from "./RunConditionsPanel";
+import { RunConditionsPanel } from "./RunConditionsPanel";
 import {
   RunBlockerNotice,
   type RunDraft,
@@ -29,6 +29,7 @@ import { RunMissing } from "./RunMissing";
 import { RunModelsPanel } from "./RunModelsPanel";
 import { RunSubmitted } from "./RunSubmitted";
 import { RunTaskPicker } from "./RunTaskPicker";
+import { conditionsProblem, submittedConditions } from "./run-conditions";
 import { restoreRunDraft } from "./run-draft";
 import { runCredentials, selectionReady } from "./run-readiness";
 import { type EvaluationScope, useEvaluationScope } from "./useEvaluationScope";

@@ -46,7 +46,7 @@ curl https://app.selfbench.dev/api/me -H "Authorization: Bearer $SELFBENCH_API_K
 | | `GET`, `POST` | `{repo}/environments` | List environments, or create one and build every approved task in it |
 | | `GET`, `DELETE` | `{repo}/environments/{id}` | One environment with each task's check, or delete it |
 | | `POST` | `{repo}/environments/{id}/build` | Build the approved tasks it lacks or that failed |
-| Evaluate | `GET` | `{scope}/evaluations/catalog` | Models and sandboxes |
+| Evaluate | `GET` | `{scope}/evaluations/catalog` | Models, sandboxes, and each harness's options (`harnessOptions`) |
 | | `GET` | `{scope}/evaluations/options` | Tasks a comparison can run; any judge variables |
 | | `GET`, `POST` | `{scope}/evaluations/comparisons` | List or start comparisons |
 | | `GET` | `{scope}/evaluations/comparisons/{id}` | A comparison's progress |
@@ -86,7 +86,7 @@ Routes not listed here take no body.
 | `POST …/feedback` | `{ feedback?, draft?: base64 tar.gz (≤22 MB), generation }` returns the revision |
 | `POST {repo}/environments` | `{ environment: { name, packages?: [{ name, spec, directory? }], files?: [{ path, mode: "replace" \| "append" \| "delete", content? }] }, generation }` |
 | `POST …/steering` | `{ feedback }` |
-| `POST {scope}/evaluations/comparisons` | `{ id (UUID you generate; retries never start twice), models: [{ catalogId, credentialId, harnesses, thinking? }] (≤12), sandbox, sandboxCredentialId, tasks?: [{ runId, taskId }], skipCompleted?, judgeCredentialId?, conditions?: [{ name, skills?, instructions?, environment? }] (≤4), baseline? }` |
+| `POST {scope}/evaluations/comparisons` | `{ id (UUID you generate; retries never start twice), models: [{ catalogId, credentialId, harnesses, thinking? }] (≤12), sandbox, sandboxCredentialId, tasks?: [{ runId, taskId }], skipCompleted?, judgeCredentialId?, conditions?: [{ name, skills?, instructions?, environment?, harnessOptions? }] (≤4), baseline? }` |
 | `POST {scope}/evaluations/{id}/explain` | `{ runId, taskId, harness, explanation? }` |
 | `POST {scope}/evaluations/audit` | `{ runId, taskId, audit: { credentialId, model } }` |
 | `POST {scope}/evaluations/summaries` | `{ configurations: [keys] (≤12), summary: { credentialId, model } }` |
@@ -102,7 +102,7 @@ Routes not listed here take no body.
 
 `POST {scope}/evaluations/comparisons` starts one **evaluation** per model, running every task on each harness as a trial. If the reply has `submissionError`, resume the same comparison with its `id`; it reuses the same evaluation IDs.
 
-`conditions` runs every task again under each [condition](/concepts/how-it-works#conditions) beside the tasks as they are; `baseline: false` runs only the conditions. A condition's `environment` is an environment's id from `{repo}/environments`. Results report each condition as its own configuration.
+`conditions` runs every task again under each [condition](/concepts/how-it-works#conditions) beside the tasks as they are; `baseline: false` runs only the conditions. A condition's `environment` is an environment's id from `{repo}/environments`. Its `harnessOptions` maps a harness to options from the catalog's `harnessOptions`, such as `{"claude-code": {"max_turns": 30, "config": {…}}}`; a condition with them runs only on those harnesses. Results report each condition as its own configuration.
 
 Use `GET {scope}/evaluations/results` for scores rather than adding up trials. Results count each configuration's latest scored result on each counted task: a repository's accepted tasks, or a benchmark's tasks. Errors, cancellations, and trials still running don't count.
 

@@ -86,6 +86,7 @@ Workspace admins connect the model access and sandboxes runs use. Secrets never 
 | Command | Does |
 | --- | --- |
 | `catalog R` | Models available for evaluations |
+| `catalog R --harness H` | Options a condition can set on harness `H` |
 | `compare R --model ID [--model ID ...]` | Run each model on every approved task |
 | `comparisons R` · `comparison show\|resume\|cancel ID R` | Follow, resume, or stop comparisons |
 | `runs R` · `run show\|cancel\|delete EVALUATION_ID R` | One model's evaluation, with every trial |
@@ -101,7 +102,8 @@ Workspace admins connect the model access and sandboxes runs use. Secrets never 
 | `--task RUN_ID/TASK_ID` (repeatable) | every approved task |
 | `--skip-completed` | rerun everything |
 | `--judge-credential ID` | required for tasks graded by an LLM judge |
-| `--condition JSON\|@FILE` (repeatable): `{"name": "…", "environment": ID, "skills": ["org/repo"], "instructions": "…"}` | none: only the tasks as they are |
+| `--condition JSON\|@FILE` (repeatable): `{"name": "…", "environment": ID, "skills": ["org/repo"], "instructions": "…", "harnessOptions": {"claude-code": {"max_turns": 30}}}` | none: only the tasks as they are |
+| `--harness-option HARNESS.OPTION=VALUE` (repeatable), with `--options-name NAME`: one more condition setting these options. `VALUE` is JSON when it parses, text otherwise, or `@FILE`, as in `claude-code.config=@settings.json` | none |
 | `--no-baseline` | the tasks as they are run too |
 | `--selection JSON\|@FILE` | a full [comparison body](/api#evaluate) in place of the flags |
 

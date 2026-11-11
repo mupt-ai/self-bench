@@ -262,7 +262,7 @@ async function runTrial(context: {
           run.sandbox,
           context.extraAllowedHosts,
           context.verifierEnv,
-          run.condition,
+          { condition: run.condition, harness: context.trial.harness },
         ),
         {
           env: child,

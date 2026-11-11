@@ -6,7 +6,13 @@ import type { Vault } from "../db/vault.js";
 import { type ManagedOffer, managedHarborEnvironment } from "../generation/billing/managed.js";
 import { type CatalogModel, evaluationCatalog } from "./catalog.js";
 import type { ComparisonSelection } from "./comparisons.js";
-import { conditionRefusal, type RunCondition, runCondition } from "./conditions.js";
+import {
+  conditionRefusal,
+  conditionRunsOn,
+  conditionUnmatched,
+  type RunCondition,
+  runCondition,
+} from "./conditions.js";
 import type { EvaluationDataset } from "./dataset.js";
 import { defaultThinking, routeFor, signInRefusal, thinkingOptions } from "./models.js";
 import { assertTasksFitSandbox } from "./resource-check.js";
@@ -116,6 +122,11 @@ export async function saveComparison(
       throw new Error(`${condition.name}: no picked task is ready in ${built.name} yet`);
     conditions.push({ condition: runCondition(condition, built.name), tasks: built.tasks });
   }
+  const picked = selection.models.flatMap((model) => model.harnesses);
+  for (const { condition } of conditions) {
+    const unmatched = condition && conditionUnmatched(condition, picked);
+    if (unmatched) throw new Error(unmatched);
+  }
   const resourceWarnings = assertTasksFitSandbox(frozen, sandbox);
   const judgeCredentialId = judge?.(frozen, saved);
   const seen = new Set<string>();
@@ -161,14 +172,16 @@ export async function saveComparison(
         throw new Error("Select each model, harness, and thinking configuration once");
       seen.add(pair);
       for (const { condition } of conditions) {
+        if (!conditionRunsOn(condition, harness)) continue;
         const refusal = condition && conditionRefusal(condition, harness);
         if (refusal) throw new Error(refusal);
       }
     }
     const modelName = `${route.provider === "custom" ? "openai" : route.provider}/${route.model}`;
-    const groups = conditions.flatMap(({ condition, tasks }) =>
-      selection.skipCompleted
-        ? selected.harnesses.map((harness) => ({
+    const groups = conditions.flatMap(({ condition, tasks }) => {
+      const harnesses = selected.harnesses.filter((harness) => conditionRunsOn(condition, harness));
+      return selection.skipCompleted
+        ? harnesses.map((harness) => ({
             condition,
             harnesses: [harness],
             tasks: tasks.filter(
@@ -182,11 +195,11 @@ export async function saveComparison(
                 ),
             ),
           }))
-        : [{ condition, harnesses: selected.harnesses, tasks }],
-    );
+        : [{ condition, harnesses, tasks }];
+    });
     const { pricing } = route;
     return groups
-      .filter((group) => group.tasks.length > 0)
+      .filter((group) => group.tasks.length > 0 && group.harnesses.length > 0)
       .map(
         (group): EvaluationInput => ({
           id: randomUUID(),

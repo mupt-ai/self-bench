@@ -58,7 +58,7 @@ test("a condition's id follows what it changes, and Harbor gets its skills and i
     "modal",
     [],
     [],
-    condition,
+    { condition, harness: "pi" },
   );
   expect(args.slice(-6)).toEqual([
     "--skill",
@@ -68,7 +68,7 @@ test("a condition's id follows what it changes, and Harbor gets its skills and i
     "--ak",
     "x=1",
   ]);
-  expect(conditionArguments(undefined)).toEqual([]);
+  expect(conditionArguments(undefined, "pi")).toEqual([]);
 });
 
 test("a comparison runs every model under the baseline and each condition, kept apart", async () => {
