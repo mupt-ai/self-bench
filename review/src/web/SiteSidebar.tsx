@@ -8,6 +8,7 @@ import {
   LockKeyhole,
   type LucideIcon,
   Rocket,
+  Users,
   X,
 } from "lucide-react";
 import React from "react";
@@ -87,8 +88,14 @@ function sectionsOf(billing: boolean): { label: string; items: NavItem[] }[] {
       ],
     },
     {
-      label: "Organization",
+      label: "Workspace",
       items: [
+        {
+          label: "Members",
+          to: "/settings/members",
+          icon: Users,
+          active: (path) => path.startsWith("/settings/members"),
+        },
         {
           label: "Credentials",
           to: "/settings/credentials",
@@ -136,7 +143,7 @@ export function SiteSidebar({
         <Lockup compact showName={!collapsed} />
       </SidebarHeader>
       <SidebarContent>
-        <nav aria-label="Organization Navigation" className="flex flex-col gap-3 pt-4">
+        <nav aria-label="Workspace Navigation" className="flex flex-col gap-3 pt-4">
           {onSetup && (
             <SidebarGroup className="py-0">
               <SidebarMenu>

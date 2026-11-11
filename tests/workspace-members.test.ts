@@ -10,6 +10,7 @@ const publicUrl = "http://selfbench.test";
 let database: TestDatabase;
 let server: Server;
 let base: string;
+let root: string;
 
 beforeAll(async () => {
   database = await testDatabase();
@@ -21,13 +22,21 @@ beforeAll(async () => {
     scopes: "",
     orgs: [{ githubId: 10, login: "Mupt-AI", role: "admin" }],
   });
-  const options = { users, publicUrl } as unknown as EvaluationRoutesOptions;
+  const options = {
+    users,
+    publicUrl,
+    githubApiUrl: "https://api.github.test",
+    // GitHub knows `taken-on-github`; every other login is free.
+    fetch: async (input: string | URL | Request) =>
+      new Response("{}", { status: String(input).endsWith("/users/taken-on-github") ? 200 : 404 }),
+  } as unknown as EvaluationRoutesOptions;
   server = createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", publicUrl);
     if (!(await memberRoutes(options, request, url, response, user))) response.writeHead(404).end();
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/orgs/mupt-ai`;
+  root = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/orgs`;
+  base = `${root}/mupt-ai`;
 });
 afterAll(async () => {
   server.close();
@@ -65,4 +74,19 @@ test("an admin invites and renames, and the last admin stays an admin", async ()
 
 test("a cross-site request cannot change membership", async () => {
   expect((await post("invites", { login: "mallory" }, "http://evil.test")).status).toBe(403);
+});
+
+test("a new workspace may not take a GitHub account's name", async () => {
+  const create = (body: unknown) =>
+    fetch(root, {
+      method: "POST",
+      headers: { origin: publicUrl, "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  const refused = await create({ login: "taken-on-github" });
+  expect(refused.status).toBe(409);
+  const made = await create({ login: "mupt-evals", name: "Mupt Evals" });
+  expect(made.status).toBe(201);
+  expect(await made.json()).toMatchObject({ login: "mupt-evals" });
+  expect((await create({ login: "Mupt-Evals" })).status).toBe(409);
 });

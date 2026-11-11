@@ -1,10 +1,11 @@
-import { ChevronsUpDown } from "lucide-react";
+import { ChevronsUpDown, Plus } from "lucide-react";
 import React from "react";
 import { Avatar } from "./Dropdown";
 import { cn } from "./primitives/cn";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -12,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "./primitives/dropdown-menu";
 import type { SiteOrg } from "./session";
+import { CreateWorkspaceDialog } from "./settings/CreateWorkspaceDialog";
 
 /** Switch accounts without taking space from the sidebar navigation. */
 export function SidebarOrgPicker({
@@ -32,6 +34,7 @@ export function SidebarOrgPicker({
       root.current?.closest("dialog") ?? root.current?.closest<HTMLElement>(".sb") ?? null,
     );
   }, []);
+  const [creating, setCreating] = React.useState(false);
   const personal = orgs.filter((item) => item.kind === "user");
   const organizations = orgs.filter((item) => item.kind === "org");
   return (
@@ -40,7 +43,7 @@ export function SidebarOrgPicker({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            aria-label="Organization"
+            aria-label="Workspace"
             className={cn(
               "flex h-12 w-full min-w-0 cursor-pointer items-center gap-2.5 border border-foreground/15 bg-card px-2.5 text-sm hover:border-foreground/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/15",
               collapsed && "h-8 justify-center border-0 bg-transparent px-0",
@@ -51,7 +54,7 @@ export function SidebarOrgPicker({
               <span className="min-w-0 flex-1 text-left leading-tight">
                 <span className="block truncate font-medium text-foreground">{org.login}</span>
                 <span className="block truncate text-xs text-muted-foreground">
-                  {org.kind === "user" ? "Personal Account" : "Organization"}
+                  {org.kind === "user" ? "Personal Workspace" : (org.name ?? "Shared Workspace")}
                 </span>
               </span>
             )}
@@ -68,7 +71,7 @@ export function SidebarOrgPicker({
           side="top"
           align="start"
           className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-52 max-w-[calc(100vw-24px)] p-1.5"
-          aria-label="Switch Organization"
+          aria-label="Switch Workspace"
         >
           <DropdownMenuRadioGroup
             value={org.login}
@@ -84,7 +87,7 @@ export function SidebarOrgPicker({
               <>
                 {personal.length > 0 && <DropdownMenuSeparator />}
                 <DropdownMenuLabel className="px-2 pt-2 pb-1 text-xs font-semibold text-muted-foreground">
-                  Organizations
+                  Shared Workspaces
                 </DropdownMenuLabel>
                 {organizations.map((item) => (
                   <OrgItem key={item.login} org={item} />
@@ -92,8 +95,14 @@ export function SidebarOrgPicker({
               </>
             )}
           </DropdownMenuRadioGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem className="min-h-9 gap-2.5" onSelect={() => setCreating(true)}>
+            <Plus className="size-4 text-muted-foreground" aria-hidden="true" />
+            Create Workspace
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      {creating && <CreateWorkspaceDialog onCancel={() => setCreating(false)} />}
     </div>
   );
 }
@@ -108,7 +117,7 @@ function OrgItem({ org }: { org: SiteOrg }) {
       <span className="min-w-0 flex-1">
         <span className="block truncate font-mono text-sm leading-5">{org.login}</span>
         {org.kind === "user" && (
-          <span className="block text-xs leading-5 text-muted-foreground">Personal Account</span>
+          <span className="block text-xs leading-5 text-muted-foreground">Personal Workspace</span>
         )}
       </span>
     </DropdownMenuRadioItem>

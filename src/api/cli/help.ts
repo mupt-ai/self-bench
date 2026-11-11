@@ -7,6 +7,14 @@ Setup
   self-bench whoami                  the signed-in account, workspaces, and key scope
   self-bench logout                  revoke the saved key and forget it
 
+Workspaces
+  self-bench workspace create NAME [--name TEXT]    a shared workspace you administer
+  self-bench workspace connect GITHUB_ORG           move a GitHub org's members and repos here
+  self-bench workspace rename TEXT                   the display name; NAME never changes
+  self-bench members                                 people, roles, and connected GitHub orgs
+  self-bench member invite LOGIN [--role admin|member] | member invites | member revoke ID
+  self-bench member role LOGIN admin|member | member remove LOGIN
+
   In CI, set SELFBENCH_API_KEY (Settings → API Keys) instead of logging in. SELFBENCH_ORG and
   --org override the workspace; SELFBENCH_API_URL or login --api-url point at another deployment.
 

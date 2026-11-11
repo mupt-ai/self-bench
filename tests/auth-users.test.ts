@@ -124,10 +124,45 @@ describe("user store", () => {
     await signIn(22, "outsider", []);
     expect(await store.orgsFor(outsider.id)).toHaveLength(2);
 
-    await expect(store.removeMember(team.id, "owner")).rejects.toThrow("at least one admin");
+    // A GitHub-synced member would come back at sign-in, so only GitHub can remove them.
+    await expect(store.removeMember(team.id, "owner")).rejects.toThrow("remove them there");
+    expect(await store.removeMember(team.id, "outsider")).toBe(true);
     await expect(
       store.invite((await store.orgsFor(owner.id))[0]?.id ?? 0, "x", "member", owner.id),
     ).rejects.toThrow("Personal workspaces");
+  });
+
+  test("a created workspace takes over a GitHub org's connection, and its members follow", async () => {
+    const store = createUserStore(database.db, { secret: testAuthConfig.sessionSecret });
+    const signIn = (githubId: number, login: string, role: "admin" | "member") =>
+      store.upsert({
+        githubId,
+        login,
+        token: "t",
+        scopes: "",
+        orgs: [{ githubId: 800, login: "acme", role }],
+      });
+    const admin = await signIn(40, "acme-admin", "admin");
+    const member = await signIn(41, "acme-dev", "member");
+    const made = await store.create("acme-evals", "Acme Evals", admin.id);
+    await expect(store.create("ACME-EVALS", null, admin.id)).rejects.toThrow("taken");
+    await expect(store.moveConnection(made.id, "acme", member.id)).rejects.toThrow("Only an admin");
+    await store.moveConnection(made.id, "acme", admin.id);
+
+    await signIn(41, "acme-dev", "member");
+    expect((await store.orgsFor(member.id)).map((org) => [org.login, org.github])).toEqual([
+      ["acme-dev", [{ githubId: 41, login: "acme-dev", kind: "user" }]],
+      ["acme", []],
+      ["acme-evals", [{ githubId: 800, login: "acme", kind: "org" }]],
+    ]);
+    // The creator stays though GitHub never put them there, and the old workspace, now with no
+    // connection, keeps its people.
+    await signIn(40, "acme-admin", "admin");
+    expect((await store.orgsFor(admin.id)).map((org) => org.login)).toEqual([
+      "acme-admin",
+      "acme",
+      "acme-evals",
+    ]);
   });
 
   test("a new workspace takes a free slug when its GitHub login is taken", async () => {

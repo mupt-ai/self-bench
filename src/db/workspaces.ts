@@ -1,6 +1,6 @@
 import { and, asc, eq, ne, sql } from "drizzle-orm";
 import type { Database } from "./client.js";
-import { orgInvites, orgMembers, orgs, users } from "./schema.js";
+import { githubConnections, orgInvites, orgMembers, orgs, users } from "./schema.js";
 
 type WorkspaceRole = "admin" | "member";
 
@@ -37,8 +37,22 @@ export interface WorkspaceStore {
   revokeInvite(orgId: number, inviteId: number): Promise<boolean>;
   /** Sets a member's role; refuses to demote the last admin. */
   setRole(orgId: number, login: string, role: WorkspaceRole): Promise<boolean>;
-  /** Removes a member; refuses to remove the last admin. */
+  /**
+   * Removes an invited member; refuses the last admin, and anyone a connected GitHub organization
+   * brings in, since sign-in would add them back.
+   */
   removeMember(orgId: number, login: string): Promise<boolean>;
+  /** Makes a shared workspace with `userId` as its admin; the slug must be free. */
+  create(
+    login: string,
+    name: string | null,
+    userId: number,
+  ): Promise<{ id: number; login: string }>;
+  /**
+   * Moves a GitHub organization's connection into `orgId`. `userId` must administer the workspace
+   * it is connected to now. Its members join `orgId` at their next sign-in.
+   */
+  moveConnection(orgId: number, githubLogin: string, userId: number): Promise<void>;
   /**
    * Sets the display name. The slug stays: public release and group addresses are built from it.
    */
@@ -145,12 +159,81 @@ export function createWorkspaceStore(db: Database): WorkspaceStore {
     async removeMember(orgId, login) {
       const userId = await userIdOf(login);
       if (userId === undefined) return false;
+      const [member] = await db
+        .select({ source: orgMembers.source })
+        .from(orgMembers)
+        .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, userId)));
+      if (!member) return false;
+      if (member.source === "github")
+        throw new WorkspaceError(
+          `${login} is a member through a connected GitHub organization; remove them there`,
+        );
       await assertOtherAdmin(orgId, userId);
       const rows = await db
         .delete(orgMembers)
         .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, userId)))
         .returning({ userId: orgMembers.userId });
       return rows.length > 0;
+    },
+    async create(login, name, userId) {
+      return db.transaction(async (tx) => {
+        const [taken] = await tx
+          .select({ id: orgs.id })
+          .from(orgs)
+          .where(sql`lower(${orgs.login}) = ${login.toLowerCase()}`);
+        if (taken) throw new WorkspaceError(`${login} is taken`);
+        const [org] = await tx
+          .insert(orgs)
+          .values({ login, kind: "org", name })
+          .returning({ id: orgs.id, login: orgs.login });
+        if (!org) throw new Error("workspace insert returned no row");
+        await tx
+          .insert(orgMembers)
+          .values({ orgId: org.id, userId, role: "admin", source: "invite" });
+        return org;
+      });
+    },
+    async moveConnection(orgId, githubLogin, userId) {
+      const [target] = await db.select({ kind: orgs.kind }).from(orgs).where(eq(orgs.id, orgId));
+      if (target?.kind !== "org")
+        throw new WorkspaceError("GitHub organizations connect to shared workspaces only");
+      const [connection] = await db
+        .select({
+          githubId: githubConnections.githubId,
+          orgId: githubConnections.orgId,
+          kind: githubConnections.kind,
+        })
+        .from(githubConnections)
+        .where(sql`lower(${githubConnections.login}) = ${githubLogin.toLowerCase()}`);
+      if (connection?.kind !== "org")
+        throw new WorkspaceError(
+          `${githubLogin} is not a GitHub organization SelfBench has seen; a member signs in first`,
+        );
+      if (connection.orgId === orgId) return;
+      const [admin] = await db
+        .select({ role: orgMembers.role })
+        .from(orgMembers)
+        .where(and(eq(orgMembers.orgId, connection.orgId), eq(orgMembers.userId, userId)));
+      if (admin?.role !== "admin")
+        throw new WorkspaceError(`Only an admin of the workspace ${githubLogin} is in can move it`);
+      await db.transaction(async (tx) => {
+        await tx
+          .update(githubConnections)
+          .set({ orgId, updatedAt: new Date() })
+          .where(eq(githubConnections.githubId, connection.githubId));
+        // A workspace left with no GitHub connection keeps the people it had, as invited members,
+        // so its repositories and results stay reachable.
+        const [remaining] = await tx
+          .select({ githubId: githubConnections.githubId })
+          .from(githubConnections)
+          .where(eq(githubConnections.orgId, connection.orgId))
+          .limit(1);
+        if (!remaining)
+          await tx
+            .update(orgMembers)
+            .set({ source: "invite" })
+            .where(eq(orgMembers.orgId, connection.orgId));
+      });
     },
     async rename(orgId, name) {
       await db.update(orgs).set({ name, updatedAt: new Date() }).where(eq(orgs.id, orgId));
