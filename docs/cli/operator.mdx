@@ -1,0 +1,15 @@
+---
+title: "CLI: Operator"
+sidebarTitle: "Operator"
+description: "Deployment-level commands: generation runs, Harbor exports, and registry grants."
+icon: "server"
+---
+
+These take `SELFBENCH_API_TOKEN`, the deployment's own token, in place of an API key.
+
+| Command | Does |
+| --- | --- |
+| `status\|cancel RUN_ID` · `list` | Generation runs |
+| `download RUN_ID OUT.tar.gz` | A batch's Harbor export, checked against its SHA-256 |
+| `grant create --label NAME --task ID [--task ID ...] [--days N] [--with-verifier]` | A customer's registry login for accepted tasks' images, shown once |
+| `grant list` · `grant revoke GRANT_ID` | List or revoke grants |

@@ -1,0 +1,37 @@
+---
+title: "API: Evaluate"
+sidebarTitle: "Evaluate"
+description: "Run models and harnesses on approved tasks, and follow comparisons."
+icon: "play"
+---
+
+| Method | Route | Does |
+| --- | --- | --- |
+| `GET` | `{scope}/evaluations/catalog` | Models and sandboxes |
+| `GET` | `{scope}/evaluations/options` | Tasks a comparison can run; any judge variables |
+| `GET`, `POST` | `{scope}/evaluations/comparisons` | List or start comparisons |
+| `GET` | `{scope}/evaluations/comparisons/{id}` | A comparison's progress |
+| `POST` | `…/comparisons/{id}/resume` · `/cancel` | Resume or stop it |
+| `GET` | `{scope}/evaluations` · `/{id}` | Evaluations, with every trial |
+| `GET` | `{scope}/evaluations/{id}/artifacts?name=…` | A file a trial's agent left |
+| `POST` | `{scope}/evaluations/{id}/cancel` · `/delete` | Stop or delete one |
+
+## Request Body
+
+| Route | Body |
+| --- | --- |
+| `POST {scope}/evaluations/comparisons` | `{ id (UUID you generate; retries never start twice), models: [{ catalogId, credentialId, harnesses, thinking? }] (≤12), sandbox, sandboxCredentialId, tasks?: [{ runId, taskId }], skipCompleted?, judgeCredentialId?, conditions?: [{ name, skills?, instructions?, environment? }] (≤4), baseline? }` |
+
+`credentialId` in a model choice is a saved credential's ID, or `managed-model`. `models[].harnesses` are `pi`, `codex`, `claude-code`, `mini-swe-agent`, `terminus-2`, or `muse-code`. `thinking` is `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`.
+
+## Comparisons
+
+A comparison starts one **evaluation** per model, running every task on each harness as a trial. If the reply has `submissionError`, resume the same comparison with its `id`; it reuses the same evaluation IDs.
+
+`conditions` runs every task again under each [condition](/concepts/how-it-works#conditions) beside the tasks as they are; `baseline: false` runs only the conditions. A condition's `environment` is an [environment's](/api/environments) id. Results report each condition as its own configuration.
+
+For scores, read [results](/api/inspect) rather than adding up trials.
+
+## Model Costs
+
+Trials call their model through SelfBench's gateway, which uses the workspace credential and records each call's cost: the provider's own charge where it reports one, else the model's list price. A trial with an unpriced call shows its cost as incomplete. The credential never reaches the agent, which gets a short-lived key for its one model.

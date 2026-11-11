@@ -1,0 +1,16 @@
+---
+title: "CLI: Benchmarks and Groups"
+sidebarTitle: "Benchmarks and Groups"
+description: "Evaluate Harbor registry datasets, and pool repositories into groups."
+icon: "layer-group"
+---
+
+Evaluate, inspect, and release commands take `--benchmark ORG/NAME` or `--group SLUG` in place of `--repo`.
+
+| Command | Does |
+| --- | --- |
+| `benchmarks` · `benchmark add\|show\|tasks\|remove ORG/NAME[@REF]` | Harbor registry datasets |
+| `groups` · `group show\|delete SLUG` | Repository groups |
+| `group create\|update SLUG --name NAME --member OWNER/NAME [--member ...]` | Pool connected repositories |
+
+Benchmarks are never released.
