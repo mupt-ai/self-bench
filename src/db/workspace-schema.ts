@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   bigserial,
+  boolean,
   index,
   pgTable,
   text,
@@ -55,8 +56,8 @@ export const orgInvites = pgTable(
 
 /**
  * Who belongs to a workspace. `source` "github" rows come from a connected GitHub organization and
- * are removed at sign-in once GitHub stops listing the user; "invite" rows were added in SelfBench
- * and stay until removed there. Roles are SelfBench's: GitHub's only seeds a new row.
+ * are removed at sign-in once GitHub stops listing the user, unless they were also invited; "invite"
+ * rows were added in SelfBench and stay until removed there. Roles are SelfBench's: GitHub's only seeds a new row.
  */
 export const orgMembers = pgTable(
   "org_members",
@@ -71,6 +72,8 @@ export const orgMembers = pgTable(
     source: text("source", { enum: ["github", "invite"] })
       .notNull()
       .default("github"),
+    /** Invited at some point: when GitHub stops listing them they stay, as an invited member. */
+    invited: boolean("invited").notNull().default(false),
     syncedAt: timestamptz("synced_at").notNull().defaultNow(),
   },
   (table) => [

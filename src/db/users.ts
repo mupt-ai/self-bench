@@ -1,9 +1,10 @@
-import { and, asc, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { createSecretBox, deriveKey } from "../api/auth/crypto.js";
 import type { GitHubProfile, OrgMembership } from "../third_party/github/oauth.js";
 import type { Database } from "./client.js";
-import { githubConnections, orgInvites, orgMembers, orgs, users } from "./schema.js";
-import { createWorkspaceStore, keepAnAdmin, type WorkspaceStore } from "./workspaces.js";
+import { githubConnections, orgMembers, orgs, users } from "./schema.js";
+import { acceptInvites, leaveGitHub } from "./workspace-sync.js";
+import { createWorkspaceStore, type WorkspaceStore } from "./workspaces.js";
 
 /** How an API-key request identifies itself; absent on cookie sessions. */
 export interface ApiKeyRef {
@@ -179,48 +180,11 @@ export function createUserStore(
             })
             .onConflictDoUpdate({
               target: [orgMembers.orgId, orgMembers.userId],
-              set: { syncedAt: now() },
+              set: { source: "github", syncedAt: now() },
             });
         }
-        // Gone from a connected GitHub org means gone from its workspace; invited members stay.
-        const dropped = await tx
-          .delete(orgMembers)
-          .where(
-            and(
-              eq(orgMembers.userId, row.id),
-              eq(orgMembers.source, "github"),
-              kept.length ? notInArray(orgMembers.orgId, kept) : undefined,
-            ),
-          )
-          .returning({ orgId: orgMembers.orgId, role: orgMembers.role });
-        // A workspace whose last admin just left keeps one: its longest-standing member.
-        for (const { orgId } of dropped.filter((member) => member.role === "admin"))
-          await keepAnAdmin(tx, orgId);
-        // Invitations to this login are accepted on sign-in.
-        const invites = await tx
-          .delete(orgInvites)
-          .where(sql`lower(${orgInvites.githubLogin}) = ${profile.login.toLowerCase()}`)
-          .returning();
-        for (const invite of invites) {
-          await tx
-            .insert(orgMembers)
-            .values({
-              orgId: invite.orgId,
-              userId: row.id,
-              role: invite.role,
-              source: "invite",
-              syncedAt: now(),
-            })
-            // Already in through GitHub: the invite still counts, so leaving GitHub keeps them,
-            // and an admin invite raises the role but a member invite never lowers it.
-            .onConflictDoUpdate({
-              target: [orgMembers.orgId, orgMembers.userId],
-              set: {
-                source: "invite",
-                role: sql`case when excluded.role = 'admin' then 'admin' else ${orgMembers.role} end`,
-              },
-            });
-        }
+        await leaveGitHub(tx, row.id, kept);
+        await acceptInvites(tx, row.id, profile.login, now());
         return userFrom(row);
       });
     },

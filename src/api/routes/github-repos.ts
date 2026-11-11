@@ -65,20 +65,17 @@ export function createGitHubRepoRoutes(options: GitHubRepoRoutesOptions): GitHub
     // reach, but only the signed-in user's own account gives that listing.
     const repos: RepoSummary[] = [];
     const seen = new Set<string>();
-    const failures: GitHubOAuthError[] = [];
     for (const account of tenant.github) {
       if (account.kind === "user" && account.githubId !== user.githubId) continue;
       const path =
         account.kind === "user"
           ? "/user/repos?affiliation=owner,collaborator&sort=pushed"
           : `/orgs/${encodeURIComponent(account.login)}/repos?type=all&sort=pushed`;
-      // One connected org the user can't read (they joined by invite, or are in another of the
-      // workspace's orgs) skips that org instead of failing the whole listing.
+      // An org the user can't read (not a member, or SSO not granted) is skipped; anything else,
+      // such as a rate limit, fails the listing rather than caching a partial one.
       const listed = await fetchRepoPages(config, token, path, fetchImpl).catch((error) => {
-        if (error instanceof GitHubOAuthError && error.status !== 401) {
-          failures.push(error);
+        if (error instanceof GitHubOAuthError && (error.status === 403 || error.status === 404))
           return [];
-        }
         throw error;
       });
       for (const repo of listed) {
@@ -87,7 +84,6 @@ export function createGitHubRepoRoutes(options: GitHubRepoRoutesOptions): GitHub
         repos.push(repo);
       }
     }
-    if (failures.length && failures.length === tenant.github.length) throw failures[0];
     cache.set(key, { at: now().getTime(), repos });
     return repos;
   };

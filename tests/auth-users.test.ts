@@ -180,6 +180,8 @@ describe("user store", () => {
     await store.invite(crew.id, "pal", "admin", lead.id);
     const pal = await signIn(51, "pal", [{ githubId: 900, login: "crew", role: "member" }]);
     expect((await store.orgsFor(pal.id)).find((org) => org.id === crew.id)?.role).toBe("admin");
+    // Still listed by GitHub, so removing them here would only last until their next sign-in.
+    await expect(store.removeMember(crew.id, "pal")).rejects.toThrow("remove them there");
     await signIn(51, "pal", []);
     expect((await store.orgsFor(pal.id)).some((org) => org.id === crew.id)).toBe(true);
 

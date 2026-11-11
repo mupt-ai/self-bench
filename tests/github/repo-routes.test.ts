@@ -52,6 +52,38 @@ describe("GitHub repo listing", () => {
     expect(listCalls()).toHaveLength(1);
   });
 
+  test("skips a connected org the user can't read, but fails rather than cache a GitHub outage", async () => {
+    const hub = fakeGitHub({ orgs: ["Mupt-AI", "Other"], repos: [{ full_name: "Mupt-AI/site" }] });
+    let other = 404;
+    const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) =>
+      String(input).includes("/orgs/Other/repos")
+        ? Response.json({}, { status: other })
+        : hub.fetch(input, init)) as typeof fetch;
+    server = await startAuthServer({ config: testAuthConfig, fetchImpl });
+    const headers = await signedIn(server);
+    const user = await server.users.findByGitHubId(42);
+    const team = (await server.users.orgsFor(user?.id ?? 0)).find((org) => org.login === "Mupt-AI");
+    // Only an admin of Other's workspace may move it; GitHub made this user a plain member there.
+    const otherWorkspace = (await server.users.orgsFor(user?.id ?? 0)).find(
+      (org) => org.login === "Other",
+    );
+    await server.users.setRole(otherWorkspace?.id ?? 0, "avyay", "admin");
+    await server.users.moveConnection(team?.id ?? 0, "Other", user?.id ?? 0);
+
+    other = 503;
+    expect((await server.request("/api/orgs/mupt-ai/github-repos", { headers })).status).not.toBe(
+      200,
+    );
+    other = 404;
+    const listed = await server.request("/api/orgs/mupt-ai/github-repos", { headers });
+    expect(listed.status).toBe(200);
+    expect(
+      ((await listed.json()) as { repos: { fullName: string }[] }).repos.map(
+        (repo) => repo.fullName,
+      ),
+    ).toEqual(["Mupt-AI/site"]);
+  });
+
   test("lists the personal tenant from /user/repos and refuses foreign orgs", async () => {
     const { site, hub, headers } = await bootSignedIn({
       orgs: [],
