@@ -17,6 +17,7 @@
 <p align="center">
   <a href="https://selfbench.dev"><img src="https://img.shields.io/badge/Leaderboards-selfbench.dev-111111?style=for-the-badge" alt="Leaderboards at selfbench.dev"></a>
   <a href="https://app.selfbench.dev"><img src="https://img.shields.io/badge/Benchmark_Your_Repo-app.selfbench.dev-0f9d76?style=for-the-badge" alt="Benchmark your repo at app.selfbench.dev"></a>
+  <a href="https://docs.selfbench.dev"><img src="https://img.shields.io/badge/Docs-docs.selfbench.dev-555555?style=for-the-badge" alt="Docs at docs.selfbench.dev"></a>
 </p>
 
 <p align="center">
@@ -60,7 +61,7 @@ Everything happens in the web app at [app.selfbench.dev](https://app.selfbench.d
 5. **Results**: compare accuracy against cost, and open any trial's transcript and scores.
 6. **Releases**: publish a public repository's results to [selfbench.dev](https://selfbench.dev).
 
-Models and sandboxes run on your organization's own keys under **Credentials**. Automate the same workflows with the [CLI](docs/cli.mdx) or the [API](docs/api.mdx). Read released results without a key through the [Public API](docs/public-api.mdx).
+Models and sandboxes run on your organization's own keys under **Credentials**. Automate the same workflows with the [CLI](https://docs.selfbench.dev/cli/overview) or the [API](https://docs.selfbench.dev/api/overview). Read released results without a key through the [Public API](https://docs.selfbench.dev/api/public).
 
 ## Self-hosting
 
@@ -96,10 +97,7 @@ For frontend work, `bun run dev:site` runs the API and Vite with hot reload (sec
 
 ## Documentation
 
-- [Mintlify docs](docs/): quickstart, concepts, CLI, and API (`cd docs && npm ci && npm run dev`)
-- [CLI](docs/cli.mdx) · [API](docs/api.mdx) · [Public API](docs/public-api.mdx)
-- [How it works](docs/concepts/how-it-works.mdx): the pipeline and what makes a task valid
-- [Infrastructure](infra/README.md)
+Read the docs at **[docs.selfbench.dev](https://docs.selfbench.dev)**: quickstart, concepts, CLI, and API. Their source is in [`docs/`](docs/); preview edits with `cd docs && npm ci && npm run dev`.
 
 ## License
 

@@ -1,0 +1,37 @@
+---
+title: "API"
+sidebarTitle: "Overview"
+description: "Authenticate with an API key, and the conventions every route shares."
+icon: "code"
+---
+
+The app and the CLI use these routes. Base URL `https://app.selfbench.dev`. Send `Authorization: Bearer $SELFBENCH_API_KEY` (or `X-API-Key`). Create keys under **Settings → API Keys**; the secret is shown once. A `read` key may only `GET`. A key acts as its owner, with the owner's workspace roles. Keys can be listed with a key but only minted or revoked from a signed-in browser, so a leaked key can't issue more keys.
+
+```bash
+curl https://app.selfbench.dev/api/me -H "Authorization: Bearer $SELFBENCH_API_KEY"
+```
+
+## Conventions
+
+- **Scope.** Evaluation routes sit under `{scope}`: a repository or eval `/api/orgs/{org}/repos/{owner}/{name}` (an eval's owner is `evals`), a benchmark `/api/orgs/{org}/benchmarks/{dataset-org}/{dataset}`, or a group `/api/orgs/{org}/groups/{slug}`. `{repo}` is the repository form only.
+- **Tasks** are named by batch and task ID, `{runId}/{taskId}`.
+- **Configurations** are named by a setting `key`, shared by results, summaries, and releases.
+- **Generation.** Routes that author or build tasks take `generation`: the models, sandbox, and credentials to use. Leave it out to use the managed models and sandbox, where the deployment offers them.
+- **Bodies.** Routes whose page lists no body take none.
+- **Background work** returns `202`. Poll the matching `GET`.
+- **Errors** are `{ "error": "…" }`: `400` invalid, `403` not allowed for this key, `404` not found, `409` wrong state.
+
+## Routes
+
+| Page | Routes |
+| --- | --- |
+| [Account and Credentials](/api/account) | `/api/me`, `/api/api-keys`, `/api/orgs`, `/api/orgs/{org}/members`, `/api/orgs/{org}/credentials` |
+| [Build Tasks](/api/build) | `/api/orgs/{org}/repos`, `/api/orgs/{org}/evals`, `{repo}/batches`, `{repo}/tasks/from-pr`, `{repo}/tasks/from-scenario` |
+| [Review Tasks](/api/review) | `{repo}/tasks`, `…/review`, `…/feedback`, `…/steering` |
+| [Environments](/api/environments) | `{repo}/environments` |
+| [Evaluate](/api/evaluate) | `{scope}/evaluations/catalog`, `…/comparisons`, `{scope}/evaluations` |
+| [Inspect Results](/api/inspect) | `{scope}/evaluations/results`, `…/explain`, `…/audit`, `…/summaries` |
+| [Publish and Export](/api/publish) | `{repo}/releases`, `{scope}/evaluations/exports` |
+| [Benchmarks and Groups](/api/benchmarks-and-groups) | `/api/orgs/{org}/benchmarks`, `/api/orgs/{org}/groups` |
+
+Read released results without a key through the [Public API](/api/public).

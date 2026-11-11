@@ -1,0 +1,19 @@
+---
+title: "CLI: Inspect Results"
+sidebarTitle: "Inspect Results"
+description: "Scores, failure explanations, fairness audits, and model summaries."
+icon: "chart-line"
+---
+
+`R` is `--repo OWNER/NAME`, or another [scope](/cli/overview#conventions).
+
+| Command | Does |
+| --- | --- |
+| `results R` | Pass rate and cost per configuration, and every task, hardest first |
+| `task results RUN_ID TASK_ID R` | Every configuration on one task, with failure explanations and the fairness verdict |
+| `task explain RUN_ID TASK_ID R [--config KEY] [--model M --credential ID] [--wait]` | Explain a task's unexplained failures |
+| `task audit RUN_ID TASK_ID R --model M --credential ID [--wait]` | Judge whether the task is `fair`, `unfair`, or `unclear` |
+| `summaries R` | The latest Model Summaries report |
+| `summaries create R --model M --credential ID [--config KEY ...] [--wait]` | Summarize how configurations differ |
+
+`task explain` uses a managed model where the deployment offers one. Audits and summaries need a saved model API key.

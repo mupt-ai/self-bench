@@ -1,0 +1,37 @@
+---
+title: "CLI"
+sidebarTitle: "Overview"
+description: "Sign in, the conventions every command shares, and where each stage's commands live."
+icon: "terminal"
+---
+
+Install and first steps are in the [Quickstart](/quickstart). `self-bench help` lists every command in your terminal.
+
+## Sign In and CI
+
+`login` saves a personal API key to `~/.config/self-bench/config.json`, readable only by you. On a remote machine, paste the address the browser lands on into the login page. `logout` revokes the key.
+
+In CI, skip `login` and set `SELFBENCH_API_KEY` (from **Settings → API Keys**) and `SELFBENCH_ORG`. `SELFBENCH_API_URL` or `login --api-url` points at a self-hosted deployment.
+
+## Conventions
+
+- **Workspace.** Commands act in the workspace `login` chose. `org use` changes it; `--org` overrides it once.
+- **Scope.** `R` in the command tables is `--repo OWNER/NAME`. An eval is `evals/NAME`. `--benchmark ORG/NAME` and `--group SLUG` take its place.
+- **Tasks** are named by batch and ID: `RUN_ID TASK_ID`.
+- **Configurations** are named by the `KEY` that `results` prints.
+- **Output.** Tables on a terminal, JSON when piped or with `--json`, so `self-bench results --repo acme/app | jq` works.
+- **Background work.** Explanations, audits, and summaries return at once. Add `--wait` to wait and print the answer.
+
+## Commands
+
+| Page | Commands |
+| --- | --- |
+| [Account and Credentials](/cli/account) | `login`, `org`, `whoami`, `credential` |
+| [Build Tasks](/cli/build) | `repo`, `eval create`, `prs`, `generate`, `task add-pr`, `scenario create`, `batch` |
+| [Review Tasks](/cli/review) | `tasks`, `task show\|pull\|revise\|steer\|approve\|reject` |
+| [Environments](/cli/environments) | `environments`, `environment create\|show\|build\|delete` |
+| [Evaluate](/cli/evaluate) | `catalog`, `compare`, `comparison`, `run` |
+| [Inspect Results](/cli/inspect) | `results`, `task results\|explain\|audit`, `summaries` |
+| [Publish](/cli/publish) | `release preview\|publish\|withdraw` |
+| [Benchmarks and Groups](/cli/benchmarks-and-groups) | `benchmark`, `group` |
+| [Operator](/cli/operator) | `status`, `download`, `grant` |

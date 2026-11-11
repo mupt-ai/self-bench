@@ -1,0 +1,43 @@
+---
+title: "CLI: Account and Credentials"
+sidebarTitle: "Account and Credentials"
+description: "Sign in, manage workspaces and members, and connect model and sandbox credentials."
+icon: "key"
+---
+
+## Account
+
+| Command | Does |
+| --- | --- |
+| `login [--api-url URL] [--no-browser]` | Sign in through the browser; saves a key and the workspace |
+| `org` · `org use [NAME]` | Show or change the workspace |
+| `whoami` | The account, its workspaces and roles, and the key's scope |
+| `logout` | Revoke the saved key and forget it |
+
+## Workspaces
+
+A workspace is SelfBench's own: its name, members, and roles live here, not on GitHub. Everyone gets a personal one. Members of a connected GitHub organization join its workspace when they sign in and leave when they leave the organization; anyone else joins by invite.
+
+| Command | Does |
+| --- | --- |
+| `workspace create NAME [--name TEXT]` | A shared workspace you administer. `NAME` can't be a GitHub account's login |
+| `workspace connect GITHUB_ORG` | Move a GitHub organization here from its current workspace (admins of both) |
+| `workspace rename TEXT` | Set the display name; `NAME` never changes |
+| `members` | People, roles, how each joined, and connected GitHub organizations |
+| `member invite LOGIN [--role admin\|member]` | Invite a GitHub user; they join at their next sign-in |
+| `member invites` · `member revoke ID` | Pending invites, and withdraw one |
+| `member role LOGIN admin\|member` · `member remove LOGIN` | Change a role, or remove an invited member |
+
+## Credentials
+
+Workspace admins connect the model access and sandboxes runs use. Secrets never go in an argument, so they stay out of shell history.
+
+| Command | Does |
+| --- | --- |
+| `credentials` | Saved credentials, with the IDs flags take |
+| `credential add` | Pick a provider, then paste its key (masked) or sign in |
+| `credential add --kind KIND (--value-env VAR \| --value-stdin) [--name NAME]` | Add a key without prompts |
+| `credential add --sign-in chatgpt\|claude\|meta` | A ChatGPT, Claude, or Meta sign-in |
+| `credential rename ID NAME` · `credential remove ID` | Rename or remove one |
+
+`KIND` is `openai`, `anthropic`, `meta`, `openrouter`, `vercel-ai-gateway`, `dari`, `custom` (with `--endpoint`), `e2b`, `modal` (with `--token-id`), `daytona`, or `vercel` (with `--team-id` and `--project-id`). See [Credentials](/concepts/credentials).

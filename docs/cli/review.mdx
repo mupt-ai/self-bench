@@ -1,0 +1,21 @@
+---
+title: "CLI: Review Tasks"
+sidebarTitle: "Review Tasks"
+description: "Read, revise, steer, and approve or reject generated tasks."
+icon: "list-check"
+---
+
+`R` is `--repo OWNER/NAME`, or another [scope](/cli/overview#conventions). Only approved tasks are evaluated.
+
+| Command | Does |
+| --- | --- |
+| `tasks R [--state S]` | `S` is `needs_review`, `accepted`, `rejected`, `in_progress`, `failed`, or `cancelled` |
+| `task show RUN_ID TASK_ID R` | A task, its review, cost, and revisions |
+| `task pull RUN_ID TASK_ID [DIR] R` | Download its files: instruction, Dockerfile, patches, scripts, `workspace/` |
+| `task revise RUN_ID TASK_ID R (--feedback TEXT \| --feedback-file F) [--draft DIR]` | Revise from feedback; `--draft` sends your edited files too |
+| `task steer RUN_ID TASK_ID R (--feedback TEXT \| --feedback-file F)` | A note to a task still generating; its author reads it at its next turn |
+| `task steering RUN_ID TASK_ID R` | The notes sent, and which turn received each |
+| `task approve\|reject RUN_ID TASK_ID R [--note TEXT]` | Review it |
+| `task unreview\|cancel\|delete RUN_ID TASK_ID R` | Clear the review, stop generation, or delete |
+
+`task revise` takes the same [generation options](/cli/build#generation-options) as `generate`.

@@ -1,0 +1,23 @@
+---
+title: "API: Publish and Export"
+sidebarTitle: "Publish and Export"
+description: "Release a public repository's results to selfbench.dev, and export tasks for customers."
+icon: "globe"
+---
+
+Only public repositories, and groups of them, can be released to selfbench.dev.
+
+| Method | Route | Does |
+| --- | --- | --- |
+| `GET`, `POST` | `{repo}/releases` · `/api/orgs/{org}/groups/{slug}/releases` | List or publish releases |
+| `GET` | `…/releases/preview` | What a release would publish |
+| `POST` | `…/releases/{id}/withdraw` | Withdraw one |
+| `GET`, `POST` | `{scope}/evaluations/exports` · `/{id}/download` · `/{id}/revoke` | Customer exports of image-backed tasks |
+
+## Request Body
+
+| Route | Body |
+| --- | --- |
+| `POST {repo}/releases` | `{ settings: [keys], head, fingerprint, publishTasks?, publishTrials?, publishSummaries? }` |
+
+Exports include tasks, hidden tests, and reference solutions unencrypted; see [Sharing Tasks](/concepts/how-it-works#sharing-tasks).

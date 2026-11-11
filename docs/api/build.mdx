@@ -1,0 +1,32 @@
+---
+title: "API: Build Tasks"
+sidebarTitle: "Build Tasks"
+description: "Connect repositories and evals, and generate tasks from merged PRs or described scenarios."
+icon: "hammer"
+---
+
+`{repo}` is `/api/orgs/{org}/repos/{owner}/{name}`. See [Conventions](/api/overview#conventions).
+
+| Method | Route | Does |
+| --- | --- | --- |
+| `GET`, `POST` | `/api/orgs/{org}/repos` | List, or connect a repository |
+| `GET`, `PATCH`, `DELETE` | `{repo}` | Read, set `agentMinutes`, or disconnect |
+| `POST` | `/api/orgs/{org}/evals` | Create a workspace eval |
+| `GET` | `{repo}/pull-requests?page=N` | Merged pull requests |
+| `GET` | `{repo}/generation-options` | Models, sandboxes, and credentials for generation |
+| `GET`, `POST` | `{repo}/batches` | List or start batches |
+| `GET` | `{repo}/batches/{runId}` | A batch's progress |
+| `POST` | `{repo}/batches/{runId}/cancel` | Stop a batch |
+| `POST` | `{repo}/tasks/from-pr` | A task from one merged PR |
+| `POST` | `{repo}/tasks/from-scenario` | A task from a described scenario |
+
+## Request Bodies
+
+| Route | Body |
+| --- | --- |
+| `POST /api/orgs/{org}/repos` | `{ fullName: "owner/name" }` |
+| `PATCH {repo}` | `{ agentMinutes }` |
+| `POST /api/orgs/{org}/evals` | `{ name }` |
+| `POST {repo}/batches` | `{ candidateCounts: { easy, medium, hard } (1–300 total), focus?, generation }` |
+| `POST {repo}/tasks/from-pr` | `{ pr: number or URL, generation }` |
+| `POST {repo}/tasks/from-scenario` | `{ title (≤120), scenario (≤20,000 chars), commit? (repositories only: SHA, branch, or HEAD), difficulty?: easy\|medium\|hard, attachments?: [{ name, content: base64 }] (≤20 files, 20 MB), generation }` |

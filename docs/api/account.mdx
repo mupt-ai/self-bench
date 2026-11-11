@@ -1,0 +1,34 @@
+---
+title: "API: Account and Credentials"
+sidebarTitle: "Account and Credentials"
+description: "The caller, API keys, workspaces and members, and saved model and sandbox credentials."
+icon: "key"
+---
+
+| Method | Route | Does |
+| --- | --- | --- |
+| `GET` | `/api/me` | Caller, workspaces, and key scope |
+| `GET`, `POST`, `DELETE` | `/api/api-keys[/{id}]` | List keys; mint or revoke from a browser session |
+| `POST` | `/api/orgs` | Create a shared workspace; the caller is its admin |
+| `GET` | `/api/orgs/{org}/members` | Members, roles, how each joined, and connected GitHub organizations |
+| `POST` | `/api/orgs/{org}/members/{login}/role`, `…/delete` | Change a role, or remove an invited member; admins only |
+| `GET`, `POST` | `/api/orgs/{org}/invites` | Pending invites; invite a GitHub login; admins only |
+| `POST` | `/api/orgs/{org}/invites/{id}/delete` | Revoke an invite; admins only |
+| `POST` | `/api/orgs/{org}/github` | Move a GitHub organization's connection here; admins of both workspaces |
+| `POST` | `/api/orgs/{org}/settings` | Set the display name; admins only |
+| `GET` | `/api/orgs/{org}/credentials` | Saved model and sandbox credentials (never secrets) |
+| `POST`, `…/{id}/update`, `…/{id}/delete` | `/api/orgs/{org}/credentials` | Add, rename, or remove; admins only |
+
+## Request Bodies
+
+| Route | Body |
+| --- | --- |
+| `POST /api/api-keys` | `{ name, scope: "read" \| "write" }` (browser session) |
+| `POST /api/orgs` | `{ login, name? }`; `login` can't be a GitHub account's login |
+| `POST /api/orgs/{org}/invites` | `{ login, role?: "admin" \| "member" }` |
+| `POST /api/orgs/{org}/members/{login}/role` | `{ role: "admin" \| "member" }` |
+| `POST /api/orgs/{org}/github` | `{ login }`, the GitHub organization |
+| `POST /api/orgs/{org}/settings` | `{ name }`, or `null` to clear it |
+| `POST /api/orgs/{org}/credentials` | `{ name, kind, value, tokenId?, teamId?, projectId?, endpoint? }` |
+
+See [Credentials](/concepts/credentials) for each `kind`.

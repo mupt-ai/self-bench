@@ -1,0 +1,14 @@
+---
+title: "CLI: Environments"
+sidebarTitle: "Environments"
+description: "Change every approved task's files once, then run them as a condition."
+icon: "box"
+---
+
+An environment changes every approved task's files the same way (packages, added or replaced files, deletions) and builds each task with the change. Run it with `compare --condition` ([Evaluate](/cli/evaluate)). `R` is `--repo OWNER/NAME`.
+
+| Command | Does |
+| --- | --- |
+| `environments R` | Each environment and how many of its tasks are ready |
+| `environment create R --name N [--package NAME@SPEC ...] [--directory DIR] [--file DEST=SOURCE ...] [--replace] [--delete PATH ...]` | Change every approved task's files and build each; `--environment JSON\|@FILE` gives it whole |
+| `environment show\|build\|delete ID R` | Each task's check; build tasks approved since or that failed; delete it |

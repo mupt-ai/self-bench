@@ -1,0 +1,32 @@
+---
+title: "CLI: Evaluate"
+sidebarTitle: "Evaluate"
+description: "Run models and harnesses on approved tasks, and follow comparisons."
+icon: "play"
+---
+
+`R` is `--repo OWNER/NAME`, or another [scope](/cli/overview#conventions).
+
+| Command | Does |
+| --- | --- |
+| `catalog R` | Models available for evaluations |
+| `compare R --model ID [--model ID ...]` | Run each model on every approved task |
+| `comparisons R` · `comparison show\|resume\|cancel ID R` | Follow, resume, or stop comparisons |
+| `runs R` · `run show\|cancel\|delete EVALUATION_ID R` | One model's evaluation, with every trial |
+
+## Compare Flags
+
+| Flag | Default |
+| --- | --- |
+| `--harness H` (repeatable): `pi`, `codex`, `claude-code`, `mini-swe-agent`, `terminus-2`, `muse-code` | `pi` |
+| `--thinking LEVEL`: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max` | the model's default |
+| `--credential ID` | managed model |
+| `--sandbox managed\|e2b\|modal\|daytona` and `--sandbox-credential ID` | managed sandbox |
+| `--task RUN_ID/TASK_ID` (repeatable) | every approved task |
+| `--skip-completed` | rerun everything |
+| `--judge-credential ID` | required for tasks graded by an LLM judge |
+| `--condition JSON\|@FILE` (repeatable): `{"name": "…", "environment": ID, "skills": ["org/repo"], "instructions": "…"}` | none: only the tasks as they are |
+| `--no-baseline` | the tasks as they are run too |
+| `--selection JSON\|@FILE` | a full [comparison body](/api/evaluate#request-body) in place of the flags |
+
+A condition runs every task again with its skills, extra instructions, or [environment](/cli/environments); see [Conditions](/concepts/how-it-works#conditions).
