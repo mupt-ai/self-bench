@@ -1,0 +1,14 @@
+---
+title: "CLI: Publish"
+sidebarTitle: "Publish"
+description: "Release a public repository's results to selfbench.dev."
+icon: "globe"
+---
+
+Only public repositories, and groups of them, can be released to selfbench.dev. `R` is `--repo OWNER/NAME` or `--group SLUG`.
+
+| Command | Does |
+| --- | --- |
+| `release preview R` | The settings, tasks, and coverage a release would publish |
+| `release publish R [--setting KEY ... \| --all-settings] [--publish-tasks] [--publish-trials] [--publish-summaries]` | Release the preview it just read |
+| `releases R` · `release withdraw RELEASE_ID R` | List or withdraw releases |

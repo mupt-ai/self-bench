@@ -1,0 +1,26 @@
+---
+title: "API: Review Tasks"
+sidebarTitle: "Review Tasks"
+description: "Read, revise, steer, and approve or reject generated tasks."
+icon: "list-check"
+---
+
+`…` is `{repo}/tasks/{runId}`. Only approved tasks are evaluated.
+
+| Method | Route | Does |
+| --- | --- | --- |
+| `GET` | `{repo}/tasks` | List tasks |
+| `GET`, `DELETE` | `{repo}/tasks/{runId}/{taskId}` | Read or delete a task |
+| `GET` | `…/{taskId}/draft` · `…/artifacts` | Its files as `.tar.gz`; its gate and review artifacts |
+| `PUT`, `DELETE` | `…/{taskId}/review` | Approve or reject, or clear the review |
+| `POST` | `…/{taskId}/feedback` | Revise from feedback and edited files |
+| `POST` | `…/{taskId}/cancel` | Stop its generation |
+| `GET`, `POST` | `…/{taskId}/steering` | Notes to a task still generating, and those sent |
+
+## Request Bodies
+
+| Route | Body |
+| --- | --- |
+| `PUT …/review` | `{ decision: "approve" \| "reject", note? }` (settled tasks only) |
+| `POST …/feedback` | `{ feedback?, draft?: base64 tar.gz (≤22 MB), generation }` returns the revision |
+| `POST …/steering` | `{ feedback }` |

@@ -1,0 +1,23 @@
+---
+title: "API: Inspect Results"
+sidebarTitle: "Inspect Results"
+description: "Scores, failure explanations, fairness audits, and model summaries."
+icon: "chart-line"
+---
+
+| Method | Route | Does |
+| --- | --- | --- |
+| `GET` | `{scope}/evaluations/results` | Scores, and each task's results |
+| `GET`, `POST` | `{scope}/evaluations/{id}/explain` | Explain a failed trial |
+| `GET`, `POST` | `{scope}/evaluations/audit` | Audit a task's fairness |
+| `GET`, `POST` | `{scope}/evaluations/summaries` | Model summaries |
+
+Use `GET {scope}/evaluations/results` for scores rather than adding up trials. Results count each configuration's latest scored result on each counted task: a repository's accepted tasks, or a benchmark's tasks. Errors, cancellations, and trials still running don't count.
+
+## Request Bodies
+
+| Route | Body |
+| --- | --- |
+| `POST {scope}/evaluations/{id}/explain` | `{ runId, taskId, harness, explanation? }` |
+| `POST {scope}/evaluations/audit` | `{ runId, taskId, audit: { credentialId, model } }` |
+| `POST {scope}/evaluations/summaries` | `{ configurations: [keys] (≤12), summary: { credentialId, model } }` |

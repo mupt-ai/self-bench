@@ -1,0 +1,22 @@
+---
+title: "API: Account and Credentials"
+sidebarTitle: "Account and Credentials"
+description: "The caller, API keys, and saved model and sandbox credentials."
+icon: "key"
+---
+
+| Method | Route | Does |
+| --- | --- | --- |
+| `GET` | `/api/me` | Caller, workspaces, and key scope |
+| `GET`, `POST`, `DELETE` | `/api/api-keys[/{id}]` | List keys; mint or revoke from a browser session |
+| `GET` | `/api/orgs/{org}/credentials` | Saved model and sandbox credentials (never secrets) |
+| `POST`, `…/{id}/update`, `…/{id}/delete` | `/api/orgs/{org}/credentials` | Add, rename, or remove; admins only |
+
+## Request Bodies
+
+| Route | Body |
+| --- | --- |
+| `POST /api/api-keys` | `{ name, scope: "read" \| "write" }` (browser session) |
+| `POST /api/orgs/{org}/credentials` | `{ name, kind, value, tokenId?, teamId?, projectId?, endpoint? }` |
+
+See [Credentials](/concepts/credentials) for each `kind`.

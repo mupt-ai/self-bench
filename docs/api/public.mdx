@@ -19,4 +19,4 @@ curl https://selfbench.dev/api/public/results/earendil-works/pi
 
 `accuracy` is a percentage; `costPerTaskUsd` is model API USD per task. `frontier` lists setting IDs on the cost-accuracy frontier. Responses carry an `ETag` and a 10-second shared cache. Excess requests get `429` with `Retry-After`. The older `/api/public/directory` and `/api/public/repos/{owner}/{name}` paths still work. A page on any site can read these routes, a `404` or `429` included, so it can tell a withdrawn release from a failed request.
 
-Per-task trial results are never public. For authenticated access, see the [API](/api).
+Per-task trial results are never public. For authenticated access, see the [API](/api/overview).

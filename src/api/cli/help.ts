@@ -102,5 +102,5 @@ Operator (SELFBENCH_API_TOKEN, the deployment's token)
   self-bench grant create --label NAME --task ID [--task ID ...] [--days N] [--with-verifier]
   self-bench grant list | grant revoke GRANT_ID
 
-Docs: https://docs.selfbench.dev/cli`);
+Docs: https://docs.selfbench.dev/cli/overview`);
 }
