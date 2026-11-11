@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { RunDraft } from "./RunExecution";
 import { RunHarnessOptions } from "./RunHarnessOptions";
 import { conditionsProblem, submittedConditions } from "./run-conditions";
+import { restoreRunDraft } from "./run-draft";
 
 type Condition = NonNullable<RunDraft["conditions"]>[number];
 
@@ -50,6 +51,11 @@ test("typed option text is sent as each option's value, for the harnesses the ru
       },
     },
   ]);
+  // A submitted draft is saved with typed values, and restores with them after a refresh.
+  const submitted = { ...picked, id: crypto.randomUUID(), ...submittedConditions(picked) };
+  const restored = restoreRunDraft(JSON.stringify({ submitted: true, draft: submitted }), null);
+  expect(restored.draft.id).toBe(submitted.id);
+  expect(restored.draft.conditions).toEqual(submitted.conditions);
   const broken = (options: Record<string, string>) =>
     conditionsProblem(
       draft({ name: "Tuned", skills: [], harnessOptions: { "claude-code": options } }, [

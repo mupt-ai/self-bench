@@ -39,11 +39,20 @@ const draftStateSchema = z.object({
           skills: z.array(z.string().max(MAX_SKILL_LENGTH)).max(MAX_SKILLS),
           instructions: z.string().max(4000).optional(),
           environment: z.number().int().positive().optional(),
-          // Harness options as typed text, by harness and option name (RunHarnessOptions).
+          // Harness options by harness and option name: typed text while editing
+          // (RunHarnessOptions), their values once submitted (submittedConditions).
           harnessOptions: z
             .partialRecord(
               z.enum(harnessIds),
-              z.record(z.string().max(100), z.string().max(MAX_NATIVE_CONFIG)),
+              z.record(
+                z.string().max(100),
+                z.union([
+                  z.string().max(MAX_NATIVE_CONFIG),
+                  z.number(),
+                  z.boolean(),
+                  z.record(z.string(), z.unknown()),
+                ]),
+              ),
             )
             .optional(),
         }),
