@@ -274,6 +274,13 @@
       "when": 1794256162400,
       "tag": "0038_task_environments",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1794418920651,
+      "tag": "0039_workspaces",
+      "breakpoints": true
     }
   ]
 }

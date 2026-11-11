@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
-import { orgMembers, orgs, users } from "../src/db/schema.js";
+import { githubConnections, orgMembers, users } from "../src/db/schema.js";
 import { createUserStore } from "../src/db/users.js";
 import { type TestDatabase, testAuthConfig, testDatabase } from "./support/site-fixture.js";
 
@@ -67,25 +67,79 @@ describe("user store", () => {
     expect(await store.gitHubToken(8)).toBeUndefined();
   });
 
-  test("memberships are replaced on each sign-in, personal account first", async () => {
+  test("GitHub memberships sync on each sign-in, personal workspace first", async () => {
     const store = createUserStore(database.db, { secret: testAuthConfig.sessionSecret });
     const user = await store.findByGitHubId(7);
     if (!user) throw new Error("user 7 missing");
     const tenants = await store.orgsFor(user.id);
+    // The personal workspace keeps the slug it was made with; its connection follows the rename.
     expect(tenants.map((org) => [org.login, org.kind, org.role])).toEqual([
-      ["new-login", "user", "admin"],
+      ["old-login", "user", "admin"],
       ["alpha", "org", "member"],
       ["Zeta", "org", "admin"],
     ]);
-    expect(tenants[0]).toMatchObject({ githubId: 7, name: "N", avatarUrl: "https://a/x.png" });
+    expect(tenants[0]?.github).toEqual([{ githubId: 7, login: "new-login", kind: "user" }]);
     expect(tenants[2]?.avatarUrl).toBe("https://a/z.png");
-    const stale = await database.db.select().from(orgs).where(eq(orgs.githubId, 500));
-    expect(stale).toHaveLength(1);
+    // Leaving Old-Org on GitHub removed the membership but kept its workspace.
+    const [stale] = await database.db
+      .select()
+      .from(githubConnections)
+      .where(eq(githubConnections.githubId, 500));
+    expect(stale).toBeDefined();
     const members = await database.db
       .select()
       .from(orgMembers)
       .where(eq(orgMembers.userId, user.id));
     expect(members).toHaveLength(3);
+  });
+
+  test("workspace roles outlive GitHub's, and invites survive leaving GitHub orgs", async () => {
+    const store = createUserStore(database.db, { secret: testAuthConfig.sessionSecret });
+    const signIn = (
+      githubId: number,
+      login: string,
+      orgs: { githubId: number; login: string; role: "admin" | "member" }[],
+    ) => store.upsert({ githubId, login, token: "t", scopes: "", orgs });
+    const owner = await signIn(20, "owner", [{ githubId: 600, login: "team", role: "admin" }]);
+    const team = (await store.orgsFor(owner.id)).find((org) => org.login === "team");
+    if (!team) throw new Error("team workspace missing");
+
+    const dev = await signIn(21, "dev", [{ githubId: 600, login: "team", role: "member" }]);
+    expect(await store.setRole(team.id, "dev", "admin")).toBe(true);
+    await signIn(21, "dev", [{ githubId: 600, login: "team", role: "member" }]);
+    expect((await store.orgsFor(dev.id)).find((org) => org.id === team.id)?.role).toBe("admin");
+
+    // Removed from the GitHub org, removed from the workspace.
+    await signIn(21, "dev", []);
+    expect((await store.orgsFor(dev.id)).map((org) => org.login)).toEqual(["dev"]);
+
+    // An outsider joins by invite at sign-in and stays without any GitHub membership.
+    await store.invite(team.id, "Outsider", "member", owner.id);
+    const outsider = await signIn(22, "outsider", []);
+    expect((await store.orgsFor(outsider.id)).map((org) => [org.login, org.role])).toEqual([
+      ["outsider", "admin"],
+      ["team", "member"],
+    ]);
+    expect(await store.invites(team.id)).toEqual([]);
+    await signIn(22, "outsider", []);
+    expect(await store.orgsFor(outsider.id)).toHaveLength(2);
+
+    await expect(store.removeMember(team.id, "owner")).rejects.toThrow("at least one admin");
+    await expect(
+      store.invite((await store.orgsFor(owner.id))[0]?.id ?? 0, "x", "member", owner.id),
+    ).rejects.toThrow("Personal workspaces");
+  });
+
+  test("a new workspace takes a free slug when its GitHub login is taken", async () => {
+    const store = createUserStore(database.db, { secret: testAuthConfig.sessionSecret });
+    const user = await store.upsert({
+      githubId: 30,
+      login: "someone",
+      token: "t",
+      scopes: "",
+      orgs: [{ githubId: 700, login: "ALPHA", role: "member" }],
+    });
+    expect((await store.orgsFor(user.id)).map((org) => org.login)).toEqual(["someone", "ALPHA-2"]);
   });
 
   test("a different secret cannot open the stored token", async () => {

@@ -108,15 +108,16 @@ export function createConnectedRepoRoutes(
           sendJson(response, 400, { error: `${EVAL_OWNER} is reserved for evals` });
           return true;
         }
-        // An org may connect anything public, but only its own private repositories.
-        const owner = found.fullName.split("/")[0] ?? "";
+        // A shared workspace may connect anything public, but only private repositories owned
+        // by a GitHub organization connected to it.
+        const owner = (found.fullName.split("/")[0] ?? "").toLowerCase();
         if (
           tenant.kind === "org" &&
           found.private &&
-          owner.toLowerCase() !== tenant.login.toLowerCase()
+          !tenant.github.some((account) => account.login.toLowerCase() === owner)
         ) {
           sendJson(response, 400, {
-            error: `private repository is not owned by ${tenant.login}`,
+            error: `private repository is not owned by a GitHub organization connected to ${tenant.login}`,
           });
           return true;
         }

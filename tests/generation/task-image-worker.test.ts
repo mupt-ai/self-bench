@@ -22,10 +22,7 @@ async function seed(row: Partial<typeof tasks.$inferInsert> = {}) {
     .insert(users)
     .values({ githubId: 1, login: "avyay", githubToken: "token" })
     .returning();
-  const [org] = await db
-    .insert(orgs)
-    .values({ githubId: 2, login: "mupt-ai", kind: "org" })
-    .returning();
+  const [org] = await db.insert(orgs).values({ login: "mupt-ai", kind: "org" }).returning();
   if (!user || !org) throw new Error("seed failed");
   const [repo] = await db
     .insert(repos)

@@ -2,11 +2,8 @@ import { expect, test } from "bun:test";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
-import { drizzle } from "drizzle-orm/pglite";
 import { migrationsFolder } from "../src/db/client.js";
-import * as schema from "../src/db/schema.js";
-import { createUserStore } from "../src/db/users.js";
-import { testAuthConfig } from "./support/site-fixture.js";
+import { legacyTenant } from "./support/legacy-tenant.js";
 
 const commit = (digit: string) => digit.repeat(40);
 
@@ -21,11 +18,7 @@ test("existing tasks take their base commit from their definition, or else their
     for (const file of files.slice(0, files.indexOf(backfill))) {
       await client.exec(await readFile(join(migrationsFolder(), file), "utf8"));
     }
-    const users = createUserStore(drizzle(client, { schema }), {
-      secret: testAuthConfig.sessionSecret,
-    });
-    const user = await users.upsert({ githubId: 1, login: "o", token: "t", scopes: "", orgs: [] });
-    const [org] = await users.orgsFor(user.id);
+    const { user, org } = await legacyTenant(client, "o");
     await client.query(
       "INSERT INTO repos (org_id, github_id, full_name, default_branch, private, connected_by) VALUES ($1, 1, 'o/r', 'main', true, $2)",
       [org?.id, user.id],

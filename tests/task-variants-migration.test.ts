@@ -5,8 +5,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrationsFolder } from "../src/db/client.js";
 import * as schema from "../src/db/schema.js";
-import { createUserStore } from "../src/db/users.js";
-import { testAuthConfig } from "./support/site-fixture.js";
+import { legacyTenant } from "./support/legacy-tenant.js";
 
 /** Applies the journal's migrations in order, up to and including `last`. */
 async function migrate(client: PGlite, from: string | undefined, last: string) {
@@ -25,15 +24,7 @@ test("variants made as task rows move to task_variants as they stood, one enviro
     await client.waitReady;
     await migrate(client, undefined, "0037_benchmark_releases");
     const db = drizzle(client, { schema });
-    const users = createUserStore(db, { secret: testAuthConfig.sessionSecret });
-    const user = await users.upsert({
-      githubId: 1,
-      login: "owner",
-      token: "t",
-      scopes: "",
-      orgs: [],
-    });
-    const [org] = await users.orgsFor(user.id);
+    const { user, org } = await legacyTenant(client, "owner");
     const [repo] = await db
       .insert(schema.repos)
       .values({
