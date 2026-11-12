@@ -5,14 +5,9 @@ import type { SelfBenchConfig } from "../contracts/config/index.js";
 import { isArtifactRegistry } from "../contracts/config/task-images.js";
 import { apiKeyDenies } from "../db/api-keys.js";
 import { openDatabase } from "../db/client.js";
-import { validateEndpoint } from "../db/credential-endpoints.js";
 import { createRegistryGrantStore } from "../db/registry-grants.js";
-import { gatewayRoute } from "../gateway/mount.js";
-import { withManagedModel } from "../gateway/platform.js";
-import { createGatewayUsageStore } from "../gateway/usage-store.js";
-import { gatewayModelPrice, listedModelConfig, servedModelCost } from "../gateways/catalog.js";
+import { selfBenchGateway } from "../gateway/serve.js";
 import { createGenerationBatches, RunNotFoundError } from "../generation/batches/service.js";
-import { platformModelKey } from "../generation/billing/managed.js";
 import { googleAccessToken } from "../lib/google-access-token.js";
 import { reportError } from "../lib/telemetry/sentry.js";
 import { connectTemporalClient } from "../temporal/connection.js";
@@ -87,27 +82,9 @@ export async function startApi(
     if (!batches) throw new RunNotFoundError(runId);
     return batches.status(runId);
   };
-  // The model gateway trials call with a trial key; it needs the vault for the org's own keys,
-  // and the platform's OpenRouter key for managed model access.
-  const gateway = site?.vault
-    ? (() => {
-        const usage = createGatewayUsageStore(site.database.db);
-        return gatewayRoute({
-          secret,
-          credentials: withManagedModel(site.vault.credentials, platformModelKey(process.env)),
-          modelConfig: listedModelConfig,
-          modelPrice: gatewayModelPrice,
-          servedModelCost,
-          endpoint: (endpoint) => validateEndpoint(endpoint, process.env),
-          recordUsage: (entry) => {
-            usage
-              .record(entry)
-              .catch((error) => reportError(error, { tags: { route: "gateway" } }));
-          },
-          captureError: (error) => reportError(error, { tags: { route: "gateway" } }),
-        });
-      })()
-    : undefined;
+  // The model gateway trials call with a trial key. Hosted, the load balancer sends its path to
+  // the gateway service instead (gateway/main.ts), so model streams never share the site's CPU.
+  const gateway = site?.vault ? selfBenchGateway(site.database.db, site.vault, secret) : undefined;
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);

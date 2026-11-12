@@ -124,6 +124,49 @@ run "results_site_cdn" {
     condition     = output.deployment.api.results_site_cdn.host == "selfbench.example"
     error_message = "The deploy needs the host and URL map to clear the CDN."
   }
+  assert {
+    condition     = one([for rule in google_compute_url_map.api.host_rule : tolist(rule.hosts) if rule.path_matcher == "app"]) == tolist(["app.selfbench.example"])
+    error_message = "The results site's host never serves the model gateway."
+  }
+}
+run "gateway_on_its_own_service" {
+  command = plan
+  override_resource {
+    target          = google_compute_backend_service.api
+    override_during = plan
+    values          = { id = "api-backend" }
+  }
+  override_resource {
+    target          = google_compute_backend_service.gateway
+    override_during = plan
+    values          = { id = "gateway-backend" }
+  }
+  assert {
+    condition     = google_cloud_run_v2_service.gateway.ingress == "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER" && google_cloud_run_v2_service.gateway.template[0].containers[0].command == tolist(["bun", "dist/gateway/main.js"]) && google_cloud_run_v2_service.gateway.template[0].containers[0].image == var.image
+    error_message = "The gateway runs from the release image behind the load balancer only."
+  }
+  assert {
+    condition     = google_cloud_run_v2_service.gateway.template[0].max_instance_request_concurrency == 16 && google_cloud_run_v2_service.gateway.template[0].scaling[0].max_instance_count == 20
+    error_message = "Few streams share a gateway instance, so it scales out before its CPU saturates."
+  }
+  assert {
+    condition = {
+      for env in google_cloud_run_v2_service.gateway.template[0].containers[0].env : env.name => env.value_source[0].secret_key_ref[0].secret
+      if length(env.value_source) > 0
+      } == {
+      SELFBENCH_DATABASE_URL        = "selfbench-database-url"
+      SELFBENCH_EVAL_CREDENTIAL_KEY = "selfbench-eval-credential-key"
+      SELFBENCH_SANDBOX_SECRET      = "selfbench-sandbox-secret"
+    }
+    error_message = "The gateway reads only the database, the vault key, and the trial key secret."
+  }
+  assert {
+    condition = alltrue([
+      for matcher in google_compute_url_map.api.path_matcher : matcher.default_service == "api-backend" && one(matcher.path_rule).service == "gateway-backend" && toset(one(matcher.path_rule).paths) == toset(["/gateway", "/gateway/*"])
+      if matcher.name == "app"
+    ]) && one([for rule in google_compute_url_map.api.host_rule : tolist(rule.hosts) if rule.path_matcher == "app"]) == tolist(["app.selfbench.example", "selfbench.example"])
+    error_message = "The app's hosts send the gateway's path to the gateway service and everything else to the API."
+  }
 }
 run "no_results_site_cdn_by_default" {
   command = plan

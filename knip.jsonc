@@ -3,6 +3,7 @@
   "entry": [
     "src/api/cli/bin.ts!",
     "src/api/main.ts!",
+    "src/gateway/main.ts!",
     "src/temporal/worker-main.ts!",
     // Operator-only maintenance programs, bundled into dist/maintenance.
     "maintenance/bin/*.ts!",
