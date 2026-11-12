@@ -105,7 +105,7 @@ function sectionsOf(billing: boolean): { label: string; items: NavItem[] }[] {
         },
         {
           // Saved harness changes, which any repository's or benchmark's runs pick.
-          label: "Conditions",
+          label: "Harnesses",
           to: "/settings/conditions",
           icon: SlidersHorizontal,
           active: (path) => path.startsWith("/settings/conditions"),

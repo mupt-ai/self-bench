@@ -38,7 +38,7 @@ test("sidebar exposes labeled navigation and credentials", () => {
   expect(html).toContain(">Public Benchmarks</span>");
   expect(html).toContain('aria-label="Credentials"');
   expect(html).toContain("Credentials");
-  expect(html).toContain('aria-label="Conditions"');
+  expect(html).toContain('aria-label="Harnesses"');
   expect(html).toContain('aria-label="API Keys"');
   expect(html).toContain(">API Keys</span>");
   expect(html).toContain('aria-label="Billing"');
@@ -53,7 +53,7 @@ test("sidebar exposes labeled navigation and credentials", () => {
 test("sidebar sorts its pages into named sections, in order", () => {
   const html = renderSidebar("/");
   const order = ["Benchmarks", "Mined Repos", "Scenarios", "Public Benchmarks"]
-    .concat(["Workspace", "Members", "Credentials", "Conditions", "API Keys", "Billing"])
+    .concat(["Workspace", "Members", "Credentials", "Harnesses", "API Keys", "Billing"])
     .map((label) => html.indexOf(`>${label}</`));
   expect(order.every((at) => at >= 0)).toBe(true);
   expect(order).toEqual([...order].sort((left, right) => left - right));

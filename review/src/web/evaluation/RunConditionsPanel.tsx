@@ -132,7 +132,7 @@ export function RunConditionsPanel({
                 <label htmlFor={`condition-${index}-saved`} className={fieldStyles}>
                   <span className="flex items-center gap-1.5">
                     Condition
-                    <InfoTooltip label="A saved condition: skills, instructions, harness options, or a subagent model. Save and edit them under Conditions in the sidebar." />
+                    <InfoTooltip label="A saved condition: skills, instructions, harness options, or a subagent model. Save and edit them under Harnesses in the sidebar." />
                   </span>
                   <Select
                     id={`condition-${index}-saved`}

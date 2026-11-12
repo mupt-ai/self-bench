@@ -3,7 +3,7 @@ import React from "react";
 import { formatAgo } from "../api";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
-import { Button, DataTable, EmptyState, Notice, PageContent, PageHeader } from "../ui";
+import { Button, DataTable, EmptyState, Notice, PageFrame, PageHeader } from "../ui";
 import { ConditionDialog } from "./ConditionDialog";
 import {
   deleteCondition,
@@ -21,7 +21,7 @@ import { conditionSummary } from "./condition-summary";
  */
 export function ConditionsPage() {
   const { org } = useOrg();
-  useDocumentTitle(`Conditions · ${org.login}`);
+  useDocumentTitle(`Harnesses · ${org.login}`);
   const [conditions, setConditions] = React.useState<SavedCondition[]>();
   const [models, setModels] = React.useState<{ id: string; label: string }[]>([]);
   const [error, setError] = React.useState<string | null>(null);
@@ -59,26 +59,26 @@ export function ConditionsPage() {
   };
 
   return (
-    <PageContent>
+    <PageFrame>
       <PageHeader
         className="mb-6"
-        title="Conditions"
-        description="Save a change to the harness once, then run any tasks with and without it."
+        title="Harnesses"
+        description="Save a change to a harness once, then run any tasks with and without it."
       >
         <Button variant="primary" onClick={() => setEditing("new")}>
           <Plus aria-hidden="true" />
-          New Condition
+          New Harness
         </Button>
       </PageHeader>
       {error && <Notice className="mb-5">{error}</Notice>}
       {!conditions ? (
         !error && (
           <p role="status" className="text-sm text-muted-foreground">
-            Loading conditions…
+            Loading harnesses…
           </p>
         )
       ) : conditions.length === 0 ? (
-        <EmptyState title="No Conditions Yet">
+        <EmptyState title="No Harnesses Yet">
           Add skills, extra instructions, harness options, or a subagent model. Then pick the
           condition on any Run page to compare it with the baseline.
         </EmptyState>
@@ -86,7 +86,7 @@ export function ConditionsPage() {
         <DataTable>
           <thead>
             <tr>
-              <th>Condition</th>
+              <th>Harness</th>
               <th>Changes</th>
               <th className="text-right">Updated</th>
               <th className="w-24" aria-label="Actions" />
@@ -139,6 +139,6 @@ export function ConditionsPage() {
           }}
         />
       )}
-    </PageContent>
+    </PageFrame>
   );
 }
