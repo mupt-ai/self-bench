@@ -131,7 +131,7 @@ function TaskPageContent() {
           <Breadcrumbs
             items={[
               isEvalName(fullName)
-                ? { label: "Scenarios", to: "/evals" }
+                ? { label: "Vibe Evals", to: "/evals" }
                 : { label: "Mined Repos", to: "/" },
               {
                 label: fullName,

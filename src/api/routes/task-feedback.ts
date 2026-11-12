@@ -89,7 +89,7 @@ export async function taskFeedbackRoute(
   const scenario = task.sourcePr === undefined && task.title !== undefined;
   if (task.sourcePr === undefined && !scenario) {
     sendJson(response, 409, {
-      error: "Only a task built from a pull request or a scenario can be revised.",
+      error: "Only a task built from a pull request or a vibe eval can be revised.",
     });
     return true;
   }

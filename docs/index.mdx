@@ -8,7 +8,7 @@ SelfBench turns merged pull requests into verified tasks, runs coding agents on 
 
 | Stage | Does | CLI | API |
 | --- | --- | --- | --- |
-| Build | Generate tasks from merged PRs or a described scenario | `generate`, `scenario create` | `…/batches`, `…/tasks/from-scenario` |
+| Build | Generate tasks from merged PRs or a described vibe eval | `generate`, `scenario create` | `…/batches`, `…/tasks/from-scenario` |
 | Review | Approve, reject, or revise each task | `task approve`, `task revise` | `…/tasks/{runId}/{taskId}/review`, `…/feedback` |
 | Evaluate | Run models and harnesses on approved tasks | `compare` | `…/evaluations/comparisons` |
 | Inspect | Scores, failure explanations, fairness audits | `results`, `task explain`, `task audit` | `…/evaluations/results`, `…/explain`, `…/audit` |
