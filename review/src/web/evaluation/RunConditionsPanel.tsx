@@ -39,7 +39,7 @@ export function useConditionChoices(
       stopped = true;
     };
   }, [org, repo]);
-  return { saved, environments, models, credentials };
+  return { saved, environments, ...(repo ? { repo } : {}), models, credentials };
 }
 
 /**
@@ -240,8 +240,19 @@ export function RunConditionsPanel({
           >
             Manage Conditions
           </Link>
+          {choices.repo && (
+            <Link
+              className={cn(buttonStyles.ghost, "text-sm")}
+              to={`/repos/${choices.repo}/environments`}
+              aria-label="Manage Environments"
+            >
+              Manage Environments
+            </Link>
+          )}
           {choices.saved?.length === 0 && environments.length === 0 && (
-            <span className="text-sm text-muted-foreground">No saved conditions yet.</span>
+            <span className="text-sm text-muted-foreground">
+              No saved conditions or environments yet.
+            </span>
           )}
         </div>
       </div>

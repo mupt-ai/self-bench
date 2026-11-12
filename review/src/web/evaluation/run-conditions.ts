@@ -18,6 +18,8 @@ export interface ConditionChoices {
   saved: SavedCondition[] | undefined;
   /** The repository's environments; none for a benchmark or a group. */
   environments: EnvironmentItem[];
+  /** The repository whose environments these are, when the page is a repository's. */
+  repo?: string;
   models: CatalogModel[];
   credentials: CredentialInfo[];
 }
