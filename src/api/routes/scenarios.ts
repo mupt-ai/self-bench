@@ -75,7 +75,7 @@ export async function scenarioRoute(
   }
   if (repo.kind === "github" && !body.commit) {
     sendJson(response, 400, {
-      error: `Name the commit the agent starts from. A scenario with no repository behind it belongs to an eval (${EVAL_OWNER}/<name>).`,
+      error: `Name the commit the agent starts from. A vibe eval with no repository behind it belongs to an eval (${EVAL_OWNER}/<name>).`,
     });
     return true;
   }

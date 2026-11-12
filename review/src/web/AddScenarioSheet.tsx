@@ -28,7 +28,7 @@ export interface AddScenarioSheetProps {
 
 const COPY = {
   repository: {
-    heading: "Add Scenario",
+    heading: "Add Vibe Eval",
     about:
       "Describe a change to make in this repository, ideally one an agent got wrong. The agent starts from the repository at the commit you choose; the author writes the instruction, a reference implementation, and hidden tests.",
     titlePlaceholder: "Personalised Dashboard on Cache Components",
@@ -36,7 +36,7 @@ const COPY = {
       "For example: our team dashboard awaits all its data at the top of the page, so it blocks for two seconds. Enable Cache Components and make it load fast, without leaking one member's data to another.",
   },
   workspace: {
-    heading: "Add Workspace Scenario",
+    heading: "Add Workspace Vibe Eval",
     about:
       "Describe a task an agent should handle, ideally one it got wrong, with any real files from it. The author builds the files the agent starts with, the instruction, and hidden tests that check the outcome.",
     titlePlaceholder: "CSV Import Drops Quoted Rows",
@@ -124,7 +124,7 @@ export function AddScenarioSheet({
           closeRef={closeButton}
           busy={busy}
         />
-        <GenerationSteps step={step} firstStep="Describe Scenario" />
+        <GenerationSteps step={step} firstStep="Describe Vibe Eval" />
         <div className="px-4 pb-6 sm:px-6">
           {step === 1 ? (
             <div className="grid gap-4">
@@ -165,12 +165,12 @@ export function AddScenarioSheet({
               </div>
               <label htmlFor="scenario-text" className={fieldStyles}>
                 <span className="flex items-center gap-1.5">
-                  Scenario
+                  Description
                   <InfoTooltip label={copy.about} />
                 </span>
                 <textarea
                   id="scenario-text"
-                  aria-label="Scenario"
+                  aria-label="Description"
                   rows={9}
                   maxLength={MAX_SCENARIO_LENGTH}
                   placeholder={copy.scenarioPlaceholder}
@@ -200,7 +200,7 @@ export function AddScenarioSheet({
                   <span className="flex items-center gap-1.5">
                     Attachments
                     <InfoTooltip
-                      label={`Optional real files from the situation, such as a log, a design, or the emails: up to ${MAX_ATTACHMENTS} files and ${MAX_ATTACHMENT_BYTES / 1024 / 1024} MB. Details the scenario doesn't depend on are replaced with fictional ones.`}
+                      label={`Optional real files from the situation, such as a log, a design, or the emails: up to ${MAX_ATTACHMENTS} files and ${MAX_ATTACHMENT_BYTES / 1024 / 1024} MB. Details the vibe eval doesn't depend on are replaced with fictional ones.`}
                     />
                   </span>
                   <Input
