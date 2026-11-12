@@ -27,7 +27,7 @@ export function EnvironmentsPage() {
   const { org } = useOrg();
   const { owner = "", name = "" } = useParams();
   const fullName = `${owner}/${name}`;
-  useDocumentTitle(`Environments · ${fullName} · SelfBench`);
+  useDocumentTitle(`Repo Ablations · ${fullName} · SelfBench`);
   const [environments, setEnvironments] = React.useState<EnvironmentItem[]>();
   const [error, setError] = React.useState<string | null>(null);
   // Tasks a new environment could not start; kept apart from load errors, which reloads clear.
@@ -65,7 +65,7 @@ export function EnvironmentsPage() {
     <PageContent>
       <PageHeader
         className="mb-6"
-        title="Environments"
+        title="Repo Ablations"
         description="Change every task's files once, then compare runs with and without the change."
       >
         <Button
@@ -76,7 +76,7 @@ export function EnvironmentsPage() {
           }}
         >
           <Plus aria-hidden="true" />
-          New Environment
+          New Repo Ablation
         </Button>
       </PageHeader>
       {error && <Notice className="mb-5">{error}</Notice>}
@@ -84,20 +84,20 @@ export function EnvironmentsPage() {
       {!environments ? (
         !error && (
           <p role="status" className="text-sm text-muted-foreground">
-            Loading environments…
+            Loading repo ablations…
           </p>
         )
       ) : environments.length === 0 ? (
-        <EmptyState title="No Environments Yet">
+        <EmptyState title="No Repo Ablations Yet">
           Remove AGENTS.md, add a docs block, or swap a package build for every approved task. Then
-          pick it in a Conditions row's Environment field on the Run page.
+          pick it in a Conditions row's Repo Ablation field on the Run page.
         </EmptyState>
       ) : (
         <DataTable>
           <thead>
             <tr>
               <th className="w-8" aria-label="Details" />
-              <th>Environment</th>
+              <th>Repo Ablation</th>
               <th>Tasks</th>
               <th className="text-right">Created</th>
             </tr>

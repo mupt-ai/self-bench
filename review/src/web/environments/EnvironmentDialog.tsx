@@ -77,14 +77,14 @@ export function EnvironmentDialog({
     >
       <section className="flex min-w-0 flex-col" aria-labelledby="create-environment-title">
         <DialogHeader
-          title="New Environment"
+          title="New Repo Ablation"
           titleId="create-environment-title"
           description="Builds every approved task with these changes."
           onClose={onClose}
           closeRef={closeButton}
           busy={busy}
         />
-        <GenerationSteps step={step} firstStep="Change Environment" />
+        <GenerationSteps step={step} firstStep="Change Tasks" />
         {/* The steps row keeps its own bottom margin, so the body pads only its sides and bottom. */}
         <div className="grid gap-4 px-4 pb-6 sm:px-6">
           {step === 1 ? (
@@ -92,7 +92,7 @@ export function EnvironmentDialog({
               <label htmlFor="environment-name" className={fieldStyles}>
                 <span className="flex items-center gap-1.5">
                   Name
-                  <InfoTooltip label="What this environment changes, as conditions and results will name it." />
+                  <InfoTooltip label="What this repo ablation changes, as conditions and results will name it." />
                 </span>
                 <Input
                   id="environment-name"
@@ -164,7 +164,7 @@ export function EnvironmentDialog({
               disabled={busy || !filled || (step === 2 && !valid)}
               onClick={() => (step === 1 ? setStep(2) : void submit())}
             >
-              {busy ? "Starting…" : step === 1 ? "Continue" : "Build Environment"}
+              {busy ? "Starting…" : step === 1 ? "Continue" : "Build Repo Ablation"}
             </Button>
           </div>
         </DialogFooter>

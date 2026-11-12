@@ -88,7 +88,7 @@ export function RunConditionsPanel({
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5 text-sm font-semibold">
             Conditions
-            <InfoTooltip label="Run every task again under a saved condition, which changes the harness, in an environment, which changes the tasks, or both. Results show each apart from the baseline, the tasks and harness as they are." />
+            <InfoTooltip label="Run every task again under a saved condition, which changes the harness, in a repo ablation, which changes the tasks, or both. Results show each apart from the baseline, the tasks and harness as they are." />
           </span>
           <span className="mt-1 block truncate text-sm text-muted-foreground">
             {summary || "Nothing to run"}
@@ -160,12 +160,12 @@ export function RunConditionsPanel({
                 {environments.length > 0 && (
                   <label htmlFor={`condition-${index}-environment`} className={fieldStyles}>
                     <span className="flex items-center gap-1.5">
-                      Environment
-                      <InfoTooltip label="Run each task as one of this repository's environments built it, with its files changed. Tasks it has no ready build for are left out of this row." />
+                      Repo Ablation
+                      <InfoTooltip label="Run each task as one of this repository's repo ablations built it, with its files changed. Tasks it has no ready build for are left out of this row." />
                     </span>
                     <Select
                       id={`condition-${index}-environment`}
-                      aria-label="Environment"
+                      aria-label="Repo Ablation"
                       value={picked.environment ?? ""}
                       onChange={(event) => {
                         const { environment: _, ...rest } = picked;
@@ -244,9 +244,9 @@ export function RunConditionsPanel({
             <Link
               className={cn(buttonStyles.ghost, "text-sm")}
               to={`/repos/${choices.repo}/environments`}
-              aria-label="Manage Environments"
+              aria-label="Manage Repo Ablations"
             >
-              Manage Environments
+              Manage Repo Ablations
             </Link>
           )}
           {choices.saved?.length === 0 && environments.length === 0 && (

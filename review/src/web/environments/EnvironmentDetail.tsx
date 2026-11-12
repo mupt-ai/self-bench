@@ -118,7 +118,7 @@ export function EnvironmentDetail({
           </Button>
         )}
         <Button variant="ghost" disabled={busy !== null} onClick={() => void act("delete")}>
-          {busy === "delete" ? "Deleting…" : "Delete Environment"}
+          {busy === "delete" ? "Deleting…" : "Delete Repo Ablation"}
         </Button>
       </div>
     </div>

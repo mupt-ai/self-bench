@@ -137,5 +137,5 @@ test("each condition row picks a saved condition and an environment, and a crede
   const plain = render([{ saved: 1 }], { ...choices, environments: [] });
   expect(plain).not.toContain('aria-label="Subagent Credential"');
   // A benchmark or a group has no environments to pick.
-  expect(plain).not.toContain('aria-label="Environment"');
+  expect(plain).not.toContain('aria-label="Repo Ablation"');
 });
