@@ -1,5 +1,5 @@
 import { Trash2 } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import {
   type HarborAgentOption,
   type HarnessOptionValue,
@@ -12,11 +12,7 @@ import { type Harness, harnessLabels } from "../../../../src/evaluation/models";
 import { cn } from "../primitives/cn";
 import { InfoTooltip } from "../primitives/tooltip";
 import { Button, controlStyles, fieldStyles, Input, Select } from "../ui";
-import type { RunDraft } from "./RunExecution";
-import { optionText } from "./run-conditions";
-
-type Condition = NonNullable<RunDraft["conditions"]>[number];
-type Options = NonNullable<Condition["harnessOptions"]>;
+import { type OptionsDraft, optionText } from "./condition-draft";
 
 /** What each harness's native config is, where Harbor's description says only "config". */
 const NATIVE_CONFIG: Partial<Record<Harness, string>> = {
@@ -35,22 +31,22 @@ function firstValue(option: HarborAgentOption): string {
 }
 
 /**
- * A condition's harness options: for each picked harness that has any, the options set so far and
- * a picker for the rest. Values stay typed text until submitted (run-conditions.ts).
+ * A condition's harness options: for each harness that has any, the options set so far and a
+ * picker for the rest. Values stay typed text until the condition is saved (condition-draft.ts).
  */
-export function RunHarnessOptions({
-  condition,
-  harnesses,
+export function HarnessOptionsEditor({
+  value: options,
   idPrefix,
   onChange,
 }: {
-  condition: Condition;
-  harnesses: readonly Harness[];
+  value: OptionsDraft;
   idPrefix: string;
-  onChange: (options: Options) => void;
+  onChange: (options: OptionsDraft) => void;
 }) {
-  const shown = harnesses.filter((harness) => OPTION_HARNESSES.includes(harness));
-  const options = condition.harnessOptions ?? {};
+  // A harness shows once it has an option set, or once it is added here to set one.
+  const [added, setAdded] = useState<Harness[]>([]);
+  const shown = OPTION_HARNESSES.filter((harness) => harness in options || added.includes(harness));
+  const hidden = OPTION_HARNESSES.filter((harness) => !shown.includes(harness));
   const set = (harness: Harness, name: string, value: HarnessOptionValue | undefined) => {
     const { [name]: _, ...rest } = options[harness] ?? {};
     const next = value === undefined ? rest : { ...rest, [name]: value };
@@ -59,15 +55,31 @@ export function RunHarnessOptions({
   };
   return (
     <div className={fieldStyles}>
-      <span className="flex items-center gap-1.5">
-        Harness Options
-        <InfoTooltip label="Set options on each harness's agent, such as its system prompt, turn limit, tools, version, or native config. A condition with harness options runs only on the harnesses it sets them for." />
-      </span>
-      {shown.length === 0 && (
-        <span className="text-sm font-normal text-muted-foreground">
-          Pick a model with a harness to set its options.
+      <div className="flex items-center gap-3">
+        <span className="flex flex-1 items-center gap-1.5">
+          Harness Options
+          <InfoTooltip label="Set options on each harness's agent, such as its system prompt, turn limit, tools, version, or native config. A condition with harness options runs only on the harnesses it sets them for." />
         </span>
-      )}
+        {hidden.length > 0 && (
+          <span className="w-44">
+            <Select
+              aria-label="Add Harness"
+              value=""
+              onChange={(event) => {
+                const harness = hidden.find((entry) => entry === event.target.value);
+                if (harness) setAdded([...added, harness]);
+              }}
+            >
+              <option value="">Add Harness</option>
+              {hidden.map((harness) => (
+                <option key={harness} value={harness}>
+                  {harnessLabels[harness]}
+                </option>
+              ))}
+            </Select>
+          </span>
+        )}
+      </div>
       {shown.map((harness) => {
         const all = harnessOptionsFor(harness);
         const chosen = options[harness] ?? {};

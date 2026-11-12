@@ -29,7 +29,7 @@ function renderSidebar(
 test("sidebar exposes labeled navigation and credentials", () => {
   const html = renderSidebar("/");
   const links = html.match(/<a[^>]*data-slot="sidebar-menu-button"[^>]*>/g) ?? [];
-  expect(links).toHaveLength(8);
+  expect(links).toHaveLength(9);
   expect(html).toContain('aria-label="Members"');
   expect(html).toContain('aria-label="Workspace Navigation"');
   expect(html).toContain('aria-label="Mined Repos"');
@@ -38,6 +38,7 @@ test("sidebar exposes labeled navigation and credentials", () => {
   expect(html).toContain(">Public Benchmarks</span>");
   expect(html).toContain('aria-label="Credentials"');
   expect(html).toContain("Credentials");
+  expect(html).toContain('aria-label="Conditions"');
   expect(html).toContain('aria-label="API Keys"');
   expect(html).toContain(">API Keys</span>");
   expect(html).toContain('aria-label="Billing"');
@@ -52,7 +53,7 @@ test("sidebar exposes labeled navigation and credentials", () => {
 test("sidebar sorts its pages into named sections, in order", () => {
   const html = renderSidebar("/");
   const order = ["Benchmarks", "Mined Repos", "Scenarios", "Public Benchmarks"]
-    .concat(["Workspace", "Members", "Credentials", "API Keys", "Billing"])
+    .concat(["Workspace", "Members", "Credentials", "Conditions", "API Keys", "Billing"])
     .map((label) => html.indexOf(`>${label}</`));
   expect(order.every((at) => at >= 0)).toBe(true);
   expect(order).toEqual([...order].sort((left, right) => left - right));
@@ -63,7 +64,7 @@ test("sidebar sorts its pages into named sections, in order", () => {
 
 test("sidebar leaves out Billing without the managed offering", () => {
   const html = renderSidebar("/", "org", false);
-  expect(html.match(/<a[^>]*data-slot="sidebar-menu-button"[^>]*>/g) ?? []).toHaveLength(7);
+  expect(html.match(/<a[^>]*data-slot="sidebar-menu-button"[^>]*>/g) ?? []).toHaveLength(8);
   expect(html).not.toContain("Billing");
 });
 

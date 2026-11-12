@@ -9,6 +9,7 @@ import { BenchmarkLayout } from "./benchmarks/BenchmarkLayout";
 import { BenchmarkReleasesPage } from "./benchmarks/BenchmarkReleasesPage";
 import { BenchmarksPage } from "./benchmarks/BenchmarksPage";
 import { BenchmarkTaskPage } from "./benchmarks/BenchmarkTaskPage";
+import { ConditionsPage } from "./conditions/ConditionsPage";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { EnvironmentsPage } from "./environments/EnvironmentsPage";
 import { CredentialsPage } from "./evaluation/CredentialsPage";
@@ -93,6 +94,7 @@ export function WebApp() {
                   <Route path="settings/credentials" element={<CredentialsPage />} />
                   <Route path="settings/api-keys" element={<ApiKeysPage />} />
                   <Route path="settings/members" element={<MembersPage />} />
+                  <Route path="settings/conditions" element={<ConditionsPage />} />
                   {session.status === "signed-in" && session.managedOffering && (
                     <Route path="settings/billing" element={<BillingPage />} />
                   )}

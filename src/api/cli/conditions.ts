@@ -3,21 +3,39 @@ import { harborAgentOptions } from "../../contracts/harbor-agent-options.js";
 import { flag, list, type Values } from "./args.js";
 
 /**
- * `--condition JSON|@FILE`, repeatable: each an object `{name, skills?, instructions?,
- * environment?, harnessOptions?}`, or a file holding one or a list. `--harness-option
+ * `--saved-condition ID[:ENVIRONMENT_ID]`, repeatable: one of the workspace's saved conditions,
+ * run in a repository environment when it names one; `--subagent-credential ID` serves their
+ * subagent models. `--condition JSON|@FILE`, repeatable: each an object `{name, skills?,
+ * instructions?, environment?, harnessOptions?, subagent?}` or `{saved, environment?,
+ * subagentCredentialId?}`, or a file holding one or a list. `--harness-option
  * HARNESS.OPTION=VALUE`, repeatable, adds one more condition that sets those options, named by
  * `--options-name`. `--no-baseline` runs only the conditions.
  */
 export async function conditionsFromFlags(values: Values): Promise<Record<string, unknown>> {
-  const given = (
-    await Promise.all(
-      list(values, "condition").map(async (given) => {
-        const text = given.startsWith("@") ? await readFile(given.slice(1), "utf8") : given;
-        const parsed: unknown = JSON.parse(text);
-        return Array.isArray(parsed) ? parsed : [parsed];
-      }),
-    )
-  ).flat();
+  const subagentCredentialId = flag(values, "subagent-credential");
+  const saved = list(values, "saved-condition").map((entry) => {
+    const match = /^(\d+)(?::(\d+))?$/.exec(entry);
+    if (!match) throw new Error(`--saved-condition ${entry}: write ID or ID:ENVIRONMENT_ID`);
+    return {
+      saved: Number(match[1]),
+      ...(match[2] ? { environment: Number(match[2]) } : {}),
+      ...(subagentCredentialId ? { subagentCredentialId } : {}),
+    };
+  });
+  if (subagentCredentialId && !saved.length)
+    throw new Error("--subagent-credential needs --saved-condition");
+  const given = [
+    ...saved,
+    ...(
+      await Promise.all(
+        list(values, "condition").map(async (given) => {
+          const text = given.startsWith("@") ? await readFile(given.slice(1), "utf8") : given;
+          const parsed: unknown = JSON.parse(text);
+          return Array.isArray(parsed) ? parsed : [parsed];
+        }),
+      )
+    ).flat(),
+  ];
   const options = await harnessOptionsFromFlags(list(values, "harness-option"));
   const conditions = options
     ? [

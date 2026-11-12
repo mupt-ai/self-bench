@@ -17,6 +17,7 @@ import { loginCommand, logoutCommand, orgCommand } from "./login.js";
 import { memberCommand, membersCommand, workspaceCommand } from "./members.js";
 import { grantCommand } from "./operator.js";
 import { benchmarkCommand, releaseCommand } from "./releases.js";
+import { savedConditionCommand } from "./saved-conditions.js";
 import { scenarioCommand, taskCommand } from "./tasks.js";
 import { interactive } from "./tui.js";
 import { requiredArgument } from "./values.js";
@@ -54,6 +55,8 @@ const COMMANDS: Record<string, Command> = {
   task: (args) => taskCommand(args, false),
   environments: (args) => environmentCommand(args, true),
   environment: (args) => environmentCommand(args, false),
+  conditions: (args) => savedConditionCommand(args, true),
+  condition: (args) => savedConditionCommand(args, false),
   catalog: catalogCommand,
   compare: compareCommand,
   comparisons: (args) => comparisonCommand(args, true),

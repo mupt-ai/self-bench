@@ -14,7 +14,8 @@ const PROMPT =
   "You must figure out how to delegate a meaningful part of this task to at least one subagent. " +
   "Spawn the subagent, wait for its result, and use that result before finishing.";
 
-function withSubagent(provider: string, modelName: string): EvaluationInput {
+/** A run with a subagent model, told `prompt` when its condition gave one. */
+function withSubagent(provider: string, modelName: string, prompt?: string): EvaluationInput {
   return {
     ...input(provider, modelName),
     subagent: {
@@ -23,6 +24,7 @@ function withSubagent(provider: string, modelName: string): EvaluationInput {
       label: "DeepSeek V4 Pro",
       credentialId: "managed-model",
       thinking: "high",
+      ...(prompt === undefined ? {} : { prompt }),
     },
   };
 }
@@ -66,6 +68,32 @@ harbor("Claude Code is told to delegate after a condition's own system prompt", 
     `Run the tests first.\n\n${PROMPT}`,
   );
 });
+
+harbor(
+  "each harness is told its condition's delegation prompt, or nothing when it is empty",
+  async () => {
+    const own = "Hand the tests to a subagent.\nCheck its work before finishing.";
+    const claude = async (prompt: string) =>
+      argv(
+        (
+          await run(withSubagent("anthropic", "anthropic/claude-opus-5-5", prompt), "claude-code")
+        ).start("claude --verbose").command,
+        "claude",
+      );
+    const told = await claude(own);
+    expect(told[told.indexOf("--append-system-prompt") + 1]).toBe(own);
+    expect(await claude("")).not.toContain("--append-system-prompt");
+    const codex = async (prompt: string) =>
+      (await run(withSubagent("openai", "openai/gpt-6-sol", prompt), "codex")).recorded.files[
+        "/installed-agent/codex-home/config.toml"
+      ] ?? "";
+    expect(await codex(own)).toContain(`developer_instructions = ${JSON.stringify(own)}`);
+    const silent = await codex("");
+    expect(silent).not.toContain("developer_instructions");
+    // Its subagents still run on the subagent model.
+    expect(silent).toContain(`default_subagent_model = "dari/model/${DEEPSEEK}"`);
+  },
+);
 
 harbor("Claude Code without a subagent model keeps its subagents on the run's model", async () => {
   const { start } = await run(input("anthropic", "anthropic/claude-opus-5-5"), "claude-code");

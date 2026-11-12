@@ -1,10 +1,8 @@
 import { expect, test } from "bun:test";
-import { MAX_SKILLS } from "../../../../src/contracts/conditions";
 import { facets, matchingFacets } from "./configuration-facets";
 import { credentials, NOW, passed, run } from "./results-fixture";
 import { configurationsOf } from "./results-model";
 import { configurationName } from "./results-presentation";
-import { conditionsProblem } from "./run-conditions";
 import { restoreRunDraft } from "./run-draft";
 
 const condition = { id: "abc123", name: "With Skills", skills: ["https://github.com/a/b"] };
@@ -28,14 +26,24 @@ test("a run condition is its own configuration, named and filtered apart from th
   expect(chosen.map((configuration) => configuration.condition)).toEqual([undefined]);
 });
 
-test("a draft holding the most skills a condition takes still restores", () => {
-  const skills = Array.from({ length: MAX_SKILLS }, (_, at) => `acme/skills-${at}`);
+test("a draft restores the conditions it picked, and one from before saved conditions keeps its models", () => {
   const draft = restoreRunDraft(null, null).draft;
-  const saved = JSON.stringify({
-    submitted: false,
-    draft: { ...draft, conditions: [{ name: "Many", skills, instructions: "" }] },
-  });
-  expect(restoreRunDraft(saved, null).draft.conditions?.[0]?.skills).toEqual(skills);
-  const over = { ...draft, conditions: [{ name: "Many", skills: [...skills, "acme/one-more"] }] };
-  expect(conditionsProblem(over as never)).toBe(`Many can add at most ${MAX_SKILLS} skills.`);
+  const models = [
+    { catalogId: "gpt-6-sol", credentialId: "router", harnesses: ["codex" as const] },
+  ];
+  const saved = (conditions: unknown[]) =>
+    restoreRunDraft(
+      JSON.stringify({ submitted: false, draft: { ...draft, models, conditions } }),
+      null,
+    ).draft;
+  const picked = [
+    { saved: 3, environment: 7, subagentCredentialId: "managed-model" },
+    { saved: 4 },
+  ];
+  expect(saved(picked).conditions).toEqual(picked);
+  // Conditions were once written out on the Run page: those are dropped, not the whole draft.
+  const written = saved([{ name: "Many", skills: ["acme/skills"], instructions: "" }]);
+  expect(written.conditions).toEqual([]);
+  expect(written.models).toEqual(models);
+  expect(written.id).toBe(draft.id);
 });

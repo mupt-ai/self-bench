@@ -1,6 +1,5 @@
 import { z } from "zod";
-import { MAX_SKILL_LENGTH, MAX_SKILLS } from "../../../../src/contracts/conditions";
-import { MAX_NATIVE_CONFIG } from "../../../../src/contracts/harness-options";
+import { MAX_CONDITIONS } from "../../../../src/contracts/conditions";
 import { thinkingLevels } from "../../../../src/contracts/models";
 import { harnessIds } from "../../../../src/evaluation/models";
 import { evaluationRequestId } from "./api";
@@ -22,9 +21,6 @@ const draftStateSchema = z.object({
           catalogId: z.string().max(200),
           credentialId: z.string().max(36),
           thinking: z.enum(thinkingLevels).optional(),
-          subagent: z
-            .object({ catalogId: z.string().max(200), credentialId: z.string().max(36) })
-            .optional(),
           customModel: z.string().max(200).optional(),
           harnesses: z.array(z.enum(harnessIds)).max(harnessIds.length),
         }),
@@ -34,34 +30,22 @@ const draftStateSchema = z.object({
     sandboxCredentialId: z.string().max(36),
     skipCompleted: z.boolean().optional(),
     judgeCredentialId: z.string().max(36).optional(),
-    // Run conditions as typed: checked on submit (RunConditionsPanel), so a draft may be partial.
+    // The saved conditions and environments picked (RunConditionsPanel), checked on submit. A
+    // draft from when conditions were written out on this page keeps everything but them.
     conditions: z
       .array(
         z.object({
-          name: z.string().max(60),
-          skills: z.array(z.string().max(MAX_SKILL_LENGTH)).max(MAX_SKILLS),
-          instructions: z.string().max(4000).optional(),
+          saved: z.number().int().positive().optional(),
           environment: z.number().int().positive().optional(),
-          // Harness options by harness and option name: typed text while editing
-          // (RunHarnessOptions), their values once submitted (submittedConditions).
-          harnessOptions: z
-            .partialRecord(
-              z.enum(harnessIds),
-              z.record(
-                z.string().max(100),
-                z.union([
-                  z.string().max(MAX_NATIVE_CONFIG),
-                  z.number(),
-                  z.boolean(),
-                  z.record(z.string(), z.unknown()),
-                ]),
-              ),
-            )
-            .optional(),
+          subagentCredentialId: z.string().max(36).optional(),
         }),
       )
-      .max(4)
-      .optional(),
+      .max(MAX_CONDITIONS)
+      .transform((picked) =>
+        picked.filter((entry) => entry.saved !== undefined || entry.environment !== undefined),
+      )
+      .optional()
+      .catch(undefined),
     baseline: z.boolean().optional(),
   }),
 });

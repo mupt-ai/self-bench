@@ -28,7 +28,7 @@ class Options:
     append_system_prompt = None
 class Agent:
     def __init__(self, **kwargs):
-        self.options = types.SimpleNamespace(**{"view_image": True, "subagent_model": None, "append_system_prompt": None, **kwargs})
+        self.options = types.SimpleNamespace(**{"view_image": True, "subagent_model": None, "subagent_prompt": None, "append_system_prompt": None, **kwargs})
         self.model_name = "openai/dari/model/openai/gpt-6-sol"
         self._base_config = {}
     def build_cli_flags(self):
@@ -71,8 +71,23 @@ test.each(["claude-code", "codex"] as const)(
     });
     const trial = gatewayTrial(input, harness, input.modelName, {}, connection);
     expect(trial.agentArguments).toContain(`subagent_model=dari/model/${subagent.model}`);
-    // The delegation prompt is the adapter's to add, beside any a run condition sets.
+    // The delegation prompt is the adapter's to add, beside any a run condition sets: its own
+    // for a run that names none, as runs from before conditions named one were told.
     expect(trial.agentArguments.join(" ")).not.toContain("append_system_prompt");
+    expect(trial.agentArguments.join(" ")).not.toContain("subagent_prompt");
+    // A condition's prompt goes as JSON, so its lines survive and an empty one stays empty.
+    const told = (prompt: string) =>
+      gatewayTrial(
+        { ...input, subagent: { ...subagent, prompt } },
+        harness,
+        input.modelName,
+        {},
+        connection,
+      ).agentArguments;
+    expect(told("Delegate the tests.\nThen verify.")).toContain(
+      'subagent_prompt="Delegate the tests.\\nThen verify."',
+    );
+    expect(told("")).toContain('subagent_prompt=""');
     expect(trial.agentArguments.join(" ")).not.toContain(connection.key);
     expect(trial.model).toBe(
       `${harness === "codex" ? "openai/" : ""}dari/model/anthropic/claude-opus-5-5`,
@@ -112,6 +127,12 @@ async def check():
     assert agent.build_cli_flags() == "Run the tests first.\\n\\n" + adapter.SUBAGENT_REQUIRED_PROMPT
     assert agent.options.append_system_prompt == "Run the tests first."
     assert plain.build_cli_flags() == ""
+    # A condition's own prompt takes the default's place; an empty one tells it nothing.
+    own = adapter.SelfBenchClaudeCode(subagent_model=MODEL, subagent_prompt="Delegate the tests.", append_system_prompt="Run the tests first.")
+    assert own.build_cli_flags() == "Run the tests first.\\n\\nDelegate the tests."
+    assert adapter.SelfBenchClaudeCode(subagent_model=MODEL, subagent_prompt="").build_cli_flags() == ""
+    silent = adapter.SelfBenchClaudeCode(subagent_model=MODEL, subagent_prompt="", append_system_prompt="Run the tests first.")
+    assert silent.build_cli_flags() == "Run the tests first."
 asyncio.run(check())
 `);
 });
@@ -135,6 +156,14 @@ assert "web_search" not in openai._build_effective_config("https://gateway.examp
 plain = adapter.GatewayCodex()
 config = plain._build_effective_config("https://gateway.example/v1")
 assert "agents" not in config and "developer_instructions" not in config and "web_search" not in config
+# A condition's own prompt takes the default's place; an empty one adds no instructions.
+own = adapter.GatewayCodex(subagent_model=MODEL, subagent_prompt="Delegate the tests.")
+assert own._build_effective_config("https://gateway.example/v1")["developer_instructions"] == "Delegate the tests."
+silent = adapter.GatewayCodex(subagent_model=MODEL, subagent_prompt="")
+config = silent._build_effective_config("https://gateway.example/v1")
+assert "developer_instructions" not in config and config["agents"]["default_subagent_model"] == MODEL
+silent._base_config = {"developer_instructions": "Keep existing guidance."}
+assert silent._build_effective_config("https://gateway.example/v1")["developer_instructions"] == "Keep existing guidance."
 `);
 });
 

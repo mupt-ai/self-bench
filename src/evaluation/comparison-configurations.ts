@@ -3,7 +3,7 @@ import type { CatalogModel } from "./catalog.js";
 import type { ComparisonSelection } from "./comparisons.js";
 import { defaultThinking, type Harness, routeFor, signInRefusal } from "./models.js";
 import { subagentPart } from "./setting.js";
-import { subagentRefusal } from "./subagents.js";
+import { providerServesSubagent, subagentRefusal } from "./subagents.js";
 import type { EvaluationRun, SubagentModel } from "./types.js";
 
 /**
@@ -100,4 +100,52 @@ export function selectedSubagent(
     credentialId: credential.id,
     ...(thinking === "default" ? {} : { thinking }),
   };
+}
+
+/**
+ * The subagent model a condition's runs of one row use, with its delegation prompt: on the
+ * credential the comparison picked for it, or else the first of the workspace's (then the managed
+ * one) that can serve it beside this row. Throws why none can.
+ */
+export function conditionSubagent(
+  picked: { catalogId: string; prompt: string; credentialId?: string | undefined },
+  row: {
+    /** The condition's name, for the refusal. */
+    name: string;
+    harnesses: readonly Harness[];
+    model: Pick<CatalogModel, "id">;
+    provider: string;
+  },
+  known: Parameters<typeof selectedSubagent>[4],
+): SubagentModel {
+  const subagent = known.catalogModels.find((entry) => entry.id === picked.catalogId);
+  if (!subagent) throw new Error(`${row.name}: unknown subagent model ${picked.catalogId}`);
+  const candidates = picked.credentialId
+    ? [picked.credentialId]
+    : [
+        ...[...known.saved.values()]
+          .filter(({ kind }) => providerServesSubagent(kind) && routeFor(subagent, kind))
+          .map(({ id }) => id),
+        ...(known.managed && routeFor(subagent, "openrouter") ? ["managed-model"] : []),
+      ];
+  let refusal: unknown;
+  for (const credentialId of candidates) {
+    try {
+      return {
+        ...selectedSubagent(
+          { catalogId: picked.catalogId, credentialId },
+          row.harnesses,
+          row.model,
+          row.provider,
+          known,
+        ),
+        prompt: picked.prompt,
+      };
+    } catch (error) {
+      refusal ??= error;
+    }
+  }
+  throw new Error(
+    `${row.name}: ${refusal instanceof Error ? refusal.message : `no saved credential serves ${subagent.label} to subagents`}`,
+  );
 }

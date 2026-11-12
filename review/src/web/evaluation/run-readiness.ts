@@ -2,14 +2,12 @@ import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import type { ComparisonSelection } from "../../../../src/evaluation/comparisons";
 import { routeFor, thinkingOptions } from "../../../../src/evaluation/models";
-import { subagentRefusal } from "../../../../src/evaluation/subagents";
 import { credentialRunsAll, customModel, hasDuplicateModelSelections } from "./model-selection";
 
 /**
  * Whether a Run page's models and sandbox can start a comparison: every row has a model, a
- * credential that runs its harnesses, a thinking level it offers, and any subagent model on a
- * credential that can serve it (subagentRefusal), no row repeats another, and the sandbox has its
- * credential. The tasks are each page's own to check.
+ * credential that runs its harnesses, and a thinking level it offers, no row repeats another, and
+ * the sandbox has its credential. The tasks and conditions are each page's own to check.
  */
 export function selectionReady({
   draft,
@@ -17,7 +15,7 @@ export function selectionReady({
   credentials,
   managedSandbox,
 }: {
-  draft: ComparisonSelection;
+  draft: Pick<ComparisonSelection, "models" | "sandbox" | "sandboxCredentialId">;
   models: CatalogModel[];
   credentials: CredentialInfo[];
   managedSandbox: boolean;
@@ -41,20 +39,6 @@ export function selectionReady({
           : models.find((entry) => entry.id === selection.catalogId);
       const credential = credentials.find((entry) => entry.id === selection.credentialId);
       if (!model || !credential) return false;
-      if (selection.subagent) {
-        const secondary = models.find((entry) => entry.id === selection.subagent?.catalogId);
-        const secondaryCredential = credentials.find(
-          (entry) => entry.id === selection.subagent?.credentialId,
-        );
-        if (
-          !secondary ||
-          !secondaryCredential ||
-          subagentRefusal(selection.harnesses, credential.kind, secondaryCredential.kind) ||
-          !credentialRunsAll(secondary, secondaryCredential, selection.harnesses) ||
-          selection.catalogId === selection.subagent.catalogId
-        )
-          return false;
-      }
       const route = routeFor(model, credential.kind);
       const levels = thinkingOptions(route ?? model, selection.harnesses);
       return (
