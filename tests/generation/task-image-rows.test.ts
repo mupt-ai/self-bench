@@ -32,9 +32,7 @@ async function seeded() {
       .values({ githubId: 1, login: "avyay", githubToken: "token" })
       .returning(),
   );
-  const org = one(
-    await db.insert(orgs).values({ githubId: 2, login: "mupt-ai", kind: "org" }).returning(),
-  );
+  const org = one(await db.insert(orgs).values({ login: "mupt-ai", kind: "org" }).returning());
   const repo = one(
     await db
       .insert(repos)

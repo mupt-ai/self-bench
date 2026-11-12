@@ -9,7 +9,8 @@ async function workspace(values: Values): Promise<string> {
   const named = flag(values, "org") ?? process.env.SELFBENCH_ORG ?? readConfig().org;
   if (named) return named;
   const me = await requestJson("/api/me");
-  return (me.user as { login: string }).login;
+  const orgs = me.orgs as { login: string; kind: string }[];
+  return orgs.find((entry) => entry.kind === "user")?.login ?? (me.user as { login: string }).login;
 }
 
 const orgPath = async (values: Values) =>

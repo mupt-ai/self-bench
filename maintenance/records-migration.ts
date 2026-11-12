@@ -19,7 +19,7 @@ import {
   createCredentialStore,
 } from "../src/db/credentials.js";
 import { createEncryptedRecords } from "../src/db/encrypted-records.js";
-import { comparisons, credentials, evaluationRecords, orgs } from "../src/db/schema.js";
+import { comparisons, credentials, evaluationRecords, githubConnections, orgs } from "../src/db/schema.js";
 
 interface LegacyAccount {
   credentials: (CredentialInfo & { deleted?: boolean; migratedFrom?: string })[];
@@ -124,7 +124,8 @@ async function personalOrg(db: Database, githubId: number): Promise<number | und
   const [org] = await db
     .select({ id: orgs.id })
     .from(orgs)
-    .where(and(eq(orgs.githubId, githubId), eq(orgs.kind, "user")));
+    .innerJoin(githubConnections, eq(githubConnections.orgId, orgs.id))
+    .where(and(eq(githubConnections.githubId, githubId), eq(orgs.kind, "user")));
   return org?.id;
 }
 

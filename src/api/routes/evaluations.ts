@@ -25,6 +25,7 @@ import { credentialRoutes } from "./credentials.js";
 import { type CustomerExportRegistry, customerExportRoute } from "./customer-exports.js";
 import { EVALUATIONS_PATH, handleScopedEvaluations } from "./evaluation-scope.js";
 import { groupRoutes } from "./groups.js";
+import { memberRoutes } from "./members.js";
 
 /** A repository's evaluations: what follows it is EVALUATIONS_PATH. */
 const repoRoute =
@@ -106,6 +107,7 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
       user: User,
     ): Promise<boolean> {
       if (await credentialRoutes(options, request, url, response, user)) return true;
+      if (await memberRoutes(options, request, url, response, user)) return true;
       if (await benchmarkRoutes(options, request, url, response, user)) return true;
       if (await groupRoutes(options, privateNow, request, url, response, user)) return true;
       const repoMatch = repoRoute.exec(url.pathname);

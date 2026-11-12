@@ -1,8 +1,10 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { createSecretBox, deriveKey } from "../api/auth/crypto.js";
 import type { GitHubProfile, OrgMembership } from "../third_party/github/oauth.js";
 import type { Database } from "./client.js";
-import { orgMembers, orgs, users } from "./schema.js";
+import { githubConnections, orgMembers, orgs, users } from "./schema.js";
+import { acceptInvites, leaveGitHub } from "./workspace-sync.js";
+import { createWorkspaceStore, type WorkspaceStore } from "./workspaces.js";
 
 /** How an API-key request identifies itself; absent on cookie sessions. */
 export interface ApiKeyRef {
@@ -22,15 +24,26 @@ export interface User {
   readonly apiKey?: ApiKeyRef;
 }
 
-/** A tenant the user can work in: a GitHub org, or their personal account (`kind: "user"`). */
+/** A GitHub account attached to a workspace. */
+interface GitHubAccount {
+  readonly githubId: number;
+  readonly login: string;
+  readonly kind: "org" | "user";
+}
+
+/**
+ * A workspace the user can work in: their personal one (`kind: "user"`) or a shared one. `login`
+ * is the workspace's slug, which need not match any GitHub account; `github` lists the accounts
+ * connected to it.
+ */
 export interface Org {
   readonly id: number;
-  readonly githubId: number;
   readonly login: string;
   readonly kind: "org" | "user";
   readonly name?: string;
   readonly avatarUrl?: string;
   readonly role: "admin" | "member";
+  readonly github: readonly GitHubAccount[];
 }
 
 interface SignedInProfile extends GitHubProfile {
@@ -40,8 +53,8 @@ interface SignedInProfile extends GitHubProfile {
   readonly orgs: readonly OrgMembership[];
 }
 
-export interface UserStore {
-  /** Creates or refreshes the user, re-seals the token, and replaces their org memberships. */
+export interface UserStore extends WorkspaceStore {
+  /** Creates or refreshes the user, re-seals the token, and syncs their GitHub-derived memberships. */
   upsert(profile: SignedInProfile): Promise<User>;
   /** Looks a session's subject up; touches `last_seen_at`. Undefined when the row is gone. */
   findByGitHubId(githubId: number): Promise<User | undefined>;
@@ -51,19 +64,40 @@ export interface UserStore {
   gitHubToken(githubId: number): Promise<string | undefined>;
 }
 
-/** The tenants a profile implies: the personal account (as admin) plus every org membership. */
-function tenantsOf(profile: SignedInProfile): Omit<Org, "id">[] {
+/** The GitHub accounts a profile belongs to: the personal account (as admin), then its orgs. */
+function accountsOf(profile: SignedInProfile) {
   return [
     {
       githubId: profile.githubId,
       login: profile.login,
-      kind: "user",
-      ...(profile.name ? { name: profile.name } : {}),
-      ...(profile.avatarUrl ? { avatarUrl: profile.avatarUrl } : {}),
-      role: "admin",
+      kind: "user" as const,
+      name: profile.name,
+      avatarUrl: profile.avatarUrl,
+      role: "admin" as const,
     },
-    ...profile.orgs.map((org) => ({ ...org, kind: "org" as const })),
+    ...profile.orgs.map((org) => ({ ...org, kind: "org" as const, name: undefined })),
   ];
+}
+
+type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+/** `wanted`, or `wanted-2`, `wanted-3`, … : the first slug no workspace has taken. */
+async function freeSlug(tx: Tx, wanted: string): Promise<string> {
+  const taken = new Set(
+    (
+      await tx
+        .select({ login: orgs.login })
+        .from(orgs)
+        .where(
+          sql`lower(${orgs.login}) like ${`${wanted.toLowerCase().replace(/[\\%_]/g, "\\$&")}%`}`,
+        )
+    ).map((row) => row.login.toLowerCase()),
+  );
+  if (!taken.has(wanted.toLowerCase())) return wanted;
+  for (let n = 2; ; n += 1) {
+    const slug = `${wanted}-${n}`;
+    if (!taken.has(slug.toLowerCase())) return slug;
+  }
 }
 
 export function createUserStore(
@@ -73,6 +107,7 @@ export function createUserStore(
   const box = createSecretBox(deriveKey(options.secret, "token-sealing"));
   const now = options.now ?? (() => new Date());
   return {
+    ...createWorkspaceStore(db),
     async upsert(profile) {
       return db.transaction(async (tx) => {
         const [row] = await tx
@@ -100,34 +135,56 @@ export function createUserStore(
           })
           .returning();
         if (!row) throw new Error("user upsert returned no row");
-        await tx.delete(orgMembers).where(eq(orgMembers.userId, row.id));
-        for (const tenant of tenantsOf(profile)) {
-          const [org] = await tx
-            .insert(orgs)
-            .values({
-              githubId: tenant.githubId,
-              login: tenant.login,
-              kind: tenant.kind,
-              name: tenant.name ?? null,
-              avatarUrl: tenant.avatarUrl ?? null,
-              updatedAt: now(),
-            })
-            .onConflictDoUpdate({
-              target: orgs.githubId,
-              set: {
-                login: tenant.login,
-                kind: tenant.kind,
-                name: tenant.name ?? null,
-                avatarUrl: tenant.avatarUrl ?? null,
+        // Each GitHub account the user belongs to maps to its workspace, made on first sight.
+        const kept: number[] = [];
+        for (const account of accountsOf(profile)) {
+          const [connection] = await tx
+            .update(githubConnections)
+            .set({ login: account.login, updatedAt: now() })
+            .where(eq(githubConnections.githubId, account.githubId))
+            .returning({ orgId: githubConnections.orgId });
+          let orgId = connection?.orgId;
+          if (orgId === undefined) {
+            const [org] = await tx
+              .insert(orgs)
+              .values({
+                login: await freeSlug(tx, account.login),
+                kind: account.kind,
+                name: account.name ?? null,
+                avatarUrl: account.avatarUrl ?? null,
+                createdAt: now(),
                 updatedAt: now(),
-              },
-            })
-            .returning({ id: orgs.id });
-          if (!org) throw new Error("org upsert returned no row");
+              })
+              .returning({ id: orgs.id });
+            if (!org) throw new Error("workspace insert returned no row");
+            orgId = org.id;
+            await tx.insert(githubConnections).values({
+              githubId: account.githubId,
+              orgId,
+              login: account.login,
+              kind: account.kind,
+              createdAt: now(),
+              updatedAt: now(),
+            });
+          }
+          kept.push(orgId);
+          // GitHub's role seeds a new membership; after that the workspace's own role stands.
           await tx
             .insert(orgMembers)
-            .values({ orgId: org.id, userId: row.id, role: tenant.role, syncedAt: now() });
+            .values({
+              orgId,
+              userId: row.id,
+              role: account.role,
+              source: "github",
+              syncedAt: now(),
+            })
+            .onConflictDoUpdate({
+              target: [orgMembers.orgId, orgMembers.userId],
+              set: { source: "github", syncedAt: now() },
+            });
         }
+        await leaveGitHub(tx, row.id, kept);
+        await acceptInvites(tx, row.id, profile.login, now());
         return userFrom(row);
       });
     },
@@ -146,14 +203,28 @@ export function createUserStore(
         .innerJoin(orgs, eq(orgs.id, orgMembers.orgId))
         .where(eq(orgMembers.userId, userId))
         .orderBy(sql`(${orgs.kind} = 'user') desc`, asc(sql`lower(${orgs.login})`));
+      const connections = rows.length
+        ? await db
+            .select()
+            .from(githubConnections)
+            .where(
+              inArray(
+                githubConnections.orgId,
+                rows.map(({ org }) => org.id),
+              ),
+            )
+            .orderBy(asc(sql`lower(${githubConnections.login})`))
+        : [];
       return rows.map(({ org, role }) => ({
         id: org.id,
-        githubId: org.githubId,
         login: org.login,
         kind: org.kind,
         ...(org.name ? { name: org.name } : {}),
         ...(org.avatarUrl ? { avatarUrl: org.avatarUrl } : {}),
         role,
+        github: connections
+          .filter((connection) => connection.orgId === org.id)
+          .map(({ githubId, login, kind }) => ({ githubId, login, kind })),
       }));
     },
     async gitHubToken(githubId) {

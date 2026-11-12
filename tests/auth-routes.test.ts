@@ -85,7 +85,7 @@ describe("OAuth callback state check", () => {
     );
     expect(await users.orgsFor(1)).toEqual([
       expect.objectContaining({
-        githubId: 42,
+        github: [{ githubId: 42, login: "avyay", kind: "user" }],
         login: "avyay",
         kind: "user",
         name: "Avyay",
@@ -93,7 +93,7 @@ describe("OAuth callback state check", () => {
         role: "admin",
       }),
       expect.objectContaining({
-        githubId: 1000,
+        github: [{ githubId: 1000, login: "Mupt-AI", kind: "org" }],
         login: "Mupt-AI",
         kind: "org",
         avatarUrl: "https://a/Mupt-AI.png",

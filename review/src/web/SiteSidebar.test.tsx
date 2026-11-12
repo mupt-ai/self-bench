@@ -29,8 +29,9 @@ function renderSidebar(
 test("sidebar exposes labeled navigation and credentials", () => {
   const html = renderSidebar("/");
   const links = html.match(/<a[^>]*data-slot="sidebar-menu-button"[^>]*>/g) ?? [];
-  expect(links).toHaveLength(7);
-  expect(html).toContain('aria-label="Organization Navigation"');
+  expect(links).toHaveLength(8);
+  expect(html).toContain('aria-label="Members"');
+  expect(html).toContain('aria-label="Workspace Navigation"');
   expect(html).toContain('aria-label="Mined Repos"');
   expect(html).toContain('aria-label="Scenarios"');
   expect(html).toContain('aria-label="Public Benchmarks"');
@@ -51,18 +52,18 @@ test("sidebar exposes labeled navigation and credentials", () => {
 test("sidebar sorts its pages into named sections, in order", () => {
   const html = renderSidebar("/");
   const order = ["Benchmarks", "Mined Repos", "Scenarios", "Public Benchmarks"]
-    .concat(["Organization", "Credentials", "API Keys", "Billing"])
+    .concat(["Workspace", "Members", "Credentials", "API Keys", "Billing"])
     .map((label) => html.indexOf(`>${label}</`));
   expect(order.every((at) => at >= 0)).toBe(true);
   expect(order).toEqual([...order].sort((left, right) => left - right));
   // Each section is a group named by its heading, so a screen reader announces where it is.
-  for (const section of ["Benchmarks", "Organization"])
+  for (const section of ["Benchmarks", "Workspace"])
     expect(html).toContain(`aria-labelledby="sidebar-section-${section.toLowerCase()}"`);
 });
 
 test("sidebar leaves out Billing without the managed offering", () => {
   const html = renderSidebar("/", "org", false);
-  expect(html.match(/<a[^>]*data-slot="sidebar-menu-button"[^>]*>/g) ?? []).toHaveLength(6);
+  expect(html.match(/<a[^>]*data-slot="sidebar-menu-button"[^>]*>/g) ?? []).toHaveLength(7);
   expect(html).not.toContain("Billing");
 });
 
@@ -91,7 +92,7 @@ test("sidebar supports the compact icon mode", () => {
   expect(html).not.toContain(">Billing</span>");
   // Section names give way to rules, but each group keeps its name for screen readers.
   expect(html).not.toContain(">Evaluate</h2>");
-  expect(html).toContain('aria-label="Organization"');
+  expect(html).toContain('aria-label="Workspace"');
 });
 
 test("sidebar preserves active navigation across repository and settings routes", () => {
@@ -103,6 +104,7 @@ test("sidebar preserves active navigation across repository and settings routes"
     ["/repos/evals/data-import-bugs/run", "/evals"],
     ["/settings/credentials", "/settings/credentials"],
     ["/settings/api-keys", "/settings/api-keys"],
+    ["/settings/members", "/settings/members"],
     ["/settings/billing", "/settings/billing"],
     // Groups are part of Mined Repos.
     ["/groups/python-web/results", "/"],
@@ -117,6 +119,6 @@ test("sidebar preserves active navigation across repository and settings routes"
 test("account picker keeps its menu affordance and readable personal account label", () => {
   const html = renderSidebar("/", "user");
   expect(html).toContain('aria-haspopup="menu"');
-  expect(html).toContain('aria-label="Organization"');
+  expect(html).toContain('aria-label="Workspace"');
   expect(html).toContain("example-account");
 });

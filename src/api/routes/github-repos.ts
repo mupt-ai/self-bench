@@ -56,16 +56,35 @@ export function createGitHubRepoRoutes(options: GitHubRepoRoutesOptions): GitHub
   const listRepos = async (user: User, org: string): Promise<RepoSummary[] | undefined> => {
     const tenant = await tenantFor(users, user, org);
     if (!tenant) return undefined;
-    const key = `${user.id}:${tenant.login}`;
+    // Keyed by the connected accounts too, so connecting or moving a GitHub org lists it at once.
+    const key = `${user.id}:${tenant.id}:${tenant.github.map((account) => account.githubId).join(",")}`;
     const cached = cache.get(key);
     if (cached && now().getTime() - cached.at < CACHE_TTL_MS) return cached.repos;
     const token = await users.gitHubToken(user.githubId);
     if (!token) throw new GitHubOAuthError("no GitHub token stored for this user", 401);
-    const path =
-      tenant.kind === "user"
-        ? "/user/repos?affiliation=owner,collaborator&sort=pushed"
-        : `/orgs/${encodeURIComponent(tenant.login)}/repos?type=all&sort=pushed`;
-    const repos = await fetchRepoPages(config, token, path, fetchImpl);
+    // Every GitHub account connected to the workspace; a personal one lists what its user can
+    // reach, but only the signed-in user's own account gives that listing.
+    const repos: RepoSummary[] = [];
+    const seen = new Set<string>();
+    for (const account of tenant.github) {
+      if (account.kind === "user" && account.githubId !== user.githubId) continue;
+      const path =
+        account.kind === "user"
+          ? "/user/repos?affiliation=owner,collaborator&sort=pushed"
+          : `/orgs/${encodeURIComponent(account.login)}/repos?type=all&sort=pushed`;
+      // An org the user can't read (not a member, or SSO not granted) is skipped; anything else,
+      // such as a rate limit, fails the listing rather than caching a partial one.
+      const listed = await fetchRepoPages(config, token, path, fetchImpl).catch((error) => {
+        if (error instanceof GitHubOAuthError && (error.status === 403 || error.status === 404))
+          return [];
+        throw error;
+      });
+      for (const repo of listed) {
+        if (seen.has(repo.fullName.toLowerCase())) continue;
+        seen.add(repo.fullName.toLowerCase());
+        repos.push(repo);
+      }
+    }
     cache.set(key, { at: now().getTime(), repos });
     return repos;
   };

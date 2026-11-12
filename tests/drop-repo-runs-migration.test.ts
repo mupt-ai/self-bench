@@ -7,8 +7,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import { migrationsFolder } from "../src/db/client.js";
 import * as schema from "../src/db/schema.js";
 import { createTaskStore } from "../src/db/tasks.js";
-import { createUserStore } from "../src/db/users.js";
-import { testAuthConfig } from "./support/site-fixture.js";
+import { legacyTenant } from "./support/legacy-tenant.js";
 import { seedTasks } from "./support/task-rows.js";
 
 test("review migrations preserve batch ownership, tasks, reviews and tombstones", async () => {
@@ -35,15 +34,7 @@ test("review migrations preserve batch ownership, tasks, reviews and tombstones"
       await client.exec(await readFile(join(migrationsFolder(), file), "utf8"));
     }
     const db = drizzle(client, { schema });
-    const users = createUserStore(db, { secret: testAuthConfig.sessionSecret });
-    const user = await users.upsert({
-      githubId: 1,
-      login: "owner",
-      token: "test",
-      scopes: "",
-      orgs: [],
-    });
-    const [org] = await users.orgsFor(user.id);
+    const { user, org } = await legacyTenant(client, "owner");
     if (!org) throw new Error("Missing test organization");
     // Seed using the historical schema, before workspace-scoped uniqueness existed.
     const [repo] = await db

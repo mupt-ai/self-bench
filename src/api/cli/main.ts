@@ -14,6 +14,7 @@ import {
 import { groupCommand } from "./groups.js";
 import { printHelp } from "./help.js";
 import { loginCommand, logoutCommand, orgCommand } from "./login.js";
+import { memberCommand, membersCommand, workspaceCommand } from "./members.js";
 import { grantCommand } from "./operator.js";
 import { benchmarkCommand, releaseCommand } from "./releases.js";
 import { scenarioCommand, taskCommand } from "./tasks.js";
@@ -36,6 +37,9 @@ const COMMANDS: Record<string, Command> = {
   logout: logoutCommand,
   org: orgCommand,
   whoami: whoamiCommand,
+  workspace: workspaceCommand,
+  members: membersCommand,
+  member: memberCommand,
   credentials: (args) => credentialCommand(args, true),
   credential: (args) => credentialCommand(args, false),
   repos: (args) => repoCommand(args, true),

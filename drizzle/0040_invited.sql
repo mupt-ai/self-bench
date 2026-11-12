@@ -1,0 +1,1 @@
+ALTER TABLE "org_members" ADD COLUMN "invited" boolean DEFAULT false NOT NULL;

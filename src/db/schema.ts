@@ -68,12 +68,16 @@ export const users = pgTable(
   (table) => [index("users_login").on(table.login)],
 );
 
-/** A tenant: a GitHub organization, or a user's personal account (kind = "user"). */
+/**
+ * A workspace: SelfBench's own tenant. `login` is its slug (unique, case-insensitive), the name
+ * it is addressed by in the app, the CLI, and its public releases. A personal workspace
+ * (`kind` "user") is made for every user at sign-in; GitHub accounts are attached separately, as
+ * `github_connections`.
+ */
 export const orgs = pgTable(
   "orgs",
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
-    githubId: bigint("github_id", { mode: "number" }).notNull().unique(),
     login: text("login").notNull(),
     kind: text("kind", { enum: ["org", "user"] }).notNull(),
     name: text("name"),
@@ -81,26 +85,7 @@ export const orgs = pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
-  (table) => [index("orgs_login").on(table.login)],
-);
-
-/** Refreshed from GitHub on every sign-in; the site trusts this, not a live call. */
-export const orgMembers = pgTable(
-  "org_members",
-  {
-    orgId: bigint("org_id", { mode: "number" })
-      .notNull()
-      .references(() => orgs.id, { onDelete: "cascade" }),
-    userId: bigint("user_id", { mode: "number" })
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    role: text("role", { enum: ["admin", "member"] }).notNull(),
-    syncedAt: timestamptz("synced_at").notNull().defaultNow(),
-  },
-  (table) => [
-    uniqueIndex("org_members_pk").on(table.orgId, table.userId),
-    index("org_members_user_id").on(table.userId),
-  ],
+  (table) => [uniqueIndex("orgs_login").on(sql`lower(${table.login})`)],
 );
 
 /**
@@ -297,3 +282,4 @@ export * from "./gateway-schema.js";
 export * from "./group-schema.js";
 export * from "./registry-grant-schema.js";
 export * from "./task-variant-schema.js";
+export * from "./workspace-schema.js";
