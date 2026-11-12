@@ -67,7 +67,7 @@ export interface Tally {
 }
 
 export interface Configuration extends Tally {
-  /** The release's setting key: model, harness and reasoning. */
+  /** The release's setting key: model, harness and reasoning, with any condition and subagent model. */
   key: string;
   label: string;
   /** The model as a release names it: "vendor/model", or a custom endpoint's typed name. */
@@ -78,6 +78,8 @@ export interface Configuration extends Tally {
   thinking?: ThinkingLevel;
   /** The run condition it ran under; none for the tasks as they are. */
   condition?: { id: string; name: string };
+  /** The model its subagents ran on, when not its own; its label names both. */
+  subagent?: { catalogId: string; label: string };
   /** How its runs reached the model, in the order they were first used. */
   routes: string[];
   /** Oldest first. */

@@ -1,7 +1,18 @@
-import { sql } from "drizzle-orm";
+import { type AnyColumn, sql } from "drizzle-orm";
 import type { Database } from "../db/client.js";
 import { gatewayRequests } from "../db/schema.js";
 import type { GatewayUsage } from "./platform.js";
+
+/** One model's share of a trial's solver calls: how many used tokens, and the tokens they used. */
+export interface TrialModelUsage {
+  /** The gateway's id for the model, `provider/model`. */
+  readonly model: string;
+  readonly calls: number;
+  readonly input: number;
+  readonly output: number;
+  readonly cacheRead: number;
+  readonly cacheWrite: number;
+}
 
 /** Where the gateway's per-call usage lands, and the per-trial totals read back from it. */
 export function createGatewayUsageStore(db: Database) {
@@ -48,6 +59,30 @@ export function createGatewayUsageStore(db: Database) {
         );
       if (!row?.calls) return undefined;
       return { costUsd: row.costUsd, complete: row.unpriced === 0 };
+    },
+    /**
+     * The tokens a trial's solver used on each model it called (its judge's calls aside), from the
+     * calls that used any: a run with a subagent model has two.
+     */
+    async trialModels(orgId: number, trial: string): Promise<TrialModelUsage[]> {
+      const tokens = (column: AnyColumn) => sql<number>`coalesce(sum(${column}), 0)::float8`;
+      return await db
+        .select({
+          model: gatewayRequests.model,
+          calls: sql<number>`count(*)::int`,
+          input: tokens(gatewayRequests.inputTokens),
+          output: tokens(gatewayRequests.outputTokens),
+          cacheRead: tokens(gatewayRequests.cacheReadTokens),
+          cacheWrite: tokens(gatewayRequests.cacheWriteTokens),
+        })
+        .from(gatewayRequests)
+        .where(
+          sql`${gatewayRequests.orgId} = ${orgId} and ${gatewayRequests.tags}->>'trial' = ${trial}
+            and ${gatewayRequests.tags}->>'judge' is null
+            and coalesce(${gatewayRequests.inputTokens}, 0) + coalesce(${gatewayRequests.outputTokens}, 0)
+              + coalesce(${gatewayRequests.cacheReadTokens}, 0) + coalesce(${gatewayRequests.cacheWriteTokens}, 0) > 0`,
+        )
+        .groupBy(gatewayRequests.model);
     },
   };
 }

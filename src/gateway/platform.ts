@@ -16,9 +16,12 @@ import {
   modelConfig,
   registryModel,
 } from "./model-config.js";
+import { routerTables, subagentRouterModel } from "./router-models.js";
 import { servedCost } from "./served-model.js";
 import { signInCredential } from "./sign-in.js";
-import { MANAGED_MODEL_CREDENTIAL, readTrialKey, type TrialKey } from "./trial-key.js";
+import { judgeCredential, readTrialKey, solverCredential, type TrialKey } from "./trial-key.js";
+
+export { withManagedModel } from "./managed-model.js";
 
 /** The gateway's description of one model: its provider, native id, API, limits and prices. */
 export type GatewayModelConfig = NonNullable<ResolvedRouter["model_configs"]>[string];
@@ -105,9 +108,10 @@ const unavailable = (what: string) =>
 
 /**
  * SelfBench's gateway platform. A request authenticates with a trial key (trial-key.ts). Its
- * solver part pins one model on one of the org's credentials: the router is strict, so the gateway
- * serves exactly that model (at the key's thinking level, when it names one) and never falls back
- * or leases. A sign-in serves it on the plan the platform supplies. Its judge part lets the task's
+ * solver part pins one model on one of the org's credentials, and a subagent model on its own
+ * credential when the run names one: the router is strict, so the gateway serves exactly those
+ * (the run's model at the key's thinking level, when it names one) and never falls back or
+ * leases. A sign-in serves it on the plan the platform supplies. Its judge part lets the task's
  * judge call any model of its credential's provider (`strict_providers`). Conversation routing
  * state is not kept, since a strict router never reads it.
  */
@@ -134,8 +138,16 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
       const endpoint = credential && credential.kind === "custom" ? credential.endpoint : undefined;
       const registered = model && endpoint ? registryModel(endpoint, model) : undefined;
       // A custom endpoint's model that Pi's registry knows is priced at the registry's list rates.
-      const price = model && (deps.modelPrice?.(model) ?? registered?.cost);
+      const price = model ? (deps.modelPrice?.(model) ?? registered?.cost) : undefined;
+      // A pinned level is the only one served, whatever level a call asks for or omits. A custom
+      // endpoint's model that Pi's registry knows, which takes no chosen level, is pinned to its
+      // own default: every call, Claude Code's too, is served at one level the model lists.
       const pinned = thinking ?? registered?.defaultLevel;
+      const subagent = await subagentRouterModel(deps, key);
+      const served = [
+        ...(model ? [{ model, config, price, pinned }] : []),
+        ...(subagent ? [subagent] : []),
+      ];
       for (const [stale, entry] of resolved)
         if (entry.expiresAt <= Date.now()) resolved.delete(stale);
       // Any other custom endpoint's call is priced by the model its response names.
@@ -151,14 +163,9 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
         organization_id: String(key.orgId),
         api_key_id: id,
         attributed_user_id: null,
-        enabled_models: model ? [model] : [],
+        enabled_models: served.map((entry) => entry.model),
         provider_keys: {},
-        ...(model && config ? { model_configs: { [model]: config } } : {}),
-        ...(model && price ? { model_prices: { [model]: price } } : {}),
-        // A pinned level is the only one served, whatever level a call asks for or omits. A custom
-        // endpoint's model that Pi's registry knows, which takes no chosen level, is pinned to its
-        // own default: every call, Claude Code's too, is served at one level the model lists.
-        ...(model && pinned ? { model_thinking_levels: { [model]: [pinned] } } : {}),
+        ...routerTables(served),
         strict: true,
         ...(judge ? { strict_providers: [judge.provider] } : {}),
         model_fallback_enabled: false,
@@ -171,8 +178,8 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
     },
     async resolveProviderCredential({ apiKey, model }: { apiKey: string; model: string }) {
       const key = keyOf(apiKey);
-      // The solver's model on its credential; any other model is the judge's, on the judge's.
-      const id = model === key.model ? key.credentialId : judgeCredential(key, model);
+      // Solver and judge keys are disjoint; each solver model has an exact credential.
+      const id = solverCredential(key, model) ?? judgeCredential(key, model);
       if (!id) throw unavailable(`A credential for ${model}`);
       const [info, secret] = await Promise.all([
         deps.credentials.find(key.orgId, id),
@@ -219,12 +226,16 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
       const key = summary.api_key_id ? resolved.get(summary.api_key_id) : undefined;
       if (!key) return;
       const model = summary.selected_model ?? key.model ?? "";
-      const solver = model === key.model;
-      const credentialId = solver ? key.credentialId : judgeCredential(key, model);
+      const solver = solverCredential(key, model);
+      const credentialId = solver ?? judgeCredential(key, model);
       if (!credentialId) return;
+      // Which of the key's models a call is on is the gateway's to say, never a header's.
+      const requestTags = { ...tags };
+      delete requestTags.judge;
+      delete requestTags.subagent;
       // A custom endpoint's call is priced by the model that served it, unless it said its price.
       const cost =
-        key.customEndpoint && solver && summary.cost_source !== "provider"
+        key.customEndpoint && model === key.model && summary.cost_source !== "provider"
           ? servedCost(deps.servedModelCost, summary, key.customEndpoint.provider)
           : { costUsd: summary.total_cost_usd, costSource: summary.cost_source };
       try {
@@ -234,7 +245,12 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
           credentialId,
           model,
           // The key's tags win: a header can add labels but never reattribute spend.
-          tags: { ...tags, ...key.tags, ...(solver ? {} : { judge: "true" }) },
+          tags: {
+            ...requestTags,
+            ...key.tags,
+            ...(solver ? {} : { judge: "true" }),
+            ...(key.subagent?.model === model ? { subagent: "true" } : {}),
+          },
           status: summary.status,
           inputTokens: summary.input_tokens,
           outputTokens: summary.output_tokens,
@@ -253,38 +269,5 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
     captureOperationalError(error: unknown) {
       deps.captureError(error);
     },
-  };
-}
-
-/** The judge's credential, when `model` is one of the judge's provider's. */
-function judgeCredential(key: TrialKey, model: string): string | undefined {
-  return key.judge && model.startsWith(`${key.judge.provider}/`)
-    ? key.judge.credentialId
-    : undefined;
-}
-
-/**
- * The org's credentials, plus SelfBench's own OpenRouter account as the managed model credential
- * when `managedKey` (the platform's OpenRouter key) is set.
- */
-export function withManagedModel(
-  credentials: SelfBenchGatewayDeps["credentials"],
-  managedKey: string | undefined,
-): SelfBenchGatewayDeps["credentials"] {
-  const managed = (id: string) => id === MANAGED_MODEL_CREDENTIAL;
-  return {
-    find: async (orgId, id) =>
-      managed(id)
-        ? managedKey
-          ? { id, kind: "openrouter", auth: "api-key" }
-          : undefined
-        : credentials.find(orgId, id),
-    secret: async (orgId, id) =>
-      managed(id)
-        ? managedKey
-          ? { value: managedKey }
-          : undefined
-        : credentials.secret(orgId, id),
-    renew: (orgId, id, value) => credentials.renew(orgId, id, value),
   };
 }

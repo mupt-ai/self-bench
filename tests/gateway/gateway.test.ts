@@ -11,9 +11,7 @@ import {
   type TrialKey,
 } from "../../src/gateway/trial-key.js";
 
-// SelfBench's gateway end to end: a trial key pins one model on the org's own credential, the
-// real gateway handler serves it through the API's route, and the provider's billed cost lands
-// in the usage record. A local stand-in for OpenRouter plays the provider.
+// End-to-end gateway routes with a local provider: authorization, wire protocol and cost.
 
 const SECRET = "s".repeat(40);
 const CREDENTIAL = "8d6b2c4e-1f3a-4b5c-9d7e-0a1b2c3d4e5f";
@@ -246,6 +244,34 @@ test("usage rows sum to a trial's cost, flagging unpriced calls, managed calls i
   } finally {
     await database.close();
   }
+});
+
+test("Messages serves an authorized subagent model and records it as solver spend", async () => {
+  const model = "custom/acme-child";
+  const key = trialKey({ subagent: { model, credentialId: CREDENTIAL } });
+  const response = await fetch(`${apiUrl}/gateway/v1/messages`, {
+    method: "POST",
+    headers: {
+      "x-api-key": key,
+      "content-type": "application/json",
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: `dari/model/${model}`,
+      max_tokens: 100,
+      stream: true,
+      messages: [{ role: "user", content: "hello" }],
+    }),
+  });
+  expect(response.status).toBe(200);
+  expect(await response.text()).toContain("served by acme-child");
+  await waitFor(() => usage.length === 1);
+  expect(upstreamCalls[0]).toEqual({ model: "acme-child", authorization: "Bearer byok-secret" });
+  expect(usage[0]).toMatchObject({ model, tags: { trial: "t1", subagent: "true" } });
+  expect(usage[0]?.tags.judge).toBeUndefined();
+  const refused = await chat(key, "dari/model/custom/another-child");
+  expect(refused.status).not.toBe(200);
+  expect(upstreamCalls).toHaveLength(1);
 });
 
 test("a connection's key is served by the gateway it points at", async () => {

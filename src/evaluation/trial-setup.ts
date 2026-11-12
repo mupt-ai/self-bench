@@ -26,6 +26,7 @@ import {
   gatewayTrial,
   gatewayTrialTag,
   pinnedThinking,
+  subagentKey,
 } from "./gateway-trial.js";
 import { judgeEnvironment, judgeTrial } from "./judge.js";
 import { refuseTrial } from "./refusal.js";
@@ -113,6 +114,7 @@ export async function setUpTrial(
       orgId: execution.credential.orgId,
       credentialId: execution.credential.id,
       model: gatewayModelId(input),
+      ...(input.subagent ? { subagent: subagentKey(input.subagent) } : {}),
       ...(thinking ? { thinking } : {}),
       // A custom endpoint is called in the harness's own protocol: Responses for Codex, as its
       // direct route did, and Messages for Claude Code.
@@ -165,6 +167,7 @@ export async function setUpTrial(
     ...gateway,
     extraAllowedHosts,
     modelAuth: execution.auth,
+    ...(execution.subagentAuth ? { subagentAuth: execution.subagentAuth } : {}),
     // A gateway trial's cost is what the gateway recorded for its calls (runner.ts).
     ...(gatewayed ? { gatewayOrgId: execution.credential.orgId } : {}),
     child: {

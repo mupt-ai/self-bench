@@ -5,7 +5,7 @@ import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
 import { runCommand } from "../lib/process.js";
 import { holdingBuildSlot, holdingCapacity } from "../sandbox/capacity.js";
 import { explainTrialFailure } from "./failure-summary.js";
-import type { TrialGateway } from "./gateway-trial.js";
+import type { TrialGateway } from "./gateway-cost.js";
 import { failEvaluation, failTrial, finishEvaluation, startEvaluation } from "./lifecycle.js";
 import { type ModelSummaryRequest, summarizeModels } from "./model-summary.js";
 import { environmentSecrets, redactOutput } from "./output.js";
@@ -65,7 +65,14 @@ export function createEvaluationActivities(
     return holdingCapacity(
       vault,
       orgId,
-      [ids.sandboxCredentialId, ...(usesModel ? [ids.modelCredentialId] : [])],
+      [
+        ...new Set([
+          ids.sandboxCredentialId,
+          ...(usesModel
+            ? [ids.modelCredentialId, ...(input.subagent ? [input.subagent.credentialId] : [])]
+            : []),
+        ]),
+      ],
       run,
     );
   };

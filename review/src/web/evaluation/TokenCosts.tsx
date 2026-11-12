@@ -7,7 +7,12 @@ export function TokenCosts({
   trial: Partial<
     Pick<
       EvaluationTrial,
-      "tokenUsage" | "apiCostUsd" | "costSource" | "cacheWritesInferred" | "billedCostUsd"
+      | "tokenUsage"
+      | "apiCostUsd"
+      | "costSource"
+      | "cacheWritesInferred"
+      | "billedCostUsd"
+      | "subagentCalls"
     >
   >;
 }) {
@@ -39,6 +44,12 @@ export function TokenCosts({
             <dd>{dollars(trial.billedCostUsd)}</dd>
           </div>
         )}
+        {trial.subagentCalls !== undefined && (
+          <div>
+            <dt>Subagent Model Calls</dt>
+            <dd>{trial.subagentCalls.toLocaleString()}</dd>
+          </div>
+        )}
       </dl>
       <p className="mb-6 text-xs text-muted-foreground">
         {trial.cacheWritesInferred &&
@@ -52,6 +63,10 @@ export function TokenCosts({
               : `${trial.costSource === "harbor" ? "Harbor’s per-request" : "Reference-rate"} estimate from token usage. Not an invoice; sandbox charges excluded.`}
         {trial.billedCostUsd !== undefined &&
           " The gateway’s charge can differ: it reflects the provider it routed to and any discount."}
+        {trial.subagentCalls !== undefined &&
+          (trial.subagentCalls === 0
+            ? " The agent never called its subagent model, so this trial ran on the run’s own model alone."
+            : " Tokens and cost cover both the run’s model and its subagent model.")}
       </p>
     </section>
   );

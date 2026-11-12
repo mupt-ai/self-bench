@@ -46,11 +46,13 @@ export function harnessOptionsFor(harness: Harness): readonly HarborAgentOption[
 export const OPTION_HARNESSES = harnessIds.filter((harness) => harnessOptionsFor(harness).length);
 
 /**
- * Settings the trial's own route owns, refused anywhere in a native config: a model, where it is
- * served, and the key that reaches it. SelfBench sets these; a config that changes them would run
+ * Settings the trial's own route owns, refused anywhere in a native config: a model (its
+ * subagents' too, which a run names as its subagent model), where it is served, and the key that
+ * reaches it. SelfBench sets these; a config that changes them would run
  * another model than the setting names, or reach for a host the sandbox cannot.
  */
-const ROUTING_KEY = /(api_?key|auth_?token|base_?url|_url|provider|^model$|^models$|^profiles?$)/i;
+const ROUTING_KEY =
+  /(api_?key|auth_?token|base_?url|_url|provider|^model$|^models$|^profiles?$|subagent_model)/i;
 const ROUTING_ENV =
   /^(ANTHROPIC_|OPENAI_|CLAUDE_CODE_USE_|CLAUDE_CODE_SUBAGENT_MODEL|AWS_|VERTEX_|CLOUD_ML_|GOOGLE_|META_|MUSE_)/;
 /** Settings each agent reads as its model or its key, besides the ones ROUTING_KEY names. */

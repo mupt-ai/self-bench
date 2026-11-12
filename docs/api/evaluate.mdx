@@ -20,7 +20,7 @@ icon: "play"
 
 | Route | Body |
 | --- | --- |
-| `POST {scope}/evaluations/comparisons` | `{ id (UUID you generate; retries never start twice), models: [{ catalogId, credentialId, harnesses, thinking? }] (≤12), sandbox, sandboxCredentialId, tasks?: [{ runId, taskId }], skipCompleted?, judgeCredentialId?, conditions?: [{ name, skills?, instructions?, environment?, harnessOptions? }] (≤4), baseline? }` |
+| `POST {scope}/evaluations/comparisons` | `{ id (UUID you generate; retries never start twice), models: [{ catalogId, credentialId, harnesses, thinking?, subagent?: { catalogId, credentialId } }] (≤12), sandbox, sandboxCredentialId, tasks?: [{ runId, taskId }], skipCompleted?, judgeCredentialId?, conditions?: [{ name, skills?, instructions?, environment?, harnessOptions? }] (≤4), baseline? }` |
 
 `credentialId` in a model choice is a saved credential's ID, or `managed-model`. `models[].harnesses` are `pi`, `codex`, `claude-code`, `mini-swe-agent`, `terminus-2`, or `muse-code`. `thinking` is `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`.
 
@@ -32,6 +32,22 @@ A comparison starts one **evaluation** per model, running every task on each har
 
 For scores, read [results](/api/inspect) rather than adding up trials.
 
+## Subagent Models
+
+`subagent` on a model choice runs that model as the orchestrator and another catalog model for the work it delegates: Claude Opus on Claude Code with DeepSeek subagents, say. Leave it out and subagents run on the model itself.
+
+| Rule | Detail |
+| --- | --- |
+| Harnesses | `claude-code` and `codex` only; any other is refused. |
+| Models | Two different catalog models. `subagent.credentialId` is a saved credential that serves the subagent model, or `managed-model`; it may be the model's own. |
+| Route | Both models are called through SelfBench's gateway, so neither may be on a custom endpoint, and the subagent model may not be Dari's router. A trial that would not go through the gateway is refused. |
+| Reasoning | `thinking` sets the orchestrator's level. Every subagent call is served at the subagent model's default level: `high` where it has one, whatever level the harness asks for. |
+| Delegation | The agent is told to delegate a meaningful part of each task, which a run without a subagent model is not. A trial's `subagentCalls` counts the calls its subagent model served; `0` means the agent never delegated. |
+| Shared Tools | Subagents use the harness's tools, so Codex gets hosted web search and its image tool only when both models take them. |
+| Results | A model with a subagent model is its own configuration, named for both, in results and releases. `skipCompleted` and retries keep it apart from the model alone. |
+
+The trial's key serves exactly its two models. Its cost, tokens, and model check all come from the gateway's record of each call, priced at that call's own model; a trial with an unpriced call has no cost rather than an estimate. `billedCostUsd` is set only when both credentials are API keys, since a sign-in's calls are priced at list rates but not billed.
+
 ## Model Costs
 
-Trials call their model through SelfBench's gateway, which uses the workspace credential and records each call's cost: the provider's own charge where it reports one, else the model's list price. A trial with an unpriced call shows its cost as incomplete. The credential never reaches the agent, which gets a short-lived key for its one model.
+Trials call their model through SelfBench's gateway, which uses the workspace credential and records each call's cost: the provider's own charge where it reports one, else the model's list price. A trial with an unpriced call shows its cost as incomplete. The credential never reaches the agent, which gets a short-lived key for its one model, or for its two with a [subagent model](#subagent-models).

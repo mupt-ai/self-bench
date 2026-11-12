@@ -54,7 +54,9 @@ export function gatewayRoute(deps: SelfBenchGatewayDeps) {
                 ? judgeBody(Buffer.concat(await request.toArray()), judge.provider)
                 : key?.endpointEffort
                   ? withoutEffort(Buffer.concat(await request.toArray()))
-                  : (Readable.toWeb(request) as unknown as ReadableStream),
+                  : key?.subagent
+                    ? subagentBody(Buffer.concat(await request.toArray()), key.subagent.model)
+                    : (Readable.toWeb(request) as unknown as ReadableStream),
               duplex: "half",
             }
           : {}),
@@ -88,6 +90,22 @@ function withoutEffort(body: Buffer): Buffer | string {
       rest.output_config = kept;
     }
     return JSON.stringify(rest);
+  } catch {
+    return body;
+  }
+}
+
+/**
+ * A call for a trial's subagent model, without the reasoning effort its harness asks for. The
+ * harness asks its subagents' model for the level it runs its own model at, which the subagent
+ * model may not have, and a strict router refuses a call for a level its model lacks. Without
+ * one, the gateway serves the subagent model at the level its key pins it to (platform.ts).
+ */
+function subagentBody(body: Buffer, model: string): Buffer | string {
+  try {
+    return JSON.parse(body.toString())?.model === `dari/model/${model}`
+      ? withoutEffort(body)
+      : body;
   } catch {
     return body;
   }

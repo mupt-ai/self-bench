@@ -2,15 +2,13 @@ import type { ThinkingLevel } from "../contracts/models.js";
 import type { CredentialInfo } from "../db/credentials.js";
 import type { GatewayConnection } from "../gateway/connection.js";
 import { registryModel } from "../gateway/model-config.js";
-import type { CustomEndpointApi, PinnedThinking } from "../gateway/trial-key.js";
-import type { createGatewayUsageStore } from "../gateway/usage-store.js";
+import type { CustomEndpointApi, PinnedThinking, TrialKey } from "../gateway/trial-key.js";
 import { catalogEntry } from "../gateways/catalog.js";
 import { gateways } from "../gateways/index.js";
-import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
 import { isDariRun } from "./dari/cost.js";
 import { thinkingArguments } from "./models.js";
 import { refuseTrial } from "./refusal.js";
-import type { EvaluationInput, EvaluationRun, EvaluationTrial, Harness } from "./types.js";
+import type { EvaluationInput, EvaluationRun, Harness } from "./types.js";
 
 /**
  * How a trial's agent reaches its model. Every API key and ChatGPT or Claude sign-in goes through
@@ -71,9 +69,14 @@ export function endpointPicksEffort(
   return harness === "codex" || (!!endpoint && !!registryModel(endpoint, gatewayModelId(input)));
 }
 
+/** The name a request carries for the gateway's model `id`, which the gateway serves exactly. */
+function gatewayRequestName(id: string): string {
+  return `dari/model/${id}`;
+}
+
 /** The model name a gateway trial's requests carry, which the gateway serves exactly. */
 export function gatewayRequestModel(input: Pick<EvaluationInput, "credentials" | "modelName">) {
-  return `dari/model/${gatewayModelId(input)}`;
+  return gatewayRequestName(gatewayModelId(input));
 }
 
 /**
@@ -87,6 +90,22 @@ export function pinnedThinking(
   level?: ThinkingLevel,
 ): PinnedThinking | undefined {
   return harness === "claude-code" || !level || level === "default" ? undefined : level;
+}
+
+/**
+ * A run's subagent model as its trial key names it: the gateway's model id, the credential that
+ * serves it, and the level it is pinned to. Unlike the run's own model, it is pinned on every
+ * harness, Claude Code too: the gateway drops whatever level a call for it asks for (mount.ts).
+ */
+export function subagentKey(
+  subagent: NonNullable<EvaluationInput["subagent"]>,
+): NonNullable<TrialKey["subagent"]> {
+  const { model, credentialId, thinking } = subagent;
+  return {
+    model,
+    credentialId,
+    ...(thinking && thinking !== "default" ? { thinking } : {}),
+  };
 }
 
 /** Variables any model key or endpoint could travel under; a gateway trial's agent gets none. */
@@ -154,6 +173,13 @@ export function allowedHosts(
   return [...new Set([...solver.extraAllowedHosts, ...(judge ? [judge.host] : [])])];
 }
 
+/** The `--agent-kwarg` that names a run's subagent model to its harness's adapter (harbor_gateway.py). */
+function subagentArguments(input: Pick<EvaluationInput, "subagent">): string[] {
+  return input.subagent
+    ? ["--agent-kwarg", `subagent_model=${gatewayRequestName(input.subagent.model)}`]
+    : [];
+}
+
 function gatewayRouted(
   input: EvaluationInput,
   harness: Harness,
@@ -171,7 +197,8 @@ function gatewayRouted(
     return {
       model: requestModel,
       agent: "harbor_gateway:SelfBenchClaudeCode",
-      agentArguments: thinkingArguments(harness, input.thinking),
+      // Its subagents ask the gateway for the subagent model (SelfBenchClaudeCode).
+      agentArguments: [...thinkingArguments(harness, input.thinking), ...subagentArguments(input)],
       child,
       extraAllowedHosts,
     };
@@ -207,6 +234,8 @@ function gatewayRouted(
         ...thinkingArguments(harness, input.thinking),
         // An endpoint without an image model refuses a conversation holding a viewed image.
         ...(acceptsImages(input) ? [] : ["--agent-kwarg", "view_image=false"]),
+        // Its subagents ask the gateway for the subagent model (GatewayCodex).
+        ...subagentArguments(input),
       ],
       child,
       extraAllowedHosts,
@@ -219,8 +248,12 @@ function gatewayRouted(
  * Whether the trial's model reads images, as the model catalog lists it. A custom endpoint's
  * models are unknown, so it is taken not to: a router may have no model that does.
  */
-export function acceptsImages(input: Pick<EvaluationInput, "credentials" | "modelName">) {
-  return catalogEntry(gatewayModelId(input))?.input_modalities.includes("image") === true;
+export function acceptsImages(
+  input: Pick<EvaluationInput, "credentials" | "modelName" | "subagent">,
+) {
+  // A harness's subagents share its tools, so both of a run's models must read images.
+  const ids = [gatewayModelId(input), ...(input.subagent ? [input.subagent.model] : [])];
+  return ids.every((id) => catalogEntry(id)?.input_modalities.includes("image") === true);
 }
 
 /**
@@ -242,34 +275,4 @@ export function piModelDetails(input: Pick<EvaluationInput, "credentials" | "mod
 /** The tag the gateway records a trial's calls under, unique within its organization. */
 export function gatewayTrialTag(run: Pick<EvaluationRun, "id">, index: number): string {
   return `${run.id}/${index}`;
-}
-
-/** SelfBench's model gateway, which a trial's agent and judge reach their models through. */
-export interface TrialGateway {
-  /** The API's address as sandboxes reach it, and the secret its trial keys are signed with. */
-  readonly api: SandboxCallback;
-  /** What the gateway recorded each trial's calls cost. */
-  readonly usage: Pick<ReturnType<typeof createGatewayUsageStore>, "trialCost">;
-}
-
-/**
- * What the gateway recorded the trial's calls cost, which replaces any estimate: the provider's
- * own charge where it reports one (OpenRouter, Vercel AI Gateway), else the model's list price,
- * which on a sign-in's plan bills nothing. A trial with a call neither priced has no gateway cost;
- * nor does one that made no call.
- */
-export async function gatewayTrialCost(
-  gateway: TrialGateway,
-  orgId: number,
-  run: EvaluationRun,
-  index: number,
-  auth: CredentialInfo["auth"],
-): Promise<Pick<EvaluationTrial, "apiCostUsd" | "billedCostUsd" | "costSource">> {
-  const cost = await gateway.usage.trialCost(orgId, gatewayTrialTag(run, index));
-  if (!cost?.complete) return {};
-  return {
-    apiCostUsd: cost.costUsd,
-    ...(auth === "api-key" ? { billedCostUsd: cost.costUsd } : {}),
-    costSource: "gateway",
-  };
 }

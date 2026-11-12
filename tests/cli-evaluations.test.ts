@@ -90,6 +90,30 @@ test("compare flags become one comparison of every model on the same harnesses",
   ]);
 });
 
+test("compare's subagent model runs on its own credential, or the models' own", () => {
+  const flags = { model: ["claude-opus-5-5"], harness: ["claude-code"], credential: "key-1" };
+  expect(selectionFromFlags({ ...flags, "subagent-model": "deepseek-v4-pro-0813" }).models).toEqual(
+    [
+      {
+        catalogId: "claude-opus-5-5",
+        credentialId: "key-1",
+        subagent: { catalogId: "deepseek-v4-pro-0813", credentialId: "key-1" },
+        harnesses: ["claude-code"],
+      },
+    ],
+  );
+  expect(
+    selectionFromFlags({
+      ...flags,
+      "subagent-model": "deepseek-v4-pro-0813",
+      "subagent-credential": "key-2",
+    }).models,
+  ).toMatchObject([{ subagent: { catalogId: "deepseek-v4-pro-0813", credentialId: "key-2" } }]);
+  expect(() => selectionFromFlags({ ...flags, "subagent-credential": "key-2" })).toThrow(
+    "--subagent-credential needs --subagent-model",
+  );
+});
+
 test("release publish releases exactly the preview it read, with its default settings", async () => {
   const preview = {
     preview: {
