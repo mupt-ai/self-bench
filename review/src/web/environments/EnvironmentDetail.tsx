@@ -18,7 +18,7 @@ export const notStarted = (failures?: string[]) =>
     ? `${failures.length} ${failures.length === 1 ? "task" : "tasks"} did not start: ${failures.join("; ")}`
     : null;
 
-/** Each task's check in one environment, and building the tasks it lacks or deleting it. */
+/** One environment's script and each task's check, and building the tasks it lacks or deleting it. */
 export function EnvironmentDetail({
   org,
   fullName,
@@ -76,6 +76,11 @@ export function EnvironmentDetail({
   const unfinished = (tasks ?? []).filter((task) => task.state !== "accepted");
   return (
     <div className="grid gap-4 py-2">
+      {environment.script !== undefined && (
+        <pre className="max-h-64 overflow-auto panel p-3 font-mono text-sm leading-6 whitespace-pre-wrap wrap-anywhere">
+          {environment.script}
+        </pre>
+      )}
       {!tasks ? (
         <p role="status" className="text-sm text-muted-foreground">
           Loading tasks…
@@ -107,7 +112,7 @@ export function EnvironmentDetail({
       )}
       {notice && <Notice>{notice}</Notice>}
       <div className="flex flex-wrap gap-2">
-        {environment.changes && (
+        {environment.script !== undefined && (
           <Button disabled={busy !== null} onClick={() => void act("build")}>
             {busy === "build" ? "Starting…" : "Build Missing Tasks"}
           </Button>

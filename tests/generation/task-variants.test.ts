@@ -81,21 +81,24 @@ async function evalWithTask(approved = true) {
   return { ...fixture, task, key, store, repoId: row?.repoId ?? 0, environments };
 }
 
-const NEXT_BUILD = "https://vercel-packages.vercel.app/next/commits/d76ff78c/next";
-const ENVIRONMENT = {
-  name: "Next.js PR Build, No AGENTS.md",
-  packages: [{ name: "next", spec: NEXT_BUILD, directory: "apps/web" }],
-  files: [
-    { path: "CLAUDE.md", mode: "append", content: "Read node_modules/next/dist/docs/." },
-    { path: "AGENTS.md", mode: "delete" },
-  ],
-};
+// Quotes, a here-document, and a non-ASCII character: all must reach the build as written.
+const SCRIPT = `rm -f AGENTS.md
+cd apps/web && yarn add 'next@https://vercel-packages.vercel.app/next/commits/d76ff78c/next'
+cat >> /app/CLAUDE.md <<'EOF'
+Read "node_modules/next/dist/docs/" — it's bundled.
+EOF
+`;
+const ENVIRONMENT = { name: "Next.js PR Build, No AGENTS.md", script: SCRIPT };
 
 test("an environment builds every approved task with only its Dockerfile changed", async () => {
   const { environments, started, artifacts, task } = await evalWithTask();
-  const response = await environments({ environment: ENVIRONMENT });
+  // A script pasted with Windows line endings runs as the same commands.
+  const response = await environments({
+    environment: { ...ENVIRONMENT, script: SCRIPT.replaceAll("\n", "\r\n") },
+  });
   expect(response.status).toBe(201);
   const created = (await response.json()).environment as { id: number; tasks: unknown };
+  expect(created).toMatchObject({ script: SCRIPT });
   expect(created.tasks).toEqual({ ready: 0, checking: 1, failed: 0, total: 1 });
 
   const input = started.at(-1)?.input;
@@ -114,28 +117,25 @@ test("an environment builds every approved task with only its Dockerfile changed
     if (path !== "Dockerfile") expect(files[path]).toBe(text);
   const dockerfile = files.Dockerfile ?? "";
   expect(dockerfile.startsWith(DOCKERFILE.trimEnd())).toBe(true);
-  expect(dockerfile).toContain(`cd /app/apps/web`);
-  expect(dockerfile).toContain(`yarn add 'next@${NEXT_BUILD}'`);
-  const encoded = Buffer.from(ENVIRONMENT.files[0]?.content ?? "").toString("base64");
-  expect(dockerfile).toContain(`printf %s '${encoded}' | base64 -d >> /app/CLAUDE.md`);
-  expect(dockerfile).toContain("RUN rm -rf -- /app/AGENTS.md");
+  // The author's steps, then one more: the script, decoded and run in /app, stopping on failure.
+  const added = dockerfile.slice(DOCKERFILE.trimEnd().length);
+  const encoded = [...added.matchAll(/^ {2}'([A-Za-z0-9+/=]+)' \\$/gm)].map((line) => line[1]);
+  expect(Buffer.from(encoded.join(""), "base64").toString()).toBe(SCRIPT);
+  expect(added).toContain(" && cd /app && bash -e /tmp/selfbench-environment.sh && ");
 });
 
-test("an environment needs an approved task and refuses values that could escape the shell", async () => {
+test("an environment needs an approved task and a script", async () => {
   const unapproved = await evalWithTask(false);
   expect((await unapproved.environments({ environment: ENVIRONMENT })).status).toBe(409);
   await server?.stop();
 
   const { environments, started, key } = await evalWithTask();
   const before = started.length;
-  const unsafe = [
-    { ...ENVIRONMENT, packages: [{ name: "next; rm -rf /", spec: "16.4.3", directory: "" }] },
-    { ...ENVIRONMENT, packages: [{ name: "next", spec: "16.4.3' && curl evil", directory: "" }] },
-    { ...ENVIRONMENT, files: [{ path: "../etc/passwd", mode: "delete" }] },
-    { ...ENVIRONMENT, files: [{ path: ".git", mode: "delete" }] },
-    { name: "Nothing", packages: [], files: [] },
+  const refused = [
+    { name: "Blank", script: " \n" },
+    { name: "Too Long", script: `# ${"x".repeat(64 * 1024)}` },
   ];
-  for (const environment of unsafe) expect((await environments({ environment })).status).toBe(400);
+  for (const environment of refused) expect((await environments({ environment })).status).toBe(400);
   const malformed = await server?.request(`${EVAL}/environments`, {
     method: "POST",
     headers: key,

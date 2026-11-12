@@ -1,6 +1,5 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { candidateWorkflowId, type TaskImages } from "../contracts/index.js";
-import type { VariantChanges } from "../contracts/variants.js";
 import type { Database } from "./client.js";
 import { taskEnvironments, tasks, taskVariants, users } from "./schema.js";
 import type { TaskProgressPatch, TaskVerdict } from "./task-lifecycle.js";
@@ -10,7 +9,8 @@ export interface TaskEnvironmentRecord {
   readonly id: number;
   readonly repoId: number;
   readonly name: string;
-  readonly changes?: VariantChanges;
+  /** Run in /app as each task's image is built (generation/tasks/variant.ts). */
+  readonly script?: string;
   readonly createdBy?: string;
   readonly createdAt: string;
 }
@@ -50,7 +50,7 @@ export interface TaskVariantStore {
   createEnvironment(row: {
     repoId: number;
     name: string;
-    changes: VariantChanges;
+    script: string;
     createdBy: number;
   }): Promise<TaskEnvironmentRecord>;
   /** A repository's visible environments, oldest first. */
@@ -104,7 +104,13 @@ export function createTaskVariantStore(db: Database, now: () => Date): TaskVaria
     async createEnvironment(row) {
       const [created] = await db
         .insert(taskEnvironments)
-        .values({ ...row, createdAt: now() })
+        .values({
+          repoId: row.repoId,
+          name: row.name,
+          changes: { script: row.script },
+          createdBy: row.createdBy,
+          createdAt: now(),
+        })
         .returning({ id: taskEnvironments.id });
       if (!created) throw new Error("environment was not created");
       const [found] = await environments().where(eq(taskEnvironments.id, created.id));
@@ -252,7 +258,7 @@ function environmentFrom(row: {
     id: environment.id,
     repoId: environment.repoId,
     name: environment.name,
-    ...(environment.changes ? { changes: environment.changes } : {}),
+    ...(environment.changes?.script !== undefined ? { script: environment.changes.script } : {}),
     ...(row.createdBy ? { createdBy: row.createdBy } : {}),
     createdAt: environment.createdAt.toISOString(),
   };

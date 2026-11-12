@@ -2,23 +2,10 @@
 export const MAX_VARIANT_LABEL_LENGTH = 60;
 
 /**
- * What an environment changes in each task: packages installed over the task's own with its
- * package manager, and files written into or removed from /app before the agent starts.
+ * The most an environment's script may hold. It reaches the image build base64-encoded in one
+ * command, and Linux refuses a command past 128 KB.
  */
-export interface VariantChanges {
-  readonly packages: readonly {
-    readonly name: string;
-    readonly spec: string;
-    /** The workspace under /app, for a monorepo; "" is /app. */
-    readonly directory: string;
-  }[];
-  readonly files: readonly {
-    readonly path: string;
-    readonly mode: "replace" | "append" | "delete";
-    /** What a replace or append writes; a delete has none. */
-    readonly content: string;
-  }[];
-}
+export const MAX_ENVIRONMENT_SCRIPT_BYTES = 64 * 1024;
 
 /** Where one task's variant stands: it is checked once, so it never waits for a review. */
 export type VariantState = "in_progress" | "accepted" | "rejected" | "failed" | "cancelled";
@@ -35,8 +22,11 @@ export interface EnvironmentCoverage {
 export interface EnvironmentItem {
   readonly id: number;
   readonly name: string;
-  /** Absent for environments made from per-task variants before changes were recorded. */
-  readonly changes?: VariantChanges;
+  /**
+   * What it changes in each task: a Bash script run in /app as the task's image is built, before
+   * the agent starts. Absent for environments saved before they were scripts.
+   */
+  readonly script?: string;
   readonly createdBy?: string;
   readonly createdAt: string;
   readonly tasks: EnvironmentCoverage;

@@ -23,8 +23,8 @@ const route =
 const STARTING = 4;
 
 /**
- * A repository's environments (task-variant-schema.ts): changes to every approved task's files,
- * each task built and checked once as a variant, so a run condition can run them all.
+ * A repository's environments (task-variant-schema.ts): a script that changes every approved
+ * task's files, each task built and checked once as a variant, so a run condition can run them all.
  *
  * - `GET {repo}/environments`: each environment and how many of its tasks are ready.
  * - `POST {repo}/environments {environment, generation}`: saves one and builds every approved task.
@@ -116,11 +116,11 @@ export async function environmentsRoute(
   }
   let spec: EnvironmentSpec;
   if (environment) {
-    if (!environment.changes) {
-      sendJson(response, 409, { error: "This environment recorded no changes to build again." });
+    if (environment.script === undefined) {
+      sendJson(response, 409, { error: "This environment recorded no script to build again." });
       return true;
     }
-    spec = { name: environment.name, ...environment.changes } as EnvironmentSpec;
+    spec = { name: environment.name, script: environment.script };
   } else {
     const parsed = environmentRequestSchema.safeParse(raw);
     if (!parsed.success) {
@@ -174,10 +174,10 @@ export async function environmentsRoute(
     (await store.createEnvironment({
       repoId: repo.id,
       name: spec.name,
-      changes: { packages: spec.packages, files: spec.files },
+      script: spec.script,
       createdBy: user.id,
     }));
-  const changes = { name: saved.name, packages: spec.packages, files: spec.files };
+  const changes = { name: saved.name, script: spec.script };
   const failures: string[] = [];
   for (let at = 0; at < pending.length; at += STARTING) {
     await Promise.all(
@@ -230,8 +230,6 @@ export async function environmentsRoute(
     {
       ...(generation ? generationProperties(generation.settings) : {}),
       tasks: String(pending.length),
-      packages: String(spec.packages.length),
-      files: String(spec.files.length),
     },
     tenant,
   );

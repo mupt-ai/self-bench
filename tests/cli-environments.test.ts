@@ -8,7 +8,7 @@ import { createTaskStore } from "../src/db/tasks.js";
 import { mint } from "./support/api-keys.js";
 import { prFixture } from "./support/pr-fixture.js";
 import type { AuthServer } from "./support/site-fixture.js";
-import { gzippedTar, tarEntries } from "./support/tar.js";
+import { gzippedTar } from "./support/tar.js";
 
 let server: AuthServer | undefined;
 let root: string | undefined;
@@ -77,7 +77,8 @@ test("the CLI creates, shows, and deletes an environment of every approved task"
   });
   await cli(["task", "approve", task.runId, task.taskId, ...repo]);
   root = await mkdtemp(join(tmpdir(), "selfbench-cli-environment-"));
-  await writeFile(join(root, "claude.md"), "Read the bundled docs.");
+  const script = "rm -f AGENTS.md\npnpm add '@scope/next@16.4.5'\n";
+  await writeFile(join(root, "setup.sh"), script);
 
   const started = await cli([
     "environment",
@@ -85,32 +86,12 @@ test("the CLI creates, shows, and deletes an environment of every approved task"
     ...repo,
     "--name",
     "Docs, No AGENTS.md",
-    "--package",
-    "@scope/next@16.4.5",
-    "--directory",
-    "apps/web",
-    "--file",
-    `CLAUDE.md=${join(root, "claude.md")}`,
-    "--delete",
-    "AGENTS.md",
+    "--script-file",
+    join(root, "setup.sh"),
   ]);
-  const made = started.environment as { id: number; name: string; changes: unknown };
-  expect(made).toMatchObject({
-    name: "Docs, No AGENTS.md",
-    changes: {
-      packages: [{ name: "@scope/next", spec: "16.4.5", directory: "apps/web" }],
-      files: [
-        { path: "CLAUDE.md", mode: "append", content: "Read the bundled docs." },
-        { path: "AGENTS.md", mode: "delete", content: "" },
-      ],
-    },
-  });
-  const staged = fixture.started.at(-1)?.input.revision?.draft.sourceBundle ?? source;
-  const dockerfile = (await tarEntries(Buffer.from(await fixture.artifacts.get(staged)))).find(
-    (entry) => entry.path === "Dockerfile",
-  )?.text;
-  expect(dockerfile).toContain("'@scope/next@16.4.5'");
-  expect(dockerfile).toContain("rm -rf -- /app/AGENTS.md");
+  // The script as the file holds it; what the build does with it is task-variants.test.ts's.
+  const made = started.environment as { id: number; name: string; script: string };
+  expect(made).toMatchObject({ name: "Docs, No AGENTS.md", script });
 
   expect((await cli(["environments", ...repo])).environments).toMatchObject([
     { id: made.id, tasks: { checking: 1, total: 1 } },

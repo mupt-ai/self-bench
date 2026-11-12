@@ -4,11 +4,10 @@ import { repoPath, requestJson } from "../api";
 
 export type { EnvironmentItem, EnvironmentTaskItem };
 
-/** What an environment changes in every approved task (generation/tasks/variant.ts). */
-export interface EnvironmentInput {
+/** A new environment: its name, and the script run in every approved task's image. */
+interface EnvironmentInput {
   name: string;
-  packages: { name: string; spec: string; directory: string }[];
-  files: { path: string; mode: "replace" | "append" | "delete"; content: string }[];
+  script: string;
 }
 
 const environmentsPath = (org: string, fullName: string) =>

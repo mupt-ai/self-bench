@@ -54,10 +54,11 @@ Review
   self-bench task steering RUN_ID TASK_ID --repo R   notes sent, and which turn received each
   self-bench task unreview|cancel|delete RUN_ID TASK_ID --repo R
 
-Environments (changes to every approved task's files, each task built and checked once)
+Environments (a script run in every approved task's image, each task built and checked once)
   self-bench environments --repo R                   each one and how many tasks are ready
-  self-bench environment create --repo R --name N [--package NAME@SPEC ...] [--directory DIR]
-      [--file DEST=SOURCE ...] [--replace] [--delete PATH ...] | --environment JSON|@FILE
+  self-bench environment create --repo R --name N (--script TEXT | --script-file FILE)
+                                                     Bash, run in /app before the agent starts:
+                                                     --script 'rm -f AGENTS.md CLAUDE.md'
   self-bench environment show|build|delete ID --repo R
                                                      build: tasks approved since, or that failed
   Run one with compare --condition '{"name":"No AGENTS.md","environment":ID}'.

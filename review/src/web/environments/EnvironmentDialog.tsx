@@ -1,21 +1,25 @@
 import React from "react";
-import { MAX_VARIANT_LABEL_LENGTH } from "../../../../src/contracts/variants";
+import {
+  MAX_ENVIRONMENT_SCRIPT_BYTES,
+  MAX_VARIANT_LABEL_LENGTH,
+} from "../../../../src/contracts/variants";
 import { Dialog, DialogFooter, DialogHeader } from "../Dialog";
 import { GenerationFields } from "../GenerationFields";
 import { GenerationSteps } from "../GenerationSteps";
+import { cn } from "../primitives/cn";
 import { InfoTooltip } from "../primitives/tooltip";
-import { Button, fieldStyles, Input, Notice } from "../ui";
+import { Button, controlStyles, fieldStyles, Input, Notice } from "../ui";
 import { useGenerationSettings } from "../useGenerationSettings";
-import { EnvironmentChanges } from "./EnvironmentChanges";
-import { createEnvironment, type EnvironmentBuild, type EnvironmentInput } from "./environment-api";
+import { createEnvironment, type EnvironmentBuild } from "./environment-api";
 
-type PackageRow = EnvironmentInput["packages"][number];
-type FileRow = EnvironmentInput["files"][number];
+/** What the script field shows empty: the two changes environments are most often made for. */
+const EXAMPLE_SCRIPT = "rm -f AGENTS.md CLAUDE.md\npnpm add next@15.5.0";
 
 /**
- * A new environment: the same changes to every approved task's files, such as a framework build
- * from a pull request, or no AGENTS.md. Each task is built and checked once with the generation
- * settings chosen here, never re-authored, so its instruction and tests stay the task's own.
+ * A new environment: one script run in every approved task's image, such as removing AGENTS.md or
+ * installing a framework build from a pull request. Each task is built and checked once with the
+ * generation settings chosen here, never re-authored, so its instruction and tests stay the
+ * task's own.
  */
 export function EnvironmentDialog({
   org,
@@ -38,16 +42,12 @@ export function EnvironmentDialog({
     reload,
   } = useGenerationSettings(org, fullName);
   const [label, setLabel] = React.useState("");
-  const [packages, setPackages] = React.useState<PackageRow[]>([]);
-  const [files, setFiles] = React.useState<FileRow[]>([]);
+  const [script, setScript] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const closeButton = React.useRef<HTMLButtonElement>(null);
-  const filled =
-    label.trim().length > 0 &&
-    packages.every((row) => row.name.trim() && row.spec.trim()) &&
-    files.every((row) => row.path.trim()) &&
-    packages.length + files.length > 0;
+  const tooLong = new Blob([script]).size > MAX_ENVIRONMENT_SCRIPT_BYTES;
+  const filled = label.trim().length > 0 && script.trim().length > 0 && !tooLong;
 
   const submit = async () => {
     if (busy || !filled || !valid) return;
@@ -57,15 +57,7 @@ export function EnvironmentDialog({
       const build = await createEnvironment(
         org,
         fullName,
-        {
-          name: label.trim(),
-          packages: packages.map((row) => ({
-            name: row.name.trim(),
-            spec: row.spec.trim(),
-            directory: row.directory.trim(),
-          })),
-          files: files.map((row) => ({ ...row, path: row.path.trim() })),
-        },
+        { name: label.trim(), script },
         settings,
       );
       onCreated(build);
@@ -115,13 +107,32 @@ export function EnvironmentDialog({
                 />
               </label>
 
-              <EnvironmentChanges
-                packages={packages}
-                files={files}
-                onPackagesChange={setPackages}
-                onFilesChange={setFiles}
-                disabled={busy}
-              />
+              <label htmlFor="environment-script" className={fieldStyles}>
+                <span className="flex items-center gap-1.5">
+                  Setup Script
+                  <InfoTooltip label="Bash, run in /app as each task's image is built, before the agent starts. It stops at the first command that fails, so use rm -f for a file some tasks lack. Each task's instruction, hidden tests, and reference solution stay the same." />
+                </span>
+                <textarea
+                  id="environment-script"
+                  aria-label="Setup Script"
+                  rows={8}
+                  spellCheck={false}
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  autoComplete="off"
+                  data-1p-ignore
+                  placeholder={EXAMPLE_SCRIPT}
+                  className={cn(controlStyles, "h-auto resize-y py-2 font-mono leading-6")}
+                  value={script}
+                  disabled={busy}
+                  onChange={(event) => setScript(event.target.value)}
+                />
+              </label>
+              {tooLong && (
+                <Notice>
+                  The script must be at most {MAX_ENVIRONMENT_SCRIPT_BYTES / 1024} KB.
+                </Notice>
+              )}
             </div>
           ) : optionsError ? (
             <Notice>
