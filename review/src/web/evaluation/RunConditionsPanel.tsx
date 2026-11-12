@@ -1,65 +1,24 @@
 import { ChevronDown, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 import React from "react";
-import {
-  MAX_CONDITIONS,
-  MAX_SKILL_LENGTH,
-  MAX_SKILLS,
-  SKILL_HARNESSES,
-  skillSource,
-} from "../../../../src/contracts/conditions";
-import { harnessLabels } from "../../../../src/evaluation/models";
+import { MAX_CONDITIONS, MAX_SKILL_LENGTH, MAX_SKILLS } from "../../../../src/contracts/conditions";
 import { type EnvironmentItem, listEnvironments } from "../environments/environment-api";
 import { cn } from "../primitives/cn";
 import { InfoTooltip } from "../primitives/tooltip";
 import { useOrg } from "../SiteLayout";
 import { Button, controlStyles, fieldStyles, Input, Select } from "../ui";
 import type { RunDraft } from "./RunExecution";
+import { RunHarnessOptions } from "./RunHarnessOptions";
+import { pickedHarnesses } from "./run-conditions";
 import { useEvaluationScope } from "./useEvaluationScope";
 
 type Condition = NonNullable<RunDraft["conditions"]>[number];
 
-/** Why the draft's conditions can't run, if they can't; undefined when they can. */
-export function conditionsProblem(draft: RunDraft): string | undefined {
-  const conditions = draft.conditions ?? [];
-  if (draft.baseline === false && conditions.length === 0)
-    return "Run the baseline or add a condition.";
-  for (const condition of conditions) {
-    const name = condition.name.trim();
-    if (!name) return "Name each condition.";
-    const skills = condition.skills.filter((skill) => skill.trim());
-    if (!skills.length && !condition.instructions?.trim() && condition.environment === undefined)
-      return `${name} needs an environment, a skill, or instructions.`;
-    if (skills.length > MAX_SKILLS) return `${name} can add at most ${MAX_SKILLS} skills.`;
-    if (skills.some((skill) => !skillSource(skill)))
-      return `${name}: write each skill as a GitHub org/repo, org/repo@ref, or URL.`;
-    const unsupported = draft.models
-      .flatMap((model) => model.harnesses)
-      .find((harness) => !SKILL_HARNESSES.includes(harness));
-    if (skills.length && unsupported)
-      return `${name} adds skills, which ${harnessLabels[unsupported]} can't load. Skills run on Claude Code, Codex, and Pi.`;
-  }
-  return undefined;
-}
-
-/** The draft's conditions as the server takes them: blank skill rows dropped, text trimmed. */
-export function submittedConditions(draft: RunDraft): Pick<RunDraft, "conditions" | "baseline"> {
-  const conditions = (draft.conditions ?? []).map((condition) => ({
-    name: condition.name.trim(),
-    skills: condition.skills.map((skill) => skill.trim()).filter(Boolean),
-    ...(condition.instructions?.trim() ? { instructions: condition.instructions.trim() } : {}),
-    ...(condition.environment !== undefined ? { environment: condition.environment } : {}),
-  }));
-  return {
-    ...(conditions.length ? { conditions } : {}),
-    ...(draft.baseline === false ? { baseline: false } : {}),
-  };
-}
-
 /**
  * Run conditions: what every task also runs under, beside the tasks as they are (the baseline).
  * A condition runs each task in a repository environment (its files changed and built), adds
- * skills, which Harbor installs for the agent, or appends instructions to each task's instruction;
- * results keep it apart, so its pass rate compares with the baseline's.
+ * skills, which Harbor installs for the agent, appends instructions to each task's instruction, or
+ * sets options on each harness's agent; results keep it apart, so its pass rate compares with the
+ * baseline's.
  */
 export function RunConditionsPanel({
   draft,
@@ -104,7 +63,7 @@ export function RunConditionsPanel({
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5 text-sm font-semibold">
             Conditions
-            <InfoTooltip label="Run every task again with skills or extra instructions. Results show each condition apart from the baseline, the tasks as they are." />
+            <InfoTooltip label="Run every task again with skills, extra instructions, or harness options. Results show each condition apart from the baseline, the tasks as they are." />
           </span>
           <span className="mt-1 block truncate text-sm text-muted-foreground">
             {summary || "Nothing to run"}
@@ -252,6 +211,12 @@ export function RunConditionsPanel({
                 onChange={(event) => update(index, { instructions: event.target.value })}
               />
             </label>
+            <RunHarnessOptions
+              condition={condition}
+              harnesses={pickedHarnesses(draft)}
+              idPrefix={`condition-${index}`}
+              onChange={(harnessOptions) => update(index, { harnessOptions })}
+            />
           </fieldset>
         ))}
         {conditions.length < MAX_CONDITIONS && (

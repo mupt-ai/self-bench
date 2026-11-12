@@ -7,7 +7,7 @@ icon: "play"
 
 | Method | Route | Does |
 | --- | --- | --- |
-| `GET` | `{scope}/evaluations/catalog` | Models and sandboxes |
+| `GET` | `{scope}/evaluations/catalog` | Models, sandboxes, and each harness's options (`harnessOptions`) |
 | `GET` | `{scope}/evaluations/options` | Tasks a comparison can run; any judge variables |
 | `GET`, `POST` | `{scope}/evaluations/comparisons` | List or start comparisons |
 | `GET` | `{scope}/evaluations/comparisons/{id}` | A comparison's progress |
@@ -20,7 +20,7 @@ icon: "play"
 
 | Route | Body |
 | --- | --- |
-| `POST {scope}/evaluations/comparisons` | `{ id (UUID you generate; retries never start twice), models: [{ catalogId, credentialId, harnesses, thinking? }] (≤12), sandbox, sandboxCredentialId, tasks?: [{ runId, taskId }], skipCompleted?, judgeCredentialId?, conditions?: [{ name, skills?, instructions?, environment? }] (≤4), baseline? }` |
+| `POST {scope}/evaluations/comparisons` | `{ id (UUID you generate; retries never start twice), models: [{ catalogId, credentialId, harnesses, thinking? }] (≤12), sandbox, sandboxCredentialId, tasks?: [{ runId, taskId }], skipCompleted?, judgeCredentialId?, conditions?: [{ name, skills?, instructions?, environment?, harnessOptions? }] (≤4), baseline? }` |
 
 `credentialId` in a model choice is a saved credential's ID, or `managed-model`. `models[].harnesses` are `pi`, `codex`, `claude-code`, `mini-swe-agent`, `terminus-2`, or `muse-code`. `thinking` is `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`.
 
@@ -28,7 +28,7 @@ icon: "play"
 
 A comparison starts one **evaluation** per model, running every task on each harness as a trial. If the reply has `submissionError`, resume the same comparison with its `id`; it reuses the same evaluation IDs.
 
-`conditions` runs every task again under each [condition](/concepts/how-it-works#conditions) beside the tasks as they are; `baseline: false` runs only the conditions. A condition's `environment` is an [environment's](/api/environments) id. Results report each condition as its own configuration.
+`conditions` runs every task again under each [condition](/concepts/how-it-works#conditions) beside the tasks as they are; `baseline: false` runs only the conditions. A condition's `environment` is an [environment's](/api/environments) id. Its `harnessOptions` maps a harness to options from the catalog's `harnessOptions`, such as `{"claude-code": {"max_turns": 30, "config": {…}}}`; a condition with them runs only on those harnesses. Results report each condition as its own configuration.
 
 For scores, read [results](/api/inspect) rather than adding up trials.
 

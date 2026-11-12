@@ -84,6 +84,9 @@ export function retrySelection(
                 skills: [...run.condition.skills],
                 ...(run.condition.instructions ? { instructions: run.condition.instructions } : {}),
                 ...(run.condition.environment ? { environment: run.condition.environment.id } : {}),
+                ...(run.condition.harnessOptions
+                  ? { harnessOptions: run.condition.harnessOptions }
+                  : {}),
               },
             ],
             baseline: false as const,

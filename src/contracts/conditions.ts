@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Harness } from "../evaluation/models.js";
+import { harnessOptionsSchema } from "./harness-options.js";
 
 /**
  * Run conditions (evaluation/conditions.ts) as a comparison names them: shared with the Run page,
@@ -51,12 +52,15 @@ export const conditionSchema = z
     instructions: z.string().trim().max(MAX_INSTRUCTIONS).optional(),
     /** A repository environment (`{repo}/environments`): every task as it built them. */
     environment: z.number().int().positive().optional(),
+    /** Options for each harness's Harbor agent (harness-options.ts), by harness. */
+    harnessOptions: harnessOptionsSchema.optional(),
   })
   .strict()
   .refine(
     (condition) =>
       condition.skills.length > 0 ||
       !!condition.instructions ||
-      condition.environment !== undefined,
-    { message: "a condition adds a skill, instructions, or an environment" },
+      condition.environment !== undefined ||
+      Object.keys(condition.harnessOptions ?? {}).length > 0,
+    { message: "a condition adds a skill, instructions, an environment, or harness options" },
   );

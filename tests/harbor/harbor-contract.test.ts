@@ -3,6 +3,8 @@ import { copyFile, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/pro
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { conditionSchema } from "../../src/contracts/conditions.js";
+import { conditionArguments, runCondition } from "../../src/evaluation/conditions.js";
 import {
   gatewayModelId,
   gatewayTrial,
@@ -63,7 +65,12 @@ function input(provider: string, modelName: string): EvaluationInput {
 }
 
 /** The trial's agent as Harbor runs it, and the gateway key the trial carries. */
-async function run(trialInput: EvaluationInput, harness: Harness, env: NodeJS.ProcessEnv = {}) {
+async function run(
+  trialInput: EvaluationInput,
+  harness: Harness,
+  env: NodeJS.ProcessEnv = {},
+  condition?: unknown,
+) {
   const thinking = pinnedThinking(harness, trialInput.thinking);
   const connection = gatewayConnection("https://api.selfbench.test", SECRET, {
     orgId: 7,
@@ -78,7 +85,14 @@ async function run(trialInput: EvaluationInput, harness: Harness, env: NodeJS.Pr
     input: JSON.stringify({
       agent: trial.agent,
       model: trial.model,
-      agentArguments: trial.agentArguments,
+      // As harborRunArguments orders them: a condition's, then the trial's own.
+      agentArguments: [
+        ...conditionArguments(
+          condition ? runCondition(conditionSchema.parse(condition)) : undefined,
+          harness,
+        ),
+        ...trial.agentArguments,
+      ],
       env: { HOME: tmpdir(), ...trial.child },
       instruction: INSTRUCTION,
     }),
@@ -173,6 +187,35 @@ harbor("Claude Code on the gateway pins every tier to the gateway's model id", a
     ANTHROPIC_BASE_URL: "https://api.selfbench.test/gateway",
     ANTHROPIC_MODEL: "dari/model/anthropic/claude-opus-5-5",
     ANTHROPIC_DEFAULT_HAIKU_MODEL: "dari/model/anthropic/claude-opus-5-5",
+  });
+});
+
+harbor("A condition's options reach Claude Code as its flags and settings", async () => {
+  const { recorded, start, key } = await run(
+    input("anthropic", "anthropic/claude-opus-5-5"),
+    "claude-code",
+    {},
+    {
+      name: "Tuned",
+      harnessOptions: {
+        "claude-code": {
+          append_system_prompt: "Run the tests first.",
+          max_turns: 30,
+          config: { env: { BASH_MAX_TIMEOUT_MS: "600000" } },
+        },
+      },
+    },
+  );
+  const claude = start("claude --verbose");
+  const args = argv(claude.command, "claude");
+  expect(args[args.indexOf("--append-system-prompt") + 1]).toBe("Run the tests first.");
+  expect(args[args.indexOf("--max-turns") + 1]).toBe("30");
+  const settings = Object.entries(recorded.files).find(([path]) => path.endsWith("settings.json"));
+  expect(JSON.parse(settings?.[1] ?? "{}").env).toMatchObject({ BASH_MAX_TIMEOUT_MS: "600000" });
+  // The trial's route stays SelfBench's.
+  expect(claude.env).toMatchObject({
+    ANTHROPIC_API_KEY: key,
+    ANTHROPIC_BASE_URL: "https://api.selfbench.test/gateway",
   });
 });
 
