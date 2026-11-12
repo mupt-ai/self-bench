@@ -5,10 +5,18 @@ description: "Change every approved task's files once, then run them as a condit
 icon: "box"
 ---
 
-An environment changes every approved task's files the same way (packages, added or replaced files, deletions) and builds each task with the change. Run it with `compare --condition` ([Evaluate](/cli/evaluate)). `R` is `--repo OWNER/NAME`.
+An environment runs one script in every approved task's image and builds each task with the change. Run it with `compare --condition` ([Evaluate](/cli/evaluate)). `R` is `--repo OWNER/NAME`.
 
 | Command | Does |
 | --- | --- |
 | `environments R` | Each environment and how many of its tasks are ready |
-| `environment create R --name N [--package NAME@SPEC ...] [--directory DIR] [--file DEST=SOURCE ...] [--replace] [--delete PATH ...]` | Change every approved task's files and build each; `--environment JSON\|@FILE` gives it whole |
+| `environment create R --name N (--script TEXT \| --script-file F)` | Run the script in every approved task's image and build each |
 | `environment show\|build\|delete ID R` | Each task's check; build tasks approved since or that failed; delete it |
+
+The script is Bash, run in `/app` as the image is built, before the agent starts. It stops at the first command that fails, and that task's build fails with it.
+
+```bash
+self-bench environment create --repo acme/app --name "No AGENTS.md, Next.js 15.5" \
+  --script 'rm -f AGENTS.md CLAUDE.md
+pnpm add next@15.5.0'
+```

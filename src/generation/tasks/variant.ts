@@ -3,7 +3,10 @@ import { join } from "node:path";
 import { z } from "zod";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import type { AuthoredTaskDraft } from "../../contracts/index.js";
-import { MAX_VARIANT_LABEL_LENGTH } from "../../contracts/variants.js";
+import {
+  MAX_ENVIRONMENT_SCRIPT_BYTES,
+  MAX_VARIANT_LABEL_LENGTH,
+} from "../../contracts/variants.js";
 import type { TaskVariantRecord, TaskVariantStore } from "../../db/task-variants.js";
 import { extractRegularArchive } from "../../lib/archive.js";
 import { runCommand } from "../../lib/process.js";
@@ -11,115 +14,57 @@ import { withTemporaryDirectory } from "../../sandbox/temporary.js";
 import { revisionPrefix, SOURCE_BUNDLE } from "./revision.js";
 import type { TaskWorkflows } from "./workflow-client.js";
 
-const MAX_FILE_BYTES = 64 * 1024;
-
-/** An npm package name, scoped or not. */
-const packageName = z
-  .string()
-  .trim()
-  .regex(/^(@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/, "not an npm package name");
-/** A version, range, tag, or URL to a tarball: no spaces or quotes, so it is safe in a shell. */
-const packageSpec = z
-  .string()
-  .trim()
-  .min(1)
-  .max(500)
-  .regex(/^[A-Za-z0-9._~:/?#@!$&()*+,;=%^<>|[\]-]+$/, "a version, tag, or tarball URL");
-/** A path under /app: plain segments, never `..` or Git's own directory. */
-const appPath = z
-  .string()
-  .trim()
-  .regex(/^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)*$/, "a relative path of plain names")
-  .refine(
-    (path) => path.split("/").every((part) => part !== ".." && part !== "." && part !== ".git"),
-    "no . , .. , or .git segments",
-  );
-
 /**
- * An environment: changes made to each approved task's files, and nothing else. A task's
+ * An environment: a script run in each approved task's image, and nothing else. A task's
  * instruction, hidden tests, and reference solution stay byte for byte the original's.
  */
 const environmentSchema = z
   .object({
     name: z.string().trim().min(1).max(MAX_VARIANT_LABEL_LENGTH),
-    /** Packages installed over the task's own, such as a framework build from a pull request. */
-    packages: z
-      .array(
-        z
-          .object({
-            name: packageName,
-            spec: packageSpec,
-            /** Where under /app the package is installed, for a monorepo's workspace. */
-            directory: z.union([appPath, z.literal("")]).default(""),
-          })
-          .strict(),
-      )
-      .max(10)
-      .default([]),
     /**
-     * Files in /app: written (replace), added to (append), such as an AGENTS.md block that points
-     * agents at docs, or removed (delete), such as AGENTS.md itself.
+     * Bash, run in /app as the image is built: `rm -f AGENTS.md`, `pnpm add next@15.5.0`. It is the
+     * repository's own members' code in their own tasks' images, as each task's Dockerfile is.
      */
-    files: z
-      .array(
-        z
-          .object({
-            path: appPath,
-            mode: z.enum(["replace", "append", "delete"]),
-            content: z
-              .string()
-              .refine((text) => Buffer.byteLength(text) <= MAX_FILE_BYTES, "at most 64 KB")
-              .default(""),
-          })
-          .strict()
-          .transform((file) => (file.mode === "delete" ? { ...file, content: "" } : file)),
-      )
-      .max(10)
-      .default([]),
+    script: z
+      .string()
+      // Bash reads a carriage return as part of the command it ends.
+      .transform((text) => text.replace(/\r\n?/g, "\n"))
+      .refine((text) => text.trim().length > 0, "a script of at least one command")
+      .refine(
+        (text) => Buffer.byteLength(text) <= MAX_ENVIRONMENT_SCRIPT_BYTES,
+        `at most ${MAX_ENVIRONMENT_SCRIPT_BYTES / 1024} KB`,
+      ),
   })
-  .strict()
-  .refine((environment) => environment.packages.length + environment.files.length > 0, {
-    message: "an environment changes at least one package or file",
-  });
+  .strict();
 
 export type EnvironmentSpec = z.infer<typeof environmentSchema>;
 
-/** POST {repo}/environments: the changes, and the generation settings each task's check uses. */
+/** POST {repo}/environments: the script, and the generation settings each task's check uses. */
 export const environmentRequestSchema = z
   .object({ environment: environmentSchema, generation: z.unknown().optional() })
   .strict();
 
+const SCRIPT_PATH = "/tmp/selfbench-environment.sh";
+/** A Dockerfile line holds under 64 KB, so the encoded script is written a few KB to a line. */
+const ENCODED_LINE = 4096;
+
 /**
- * The Dockerfile steps an environment adds after the author's own. They run before SelfBench commits
- * the task's starting tree (render.ts), so both images get them and they never reach the agent's
- * diff. Values are validated above and quoted, so none can break out of its shell word.
+ * The Dockerfile step an environment adds after the author's own: its script, run in /app and
+ * stopped at the first command that fails, so a task whose script failed is never built without
+ * its change. It runs before SelfBench commits the task's starting tree (render.ts), so both
+ * images get it and it never reaches the agent's diff. The script travels base64-encoded, so
+ * nothing in it can end the step or start another.
  */
 function variantDockerfileSteps(environment: EnvironmentSpec): string {
-  const steps = [`# SelfBench environment: ${environment.name.replace(/[\r\n]/g, " ")}`];
-  for (const pkg of environment.packages) {
-    const target = `'${pkg.name}@${pkg.spec}'`;
-    const dir = pkg.directory ? `/app/${pkg.directory}` : "/app";
-    const has = (file: string) => `{ [ -f ${file} ] || [ -f /app/${file} ]; }`;
-    steps.push(
-      `RUN cd ${dir} && export YARN_ENABLE_IMMUTABLE_INSTALLS=false && ` +
-        `if ${has("pnpm-lock.yaml")}; then pnpm add ${target}; ` +
-        `elif ${has("yarn.lock")}; then yarn add ${target}; ` +
-        `elif ${has("bun.lock")} || ${has("bun.lockb")}; then bun add ${target}; ` +
-        `else npm install ${target}; fi`,
-    );
-  }
-  for (const file of environment.files) {
-    const path = `/app/${file.path}`;
-    if (file.mode === "delete") {
-      steps.push(`RUN rm -rf -- ${path}`);
-      continue;
-    }
-    const encoded = Buffer.from(file.content).toString("base64");
-    steps.push(
-      `RUN mkdir -p "$(dirname ${path})" && printf %s '${encoded}' | base64 -d ${file.mode === "append" ? ">>" : ">"} ${path}`,
-    );
-  }
-  return `${steps.join("\n")}\n`;
+  const encoded = Buffer.from(environment.script).toString("base64");
+  const lines = encoded.match(new RegExp(`.{1,${ENCODED_LINE}}`, "g")) ?? [];
+  return [
+    `# SelfBench environment: ${environment.name.replace(/[\r\n]/g, " ")}`,
+    "RUN printf %s \\",
+    ...lines.map((line) => `  '${line}' \\`),
+    `  | base64 -d > ${SCRIPT_PATH} && cd /app && bash -e ${SCRIPT_PATH} && rm -f ${SCRIPT_PATH}`,
+    "",
+  ].join("\n");
 }
 
 /**

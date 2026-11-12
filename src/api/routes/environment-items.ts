@@ -50,7 +50,7 @@ export function environmentItem(
   return {
     id: environment.id,
     name: environment.name,
-    ...(environment.changes ? { changes: environment.changes } : {}),
+    ...(environment.script !== undefined ? { script: environment.script } : {}),
     ...(environment.createdBy ? { createdBy: environment.createdBy } : {}),
     createdAt: environment.createdAt,
     tasks: coverageOf(latestByTask(environment, variants).values()),

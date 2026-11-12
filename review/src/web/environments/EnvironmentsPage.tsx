@@ -6,10 +6,10 @@ import { cn } from "../primitives/cn";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { Button, DataTable, EmptyState, Notice, PageContent, PageHeader } from "../ui";
-import { ChangesSummary } from "./ChangesSummary";
 import { EnvironmentDetail, notStarted } from "./EnvironmentDetail";
 import { EnvironmentDialog } from "./EnvironmentDialog";
 import { type EnvironmentItem, listEnvironments } from "./environment-api";
+import { ScriptSummary } from "./ScriptSummary";
 
 const coverage = ({ tasks }: EnvironmentItem) =>
   [
@@ -19,8 +19,8 @@ const coverage = ({ tasks }: EnvironmentItem) =>
   ].join(" · ");
 
 /**
- * A repository's environments: changes to every approved task's files, such as no AGENTS.md or a
- * framework build, each task built and checked once. A run condition on the Run page names one to
+ * A repository's environments: scripts that change every approved task's files, such as no
+ * AGENTS.md or a framework build, each task built and checked once. A run condition on the Run page names one to
  * run every task as it built them, beside the tasks as they are.
  */
 export function EnvironmentsPage() {
@@ -161,7 +161,9 @@ function EnvironmentRow({
         <td>
           <span className="block font-semibold">{environment.name}</span>
           <span className="mt-1 block text-sm">
-            <ChangesSummary {...(environment.changes ? { changes: environment.changes } : {})} />
+            <ScriptSummary
+              {...(environment.script !== undefined ? { script: environment.script } : {})}
+            />
           </span>
         </td>
         <td className="whitespace-nowrap">{coverage(environment)}</td>

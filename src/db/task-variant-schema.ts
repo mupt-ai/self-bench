@@ -9,15 +9,14 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 import type { TaskImages } from "../contracts/index.js";
-import type { VariantChanges } from "../contracts/variants.js";
 import { repos, tasks, users } from "./schema.js";
 
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 
 /**
- * An environment: changes to a repository's tasks' files (packages installed over their own,
- * files written into or removed from /app), applied to each approved task as a variant of it. A
- * run condition names one, so a comparison runs every task as its environment built it.
+ * An environment: a script that changes a repository's tasks' files (removes AGENTS.md, installs
+ * another build of a package), run in each approved task's image as a variant of it. A run
+ * condition names one, so a comparison runs every task as its environment built it.
  */
 export const taskEnvironments = pgTable(
   "task_environments",
@@ -27,8 +26,11 @@ export const taskEnvironments = pgTable(
       .notNull()
       .references(() => repos.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
-    /** What it changes; environments from per-task variants recorded only their name. */
-    changes: jsonb("changes").$type<VariantChanges>(),
+    /**
+     * Its script. Environments from per-task variants recorded only their name, and ones saved as
+     * lists of packages and files, before environments were scripts, hold no script either.
+     */
+    changes: jsonb("changes").$type<{ readonly script?: string }>(),
     createdBy: bigint("created_by", { mode: "number" }).references(() => users.id),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     deletedAt: timestamptz("deleted_at"),

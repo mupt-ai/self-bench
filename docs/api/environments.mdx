@@ -5,7 +5,7 @@ description: "Change every approved task's files once, then run them as a condit
 icon: "box"
 ---
 
-An environment changes every approved task's files the same way and builds each task with the change. Pass its `id` as a condition's `environment` when you [start a comparison](/api/evaluate).
+An environment runs one script in every approved task's image and builds each task with the change. Pass its `id` as a condition's `environment` when you [start a comparison](/api/evaluate).
 
 | Method | Route | Does |
 | --- | --- | --- |
@@ -17,4 +17,6 @@ An environment changes every approved task's files the same way and builds each 
 
 | Route | Body |
 | --- | --- |
-| `POST {repo}/environments` | `{ environment: { name, packages?: [{ name, spec, directory? }], files?: [{ path, mode: "replace" \| "append" \| "delete", content? }] }, generation }` |
+| `POST {repo}/environments` | `{ environment: { name, script }, generation }` |
+
+`script` is Bash of at most 64 KB, run in `/app` as the image is built, before the agent starts: `"rm -f AGENTS.md CLAUDE.md\npnpm add next@15.5.0"`. It stops at the first command that fails, and that task's build fails with it.

@@ -213,7 +213,7 @@ test("a condition with an environment runs each ready task from its variant, as 
     const environment = await fixture.tasks.variants.createEnvironment({
       repoId: fixture.repo.id,
       name: "No AGENTS.md",
-      changes: { packages: [], files: [{ path: "AGENTS.md", mode: "delete", content: "" }] },
+      script: "rm -f AGENTS.md",
       createdBy: fixture.user.id,
     });
     const variant = await fixture.tasks.variants.reserve({
