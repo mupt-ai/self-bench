@@ -67,6 +67,7 @@ try {
     "dist/generation/task/runtime/command.sh",
     "dist/runtime/command.sh",
     "dist/api/main.js",
+    "dist/gateway/main.js",
     "dist/temporal/worker-main.js",
     "dist/maintenance/recompute-cost.js",
     "dist/maintenance/backfill-timeouts.js",

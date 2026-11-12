@@ -24,6 +24,7 @@ output "deployment" {
         url_map = google_compute_url_map.api.name
       }
     }
+    gateway_service = google_cloud_run_v2_service.gateway.name
     secret_ids = merge(
       local.secret_ids,
       { temporal_api_key = google_secret_manager_secret.temporal_api_key.secret_id },

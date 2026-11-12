@@ -150,6 +150,20 @@ variable "api_max_instances" {
   type        = number
   default     = 3
 }
+variable "gateway_max_instances" {
+  description = "Upper bound on model gateway instances; one always stays warm."
+  type        = number
+  default     = 20
+}
+variable "gateway_request_concurrency" {
+  description = "Model calls per gateway instance, each a provider stream; low, so Cloud Run scales out before a CPU saturates."
+  type        = number
+  default     = 16
+  validation {
+    condition     = var.gateway_request_concurrency >= 1 && var.gateway_request_concurrency <= 250
+    error_message = "Gateway request concurrency must be between 1 and 250."
+  }
+}
 variable "task_images" {
   description = "Build each task's images with Cloud Build into the selfbench-tasks repository before its checks, so the checks and every trial start from them by digest."
   type        = bool
