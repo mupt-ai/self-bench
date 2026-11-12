@@ -1,6 +1,7 @@
 import { expect } from "bun:test";
 import type { EvaluationInput } from "../../src/evaluation/types.js";
-import { argv, harbor, input, packRuntime, run } from "./support/contract.js";
+import { runCommand } from "../../src/lib/process.js";
+import { argv, harbor, input, packRuntime, python, run, runtime } from "./support/contract.js";
 
 packRuntime();
 
@@ -98,3 +99,42 @@ harbor("Codex without a subagent model sets none", async () => {
   expect(config).not.toContain("developer_instructions");
   expect(config).not.toContain("web_search");
 });
+
+harbor(
+  "Codex's trajectory is the session it was started with, not its last subagent's",
+  async () => {
+    // Codex writes each subagent's rollout beside the parent's, and Harbor converts the one that
+    // sorts last. Harbor's converter takes the directory of rollouts, so the parent's is converted
+    // from a directory holding it alone.
+    const script = `import json, sys, tempfile
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from harbor_gateway import GatewayCodex
+def rollout(day, name, source, said):
+    day.mkdir(parents=True, exist_ok=True)
+    usage = {"input_tokens": 10, "cached_input_tokens": 0, "output_tokens": 2, "total_tokens": 12}
+    lines = [
+        {"type": "session_meta", "payload": {"id": name, "source": source, "cli_version": "0.167.1"}},
+        {"type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "task"}]}},
+        {"type": "response_item", "payload": {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": said}]}},
+        {"type": "event_msg", "payload": {"type": "token_count", "info": {"total_token_usage": usage, "last_token_usage": usage}}},
+    ]
+    (day / name).write_text("".join(json.dumps({"timestamp": "2026-11-11T10:00:00Z", **line}) + "\\n" for line in lines))
+def said(agent, logs):
+    return [step.message for step in agent.convert_trajectory(Path(logs)).steps if step.source == "agent"]
+model = "openai/dari/model/openai/gpt-6-sol"
+with tempfile.TemporaryDirectory() as logs:
+    day = Path(logs) / "sessions/2026/11/11"
+    rollout(day, "rollout-2026-11-11T10-00-00-parent.jsonl", "exec", "orchestrator")
+    rollout(day, "rollout-2026-11-11T10-05-00-child.jsonl", {"subagent": {"thread_spawn": {"parent_thread_id": "p", "depth": 1}}}, "subagent")
+    mixed = GatewayCodex(logs_dir=Path(logs), model_name=model, subagent_model="dari/model/openrouter/deepseek/deepseek-v4-pro-0813")
+    assert said(mixed, logs) == ["orchestrator"], said(mixed, logs)
+    # Harbor's own choice, which a run without a subagent model keeps: the last rollout.
+    assert said(GatewayCodex(logs_dir=Path(logs), model_name=model), logs) == ["subagent"]
+print("ok")
+`;
+    const result = await runCommand(python ?? "python3", ["-c", script, runtime]);
+    expect(result.stderr).toBe("");
+    expect(result.stdout.trim()).toBe("ok");
+  },
+);
