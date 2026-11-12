@@ -22,6 +22,7 @@ icon: "play"
 | `--harness H` (repeatable): `pi`, `codex`, `claude-code`, `mini-swe-agent`, `terminus-2`, `muse-code` | `pi` |
 | `--thinking LEVEL`: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max` | the model's default |
 | `--credential ID` | managed model |
+| `--subagent-model ID`, with `--subagent-credential ID`: the model Claude Code's and Codex's subagents run on | the model itself, on `--credential` |
 | `--sandbox managed\|e2b\|modal\|daytona` and `--sandbox-credential ID` | managed sandbox |
 | `--task RUN_ID/TASK_ID` (repeatable) | every approved task |
 | `--skip-completed` | rerun everything |
@@ -32,3 +33,5 @@ icon: "play"
 | `--selection JSON\|@FILE` | a full [comparison body](/api/evaluate#request-body) in place of the flags |
 
 A condition runs every task again with its skills, extra instructions, harness options, or [environment](/cli/environments); see [Conditions](/concepts/how-it-works#conditions).
+
+`--subagent-model` runs each model as the orchestrator and the subagent model for delegated work; see [Subagent Models](/api/evaluate#subagent-models).

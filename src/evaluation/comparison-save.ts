@@ -5,6 +5,12 @@ import type { CredentialInfo } from "../db/credentials.js";
 import type { Vault } from "../db/vault.js";
 import { type ManagedOffer, managedHarborEnvironment } from "../generation/billing/managed.js";
 import { type CatalogModel, evaluationCatalog } from "./catalog.js";
+import {
+  completedConfigurationTasks,
+  configurationIdentity,
+  configurationTaskKey,
+  selectedSubagent,
+} from "./comparison-configurations.js";
 import type { ComparisonSelection } from "./comparisons.js";
 import {
   conditionRefusal,
@@ -14,13 +20,15 @@ import {
   runCondition,
 } from "./conditions.js";
 import type { EvaluationDataset } from "./dataset.js";
+import { trialRoute } from "./gateway-trial.js";
 import { defaultThinking, routeFor, signInRefusal, thinkingOptions } from "./models.js";
 import { assertTasksFitSandbox } from "./resource-check.js";
 import { listRuns } from "./run-list.js";
 import { type EvaluationScope, sameScope } from "./scope.js";
 import { live } from "./store.js";
+import { SUBAGENT_NEEDS_GATEWAY } from "./subagents.js";
 import { splitCredentialLimits } from "./trial-input.js";
-import type { EvaluationInput, EvaluationRun } from "./types.js";
+import type { EvaluationInput } from "./types.js";
 
 /** Who a comparison is for: its repository's or org's evaluations, and who asked. */
 export interface ComparisonOwner {
@@ -161,13 +169,20 @@ export async function saveComparison(
       new Set(selected.harnesses).size !== selected.harnesses.length
     )
       throw new Error("Unsupported or repeated harness");
+    const subagent = selected.subagent
+      ? selectedSubagent(selected.subagent, selected.harnesses, model, route.provider, {
+          catalogModels,
+          saved,
+          managed: managed.models,
+        })
+      : undefined;
     const levels = thinkingOptions(route, selected.harnesses);
     const thinking = selected.thinking ?? defaultThinking(levels);
     if (!levels.includes(thinking))
       throw new Error("Unsupported thinking level for this model and harness");
     const modelIdentity = selected.catalogId === "custom" ? route.model : model.id;
     for (const harness of selected.harnesses) {
-      const pair = configurationIdentity(modelIdentity, thinking, harness);
+      const pair = configurationIdentity(modelIdentity, thinking, harness, { subagent });
       if (seen.has(pair))
         throw new Error("Select each model, harness, and thinking configuration once");
       seen.add(pair);
@@ -178,6 +193,21 @@ export async function saveComparison(
       }
     }
     const modelName = `${route.provider === "custom" ? "openai" : route.provider}/${route.model}`;
+    const runCredentials = {
+      modelCredentialId: credential.id,
+      sandboxCredentialId: sandbox.id,
+      provider: route.provider,
+      auth: credential.auth,
+      ...(judgeCredentialId ? { judgeCredentialId } : {}),
+    };
+    // Only the gateway can serve and price a second model: a direct trial reaches one endpoint.
+    if (
+      subagent &&
+      selected.harnesses.some(
+        (harness) => trialRoute({ modelName, credentials: runCredentials }, harness) !== "gateway",
+      )
+    )
+      throw new Error(SUBAGENT_NEEDS_GATEWAY);
     const groups = conditions.flatMap(({ condition, tasks }) => {
       const harnesses = selected.harnesses.filter((harness) => conditionRunsOn(condition, harness));
       return selection.skipCompleted
@@ -188,7 +218,10 @@ export async function saveComparison(
               (task) =>
                 !completed.has(
                   configurationTaskKey(
-                    configurationIdentity(modelIdentity, thinking, harness, condition?.id),
+                    configurationIdentity(modelIdentity, thinking, harness, {
+                      condition: condition?.id,
+                      subagent,
+                    }),
                     task.runId,
                     task.taskId,
                   ),
@@ -208,6 +241,7 @@ export async function saveComparison(
           model: model.id,
           modelName,
           thinking,
+          ...(subagent ? { subagent } : {}),
           harnesses: group.harnesses,
           sandbox: selection.sandbox === "managed" ? "modal" : selection.sandbox,
           tasks: group.tasks,
@@ -223,13 +257,7 @@ export async function saveComparison(
             : {}),
           credentialOrgId: owner.orgId,
           comparisonId: selection.id,
-          credentials: {
-            modelCredentialId: credential.id,
-            sandboxCredentialId: sandbox.id,
-            provider: route.provider,
-            auth: credential.auth,
-            ...(judgeCredentialId ? { judgeCredentialId } : {}),
-          },
+          credentials: runCredentials,
         }),
       );
   });
@@ -255,40 +283,4 @@ export async function saveComparison(
 function taskMinutes(tasks: EvaluationInput["tasks"]): { taskMinutes?: number } {
   const minutes = tasks.flatMap((task) => (task.minutes ? [task.minutes] : []));
   return minutes.length ? { taskMinutes: Math.max(...minutes) } : {};
-}
-
-/** A configuration: model, thinking, harness, and the run condition it ran under, if any. */
-function configurationIdentity(
-  model: string,
-  thinking: string | undefined,
-  harness: string,
-  condition?: string,
-) {
-  return JSON.stringify([model, thinking ?? "default", harness, ...(condition ? [condition] : [])]);
-}
-
-function configurationTaskKey(configuration: string, runId: string, taskId: string) {
-  return JSON.stringify([configuration, runId, taskId]);
-}
-
-function completedConfigurationTasks(runs: EvaluationRun[]) {
-  const completed = new Set<string>();
-  for (const run of runs) {
-    for (const trial of run.trials) {
-      if (trial.status === "completed")
-        completed.add(
-          configurationTaskKey(
-            configurationIdentity(
-              run.model === "custom" ? run.modelName.replace(/^[^/]+\//, "") : run.model,
-              run.thinking,
-              trial.harness,
-              run.condition?.id,
-            ),
-            trial.runId,
-            trial.taskId,
-          ),
-        );
-    }
-  }
-  return completed;
 }

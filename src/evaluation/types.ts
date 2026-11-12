@@ -29,6 +29,24 @@ interface EvaluationTask {
   /** What its task.toml asks of a sandbox, checked against the sandbox credential's limits. */
   resources?: ResourceRequest;
 }
+/**
+ * The model a run's subagents use in place of its own (subagents.ts): Claude Code's and Codex's
+ * delegated agents call it through the gateway, on its own credential.
+ */
+export interface SubagentModel {
+  /** The catalog's id for it, which names it in a setting whatever credential serves it. */
+  catalogId: string;
+  /** The gateway's id for it, `provider/model`. */
+  model: string;
+  label: string;
+  credentialId: string;
+  /**
+   * The level the gateway serves every subagent call at, whatever level the harness asks its
+   * subagents' model for: the one a row of this model runs at when none is chosen
+   * (defaultThinking). Absent, the model's own default.
+   */
+  thinking?: ThinkingLevel;
+}
 export interface EvaluationInput extends EvaluationScope {
   id: string;
   tenant: string;
@@ -39,6 +57,8 @@ export interface EvaluationInput extends EvaluationScope {
   thinking?: ThinkingLevel;
   /** The run condition its trials ran under (conditions.ts); none for the tasks as they are. */
   condition?: RunCondition;
+  /** The model the harness's subagents run on instead of the run's own (subagents.ts). */
+  subagent?: SubagentModel;
   harnesses: Harness[];
   sandbox: EvaluationSandbox;
   tasks: EvaluationTask[];
@@ -149,6 +169,11 @@ export interface EvaluationTrial {
   costSource?: "harbor" | "reference-rates" | "gateway" | "router-reference-rates";
   /** What the gateway charged, for comparing with the bill; apiCostUsd is the cost shown. */
   billedCostUsd?: number;
+  /**
+   * On a run with a subagent model, how many of the trial's calls that model served
+   * (subagentTrialUsage): none means its agent never delegated.
+   */
+  subagentCalls?: number;
 }
 export interface EvaluationRun extends Omit<EvaluationInput, "tasks"> {
   revision: number;

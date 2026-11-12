@@ -67,6 +67,7 @@ Evaluate
   self-bench catalog --repo R --harness H            options a condition can set on harness H
   self-bench compare --repo R --model ID [--model ID ...] [--harness pi|codex|claude-code|...]
       [--thinking LEVEL] [--credential ID] [--sandbox managed|e2b|modal|daytona]
+      [--subagent-model ID [--subagent-credential ID]]
       [--sandbox-credential ID] [--task RUN_ID/TASK_ID ...] [--skip-completed]
       [--judge-credential ID] [--condition JSON|@FILE ...] [--no-baseline]
       [--harness-option HARNESS.OPTION=VALUE|@FILE ... [--options-name NAME]]
@@ -76,6 +77,7 @@ Evaluate
       '{"name":"30 Turns","harnessOptions":{"claude-code":{"max_turns":30}}}'
       --harness-option adds one condition: claude-code.append_system_prompt="Run tests first."
       claude-code.config=@settings.json. Options run only on the harnesses they name.
+      --subagent-model runs Claude Code's and Codex's subagents on another catalog model.
   self-bench comparisons --repo R | comparison show|resume|cancel ID --repo R
   self-bench runs --repo R | run show|cancel|delete EVALUATION_ID --repo R
 

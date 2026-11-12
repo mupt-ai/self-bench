@@ -32,8 +32,10 @@ export function splitCredentialLimits(
   const share = (id: string | undefined) => {
     const limit = id ? limitOf(id) : undefined;
     const sharing = inputs.filter(
-      ({ credentials }) =>
-        credentials?.sandboxCredentialId === id || credentials?.modelCredentialId === id,
+      ({ credentials, subagent }) =>
+        credentials?.sandboxCredentialId === id ||
+        credentials?.modelCredentialId === id ||
+        subagent?.credentialId === id,
     ).length;
     return limit ? Math.max(1, Math.floor(limit / sharing)) : Number.POSITIVE_INFINITY;
   };
@@ -41,6 +43,7 @@ export function splitCredentialLimits(
     const maxTrials = Math.min(
       share(input.credentials?.sandboxCredentialId),
       share(input.credentials?.modelCredentialId),
+      share(input.subagent?.credentialId),
     );
     if (Number.isFinite(maxTrials)) input.maxTrials = maxTrials;
   }

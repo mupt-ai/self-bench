@@ -10,11 +10,10 @@ import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
 import type { HarborOutputGuard } from "../harnesses/harbor/output-guard.js";
 import { runCommand } from "../lib/process.js";
 import { claimTrial, WorkerStoppingError } from "./claim.js";
-import { trialCost } from "./cost.js";
 import { DARI_BILLING, retainDariBilling } from "./dari/billing.js";
-import { dariTrialCost, isDariRun } from "./dari/cost.js";
+import { isDariRun } from "./dari/cost.js";
 import { failureMaterial, keepFailureMaterial } from "./failure-material.js";
-import { gatewayTrialCost, type TrialGateway } from "./gateway-trial.js";
+import { measureTrial, type TrialGateway } from "./gateway-cost.js";
 import {
   blockedScores,
   collectOutput,
@@ -152,6 +151,8 @@ async function runTrial(context: {
   agent: string;
   agentArguments: string[];
   modelAuth: CredentialInfo["auth"];
+  /** The sign-in type of the credential serving the run's subagent model, when it has one. */
+  subagentAuth?: CredentialInfo["auth"];
   /** The organization a gateway trial's calls were recorded under. */
   gatewayOrgId?: number;
   child: NodeJS.ProcessEnv;
@@ -204,19 +205,22 @@ async function runTrial(context: {
       if (!result) throw new Error("Harbor did not produce a trial result");
       const parsed = record(JSON.parse(result[1]));
       if (!records) throw new Error("Harbor's transcripts were not read");
-      Object.assign(trial, trialCost(run, trial.harness, records, parsed, context.modelAuth));
-      Object.assign(trial, await dariTrialCost(run, trial, child, records));
-      if (context.gatewayOrgId !== undefined && options.gateway)
-        Object.assign(
+      Object.assign(
+        trial,
+        await measureTrial(
+          run,
           trial,
-          await gatewayTrialCost(
-            options.gateway,
-            context.gatewayOrgId,
-            run,
-            index,
-            context.modelAuth,
-          ),
-        );
+          index,
+          { records, result: parsed, child },
+          {
+            modelAuth: context.modelAuth,
+            subagentAuth: context.subagentAuth,
+            ...(context.gatewayOrgId !== undefined && options.gateway
+              ? { gateway: { at: options.gateway, orgId: context.gatewayOrgId } }
+              : {}),
+          },
+        ),
+      );
       trial.rewards = verifierRewards(parsed);
       const stopped = timeLimitScores(parsed);
       if (stopped) Object.assign(trial, stopped);

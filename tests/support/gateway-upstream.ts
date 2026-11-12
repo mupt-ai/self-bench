@@ -34,6 +34,8 @@ export interface UpstreamCall {
   authorization: string | null;
   xApiKey: string | null;
   model: string;
+  /** The reasoning effort the call asked the provider for, in its own wire's field. */
+  effort?: string;
 }
 
 /** Server-sent events in a provider's own framing. */
@@ -221,10 +223,21 @@ export function startUpstream() {
       const raw = new Uint8Array(await request.arrayBuffer());
       const text =
         request.headers.get("content-encoding") === "zstd" ? Bun.zstdDecompressSync(raw) : raw;
-      const body = JSON.parse(new TextDecoder().decode(text)) as { model: string };
+      const body = JSON.parse(new TextDecoder().decode(text)) as {
+        model: string;
+        output_config?: { effort?: string };
+        reasoning?: { effort?: string };
+      };
       const authorization = request.headers.get("authorization");
       const xApiKey = request.headers.get("x-api-key");
-      calls.push({ path: url.pathname, authorization, xApiKey, model: body.model });
+      const effort = body.output_config?.effort ?? body.reasoning?.effort;
+      calls.push({
+        path: url.pathname,
+        authorization,
+        xApiKey,
+        model: body.model,
+        ...(effort ? { effort } : {}),
+      });
       const denied = () => new Response("bad key", { status: 401 });
       const bearer = (key: string) => authorization === `Bearer ${key}`;
       if (url.pathname === "/v1/responses")

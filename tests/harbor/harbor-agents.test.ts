@@ -50,7 +50,7 @@ class Pi:
             raise RuntimeError("curl: (56) OpenSSL SSL_read: decryption failed or bad record mac")
 sys.modules["harbor.agents.installed.pi"] = types.SimpleNamespace(Pi=Pi, PiOptions=object)
 sys.modules["harbor.agents.installed.codex"] = types.SimpleNamespace(Codex=object, CodexOptions=object)
-sys.modules["harbor.agents.installed.claude_code"] = types.SimpleNamespace(ClaudeCode=object)
+sys.modules["harbor.agents.installed.claude_code"] = types.SimpleNamespace(ClaudeCode=object, ClaudeCodeOptions=object)
 INSTRUCTION = "- Update the \`display\` style property to accept \\"grid\\".\\n- It's done when tests pass."
 def prompt(command):
     """Pi's arguments in a Harbor run command."""

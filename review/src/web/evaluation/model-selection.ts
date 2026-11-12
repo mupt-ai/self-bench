@@ -99,7 +99,8 @@ export function credentialRunsAll(
 }
 
 /**
- * Whether `candidate` repeats a selection: the same model, harness and effective thinking level.
+ * Whether `candidate` repeats a selection: the same model, harness, effective thinking level and
+ * subagent model, whatever credentials serve them.
  * A row without a chosen level runs at its route's default, which depends on its credential.
  */
 export function hasModelSelection(
@@ -119,6 +120,7 @@ export function hasModelSelection(
     (selection) =>
       selection.catalogId === candidate.catalogId &&
       (selection.customModel ?? "") === (candidate.customModel ?? "") &&
+      selection.subagent?.catalogId === candidate.subagent?.catalogId &&
       effectiveThinking(selection) === effectiveThinking(candidate) &&
       selection.harnesses.some((harness) => candidate.harnesses.includes(harness)),
   );

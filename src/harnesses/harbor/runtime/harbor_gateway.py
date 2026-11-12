@@ -1,8 +1,13 @@
 """Harbor agents for trials on SelfBench's model gateway: Codex over HTTPS only, Pi with the
-gateway's model details, and Codex and Claude Code installs that work on any task image."""
+gateway's model details, Codex and Claude Code installs that work on any task image, and both
+with their subagents on a second model when the run names one."""
+import json
 import shlex
+import shutil
+import tempfile
+from pathlib import Path
 from typing import Any
-from harbor.agents.installed.claude_code import ClaudeCode
+from harbor.agents.installed.claude_code import ClaudeCode, ClaudeCodeOptions
 from harbor.agents.installed.codex import Codex, CodexOptions
 from harbor.agents.installed.pi import Pi, PiOptions
 from harbor_agents import EndsPiOptions, RetriesInstall
@@ -22,6 +27,36 @@ class SkipsSystemNode:
 
 # The gateway's id for a model on an OpenAI key or ChatGPT sign-in (gatewayRequestModel).
 OPENAI_MODELS = "dari/model/openai/"
+# A run with a subagent model measures the two models working together, so its agent is told to
+# delegate: left to itself it may do the whole task on the run's own model.
+SUBAGENT_REQUIRED_PROMPT = (
+    "You must figure out how to delegate a meaningful part of this task to at least one subagent. "
+    "Spawn the subagent, wait for its result, and use that result before finishing."
+)
+
+
+def with_subagent_prompt(existing):
+    return f"{existing}\n\n{SUBAGENT_REQUIRED_PROMPT}" if existing else SUBAGENT_REQUIRED_PROMPT
+
+
+def parent_rollout(sessions):
+    """The rollout of the session Codex was started with, when its subagents left others beside
+    it: every subagent is a thread with a rollout of its own, whose first line says a subagent
+    started it (`source: {"subagent": ...}`). None when there is one rollout or none to tell apart."""
+    rollouts = sorted(Path(sessions).rglob("rollout-*.jsonl"), key=lambda path: path.name)
+    if len(rollouts) < 2:
+        return None
+    parents = []
+    for rollout in rollouts:
+        try:
+            with open(rollout, encoding="utf-8") as lines:
+                source = json.loads(lines.readline()).get("payload", {}).get("source")
+        except (OSError, ValueError, AttributeError):
+            continue
+        if not (isinstance(source, dict) and "subagent" in source):
+            parents.append(rollout)
+    # Rollouts are named by when they started, and the parent starts first.
+    return parents[0] if parents else None
 
 
 class GatewayCodexOptions(CodexOptions):
@@ -29,6 +64,8 @@ class GatewayCodexOptions(CodexOptions):
     # every model, and a model that views a screenshot puts an image in the conversation, which an
     # endpoint without an image model refuses, failing the trial.
     view_image: bool = True
+    # The gateway's name for the model Codex's subagents run on (EvaluationInput.subagent).
+    subagent_model: str | None = None
 
 
 class GatewayCodex(RetriesInstall, SkipsSystemNode, Codex):
@@ -41,8 +78,10 @@ class GatewayCodex(RetriesInstall, SkipsSystemNode, Codex):
         if openai_base_url:
             # The gateway serves Codex's hosted web search tool only on OpenAI's own models and
             # refuses every turn that offers it to another (`unsupported_tool`).
+            # Subagents share this config, so a subagent model that is not OpenAI's turns it off too.
             model = (getattr(self, "model_name", None) or "").removeprefix("openai/")
-            if not model.startswith(OPENAI_MODELS):
+            models = [model, self.options.subagent_model or model]
+            if not all(name.startswith(OPENAI_MODELS) for name in models):
                 config["web_search"] = "disabled"
             if not self.options.view_image:
                 config.setdefault("features", {})["view_image"] = False
@@ -54,6 +93,13 @@ class GatewayCodex(RetriesInstall, SkipsSystemNode, Codex):
                 "wire_api": "responses",
                 "supports_websockets": False,
             }
+        # Codex's subagents inherit the gateway provider; only the model they ask it for changes.
+        if self.options.subagent_model:
+            config.setdefault("agents", {}).update({
+                "enabled": True,
+                "default_subagent_model": self.options.subagent_model,
+            })
+            config["developer_instructions"] = with_subagent_prompt(config.get("developer_instructions"))
         return config
 
     async def exec_as_agent(self, environment, command, **kwargs):
@@ -61,8 +107,49 @@ class GatewayCodex(RetriesInstall, SkipsSystemNode, Codex):
         command = 'export NVM_DIR="$HOME/.nvm"; ' + command
         return await super().exec_as_agent(environment, command=command, **kwargs)
 
+    def convert_trajectory(self, logs_dir):
+        # Harbor converts the rollout that sorts last, which after a subagent ran is a subagent's.
+        # The trial's transcript is the session Codex was started with.
+        parent = parent_rollout(Path(logs_dir) / "sessions") if self.options.subagent_model else None
+        if parent is None:
+            return super().convert_trajectory(logs_dir)
+        with tempfile.TemporaryDirectory() as only:
+            shutil.copy(parent, only)
+            return self._convert_events_to_trajectory(Path(only))
+
+
+class SelfBenchClaudeCodeOptions(ClaudeCodeOptions):
+    # The gateway's name for the model Claude Code's subagents run on (EvaluationInput.subagent).
+    subagent_model: str | None = None
+
 
 class SelfBenchClaudeCode(RetriesInstall, SkipsSystemNode, ClaudeCode):
+    options_model = SelfBenchClaudeCodeOptions
+
+    def build_cli_flags(self):
+        if not self.options.subagent_model:
+            return super().build_cli_flags()
+        # Added to any system prompt a run condition appends, for this command only.
+        given = self.options.append_system_prompt
+        self.options.append_system_prompt = with_subagent_prompt(given)
+        try:
+            return super().build_cli_flags()
+        finally:
+            self.options.append_system_prompt = given
+
+    async def exec_as_agent(self, environment, command, **kwargs):
+        # With a base URL, Harbor points every Claude tier and the subagent model at the run's own
+        # model. The subagents' model replaces that one here, once Harbor has built the command's
+        # environment, and FORCE keeps it whatever model a subagent's definition or the Agent
+        # tool's own `model` argument names: the trial's key serves no third model.
+        if self.options.subagent_model and kwargs.get("env") is not None:
+            kwargs["env"] = {
+                **kwargs["env"],
+                "CLAUDE_CODE_SUBAGENT_MODEL": self.options.subagent_model,
+                "CLAUDE_CODE_SUBAGENT_MODEL_FORCE": "1",
+            }
+        return await super().exec_as_agent(environment, command=command, **kwargs)
+
     async def install(self, environment):
         # Modal starts Python images with HOME's .cache/uv created as root, so a non-root agent
         # cannot create the .cache/claude the native installer writes to.

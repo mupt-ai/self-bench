@@ -32,6 +32,7 @@ export type TrialTranscript = Pick<EvaluationTrial, "steps"> &
       | "costSource"
       | "cacheWritesInferred"
       | "billedCostUsd"
+      | "subagentCalls"
     >
   >;
 

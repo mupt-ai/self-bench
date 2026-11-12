@@ -24,7 +24,8 @@ export type CustomEndpointApi = (typeof customEndpointApis)[number];
 /**
  * What one trial's agent and judge may call through the gateway, signed by the worker and checked
  * by the API with a secret both share (as callback-grant.ts does), so nothing is stored
- * server-side. The solver's part names one credential and the one model it may serve, which the
+ * server-side. The solver's part names one credential and the one model it may serve, and the
+ * model its subagents may call on a credential of its own when the run names one, which the
  * gateway pins (`strict`); the judge's names a credential whose provider's models it may call.
  */
 export interface TrialKey {
@@ -33,6 +34,16 @@ export interface TrialKey {
   readonly credentialId?: string;
   /** The gateway's model id, `provider/model`, such as `openrouter/anthropic/claude-sonnet-5-5`. */
   readonly model?: string;
+  /**
+   * The model the solver's subagents call (EvaluationInput.subagent) and the credential that
+   * serves it: a second model of the solver's, never the judge's.
+   */
+  readonly subagent?: {
+    readonly model: string;
+    readonly credentialId: string;
+    /** The level every call for it is served at; absent, the model's own default. */
+    readonly thinking?: PinnedThinking;
+  };
   /**
    * The thinking level every call is served at, when the trial's harness does not say it on each
    * request itself (Codex's is dropped by the gateway). Absent, each call's own level is served.
@@ -70,6 +81,14 @@ const keySchema = z
       .string()
       .regex(/^[^/\s]+\/\S+$/)
       .optional(),
+    subagent: z
+      .object({
+        model: z.string().regex(/^[^/\s]+\/\S+$/),
+        credentialId: z.union([z.uuid(), z.literal(MANAGED_MODEL_CREDENTIAL)]),
+        thinking: z.enum(pinnedLevels).optional(),
+      })
+      .strict()
+      .optional(),
     thinking: z.enum(pinnedLevels).optional(),
     api: z.enum(customEndpointApis).optional(),
     endpointEffort: z.literal(true).optional(),
@@ -81,8 +100,9 @@ const keySchema = z
   .refine(
     (key) =>
       (key.model && key.credentialId && !key.judge) ||
-      (key.judge && !key.credentialId && !key.model),
-  );
+      (key.judge && !key.credentialId && !key.model && !key.subagent),
+  )
+  .refine((key) => !key.subagent || key.subagent.model !== key.model);
 
 const PREFIX = "sbk_";
 
@@ -113,4 +133,20 @@ export function readTrialKey(
 
 function signature(payload: string, secret: string): string {
   return createHmac("sha256", secret).update(payload).digest("base64url");
+}
+
+/** The credential that serves `model` for a trial: its solver model's or its subagent's. */
+export function solverCredential(key: TrialKey, model: string): string | undefined {
+  return model === key.model
+    ? key.credentialId
+    : model === key.subagent?.model
+      ? key.subagent.credentialId
+      : undefined;
+}
+
+/** The judge's credential, when `model` is one of the judge's provider's. */
+export function judgeCredential(key: TrialKey, model: string): string | undefined {
+  return key.judge && model.startsWith(`${key.judge.provider}/`)
+    ? key.judge.credentialId
+    : undefined;
 }

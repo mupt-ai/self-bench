@@ -22,6 +22,9 @@ const draftStateSchema = z.object({
           catalogId: z.string().max(200),
           credentialId: z.string().max(36),
           thinking: z.enum(thinkingLevels).optional(),
+          subagent: z
+            .object({ catalogId: z.string().max(200), credentialId: z.string().max(36) })
+            .optional(),
           customModel: z.string().max(200).optional(),
           harnesses: z.array(z.enum(harnessIds)).max(harnessIds.length),
         }),

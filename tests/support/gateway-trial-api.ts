@@ -8,11 +8,13 @@ import {
   gatewayModelId,
   gatewayTrial,
   pinnedThinking,
+  subagentKey,
 } from "../../src/evaluation/gateway-trial.js";
 import type { EvaluationInput, Harness } from "../../src/evaluation/types.js";
 import { gatewayConnection } from "../../src/gateway/connection.js";
 import { gatewayRoute } from "../../src/gateway/mount.js";
-import type { TrialJudge } from "../../src/gateway/trial-key.js";
+import type { SelfBenchGatewayDeps } from "../../src/gateway/platform.js";
+import type { PinnedThinking, TrialJudge } from "../../src/gateway/trial-key.js";
 import { createGatewayUsageStore } from "../../src/gateway/usage-store.js";
 import { gatewayModelPrice, listedModelConfig } from "../../src/gateways/catalog.js";
 import { startUpstream, VAULT_SECRETS } from "./gateway-upstream.js";
@@ -68,7 +70,12 @@ export const responses = (
   });
 
 /** An Anthropic Messages call; Claude Code's own headers mark it as Claude Code's. */
-export const messages = (env: NodeJS.ProcessEnv, model: string, claudeCode = true) =>
+export const messages = (
+  env: NodeJS.ProcessEnv,
+  model: string,
+  claudeCode = true,
+  extra: Record<string, unknown> = {},
+) =>
   fetch(`${env.ANTHROPIC_BASE_URL}/v1/messages`, {
     method: "POST",
     headers: {
@@ -88,6 +95,7 @@ export const messages = (env: NodeJS.ProcessEnv, model: string, claudeCode = tru
       max_tokens: 64,
       stream: true,
       messages: [{ role: "user", content: "hello" }],
+      ...extra,
     }),
   });
 
@@ -95,7 +103,10 @@ export const messages = (env: NodeJS.ProcessEnv, model: string, claudeCode = tru
  * The API with its gateway route, on a PGlite vault holding each of CREDENTIALS, whose providers
  * are the stand-in.
  */
-export async function startTrialApi() {
+export async function startTrialApi(
+  /** How the catalog describes a model, when not as the bundled one does. */
+  modelConfig: NonNullable<SelfBenchGatewayDeps["modelConfig"]> = listedModelConfig,
+) {
   const upstream = startUpstream();
   const database = await testDatabase();
   const store = createGatewayUsageStore(database.db);
@@ -125,7 +136,7 @@ export async function startTrialApi() {
       renew: (orgId, id, value) => vault.renew(orgId, id, value),
     },
     endpoint: (endpoint) => endpoint,
-    modelConfig: listedModelConfig,
+    modelConfig,
     modelPrice: gatewayModelPrice,
     recordUsage: (entry) => {
       store.record(entry).catch((error) => failures.push(error));
@@ -150,17 +161,37 @@ export async function startTrialApi() {
     });
   }
 
-  function trialFor(harness: Harness, credential: Credential, trial: string) {
-    const { kind, auth, model } = CREDENTIALS[credential];
+  function trialFor(
+    harness: Harness,
+    credential: Credential,
+    trial: string,
+    /** The credential's model to run, if not its usual one, and a subagent model on another's. */
+    mixed?: {
+      model: string;
+      subagent: { credential: Credential; model: string; thinking?: PinnedThinking };
+    },
+  ) {
+    const { kind, auth } = CREDENTIALS[credential];
+    const model = mixed?.model ?? CREDENTIALS[credential].model;
+    const subagent = mixed && {
+      catalogId: mixed.subagent.model.split("/").slice(1).join("/"),
+      model: mixed.subagent.model,
+      label: mixed.subagent.model,
+      credentialId: ids[mixed.subagent.credential],
+      ...(mixed.subagent.thinking ? { thinking: mixed.subagent.thinking } : {}),
+    };
     const input = {
       modelName: model,
+      ...(subagent ? { subagent } : {}),
       credentials: { provider: kind, auth, modelCredentialId: ids[credential] },
     } as EvaluationInput;
     const thinking = pinnedThinking(harness, input.thinking);
+    // As the worker signs it (setUpTrial).
     const connection = gatewayConnection(apiUrl, SECRET, {
       orgId: ORG,
       credentialId: ids[credential],
       model: gatewayModelId(input),
+      ...(subagent ? { subagent: subagentKey(subagent) } : {}),
       ...(thinking ? { thinking } : {}),
       tags: { run: "run-e2e", trial, harness },
     });

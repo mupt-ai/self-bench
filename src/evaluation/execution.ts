@@ -11,11 +11,12 @@ import {
   managedSandboxCredentials,
 } from "../generation/billing/managed.js";
 import { providerCredentialEnvironment } from "../sandbox/provider-environment.js";
-import { trialRoute } from "./gateway-trial.js";
+import { type TrialRoute, trialRoute } from "./gateway-trial.js";
 import { judgeCredentialRefusal } from "./judge.js";
 import { signInRefusal } from "./models.js";
 import { refuseTrial } from "./refusal.js";
 import { sameScope } from "./scope.js";
+import { SUBAGENT_NEEDS_GATEWAY, subagentRefusal } from "./subagents.js";
 import type { EvaluationInput, Harness } from "./types.js";
 /** The organization whose credentials an evaluation uses. */
 export function evaluationCredentialOrg(
@@ -71,6 +72,9 @@ export async function credentialExecution(
   const refusal = signInRefusal(info.auth, input.harnesses);
   if (refusal) throw refuseTrial(refusal);
   const route = harness ? trialRoute(input, harness, info.auth) : undefined;
+  const subagent = input.subagent
+    ? await subagentCredential(input, input.subagent, orgId, credentials, route)
+    : undefined;
   // On the gateway route the gateway reads the API key itself (or the platform's, when managed).
   const modelSecret =
     route === "direct" ? (await credentials.secret(orgId, info.id))?.value : undefined;
@@ -118,6 +122,7 @@ export async function credentialExecution(
     child,
     secrets,
     auth: info.auth,
+    ...(subagent ? { subagentAuth: subagent.auth } : {}),
     route,
     // A custom endpoint's address says which provider in Pi's registry it is (endpointPicksEffort).
     credential: {
@@ -129,6 +134,32 @@ export async function credentialExecution(
     sandboxLimits: "resourceLimits" in sandbox ? sandbox.resourceLimits : undefined,
     judge: await trialJudge(input, orgId, credentials),
   };
+}
+
+/**
+ * The credential a run's subagent model is served on, checked as the comparison checked it when
+ * it was saved: the trial must reach its models through the gateway, which alone can serve and
+ * price a second one, on credentials that serve each by name.
+ */
+async function subagentCredential(
+  input: EvaluationInput,
+  subagent: NonNullable<EvaluationInput["subagent"]>,
+  orgId: number,
+  credentials: Vault["credentials"],
+  route: TrialRoute | undefined,
+) {
+  const info =
+    subagent.credentialId === MANAGED_MODEL_CREDENTIAL
+      ? { id: MANAGED_MODEL_CREDENTIAL, kind: "openrouter" as const, auth: "api-key" as const }
+      : await credentials.find(orgId, subagent.credentialId);
+  if (!info || !subagent.model.startsWith(`${info.kind}/`))
+    throw refuseTrial("Subagent model credential unavailable");
+  const refusal =
+    subagentRefusal(input.harnesses, input.credentials?.provider ?? "", info.kind) ??
+    signInRefusal(info.auth, input.harnesses) ??
+    (route === "direct" ? SUBAGENT_NEEDS_GATEWAY : undefined);
+  if (refusal) throw refuseTrial(refusal);
+  return info;
 }
 
 /** The credential a benchmark's LLM judge calls with through the gateway, if it has one. */

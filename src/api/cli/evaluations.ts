@@ -22,6 +22,8 @@ const SELECTION = {
   harness: { type: "string", multiple: true },
   thinking: { type: "string" },
   credential: { type: "string" },
+  "subagent-model": { type: "string" },
+  "subagent-credential": { type: "string" },
   sandbox: { type: "string" },
   "sandbox-credential": { type: "string" },
   task: { type: "string", multiple: true },
@@ -97,12 +99,22 @@ export function selectionFromFlags(values: Values): Record<string, unknown> {
   const thinking = flag(values, "thinking");
   const judge = flag(values, "judge-credential");
   const tasks = list(values, "task").map(taskRef);
+  const credentialId = flag(values, "credential") ?? "managed-model";
+  // Every model's subagents run on the one subagent model, on its credential or the models' own.
+  const subagentModel = flag(values, "subagent-model");
+  const subagentCredential = flag(values, "subagent-credential");
+  if (subagentCredential && !subagentModel)
+    throw new Error("--subagent-credential needs --subagent-model");
+  const subagent = subagentModel
+    ? { catalogId: subagentModel, credentialId: subagentCredential ?? credentialId }
+    : undefined;
   return {
     id: randomUUID(),
     models: models.map((catalogId) => ({
       catalogId,
-      credentialId: flag(values, "credential") ?? "managed-model",
+      credentialId,
       ...(thinking ? { thinking } : {}),
+      ...(subagent ? { subagent } : {}),
       harnesses: harnesses.length ? harnesses : ["pi"],
     })),
     sandbox: flag(values, "sandbox") ?? "managed",
@@ -120,6 +132,7 @@ interface Comparison {
   runs: {
     id: string;
     model: string;
+    subagent?: string;
     condition?: string;
     harnesses: string[];
     status: string;
@@ -131,7 +144,8 @@ interface Comparison {
 function comparisonView(comparison: Comparison): string {
   const runs = table(comparison.runs, [
     ["EVALUATION", (run) => run.id],
-    ["MODEL", (run) => run.model],
+    // A run with a subagent model names it after its own.
+    ["MODEL", (run) => (run.subagent ? `${run.model} + ${run.subagent}` : run.model)],
     ["CONDITION", (run) => run.condition ?? "Baseline"],
     ["HARNESSES", (run) => run.harnesses.join(", ")],
     ["STATUS", (run) => run.status],

@@ -63,13 +63,14 @@ test("Codex speaks HTTPS to the gateway and sends only what it serves", async ()
 ${HARBOR_STUBS}
 module = types.ModuleType("harbor.agents.installed.codex")
 class Codex:
+    options = types.SimpleNamespace(subagent_model=None)
     def _build_effective_config(self, openai_base_url=None):
         return {"openai_base_url": openai_base_url} if openai_base_url else {}
     async def exec_as_agent(self, environment, command, **kwargs):
         return command, kwargs
 module.Codex, module.CodexOptions = Codex, object
 sys.modules[module.__name__] = module
-sys.modules["harbor.agents.installed.claude_code"] = types.SimpleNamespace(ClaudeCode=object)
+sys.modules["harbor.agents.installed.claude_code"] = types.SimpleNamespace(ClaudeCode=object, ClaudeCodeOptions=object)
 spec = importlib.util.spec_from_file_location("adapter", sys.argv[1])
 adapter = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(adapter)
@@ -79,7 +80,7 @@ async def check():
     assert output == "/root/.nvm"
     assert options == {"timeout_sec": 30}
     gateway = adapter.GatewayCodex()
-    gateway.options = types.SimpleNamespace(view_image=True)
+    gateway.options = types.SimpleNamespace(view_image=True, subagent_model=None)
     gateway.model_name = "openai/dari/model/openrouter/anthropic/claude-sonnet-5"
     config = gateway._build_effective_config("https://gateway.example/v1")
     assert "features" not in config
@@ -130,7 +131,7 @@ class ClaudeCode:
         self.installed = True
     async def ensure_system_dependencies(self, environment, dependencies):
         self.ensured = dependencies
-module.ClaudeCode = ClaudeCode
+module.ClaudeCode, module.ClaudeCodeOptions = ClaudeCode, object
 sys.modules[module.__name__] = module
 sys.modules["harbor.agents.installed.codex"] = types.SimpleNamespace(Codex=ClaudeCode, CodexOptions=object)
 spec = importlib.util.spec_from_file_location("adapter", sys.argv[1])
