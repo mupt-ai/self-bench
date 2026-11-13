@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type {
   GatewayPlatform,
   ProviderCredential,
+  RequestErrorContext,
   RequestSummary,
   ResolvedRouter,
 } from "@mupt-ai/dari-gateway";
@@ -263,7 +264,12 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
         deps.captureError(error);
       }
     },
-    captureRequestError(error: unknown) {
+    captureRequestError(error: unknown, context: RequestErrorContext) {
+      // A 4xx is the client's (a bad key, input the gateway does not take), and a rejected
+      // credential is the org's own key to fix; Sentry is for what SelfBench must fix.
+      const rejectedKey =
+        error instanceof HttpError && error.code === "provider_credential_rejected";
+      if (context.status < 500 || rejectedKey) return;
       deps.captureError(error);
     },
     captureOperationalError(error: unknown) {

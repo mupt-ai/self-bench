@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { HttpError } from "@mupt-ai/dari-gateway/http/errors";
 import type { CredentialInfo } from "../../src/db/credentials.js";
 import {
   type SelfBenchGatewayDeps,
@@ -73,6 +74,26 @@ describe("the platform a trial key resolves to", () => {
       captureError: () => {},
       ...deps,
     });
+
+  test("reports only gateway faults, not the client's 4xx or a rejected org key", () => {
+    const captured: unknown[] = [];
+    const reporter = platform(credential("openai"), { captureError: (e) => captured.push(e) });
+    const report = (error: unknown, status: number) =>
+      reporter.captureRequestError(error, {
+        request: new Request("http://gateway.test/v1/messages"),
+        routerId: "trial",
+        sourceProtocol: "anthropic_messages",
+        status,
+      });
+    report(new HttpError(401, "Missing or invalid API key.", "invalid_api_key"), 401);
+    report(
+      new HttpError(502, "Your openai API key was rejected", "provider_credential_rejected"),
+      502,
+    );
+    const fault = new HttpError(502, "Provider request failed.", "provider_execution_failed");
+    report(fault, 502);
+    expect(captured).toEqual([fault]);
+  });
 
   test("pins the key's thinking level and prices the model at its list price", async () => {
     const router = await platform(credential("openai"), {
