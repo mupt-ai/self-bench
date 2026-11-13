@@ -51,6 +51,16 @@ test("harness options take only each harness's own options, with values of their
     );
 });
 
+test("Claude Code always runs in bypass mode, so its permission mode is fixed", () => {
+  expect(problem({ "claude-code": { permission_mode: "bypassPermissions" } })).toBeUndefined();
+  expect(problem({ "claude-code": { permission_mode: "default" } })).toBe(
+    "Claude Code Permission Mode is always bypassPermissions",
+  );
+  expect(problem({ codex: { permission_mode: "default" } })).toBe(
+    "permission_mode is not a Codex option",
+  );
+});
+
 test("a native config can't change the trial's model, route, or key", () => {
   const config = (harness: string, value: unknown) => problem({ [harness]: { config: value } });
   expect(
@@ -188,7 +198,7 @@ test("a condition with harness options runs only on the harnesses it names", asy
       }),
     );
     expect(await unmatched.json()).toEqual({
-      error: "30 Turns sets options for Claude Code, which no picked model runs",
+      error: "30 Turns is for Claude Code, which no picked model runs",
     });
     const invalid = await fixture.request(
       `${fixture.base}/comparisons`,

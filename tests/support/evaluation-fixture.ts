@@ -267,6 +267,8 @@ export async function evaluationServer(
     explains,
     audits,
     outsider,
+    /** Where the server listens, for a client other than `request` (the CLI). */
+    origin: publicUrl,
     base: "/api/orgs/avyay/repos/avyay/repo/evaluations",
     benchmarks: "/api/orgs/avyay/benchmarks",
     failStart(value: boolean) {

@@ -1,25 +1,21 @@
 import { randomUUID } from "node:crypto";
 import type { ArtifactStore } from "../artifacts/index.js";
+import { conditionRunsOn } from "../contracts/conditions.js";
 import type { ComparisonRecord } from "../db/comparisons.js";
 import type { CredentialInfo } from "../db/credentials.js";
 import type { Vault } from "../db/vault.js";
 import { type ManagedOffer, managedHarborEnvironment } from "../generation/billing/managed.js";
 import { type CatalogModel, evaluationCatalog } from "./catalog.js";
+import { comparisonConditions } from "./comparison-conditions.js";
 import {
   completedConfigurationTasks,
+  conditionSubagent,
   configurationIdentity,
   configurationTaskKey,
   selectedSubagent,
 } from "./comparison-configurations.js";
 import type { ComparisonSelection } from "./comparisons.js";
-import {
-  conditionRefusal,
-  conditionRunsOn,
-  conditionUnmatched,
-  type RunCondition,
-  runCondition,
-} from "./conditions.js";
-import type { EvaluationDataset } from "./dataset.js";
+import { conditionRefusal, conditionUnmatched } from "./conditions.js";
 import { trialRoute } from "./gateway-trial.js";
 import { defaultThinking, routeFor, signInRefusal, thinkingOptions } from "./models.js";
 import { assertTasksFitSandbox } from "./resource-check.js";
@@ -66,8 +62,8 @@ export async function saveComparison(
     tasks: EvaluationInput["tasks"],
     saved: ReadonlyMap<string, CredentialInfo>,
   ) => string | undefined,
-  /** The scope's environments, for conditions that name one (EvaluationDataset.environment). */
-  environments?: EvaluationDataset["environment"],
+  /** The workspace's saved conditions and the scope's environments, for conditions that name one. */
+  known: Parameters<typeof comparisonConditions>[2] = {},
 ): Promise<ComparisonRecord> {
   const owned = (record: ComparisonRecord) => {
     if (
@@ -109,31 +105,25 @@ export async function saveComparison(
       : sandbox.kind !== selection.sandbox)
   )
     throw new Error("Select your matching sandbox credential");
-  const given = selection.conditions ?? [];
-  if (selection.baseline === false && given.length === 0)
+  if (selection.baseline === false && !selection.conditions?.length)
     throw new Error("Run the baseline or at least one condition");
-  const ids = given.map((condition) => runCondition(condition).id);
-  if (new Set(ids).size !== ids.length) throw new Error("Pick each condition once");
   const frozen = await freeze();
   // The baseline runs the tasks as they are; each condition runs them again, kept apart in results.
-  // A condition with an environment runs each task its environment has ready, from its variant.
-  const conditions: { condition?: RunCondition; tasks: EvaluationInput["tasks"] }[] =
-    selection.baseline === false ? [] : [{ tasks: frozen }];
-  for (const condition of given) {
-    if (condition.environment === undefined) {
-      conditions.push({ condition: runCondition(condition), tasks: frozen });
-      continue;
-    }
-    const built = await environments?.(condition.environment, frozen);
-    if (!built) throw new Error(`${condition.name}: no such environment in this repository`);
-    if (built.tasks.length === 0)
-      throw new Error(`${condition.name}: no picked task is ready in ${built.name} yet`);
-    conditions.push({ condition: runCondition(condition, built.name), tasks: built.tasks });
-  }
+  const conditions = await comparisonConditions(selection, frozen, known);
   const picked = selection.models.flatMap((model) => model.harnesses);
   for (const { condition } of conditions) {
     const unmatched = condition && conditionUnmatched(condition, picked);
     if (unmatched) throw new Error(unmatched);
+    // A row on the subagent model itself has nothing to delegate to, and is left out.
+    const alone = selection.models.every(
+      (model) =>
+        model.catalogId === condition?.subagent?.catalogId ||
+        !model.harnesses.some((harness) => conditionRunsOn(condition, harness)),
+    );
+    if (condition?.subagent && alone)
+      throw new Error(
+        `${condition.name} runs subagents on ${condition.subagent.catalogId}: pick another model for it to work beside`,
+      );
   }
   const resourceWarnings = assertTasksFitSandbox(frozen, sandbox);
   const judgeCredentialId = judge?.(frozen, saved);
@@ -169,12 +159,9 @@ export async function saveComparison(
       new Set(selected.harnesses).size !== selected.harnesses.length
     )
       throw new Error("Unsupported or repeated harness");
+    const serving = { catalogModels, saved, managed: managed.models };
     const subagent = selected.subagent
-      ? selectedSubagent(selected.subagent, selected.harnesses, model, route.provider, {
-          catalogModels,
-          saved,
-          managed: managed.models,
-        })
+      ? selectedSubagent(selected.subagent, selected.harnesses, model, route.provider, serving)
       : undefined;
     const levels = thinkingOptions(route, selected.harnesses);
     const thinking = selected.thinking ?? defaultThinking(levels);
@@ -200,19 +187,31 @@ export async function saveComparison(
       auth: credential.auth,
       ...(judgeCredentialId ? { judgeCredentialId } : {}),
     };
-    // Only the gateway can serve and price a second model: a direct trial reaches one endpoint.
-    if (
-      subagent &&
-      selected.harnesses.some(
-        (harness) => trialRoute({ modelName, credentials: runCredentials }, harness) !== "gateway",
-      )
-    )
-      throw new Error(SUBAGENT_NEEDS_GATEWAY);
-    const groups = conditions.flatMap(({ condition, tasks }) => {
+    const groups = conditions.flatMap(({ condition, tasks, subagentCredentialId }) => {
       const harnesses = selected.harnesses.filter((harness) => conditionRunsOn(condition, harness));
+      // A condition's subagent model takes the row's place; a row on that model already runs it.
+      const named = condition?.subagent;
+      if (!harnesses.length || named?.catalogId === model.id) return [];
+      const delegated = named
+        ? conditionSubagent(
+            { ...named, credentialId: subagentCredentialId },
+            { name: condition.name, harnesses, model, provider: route.provider },
+            serving,
+          )
+        : subagent;
+      // Only the gateway can serve and price a second model: a direct trial reaches one endpoint.
+      if (
+        delegated &&
+        harnesses.some(
+          (harness) =>
+            trialRoute({ modelName, credentials: runCredentials }, harness) !== "gateway",
+        )
+      )
+        throw new Error(SUBAGENT_NEEDS_GATEWAY);
       return selection.skipCompleted
         ? harnesses.map((harness) => ({
             condition,
+            subagent: delegated,
             harnesses: [harness],
             tasks: tasks.filter(
               (task) =>
@@ -220,7 +219,7 @@ export async function saveComparison(
                   configurationTaskKey(
                     configurationIdentity(modelIdentity, thinking, harness, {
                       condition: condition?.id,
-                      subagent,
+                      subagent: delegated,
                     }),
                     task.runId,
                     task.taskId,
@@ -228,7 +227,7 @@ export async function saveComparison(
                 ),
             ),
           }))
-        : [{ condition, harnesses, tasks }];
+        : [{ condition, subagent: delegated, harnesses, tasks }];
     });
     const { pricing } = route;
     return groups
@@ -241,7 +240,7 @@ export async function saveComparison(
           model: model.id,
           modelName,
           thinking,
-          ...(subagent ? { subagent } : {}),
+          ...(group.subagent ? { subagent: group.subagent } : {}),
           harnesses: group.harnesses,
           sandbox: selection.sandbox === "managed" ? "modal" : selection.sandbox,
           tasks: group.tasks,

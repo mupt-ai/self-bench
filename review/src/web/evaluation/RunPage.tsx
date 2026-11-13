@@ -16,7 +16,7 @@ import {
   UnsavedComparisonError,
 } from "./comparison-submission";
 import { ResourceWarnings } from "./ResourceWarnings";
-import { RunConditionsPanel } from "./RunConditionsPanel";
+import { RunConditionsPanel, useConditionChoices } from "./RunConditionsPanel";
 import {
   RunBlockerNotice,
   type RunDraft,
@@ -144,7 +144,8 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
   const judgeReady =
     !judge?.variables.length ||
     judgeCredentials(credentials ?? []).some((entry) => entry.id === draft.judgeCredentialId);
-  const conditions = conditionsProblem(draft);
+  const choices = useConditionChoices(org.login, scope.repo, models, availableCredentials);
+  const conditions = conditionsProblem(draft, choices);
   const ready =
     tasksReady &&
     draft.tasks.length > 0 &&
@@ -176,7 +177,12 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
     setError("");
     const frozen = state.submitted
       ? draft
-      : { ...draft, models: selected, skipCompleted: missingOnly, ...submittedConditions(draft) };
+      : {
+          ...draft,
+          models: selected,
+          skipCompleted: missingOnly,
+          ...submittedConditions(draft, choices),
+        };
     const pending = { draft: frozen, submitted: true };
     setState(pending);
     try {
@@ -251,6 +257,7 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
       />
       <RunConditionsPanel
         draft={draft}
+        choices={choices}
         disabled={busy || state.submitted}
         onChange={(value) => setState((current) => ({ ...current, draft: value }))}
       />

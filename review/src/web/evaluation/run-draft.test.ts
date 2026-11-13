@@ -28,6 +28,26 @@ test("restoring a submitted draft keeps its request identity and a new dataset s
   expect(next.submitted).toBe(false);
   expect(next.draft.tasks).toEqual([{ runId: "two", taskId: "two" }]);
 });
+test("a draft drops each condition written out on the Run page, keeping picked ones", () => {
+  const state = restoreRunDraft(null, null);
+  const saved = JSON.stringify({
+    ...state,
+    draft: {
+      ...state.draft,
+      conditions: [
+        // Written out before conditions were saved: its environment alone would lose its skills.
+        { name: "Pack", environment: 3, skills: ["acme/skills"] },
+        { saved: 4, environment: 3 },
+        { environment: 5 },
+      ],
+    },
+  });
+  expect(restoreRunDraft(saved, null).draft.conditions).toEqual([
+    { saved: 4, environment: 3 },
+    { environment: 5 },
+  ]);
+});
+
 test("large selections round-trip through task links and saved drafts without truncation", () => {
   const tasks = Array.from({ length: 25 }, (_, index) => ({
     runId: "run",

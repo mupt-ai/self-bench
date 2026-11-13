@@ -42,8 +42,19 @@ export function harnessOptionsFor(harness: Harness): readonly HarborAgentOption[
   return harborAgentOptions[harness];
 }
 
-/** The harnesses that have any option to set. */
-export const OPTION_HARNESSES = harnessIds.filter((harness) => harnessOptionsFor(harness).length);
+/**
+ * Options that stay at one value on their harness. Claude Code always runs in bypass mode: a
+ * permission prompt would stall a headless trial, and that is why no tool list is set, since an
+ * allowed-tools list only pre-approves tools that bypass mode already lets run.
+ */
+const FIXED_OPTIONS: Partial<Record<Harness, Readonly<Record<string, string>>>> = {
+  "claude-code": { permission_mode: "bypassPermissions" },
+};
+
+/** Options the editor doesn't offer: fixed ones, and tool lists, which bypass mode makes moot. */
+export const UNOFFERED_OPTIONS: Partial<Record<Harness, readonly string[]>> = {
+  "claude-code": ["permission_mode", "allowed_tools", "disallowed_tools"],
+};
 
 /**
  * Settings the trial's own route owns, refused anywhere in a native config: a model (its
@@ -94,6 +105,8 @@ export function harnessOptionProblem(
   const option = harnessOptionsFor(harness).find((entry) => entry.name === name);
   if (!option) return `${name} is not a ${label} option`;
   const named = `${label} ${option.label}`;
+  const fixed = FIXED_OPTIONS[harness]?.[name];
+  if (fixed !== undefined && value !== fixed) return `${named} is always ${fixed}`;
   switch (option.kind) {
     case "boolean":
       return typeof value === "boolean" ? undefined : `${named} is true or false`;

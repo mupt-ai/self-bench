@@ -173,11 +173,20 @@ export function allowedHosts(
   return [...new Set([...solver.extraAllowedHosts, ...(judge ? [judge.host] : [])])];
 }
 
-/** The `--agent-kwarg` that names a run's subagent model to its harness's adapter (harbor_gateway.py). */
-function subagentArguments(input: Pick<EvaluationInput, "subagent">): string[] {
-  return input.subagent
-    ? ["--agent-kwarg", `subagent_model=${gatewayRequestName(input.subagent.model)}`]
-    : [];
+/**
+ * The `--agent-kwarg`s that name a run's subagent model to its harness's adapter
+ * (harbor_gateway.py), and its delegation prompt when its condition gave one: as JSON, which
+ * Harbor parses, so an empty prompt stays empty rather than unset.
+ */
+function subagentArguments({ subagent }: Pick<EvaluationInput, "subagent">): string[] {
+  if (!subagent) return [];
+  return [
+    "--agent-kwarg",
+    `subagent_model=${gatewayRequestName(subagent.model)}`,
+    ...(subagent.prompt === undefined
+      ? []
+      : ["--agent-kwarg", `subagent_prompt=${JSON.stringify(subagent.prompt)}`]),
+  ];
 }
 
 function gatewayRouted(

@@ -1,0 +1,35 @@
+---
+title: "CLI: Conditions"
+sidebarTitle: "Conditions"
+description: "Save a change to the harness once, then run any tasks with and without it."
+icon: "sliders"
+---
+
+A saved condition is a workspace's named set of harness changes. Run it with `compare --saved-condition ID` ([Evaluate](/cli/evaluate)). Conditions belong to the workspace (`--org`), not a repository.
+
+| Command | Does |
+| --- | --- |
+| `conditions` | Each saved condition and what it changes |
+| `condition create --name N [flags]` | Save one |
+| `condition update ID --name N [flags]` | Replace one. Runs that used it keep what they ran. |
+| `condition show\|delete ID` | One condition; delete it |
+
+## Flags
+
+| Flag | Does |
+| --- | --- |
+| `--skill ORG/REPO[@REF]` (repeatable) | A GitHub repository whose `skills/` folder Harbor installs |
+| `--instructions TEXT` · `--instructions-file F` | Appended to every task's instruction |
+| `--harness HARNESS` | The one harness it changes: its skills, options, and subagent model are for it alone |
+| `--harness-option HARNESS.OPTION=VALUE` (repeatable) | An option on that harness's agent; `VALUE` as in [compare](/cli/evaluate#compare-flags) |
+| `--subagent-model ID` | The model Claude Code's and Codex's subagents run on |
+| `--subagent-prompt TEXT` · `--subagent-prompt-file F` | What the harness is told about delegating. Default: delegate a meaningful part of each task. `""` tells it nothing. |
+| `--condition JSON\|@FILE` | A full [condition body](/api/conditions#request-body) in place of the flags |
+
+```bash
+self-bench condition create --name "Haiku Subagents" \
+  --subagent-model claude-haiku-5-5 \
+  --subagent-prompt "Hand the test run to a subagent and check its report."
+self-bench compare --repo acme/app --model claude-opus-5-5 --harness claude-code \
+  --saved-condition 3
+```

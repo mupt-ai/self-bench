@@ -22,7 +22,7 @@ const SELECTION = {
   harness: { type: "string", multiple: true },
   thinking: { type: "string" },
   credential: { type: "string" },
-  "subagent-model": { type: "string" },
+  "saved-condition": { type: "string", multiple: true },
   "subagent-credential": { type: "string" },
   sandbox: { type: "string" },
   "sandbox-credential": { type: "string" },
@@ -100,21 +100,12 @@ export function selectionFromFlags(values: Values): Record<string, unknown> {
   const judge = flag(values, "judge-credential");
   const tasks = list(values, "task").map(taskRef);
   const credentialId = flag(values, "credential") ?? "managed-model";
-  // Every model's subagents run on the one subagent model, on its credential or the models' own.
-  const subagentModel = flag(values, "subagent-model");
-  const subagentCredential = flag(values, "subagent-credential");
-  if (subagentCredential && !subagentModel)
-    throw new Error("--subagent-credential needs --subagent-model");
-  const subagent = subagentModel
-    ? { catalogId: subagentModel, credentialId: subagentCredential ?? credentialId }
-    : undefined;
   return {
     id: randomUUID(),
     models: models.map((catalogId) => ({
       catalogId,
       credentialId,
       ...(thinking ? { thinking } : {}),
-      ...(subagent ? { subagent } : {}),
       harnesses: harnesses.length ? harnesses : ["pi"],
     })),
     sandbox: flag(values, "sandbox") ?? "managed",

@@ -1,6 +1,5 @@
 import { z } from "zod";
-import { MAX_SKILL_LENGTH, MAX_SKILLS } from "../../../../src/contracts/conditions";
-import { MAX_NATIVE_CONFIG } from "../../../../src/contracts/harness-options";
+import { MAX_CONDITIONS } from "../../../../src/contracts/conditions";
 import { thinkingLevels } from "../../../../src/contracts/models";
 import { harnessIds } from "../../../../src/evaluation/models";
 import { evaluationRequestId } from "./api";
@@ -22,9 +21,6 @@ const draftStateSchema = z.object({
           catalogId: z.string().max(200),
           credentialId: z.string().max(36),
           thinking: z.enum(thinkingLevels).optional(),
-          subagent: z
-            .object({ catalogId: z.string().max(200), credentialId: z.string().max(36) })
-            .optional(),
           customModel: z.string().max(200).optional(),
           harnesses: z.array(z.enum(harnessIds)).max(harnessIds.length),
         }),
@@ -34,37 +30,33 @@ const draftStateSchema = z.object({
     sandboxCredentialId: z.string().max(36),
     skipCompleted: z.boolean().optional(),
     judgeCredentialId: z.string().max(36).optional(),
-    // Run conditions as typed: checked on submit (RunConditionsPanel), so a draft may be partial.
+    // The saved conditions and environments picked (RunConditionsPanel), checked on submit. A
+    // draft from when conditions were written out on this page drops each written-out row whole,
+    // rather than keeping its environment and losing the rest.
     conditions: z
-      .array(
-        z.object({
-          name: z.string().max(60),
-          skills: z.array(z.string().max(MAX_SKILL_LENGTH)).max(MAX_SKILLS),
-          instructions: z.string().max(4000).optional(),
-          environment: z.number().int().positive().optional(),
-          // Harness options by harness and option name: typed text while editing
-          // (RunHarnessOptions), their values once submitted (submittedConditions).
-          harnessOptions: z
-            .partialRecord(
-              z.enum(harnessIds),
-              z.record(
-                z.string().max(100),
-                z.union([
-                  z.string().max(MAX_NATIVE_CONFIG),
-                  z.number(),
-                  z.boolean(),
-                  z.record(z.string(), z.unknown()),
-                ]),
-              ),
-            )
-            .optional(),
+      .array(z.unknown())
+      .max(MAX_CONDITIONS)
+      .transform((rows) =>
+        rows.flatMap((row) => {
+          const parsed = pickedConditionRow.safeParse(row);
+          if (!parsed.success) return [];
+          const { saved, environment } = parsed.data;
+          return saved !== undefined || environment !== undefined ? [parsed.data] : [];
         }),
       )
-      .max(4)
-      .optional(),
+      .optional()
+      .catch(undefined),
     baseline: z.boolean().optional(),
   }),
 });
+/** A row as RunConditionsPanel picks it; any other key marks a written-out condition, which is dropped. */
+const pickedConditionRow = z
+  .object({
+    saved: z.number().int().positive().optional(),
+    environment: z.number().int().positive().optional(),
+    subagentCredentialId: z.string().max(36).optional(),
+  })
+  .strict();
 const blankModel = () => ({ catalogId: "", credentialId: "", harnesses: [] });
 
 /** The Run page's saved draft, or a new one with the tasks a link picked (`?tasks=`). */

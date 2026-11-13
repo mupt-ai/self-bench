@@ -1,6 +1,7 @@
 import { CircleAlert, KeyRound, Play, SkipForward } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
+import type { PickedCondition } from "../../../../src/contracts/conditions";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { HostedSandbox } from "../../../../src/evaluation/catalog";
 import type { ComparisonSelection } from "../../../../src/evaluation/comparisons";
@@ -10,10 +11,14 @@ import type { Coverage } from "../setup/readiness";
 import { SetupCallout } from "../setup/SetupCallout";
 import { Button, buttonStyles, fieldStyles, Notice, Select } from "../ui";
 
-/** What the Run page edits: the tasks, models, and sandbox, and the LLM judge's credential. */
-export type RunDraft = ComparisonSelection & {
+/**
+ * What the Run page edits: the tasks, models, and sandbox, the LLM judge's credential, and the
+ * conditions picked from the workspace's saved ones and the repository's environments.
+ */
+export type RunDraft = Omit<ComparisonSelection, "conditions"> & {
   tasks: { runId: string; taskId: string }[];
   judgeCredentialId?: string;
+  conditions?: PickedCondition[];
 };
 
 /** Why the comparison can't run yet, for the notice above the task picker. Nothing while

@@ -54,12 +54,15 @@ export function ModelPicker<Model extends PickableModel>({
   onSelect,
   id,
   label = "Model",
+  placeholder = "Select Model",
 }: {
   models: Model[];
   value: string;
   onSelect(model: Model): void;
   id?: string;
   label?: string;
+  /** What the trigger shows while no model is chosen. */
+  placeholder?: string;
 }) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
@@ -135,7 +138,7 @@ export function ModelPicker<Model extends PickableModel>({
         }}
       >
         <span className={cn("truncate", !selected && "text-muted-foreground")}>
-          {selected?.label ?? "Select Model"}
+          {selected?.label ?? placeholder}
         </span>
         <ChevronDown aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
       </button>

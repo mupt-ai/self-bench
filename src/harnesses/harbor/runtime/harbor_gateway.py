@@ -28,15 +28,18 @@ class SkipsSystemNode:
 # The gateway's id for a model on an OpenAI key or ChatGPT sign-in (gatewayRequestModel).
 OPENAI_MODELS = "dari/model/openai/"
 # A run with a subagent model measures the two models working together, so its agent is told to
-# delegate: left to itself it may do the whole task on the run's own model.
+# delegate: left to itself it may do the whole task on the run's own model. A run condition gives
+# its own prompt (`subagent_prompt`, empty for none); runs that name none are told this one
+# (DEFAULT_SUBAGENT_PROMPT in contracts/conditions.ts).
 SUBAGENT_REQUIRED_PROMPT = (
     "You must figure out how to delegate a meaningful part of this task to at least one subagent. "
     "Spawn the subagent, wait for its result, and use that result before finishing."
 )
 
 
-def with_subagent_prompt(existing):
-    return f"{existing}\n\n{SUBAGENT_REQUIRED_PROMPT}" if existing else SUBAGENT_REQUIRED_PROMPT
+def with_subagent_prompt(existing, prompt=None):
+    prompt = SUBAGENT_REQUIRED_PROMPT if prompt is None else prompt.strip()
+    return f"{existing}\n\n{prompt}" if existing and prompt else prompt or existing
 
 
 def parent_rollout(sessions):
@@ -66,6 +69,8 @@ class GatewayCodexOptions(CodexOptions):
     view_image: bool = True
     # The gateway's name for the model Codex's subagents run on (EvaluationInput.subagent).
     subagent_model: str | None = None
+    # What Codex is told about delegating: the run condition's prompt, or the default when unset.
+    subagent_prompt: str | None = None
 
 
 class GatewayCodex(RetriesInstall, SkipsSystemNode, Codex):
@@ -99,7 +104,11 @@ class GatewayCodex(RetriesInstall, SkipsSystemNode, Codex):
                 "enabled": True,
                 "default_subagent_model": self.options.subagent_model,
             })
-            config["developer_instructions"] = with_subagent_prompt(config.get("developer_instructions"))
+            instructions = with_subagent_prompt(
+                config.get("developer_instructions"), self.options.subagent_prompt
+            )
+            if instructions:
+                config["developer_instructions"] = instructions
         return config
 
     async def exec_as_agent(self, environment, command, **kwargs):
@@ -121,6 +130,8 @@ class GatewayCodex(RetriesInstall, SkipsSystemNode, Codex):
 class SelfBenchClaudeCodeOptions(ClaudeCodeOptions):
     # The gateway's name for the model Claude Code's subagents run on (EvaluationInput.subagent).
     subagent_model: str | None = None
+    # What Claude Code is told about delegating: the run condition's prompt, or the default when unset.
+    subagent_prompt: str | None = None
 
 
 class SelfBenchClaudeCode(RetriesInstall, SkipsSystemNode, ClaudeCode):
@@ -131,7 +142,7 @@ class SelfBenchClaudeCode(RetriesInstall, SkipsSystemNode, ClaudeCode):
             return super().build_cli_flags()
         # Added to any system prompt a run condition appends, for this command only.
         given = self.options.append_system_prompt
-        self.options.append_system_prompt = with_subagent_prompt(given)
+        self.options.append_system_prompt = with_subagent_prompt(given, self.options.subagent_prompt)
         try:
             return super().build_cli_flags()
         finally:

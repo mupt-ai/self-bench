@@ -45,20 +45,28 @@ Name the mistake the agent made and what a careful person would do. Attach real 
 
 ## Conditions
 
-A condition runs every task again with one thing changed, beside the **Baseline**, the tasks as they are. Add conditions on the Run page's **Conditions** panel, and every model and harness runs every task under each.
+A condition runs every task again with something changed, beside the **Baseline**, the tasks and harness as they are. Two things can change:
 
-| Field | Does |
+| Changes | Is | Belongs To |
+| --- | --- | --- |
+| The harness | A **condition**: skills, instructions, harness options, a subagent model | The workspace: save it once under **Harnesses**, pick it on any Run page |
+| The tasks | A **repo ablation**: a script run in every task's image | One repository: create it on that repository's **Repo Ablations** tab |
+
+On the Run page's **Conditions** panel, each row picks a saved condition, a repo ablation, or both, and every model and harness runs every task under each row.
+
+| Condition Field | Does |
 | --- | --- |
-| Environment | Runs each task as an environment built it, with its files changed. Tasks it has no ready build for are left out. |
 | Skills | GitHub repositories whose `skills/` folder Harbor installs for the agent: `org/repo`, `org/repo@ref`, or a URL. Claude Code, Codex, and Pi load them. |
-| Extra Instructions | Appended to every task's instruction |
-| Harness Options | Options on each harness's agent, as Harbor takes them: Claude Code's appended system prompt, turn limit, allowed and disallowed tools, CLI version, and `settings.json`; Codex's web search, reasoning summary, and `config.toml`; and so on. A condition with harness options runs only on the harnesses it sets them for. |
+| Instructions | Added to the end of every task's instruction, or to the harness's system prompt instead (Claude Code and Codex) |
+| Harness | The one harness it changes. Its skills, options and subagent model are for it alone. |
+| Harness Options | Options on that harness's agent, as Harbor takes them: Claude Code's appended system prompt, turn limit, allowed and disallowed tools, CLI version, and `settings.json`; Codex's web search, reasoning summary, and `config.toml`; and so on. A condition runs only on its harness. |
+| Subagent Model | Runs Claude Code's and Codex's subagents on another model, Picking one starts Instructions on a system prompt telling the harness to delegate part of each task; edit or clear it there. The Run page picks the credential that serves the model. See [Subagent Models](/api/evaluate#subagent-models). |
 
 Harness options come from the Harbor version SelfBench runs, so the list grows when Harbor adds one. A few stay with SelfBench: the model, its reasoning level, and where it is served. A native config that sets a model, a subagent model, a provider, a base URL, or a key is refused.
 
-An **environment** changes every approved task's files with one script, run in `/app` as the task's image is built: `rm -f AGENTS.md` removes a file, `pnpm add next@15.5.0` installs another build of a package. Create one on the **Environments** tab. Each task is built and checked once, never re-authored, so its instruction, tests, and reference solution stay the same; **Build Missing Tasks** builds tasks approved since and ones whose check failed.
+A **repo ablation** changes every approved task's files with one script, run in `/app` as the task's image is built: `rm -f AGENTS.md` removes a file, `pnpm add next@15.5.0` installs another build of a package. Each task is built and checked once, never re-authored, so its instruction, tests, and reference solution stay the same; **Build Missing Tasks** builds tasks approved since and ones whose check failed. A row with a repo ablation runs the tasks it has ready and leaves out the rest.
 
-Results count a condition's runs as the task's own, so each condition is a row beside the baseline, and the **Condition** filter narrows to one. Releases publish only the baseline.
+Results count a condition's runs as the task's own, so each row is a configuration beside the baseline, and the **Condition** filter narrows to one. Editing or deleting a saved condition changes no run that used it. Releases publish only the baseline.
 
 ## Results
 

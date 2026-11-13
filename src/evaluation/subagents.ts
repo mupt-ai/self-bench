@@ -33,20 +33,13 @@ export const subagentSupport: Record<Harness, { configurable: boolean; descripti
   },
 };
 
-/** Whether every one of `harnesses` takes a subagent model. */
-export function harnessesTakeSubagent(harnesses: readonly Harness[]): boolean {
-  return (
-    harnesses.length > 0 && harnesses.every((harness) => subagentSupport[harness].configurable)
-  );
-}
-
 /**
  * Whether a credential of this kind can serve a run's own model beside a subagent model. Both of
  * the run's models go through SelfBench's gateway under one trial key, which serves each by name
  * and prices each call by the model it named. A custom endpoint's calls are priced by whichever
  * model its response says served them, so the gateway cannot price it beside a second model.
  */
-export function providerTakesSubagent(provider: string): boolean {
+function providerTakesSubagent(provider: string): boolean {
   return provider !== "custom";
 }
 

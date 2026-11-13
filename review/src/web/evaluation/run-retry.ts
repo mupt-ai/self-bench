@@ -1,3 +1,4 @@
+import type { HarnessOptions } from "../../../../src/contracts/harness-options";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import { hostedSandboxes } from "../../../../src/evaluation/catalog";
 import type { EvaluationRun, Harness } from "./api";
@@ -21,12 +22,14 @@ export interface RetrySelection {
   judgeCredentialId?: string;
   /** Leaves out tasks that completed for this setting since, in this run or another. */
   skipCompleted: true;
-  /** A run under a condition retries under it alone, not the tasks as they are too. */
+  /** A run under a condition retries under it alone, as it ran it, not the tasks as they are too. */
   conditions?: {
     name: string;
     skills: string[];
     instructions?: string;
     environment?: number;
+    harnessOptions?: HarnessOptions;
+    subagent?: { catalogId: string; prompt: string; credentialId?: string };
   }[];
   baseline?: false;
 }
@@ -68,7 +71,8 @@ export function retrySelection(
           credentialId: credentials.modelCredentialId,
           ...(run.thinking ? { thinking: run.thinking } : {}),
           harnesses: [harness],
-          ...(run.subagent
+          // A run that named its subagent model on its row, before conditions did, retries so.
+          ...(run.subagent && !run.condition?.subagent
             ? {
                 subagent: {
                   catalogId: run.subagent.catalogId,
@@ -90,11 +94,20 @@ export function retrySelection(
             conditions: [
               {
                 name: run.condition.name,
+                ...(run.condition.harness ? { harness: run.condition.harness } : {}),
                 skills: [...run.condition.skills],
                 ...(run.condition.instructions ? { instructions: run.condition.instructions } : {}),
                 ...(run.condition.environment ? { environment: run.condition.environment.id } : {}),
                 ...(run.condition.harnessOptions
                   ? { harnessOptions: run.condition.harnessOptions }
+                  : {}),
+                ...(run.condition.subagent
+                  ? {
+                      subagent: {
+                        ...run.condition.subagent,
+                        ...(run.subagent ? { credentialId: run.subagent.credentialId } : {}),
+                      },
+                    }
                   : {}),
               },
             ],

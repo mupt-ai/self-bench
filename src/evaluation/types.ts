@@ -46,6 +46,12 @@ export interface SubagentModel {
    * (defaultThinking). Absent, the model's own default.
    */
   thinking?: ThinkingLevel;
+  /**
+   * What the harness is told about delegating, as the run's condition gave it; empty for nothing.
+   * Runs that named their subagent model on a model row have none, and are told
+   * DEFAULT_SUBAGENT_PROMPT (harbor_gateway.py).
+   */
+  prompt?: string;
 }
 export interface EvaluationInput extends EvaluationScope {
   id: string;

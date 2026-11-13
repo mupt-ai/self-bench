@@ -1,20 +1,27 @@
 import { createHash } from "node:crypto";
 import type { z } from "zod";
-import { type conditionSchema, SKILL_HARNESSES } from "../contracts/conditions.js";
+import {
+  conditionHarness,
+  conditionRunsOn,
+  type conditionSchema,
+  SKILL_HARNESSES,
+} from "../contracts/conditions.js";
 import {
   canonicalOptions,
   type HarnessOptions,
   harnessOptionArguments,
 } from "../contracts/harness-options.js";
 import { type Harness, harnessLabels } from "./models.js";
+import { subagentSupport } from "./subagents.js";
 
 /**
  * A run condition: what a comparison changes for every task it picks. Skills are installed into the
  * agent's skills directory and instructions appended to each task's instruction, both by Harbor
  * (`--skill`, `--extra-instruction`); harness options set the agent's own options
  * (`--agent-kwarg`), and run only on the harnesses they name; an environment runs each task as a
- * repository environment built it, from its variant's bundle. Results keep each condition apart
- * from the baseline, so the two can be compared on the same tasks.
+ * repository environment built it, from its variant's bundle; a subagent model runs the harness's
+ * delegated agents on another model (subagents.ts). Results keep each condition apart from the
+ * baseline, so the two can be compared on the same tasks.
  */
 export interface RunCondition {
   /** A digest of what it changes: two conditions that change the same things are one. */
@@ -25,13 +32,23 @@ export interface RunCondition {
   readonly instructions?: string;
   /** The repository environment its tasks ran in, by id and name. */
   readonly environment?: { readonly id: number; readonly name: string };
-  /** Each harness's Harbor agent options; a condition with any runs only on those harnesses. */
+  /** The one harness it changes, when it changes one: its options, skills, and subagents. */
+  readonly harness?: Harness;
+  /** That harness's Harbor agent options; a condition with any runs only on that harness. */
   readonly harnessOptions?: HarnessOptions;
+  /**
+   * The model its subagents run on, by catalog id, and what the harness is told about delegating
+   * (empty for nothing). A condition with one runs only on the harnesses that take one, and its
+   * runs record the model as served (EvaluationInput.subagent).
+   */
+  readonly subagent?: { readonly catalogId: string; readonly prompt: string };
 }
 
 /** A condition as a comparison names it; `environment` is its environment's name, once found. */
 export function runCondition(
-  given: z.infer<typeof conditionSchema>,
+  given: Omit<z.infer<typeof conditionSchema>, "subagent"> & {
+    subagent?: { catalogId: string; prompt: string } | undefined;
+  },
   environmentName?: string,
 ): RunCondition {
   // A set of skills, in one order, so the same set is the same condition however it was listed.
@@ -40,6 +57,12 @@ export function runCondition(
   const harnessOptions = Object.keys(given.harnessOptions ?? {}).length
     ? canonicalOptions(given.harnessOptions ?? {})
     : undefined;
+  const subagent = given.subagent
+    ? { catalogId: given.subagent.catalogId, prompt: given.subagent.prompt }
+    : undefined;
+  // Named only when no options carry it, so a condition's id is the same whichever way it names it.
+  const harness = conditionHarness(given);
+  const named = harness && !harnessOptions ? harness : undefined;
   const id = createHash("sha256")
     .update(
       JSON.stringify({
@@ -48,6 +71,8 @@ export function runCondition(
         // Added only when set, so a condition without one keeps the id it always had.
         ...(given.environment !== undefined ? { environment: given.environment } : {}),
         ...(harnessOptions ? { harnessOptions } : {}),
+        ...(named ? { harness: named } : {}),
+        ...(subagent ? { subagent } : {}),
       }),
     )
     .digest("hex")
@@ -57,10 +82,12 @@ export function runCondition(
     name: given.name,
     skills,
     ...(instructions ? { instructions } : {}),
+    ...(harness ? { harness } : {}),
     ...(harnessOptions ? { harnessOptions } : {}),
     ...(given.environment !== undefined
       ? { environment: { id: given.environment, name: environmentName ?? given.name } }
       : {}),
+    ...(subagent ? { subagent } : {}),
   };
 }
 
@@ -71,25 +98,18 @@ export function conditionRefusal(condition: RunCondition, harness: Harness): str
   return undefined;
 }
 
-/**
- * Whether a condition runs on `harness`: one that sets harness options runs only on the harnesses
- * it sets them for, since on another it would change nothing it names.
- */
-export function conditionRunsOn(condition: RunCondition | undefined, harness: Harness): boolean {
-  const options = condition?.harnessOptions;
-  return !options || Object.keys(options).length === 0 || harness in options;
-}
-
-/** Why none of `harnesses` runs a condition that sets harness options, if none does. */
+/** Why none of `harnesses` runs a condition that narrows the harnesses it runs on, if none does. */
 export function conditionUnmatched(
   condition: RunCondition,
   harnesses: readonly Harness[],
 ): string | undefined {
   if (harnesses.some((harness) => conditionRunsOn(condition, harness))) return undefined;
-  const named = Object.keys(condition.harnessOptions ?? {}).map(
-    (harness) => harnessLabels[harness as Harness],
-  );
-  return `${condition.name} sets options for ${named.join(" and ")}, which no picked model runs`;
+  const only = conditionHarness(condition);
+  // A subagent model is what rules the harnesses out when none of them takes one.
+  if (condition.subagent && harnesses.every((harness) => !subagentSupport[harness].configurable))
+    return `${condition.name} sets a subagent model, which only Claude Code and Codex take, and no picked model runs either`;
+  const named = only ? harnessLabels[only] : "a harness";
+  return `${condition.name} is for ${named}, which no picked model runs`;
 }
 
 /** The `harbor run` arguments that apply a condition to a trial on `harness`. */

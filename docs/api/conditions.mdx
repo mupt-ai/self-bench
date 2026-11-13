@@ -1,0 +1,33 @@
+---
+title: "API: Conditions"
+sidebarTitle: "Conditions"
+description: "Save a change to the harness once, then run any tasks with and without it."
+icon: "sliders"
+---
+
+A saved condition is a workspace's named set of harness changes. Pick it by `id` when you [start a comparison](/api/evaluate#conditions) in any repository, benchmark, or group.
+
+| Method | Route | Does |
+| --- | --- | --- |
+| `GET`, `POST` | `/api/orgs/{org}/conditions` | List conditions, or save one |
+| `GET`, `PUT`, `DELETE` | `/api/orgs/{org}/conditions/{id}` | One condition; replace it; delete it |
+| `GET` | `/api/orgs/{org}/conditions/models` | Models a condition's subagents can run on |
+
+## Request Body
+
+| Route | Body |
+| --- | --- |
+| `POST`, `PUT` | `{ name (≤60), harness?, skills?: ["org/repo[@ref]"] (≤10), instructions? (≤4,000), harnessOptions?: { harness: { option: value } }, subagent?: { catalogId, prompt? (≤4,000) } }` |
+
+| Field | Does |
+| --- | --- |
+| `skills` | GitHub repositories whose `skills/` folder Harbor installs. Claude Code, Codex, and Pi load them. |
+| `instructions` | Appended to every task's instruction |
+| `harness` | The one harness it changes: its skills, options, and subagent model are for it alone, and it runs only on that harness. Skills need Claude Code, Codex, or Pi; a subagent model needs Claude Code or Codex. Left out, the harness is the one `harnessOptions` names. |
+| `harnessOptions` | Options from the catalog's `harnessOptions`, for `harness` alone. Left out ones keep Harbor's default. |
+| `subagent.catalogId` | The model the harness's subagents run on; see [Subagent Models](/api/evaluate#subagent-models) |
+| `subagent.prompt` | What the harness is told about delegating. Left out, the default: delegate a meaningful part of each task. `""` tells it nothing. |
+
+A condition needs at least one of these. Names are unique in a workspace, whatever their case (`409`). A condition names no environment and no credential: a comparison picks those beside it.
+
+Replacing or deleting a condition changes no run that already used it. A comparison freezes what it picked.

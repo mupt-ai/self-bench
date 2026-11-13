@@ -18,7 +18,7 @@ export function RepoLayout() {
       <ScopeLayout
         afterDataset={[
           ...(evalScope ? [] : [{ path: "/batches", label: "Batch Generation" }]),
-          { path: "/environments", label: "Environments" },
+          { path: "/environments", label: "Repo Ablations" },
         ]}
         afterResults={[
           ...(evalScope ? [] : [{ path: "/releases", label: "Releases" }]),

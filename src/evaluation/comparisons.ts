@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ArtifactStore } from "../artifacts/index.js";
-import { conditionSchema, MAX_CONDITIONS } from "../contracts/conditions.js";
+import { comparisonConditionSchema, MAX_CONDITIONS } from "../contracts/conditions.js";
 import { modelIdPattern, thinkingLevels } from "../contracts/models.js";
 import type { ComparisonRecord } from "../db/comparisons.js";
 import type { CredentialInfo } from "../db/credentials.js";
@@ -27,6 +27,10 @@ const selectionFields = {
           customModel: z.string().regex(modelIdPattern).optional(),
           credentialId: z.union([z.uuid(), z.literal("managed-model")]),
           thinking: z.enum(thinkingLevels).optional(),
+          /**
+           * A subagent model for this row alone, under the baseline and every condition that
+           * names none: how runs named one before conditions did, which retries of them still do.
+           */
           subagent: z
             .object({
               catalogId: z.string().min(1).max(200),
@@ -43,8 +47,11 @@ const selectionFields = {
   sandbox: z.enum(["managed", ...hostedSandboxes]),
   sandboxCredentialId: z.union([z.uuid(), z.literal("managed-sandbox")]),
   skipCompleted: z.boolean().optional(),
-  /** Run conditions (conditions.ts): every configuration also runs every task under each. */
-  conditions: z.array(conditionSchema).max(MAX_CONDITIONS).optional(),
+  /**
+   * Run conditions (conditions.ts): every configuration also runs every task under each. Each is
+   * one of the workspace's saved conditions, picked by id, or one written out.
+   */
+  conditions: z.array(comparisonConditionSchema).max(MAX_CONDITIONS).optional(),
   /** Whether the tasks also run as they are; false runs only the conditions. Default true. */
   baseline: z.boolean().optional(),
 };
@@ -78,7 +85,7 @@ export type { ComparisonOwner } from "./comparison-save.js";
  * dataset gives them now.
  */
 export async function createComparison(
-  vault: Pick<Vault, "credentials" | "comparisons">,
+  vault: Pick<Vault, "credentials" | "comparisons" | "conditions">,
   dataset: Pick<EvaluationDataset, "select" | "environment">,
   store: ArtifactStore,
   managed: ManagedOffer,
@@ -97,7 +104,10 @@ export async function createComparison(
     () => dataset.select(selection.tasks),
     environment,
     (tasks, saved) => judgeCredential(tasks, saved, selection.judgeCredentialId),
-    dataset.environment?.bind(dataset),
+    {
+      environments: dataset.environment?.bind(dataset),
+      saved: async (id) => vault.conditions?.find(owner.orgId, id),
+    },
   );
 }
 
