@@ -1,6 +1,5 @@
 import { Plus } from "lucide-react";
 import { MAX_SKILL_LENGTH, MAX_SKILLS } from "../../../../src/contracts/conditions";
-import { harnessLabels } from "../../../../src/evaluation/models";
 import { cn } from "../primitives/cn";
 import { InfoTooltip } from "../primitives/tooltip";
 import { Button, controlStyles, fieldStyles, Input, Select } from "../ui";
@@ -126,7 +125,7 @@ export function InstructionsField({
           />
         </label>
         {system && draft.harness && (
-          <span className="w-40">
+          <span className="w-44 shrink-0">
             <Select
               aria-label="Instructions Go In"
               value={instructionsWhere(draft)}
@@ -136,7 +135,7 @@ export function InstructionsField({
               }
             >
               <option value="task">Task Prompt</option>
-              <option value="system">{harnessLabels[draft.harness]} System Prompt</option>
+              <option value="system">System Prompt</option>
             </Select>
           </span>
         )}
