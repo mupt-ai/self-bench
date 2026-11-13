@@ -1,11 +1,11 @@
 ---
 title: "API: Repo Ablations"
 sidebarTitle: "Repo Ablations"
-description: "Change every approved task's files once, then run the tasks as built, alone or beside a saved condition."
+description: "Change every approved task's files once, then run the tasks as built, alone or with a saved harness."
 icon: "box"
 ---
 
-An environment runs one script in every approved task's image and builds each task with the change. Pass its `id` as a condition's `environment` when you [start a comparison](/api/evaluate#conditions), alone or beside a [saved condition](/api/conditions).
+An environment runs one script in every approved task's image and builds each task with the change. Pass its `id` in `environments` when you [start a comparison](/api/evaluate#harnesses-and-environments), alone or with each [saved harness](/api/harnesses) picked.
 
 | Method | Route | Does |
 | --- | --- | --- |

@@ -1,7 +1,6 @@
 import {
   conditionHarness,
   MAX_SKILLS,
-  type SavedConditionDraft,
   SKILL_HARNESSES,
   skillSource,
 } from "../../../../src/contracts/conditions";
@@ -12,32 +11,36 @@ import {
   harnessOptionProblem,
   harnessOptionsFor,
 } from "../../../../src/contracts/harness-options";
+import type { SavedHarnessDraft } from "../../../../src/contracts/saved-harnesses";
 import { type Harness, harnessLabels } from "../../../../src/evaluation/models";
 import { subagentSupport } from "../../../../src/evaluation/subagents";
-import type { SavedCondition } from "./condition-api";
+import type { SavedHarness } from "./harness-api";
 
-/** Harness options as their fields hold them: every value typed text until the condition is saved. */
+/** Harness options as their fields hold them: every value typed text until the harness is saved. */
 export type OptionsDraft = Partial<Record<Harness, Record<string, HarnessOptionValue>>>;
 
 /**
- * A saved condition as its editor holds it: text as typed, checked when it is saved. It changes one
- * harness: its skills, options and subagent model belong to that harness, and are kept by harness
- * as they are typed, so switching harnesses and back loses nothing. Only the chosen harness's are
+ * A saved harness as its editor holds it: text as typed, checked when it is saved. It changes one
+ * agent: its skills, options and subagent model belong to that agent, and options are kept by
+ * agent as they are typed, so switching agents and back loses nothing. Only the chosen agent's are
  * saved.
  */
-export interface ConditionDraft {
+export interface HarnessDraft {
   name: string;
-  harness?: Harness;
+  agent?: Harness;
   skills: string[];
   instructions: string;
   /** Where the instructions go: the task's prompt, or the harness's system prompt where it has one. */
   instructionsWhere?: "task" | "system";
   harnessOptions: OptionsDraft;
-  /** The model its subagents run on, and what the harness is told about delegating. */
-  subagent?: { catalogId: string; prompt: string };
+  /**
+   * The model its subagents run on, what the agent is told about delegating, and the credential
+   * that serves the model (the first that can, when unset).
+   */
+  subagent?: { catalogId: string; prompt: string; credentialId?: string };
 }
 
-export const blankCondition = (): ConditionDraft => ({
+export const blankHarness = (): HarnessDraft => ({
   name: "",
   skills: [],
   instructions: "",
@@ -66,10 +69,10 @@ export const isSystemPromptOption = (harness: Harness, name: string) => {
  * page shows as its own field. Instructions can't also go there, so the Instructions field stays on
  * the task until that field is cleared.
  */
-export function systemOptionSet(draft: ConditionDraft): boolean {
-  const place = draft.harness ? SYSTEM_PROMPTS[draft.harness] : undefined;
-  if (!place || !draft.harness) return false;
-  const value = draft.harnessOptions[draft.harness]?.[place.option];
+export function systemOptionSet(draft: HarnessDraft): boolean {
+  const place = draft.agent ? SYSTEM_PROMPTS[draft.agent] : undefined;
+  if (!place || !draft.agent) return false;
+  const value = draft.harnessOptions[draft.agent]?.[place.option];
   if (value === undefined) return false;
   if (!place.key) return true;
   // The Options page holds a native config as typed JSON text.
@@ -85,10 +88,8 @@ export function systemOptionSet(draft: ConditionDraft): boolean {
 }
 
 /** Where the draft's instructions go, given its harness: the task's prompt unless it can take them. */
-export const instructionsWhere = (draft: ConditionDraft) =>
-  draft.instructionsWhere === "system" &&
-  systemPromptOption(draft.harness) &&
-  !systemOptionSet(draft)
+export const instructionsWhere = (draft: HarnessDraft) =>
+  draft.instructionsWhere === "system" && systemPromptOption(draft.agent) && !systemOptionSet(draft)
     ? "system"
     : "task";
 
@@ -112,9 +113,9 @@ function takeSystemPrompt(
   };
 }
 
-/** A saved condition as its editor opens it. */
-export function draftOf(saved: SavedCondition): ConditionDraft {
-  const harness = conditionHarness(saved);
+/** A saved harness as its editor opens it. */
+export function draftOf(saved: SavedHarness): HarnessDraft {
+  const harness = conditionHarness({ harness: saved.agent, harnessOptions: saved.harnessOptions });
   const harnessOptions: OptionsDraft = { ...saved.harnessOptions };
   const taken = takeSystemPrompt(harness, (harness && harnessOptions[harness]) || {});
   // The system prompt, and a delegation prompt (which goes to the same place), open as the
@@ -125,27 +126,33 @@ export function draftOf(saved: SavedCondition): ConditionDraft {
   if (asSystem && harness) harnessOptions[harness] = taken.rest;
   return {
     name: saved.name,
-    ...(harness ? { harness } : {}),
+    ...(harness ? { agent: harness } : {}),
     skills: [...saved.skills],
     instructions: asSystem ? system : (saved.instructions ?? ""),
     ...(asSystem ? { instructionsWhere: "system" as const } : {}),
     harnessOptions,
     ...(saved.subagent
-      ? { subagent: { catalogId: saved.subagent.catalogId, prompt: asSystem ? "" : delegation } }
+      ? {
+          subagent: {
+            catalogId: saved.subagent.catalogId,
+            prompt: asSystem ? "" : delegation,
+            ...(saved.subagent.credentialId ? { credentialId: saved.subagent.credentialId } : {}),
+          },
+        }
       : {}),
   };
 }
 
 /**
- * The harness picked, with what its fields cannot keep: skills it cannot load, and a subagent model
- * it cannot take, are dropped. Its options are kept, since they are kept by harness.
+ * The agent picked, with what its fields cannot keep: skills it cannot load, and a subagent model
+ * it cannot take, are dropped. Its options are kept, since they are kept by agent.
  */
-export function withHarness(draft: ConditionDraft, harness: Harness): ConditionDraft {
+export function withAgent(draft: HarnessDraft, harness: Harness): HarnessDraft {
   const skills = SKILL_HARNESSES.includes(harness) ? draft.skills : [];
   const { subagent: _, ...rest } = draft;
   return {
     ...rest,
-    harness,
+    agent: harness,
     skills,
     ...(subagentSupport[harness].configurable && draft.subagent
       ? { subagent: draft.subagent }
@@ -154,9 +161,14 @@ export function withHarness(draft: ConditionDraft, harness: Harness): ConditionD
 }
 
 /** A subagent model as the editor first shows it: with the delegation prompt runs have always had. */
-export const subagentOn = (catalogId: string, prompt = "") => ({
+export const subagentOn = (
+  catalogId: string,
+  prompt = "",
+  credentialId?: string,
+): NonNullable<HarnessDraft["subagent"]> => ({
   catalogId,
   prompt,
+  ...(credentialId ? { credentialId } : {}),
 });
 
 /** An option's value as its field shows it. */
@@ -190,8 +202,8 @@ function optionValue(
 }
 
 /** The chosen harness's options, typed, or the first problem with them. */
-function typedOptions(draft: ConditionDraft): { options: HarnessOptions } | { problem: string } {
-  const harness = draft.harness;
+function typedOptions(draft: HarnessDraft): { options: HarnessOptions } | { problem: string } {
+  const harness = draft.agent;
   if (!harness) return { options: {} };
   const options: Record<string, unknown> = {};
   for (const [name, given] of Object.entries(draft.harnessOptions[harness] ?? {})) {
@@ -215,43 +227,49 @@ function typedOptions(draft: ConditionDraft): { options: HarnessOptions } | { pr
 }
 
 /** Why the draft can't be saved, if it can't; undefined when it can. */
-export function conditionProblem(draft: ConditionDraft): string | undefined {
-  if (!draft.name.trim()) return "Name the condition.";
+export function harnessProblem(draft: HarnessDraft): string | undefined {
+  if (!draft.name.trim()) return "Name the harness.";
   const skills = draft.skills.filter((skill) => skill.trim());
   const typed = typedOptions(draft);
   if ("problem" in typed) return typed.problem;
-  if (!draft.harness && (skills.length || draft.subagent || Object.keys(typed.options).length))
-    return "Pick a harness for its skills, options, or subagent model.";
+  if (!draft.agent && (skills.length || draft.subagent || Object.keys(typed.options).length))
+    return "Pick an agent for its skills, options, or subagent model.";
   if (
     !skills.length &&
     !draft.instructions.trim() &&
     !draft.subagent &&
     !Object.keys(typed.options).length
   )
-    return "Add a skill, instructions, a harness option, or a subagent model.";
-  if (draft.harness && skills.length && !SKILL_HARNESSES.includes(draft.harness))
-    return `${harnessLabels[draft.harness]} can't load skills. Skills run on Claude Code, Codex, and Pi.`;
-  if (draft.subagent && draft.harness && !subagentSupport[draft.harness].configurable)
-    return `${harnessLabels[draft.harness]} takes no subagent model.`;
-  if (skills.length > MAX_SKILLS) return `A condition can add at most ${MAX_SKILLS} skills.`;
+    return "Add a skill, instructions, an option, or a subagent model.";
+  if (draft.agent && skills.length && !SKILL_HARNESSES.includes(draft.agent))
+    return `${harnessLabels[draft.agent]} can't load skills. Skills run on Claude Code, Codex, and Pi.`;
+  if (draft.subagent && draft.agent && !subagentSupport[draft.agent].configurable)
+    return `${harnessLabels[draft.agent]} takes no subagent model.`;
+  if (skills.length > MAX_SKILLS) return `A harness can add at most ${MAX_SKILLS} skills.`;
   if (skills.some((skill) => !skillSource(skill)))
     return "Write each skill as a GitHub org/repo, org/repo@ref, or URL.";
   return undefined;
 }
 
 /** The draft as the server takes it: blank skill rows dropped, text trimmed, options typed. */
-export function submittedCondition(draft: ConditionDraft): SavedConditionDraft {
+export function submittedHarness(draft: HarnessDraft): SavedHarnessDraft {
   const typed = typedOptions(draft);
   const options = "options" in typed ? typed.options : {};
   const instructions = instructionsWhere(draft) === "task" ? draft.instructions.trim() : "";
   return {
     name: draft.name.trim(),
-    ...(draft.harness ? { harness: draft.harness } : {}),
+    ...(draft.agent ? { agent: draft.agent } : {}),
     skills: draft.skills.map((skill) => skill.trim()).filter(Boolean),
     ...(instructions ? { instructions } : {}),
     ...(Object.keys(options).length ? { harnessOptions: options } : {}),
     ...(draft.subagent
-      ? { subagent: { catalogId: draft.subagent.catalogId, prompt: draft.subagent.prompt.trim() } }
+      ? {
+          subagent: {
+            catalogId: draft.subagent.catalogId,
+            prompt: draft.subagent.prompt.trim(),
+            ...(draft.subagent.credentialId ? { credentialId: draft.subagent.credentialId } : {}),
+          },
+        }
       : {}),
   };
 }

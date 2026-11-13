@@ -13,7 +13,7 @@ import {
   taskRef,
   type Values,
 } from "./args.js";
-import { conditionsFromFlags } from "./conditions.js";
+import { harnessesFromFlags } from "./harness-flags.js";
 import { percent, print, table, usd } from "./output.js";
 import { waitFor } from "./wait.js";
 
@@ -22,6 +22,8 @@ const SELECTION = {
   harness: { type: "string", multiple: true },
   thinking: { type: "string" },
   credential: { type: "string" },
+  "saved-harness": { type: "string", multiple: true },
+  environment: { type: "string", multiple: true },
   "saved-condition": { type: "string", multiple: true },
   "subagent-credential": { type: "string" },
   sandbox: { type: "string" },
@@ -38,7 +40,7 @@ const SELECTION = {
 
 /**
  * `catalog`: the models, harnesses' sandboxes, and managed offer evaluations can use; with
- * `--harness H`, the options a condition can set on that harness (`--harness-option`).
+ * `--harness H`, the options a saved harness can set on that agent (`--option`).
  */
 export async function catalogCommand(args: string[]): Promise<void> {
   const { values } = parse(args, { harness: { type: "string" } });
@@ -86,7 +88,7 @@ export async function compareCommand(args: string[]): Promise<void> {
   const scope = scopePath(values);
   const body = (await jsonOption(values, "selection")) ?? {
     ...selectionFromFlags(values),
-    ...(await conditionsFromFlags(values)),
+    ...(await harnessesFromFlags(values)),
   };
   const reply = await requestJson(`${scope}/evaluations/comparisons`, "POST", body);
   print(values, reply, () => comparisonView(reply as unknown as Comparison));
@@ -137,7 +139,7 @@ function comparisonView(comparison: Comparison): string {
     ["EVALUATION", (run) => run.id],
     // A run with a subagent model names it after its own.
     ["MODEL", (run) => (run.subagent ? `${run.model} + ${run.subagent}` : run.model)],
-    ["CONDITION", (run) => run.condition ?? "Baseline"],
+    ["SETUP", (run) => run.condition ?? "Baseline"],
     ["HARNESSES", (run) => run.harnesses.join(", ")],
     ["STATUS", (run) => run.status],
     ["TRIALS", (run) => `${run.completed}/${run.trials}`],

@@ -21,12 +21,12 @@ import type { inferResourceLimits } from "../../sandbox/resource-inference.js";
 import { tenantFor } from "../auth/tenant.js";
 import { sendJson } from "../http.js";
 import { benchmarkRoutes } from "./benchmarks.js";
-import { conditionRoutes } from "./conditions.js";
 import { credentialRoutes } from "./credentials.js";
 import { type CustomerExportRegistry, customerExportRoute } from "./customer-exports.js";
 import { EVALUATIONS_PATH, handleScopedEvaluations } from "./evaluation-scope.js";
 import { groupRoutes } from "./groups.js";
 import { memberRoutes } from "./members.js";
+import { savedHarnessRoutes } from "./saved-harnesses.js";
 
 /** A repository's evaluations: what follows it is EVALUATIONS_PATH. */
 const repoRoute =
@@ -108,7 +108,7 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
       user: User,
     ): Promise<boolean> {
       if (await credentialRoutes(options, request, url, response, user)) return true;
-      if (await conditionRoutes(options, request, url, response, user)) return true;
+      if (await savedHarnessRoutes(options, request, url, response, user)) return true;
       if (await memberRoutes(options, request, url, response, user)) return true;
       if (await benchmarkRoutes(options, request, url, response, user)) return true;
       if (await groupRoutes(options, privateNow, request, url, response, user)) return true;

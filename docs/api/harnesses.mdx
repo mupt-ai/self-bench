@@ -1,0 +1,36 @@
+---
+title: "API: Harnesses"
+sidebarTitle: "Harnesses"
+description: "Save a change to an agent once, then run any tasks with and without it."
+icon: "sliders"
+---
+
+A saved harness is a workspace's named change to one agent: its skills, instructions, options, and subagent model. Pick it by `id` in `harnesses` when you [start a comparison](/api/evaluate#harnesses-and-environments) in any repository, benchmark, or group.
+
+| Method | Route | Does |
+| --- | --- | --- |
+| `GET`, `POST` | `/api/orgs/{org}/harnesses` | List harnesses (`{ harnesses }`), or save one (`{ harness }`) |
+| `GET`, `PUT`, `DELETE` | `/api/orgs/{org}/harnesses/{id}` | One harness; replace it; delete it |
+| `GET` | `/api/orgs/{org}/harnesses/models` | Models a harness's subagents can run on |
+
+`/api/orgs/{org}/conditions`, the older path, still works.
+
+## Request Body
+
+| Route | Body |
+| --- | --- |
+| `POST`, `PUT` | `{ name (≤60), agent?, skills?: ["org/repo[@ref]"] (≤10), instructions? (≤4,000), harnessOptions?: { agent: { option: value } }, subagent?: { catalogId, prompt? (≤4,000), credentialId? } }` |
+
+| Field | Does |
+| --- | --- |
+| `agent` | The one agent it changes: `claude-code`, `codex`, `pi`, … Its skills, options, and subagent model are for it alone, and it runs only on that agent. Skills need Claude Code, Codex, or Pi; a subagent model needs Claude Code or Codex. Left out, the agent is the one `harnessOptions` names. |
+| `skills` | GitHub repositories whose `skills/` folder Harbor installs. Claude Code, Codex, and Pi load them. |
+| `instructions` | Appended to every task's instruction |
+| `harnessOptions` | Options from the catalog's `harnessOptions`, for `agent` alone. Left out ones keep Harbor's default. |
+| `subagent.catalogId` | The model the agent's subagents run on; see [Subagent Models](/api/evaluate#subagent-models) |
+| `subagent.prompt` | What the agent is told about delegating. Left out, the default: delegate a meaningful part of each task. `""` tells it nothing. |
+| `subagent.credentialId` | A saved credential that serves the subagent model, or `managed-model`. Left out, the first of the workspace's that can, when the run starts. |
+
+A harness needs at least one of `skills`, `instructions`, `harnessOptions`, or `subagent`. Names are unique in a workspace, whatever their case (`409`). A harness names no environment: a comparison picks those beside it.
+
+Replacing or deleting a harness changes no run that already used it. A comparison freezes what it picked.

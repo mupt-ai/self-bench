@@ -61,39 +61,35 @@ Environments (a script run in every approved task's image, each task built and c
                                                      --script 'rm -f AGENTS.md CLAUDE.md'
   self-bench environment show|build|delete ID --repo R
                                                      build: tasks approved since, or that failed
-  Run one with compare --condition '{"name":"No AGENTS.md","environment":ID}', or beside a
-  saved condition with --saved-condition ID:ENVIRONMENT_ID.
+  Run one with compare --environment ID.
 
-Conditions (the workspace's saved harness changes, which any comparison can run)
-  self-bench conditions                              each one and what it changes
-  self-bench condition create --name N [--skill ORG/REPO[@REF] ...]
-      [--instructions TEXT | --instructions-file FILE]
-      [--harness-option HARNESS.OPTION=VALUE|@FILE ...]
-      [--subagent-model ID [--subagent-prompt TEXT | --subagent-prompt-file FILE]]
-      | --condition JSON|@FILE
-      --subagent-model runs Claude Code's and Codex's subagents on another catalog model;
-      --subagent-prompt is what the harness is told about delegating ("" for nothing).
-  self-bench condition update ID (the same flags)    replaces it; past runs keep what they ran
-  self-bench condition show|delete ID
+Harnesses (the workspace's saved changes to an agent, which any comparison can run)
+  self-bench harnesses                               each one and what it changes
+  self-bench harness create --name N [--agent claude-code|codex|pi|...]
+      [--skill ORG/REPO[@REF] ...] [--instructions TEXT | --instructions-file FILE]
+      [--option AGENT.OPTION=VALUE|@FILE ...]
+      [--subagent-model ID [--subagent-prompt TEXT | --subagent-prompt-file FILE]
+        [--subagent-credential ID]]
+      | --body JSON|@FILE
+      --subagent-model runs Claude Code's and Codex's subagents on another catalog model, on
+      --subagent-credential (the first credential that serves it, without one);
+      --subagent-prompt is what the agent is told about delegating ("" for nothing).
+      --option claude-code.append_system_prompt="Run tests first."
+      --option claude-code.config=@settings.json
+  self-bench harness update ID (the same flags)      replaces it; past runs keep what they ran
+  self-bench harness show|delete ID
 
 Evaluate
   self-bench catalog --repo R                        models evaluations can use
-  self-bench catalog --repo R --harness H            options a condition can set on harness H
+  self-bench catalog --repo R --harness H            options a saved harness can set on agent H
   self-bench compare --repo R --model ID [--model ID ...] [--harness pi|codex|claude-code|...]
       [--thinking LEVEL] [--credential ID] [--sandbox managed|e2b|modal|daytona]
       [--sandbox-credential ID] [--task RUN_ID/TASK_ID ...] [--skip-completed]
-      [--judge-credential ID] [--saved-condition ID[:ENVIRONMENT_ID] ...]
-      [--subagent-credential ID] [--condition JSON|@FILE ...] [--no-baseline]
-      [--harness-option HARNESS.OPTION=VALUE|@FILE ... [--options-name NAME]]
+      [--judge-credential ID] [--saved-harness ID ...] [--environment ID ...] [--no-baseline]
       | --selection JSON|@FILE
-      --saved-condition runs every task again under a saved condition, in a repository
-      environment when it names one; --subagent-credential serves its subagent model (the
-      first credential that can, without it). --condition writes one out:
-      '{"name":"With Skills","skills":["org/repo"],"instructions":"..."}'
-      '{"name":"30 Turns","harnessOptions":{"claude-code":{"max_turns":30}}}'
-      '{"name":"Flash Subagents","subagent":{"catalogId":"ID","prompt":"Delegate the tests."}}'
-      --harness-option adds one condition: claude-code.append_system_prompt="Run tests first."
-      claude-code.config=@settings.json. Options run only on the harnesses they name.
+      --saved-harness and --environment run every task again with each saved harness, in each
+      environment, and with each harness in each environment. --no-baseline leaves out the
+      tasks as they are.
   self-bench comparisons --repo R | comparison show|resume|cancel ID --repo R
   self-bench runs --repo R | run show|cancel|delete EVALUATION_ID --repo R
 

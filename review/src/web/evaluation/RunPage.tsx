@@ -16,7 +16,6 @@ import {
   UnsavedComparisonError,
 } from "./comparison-submission";
 import { ResourceWarnings } from "./ResourceWarnings";
-import { RunConditionsPanel, useConditionChoices } from "./RunConditionsPanel";
 import {
   RunBlockerNotice,
   type RunDraft,
@@ -24,13 +23,14 @@ import {
   RunSetupCallout,
   runBlocker,
 } from "./RunExecution";
+import { RunHarnessesPanel, useHarnessChoices } from "./RunHarnessesPanel";
 import { judgeCredentials, RunJudgePanel } from "./RunJudgePanel";
 import { RunMissing } from "./RunMissing";
 import { RunModelsPanel } from "./RunModelsPanel";
 import { RunSubmitted } from "./RunSubmitted";
 import { RunTaskPicker } from "./RunTaskPicker";
-import { conditionsProblem, submittedConditions } from "./run-conditions";
 import { restoreRunDraft } from "./run-draft";
+import { harnessesProblem } from "./run-harnesses";
 import { runCredentials, selectionReady } from "./run-readiness";
 import { type EvaluationScope, useEvaluationScope } from "./useEvaluationScope";
 
@@ -144,13 +144,13 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
   const judgeReady =
     !judge?.variables.length ||
     judgeCredentials(credentials ?? []).some((entry) => entry.id === draft.judgeCredentialId);
-  const choices = useConditionChoices(org.login, scope.repo, models, availableCredentials);
-  const conditions = conditionsProblem(draft, choices);
+  const choices = useHarnessChoices(org.login, scope.repo, models, availableCredentials);
+  const picks = harnessesProblem(draft, choices);
   const ready =
     tasksReady &&
     draft.tasks.length > 0 &&
     judgeReady &&
-    !conditions &&
+    !picks &&
     selectionReady({
       draft,
       models,
@@ -162,8 +162,8 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
   const blocker =
     !judgeReady && tasksReady && !state.submitted
       ? "Select a judge credential to continue."
-      : conditions && !state.submitted
-        ? conditions
+      : picks && !state.submitted
+        ? picks
         : runBlocker({ draft, ready, submitted: state.submitted, tasksReady, pairs });
   const finish = (result: ComparisonReceipt) => {
     if (result.submissionError) return setError(result.submissionError);
@@ -181,7 +181,6 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
           ...draft,
           models: selected,
           skipCompleted: missingOnly,
-          ...submittedConditions(draft, choices),
         };
     const pending = { draft: frozen, submitted: true };
     setState(pending);
@@ -255,7 +254,7 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
         }
         disabled={busy || state.submitted}
       />
-      <RunConditionsPanel
+      <RunHarnessesPanel
         draft={draft}
         choices={choices}
         disabled={busy || state.submitted}

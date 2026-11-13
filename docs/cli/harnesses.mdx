@@ -1,0 +1,38 @@
+---
+title: "CLI: Harnesses"
+sidebarTitle: "Harnesses"
+description: "Save a change to an agent once, then run any tasks with and without it."
+icon: "sliders"
+---
+
+A saved harness is a workspace's named change to one agent: its skills, instructions, options, and subagent model. Run it with `compare --saved-harness ID` ([Evaluate](/cli/evaluate)). Harnesses belong to the workspace (`--org`), not a repository.
+
+| Command | Does |
+| --- | --- |
+| `harnesses` | Each saved harness and what it changes |
+| `harness create --name N [flags]` | Save one |
+| `harness update ID --name N [flags]` | Replace one. Runs that used it keep what they ran. |
+| `harness show\|delete ID` | One harness; delete it |
+
+## Flags
+
+| Flag | Does |
+| --- | --- |
+| `--agent AGENT` | The agent it changes: `claude-code`, `codex`, `pi`, … Its skills, options, and subagent model are for that agent alone. |
+| `--skill ORG/REPO[@REF]` (repeatable) | A GitHub repository whose `skills/` folder Harbor installs |
+| `--instructions TEXT` · `--instructions-file F` | Appended to every task's instruction |
+| `--option AGENT.OPTION=VALUE` (repeatable) | An option on the agent; `VALUE` is JSON when it parses, text otherwise, or `@FILE`, as in `claude-code.config=@settings.json` |
+| `--subagent-model ID` | The model Claude Code's and Codex's subagents run on |
+| `--subagent-prompt TEXT` · `--subagent-prompt-file F` | What the agent is told about delegating. Default: delegate a meaningful part of each task. `""` tells it nothing. |
+| `--subagent-credential ID` | The credential that serves the subagent model. Default: the first that can. |
+| `--body JSON\|@FILE` | A full [harness body](/api/harnesses#request-body) in place of the flags |
+
+`catalog R --harness AGENT` lists the options an agent takes. The older `conditions` and `condition` commands still work.
+
+```bash
+self-bench harness create --name "Haiku Subagents" --agent claude-code \
+  --subagent-model claude-haiku-5-5 --subagent-credential CREDENTIAL_ID \
+  --subagent-prompt "Hand the test run to a subagent and check its report."
+self-bench compare --repo acme/app --model claude-opus-5-5 --harness claude-code \
+  --saved-harness 3
+```

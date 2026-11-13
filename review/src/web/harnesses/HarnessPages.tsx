@@ -4,16 +4,16 @@ import { cn } from "../primitives/cn";
 import { InfoTooltip } from "../primitives/tooltip";
 import { Button, controlStyles, fieldStyles, Input, Select } from "../ui";
 import {
-  type ConditionDraft,
+  type HarnessDraft,
   instructionsWhere,
   systemOptionSet,
   systemPromptOption,
-} from "./condition-draft";
+} from "./harness-draft";
 
 export type Page = 1 | 2 | 3;
-const PAGES = ["Harness", "Options", "Skills and Instructions"] as const;
+const PAGES = ["Agent", "Options", "Skills and Instructions"] as const;
 
-/** The condition editor's pages, each a step that can be opened directly. */
+/** The harness editor's pages, each a step that can be opened directly. */
 export function PageSteps({
   page,
   disabled,
@@ -25,7 +25,7 @@ export function PageSteps({
 }) {
   return (
     <ol
-      aria-label="Condition Steps"
+      aria-label="Harness Steps"
       className="flex gap-6 border-b border-border pb-4 text-sm font-medium"
     >
       {PAGES.map((label, index) => (
@@ -47,7 +47,7 @@ export function PageSteps({
   );
 }
 
-/** A condition's skill sources, one row each. */
+/** A harness's skill sources, one row each. */
 export function SkillFields({
   skills,
   disabled,
@@ -103,33 +103,33 @@ export function SkillFields({
 }
 
 /**
- * A condition's instructions, and where they go: the end of each task's prompt, which every
- * harness reads, or the harness's system prompt, where it has one (Claude Code's append_system_prompt).
+ * A harness's instructions, and where they go: the end of each task's prompt, which every agent
+ * reads, or the agent's system prompt, where it has one (Claude Code's append_system_prompt).
  */
 export function InstructionsField({
   draft,
   disabled,
   onChange,
 }: {
-  draft: ConditionDraft;
+  draft: HarnessDraft;
   disabled: boolean;
-  onChange: (patch: Partial<ConditionDraft>) => void;
+  onChange: (patch: Partial<HarnessDraft>) => void;
 }) {
-  const system = !!systemPromptOption(draft.harness);
+  const system = !!systemPromptOption(draft.agent);
   return (
     <div className={fieldStyles}>
       <div className="flex items-center gap-3">
-        <label htmlFor="condition-instructions" className="flex flex-1 items-center gap-1.5">
+        <label htmlFor="harness-instructions" className="flex flex-1 items-center gap-1.5">
           Instructions
           <InfoTooltip
             label={
               system
-                ? "Task Prompt adds them to the end of every task's instruction. System Prompt appends them to the harness's system prompt instead."
-                : "Added to the end of every task's instruction under this condition."
+                ? "Task Prompt adds them to the end of every task's instruction. System Prompt appends them to the agent's system prompt instead."
+                : "Added to the end of every task's instruction under this harness."
             }
           />
         </label>
-        {system && draft.harness && (
+        {system && draft.agent && (
           <span className="w-44 shrink-0">
             <Select
               aria-label="Instructions Go In"
@@ -148,7 +148,7 @@ export function InstructionsField({
         )}
       </div>
       <textarea
-        id="condition-instructions"
+        id="harness-instructions"
         aria-label="Instructions"
         rows={3}
         maxLength={4000}

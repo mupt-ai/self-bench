@@ -2,8 +2,12 @@ import { expect, test } from "bun:test";
 import { Window } from "happy-dom";
 import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { renderToStaticMarkup } from "react-dom/server";
 import type { HarnessOptionValue } from "../../../../src/contracts/harness-options";
+import type { CredentialInfo } from "../../../../src/db/credentials";
 import { HarnessOptionFields } from "./HarnessOptionFields";
+import { subagentOn } from "./harness-draft";
+import { SubagentFields, staleSubagentCredential, subagentCredentials } from "./SubagentFields";
 
 test("every option a harness takes is a field, left at Harbor's default until set", async () => {
   const browser = new Window({ url: "https://selfbench.test" });
@@ -29,7 +33,7 @@ test("every option a harness takes is a field, left at Harbor's default until se
       <HarnessOptionFields
         harness="codex"
         options={options}
-        idPrefix="condition-codex"
+        idPrefix="harness-codex"
         disabled={false}
         onSet={(name, value) => {
           const { [name]: _, ...rest } = options;
@@ -66,7 +70,7 @@ test("every option a harness takes is a field, left at Harbor's default until se
         <HarnessOptionFields
           harness="claude-code"
           options={{}}
-          idPrefix="condition-claude-code"
+          idPrefix="harness-claude-code"
           disabled={false}
           onSet={() => undefined}
         />,
@@ -91,4 +95,46 @@ test("every option a harness takes is a field, left at Harbor's default until se
     }
     await browser.happyDOM.close();
   }
+});
+
+test("a harness's subagent credential is one that serves its model to its agent, flagged once it can't", () => {
+  const key = (id: string, kind: CredentialInfo["kind"]): CredentialInfo => ({
+    id,
+    name: id,
+    kind,
+    auth: "api-key",
+    createdAt: "",
+  });
+  const credentials = [
+    key("anthropic", "anthropic"),
+    key("router", "openrouter"),
+    key("e2b", "e2b"),
+  ];
+  // An Anthropic key serves Haiku to Claude Code alone; a gateway key serves it to Codex too.
+  const ids = (agent: "claude-code" | "codex") =>
+    subagentCredentials("claude-haiku-5-5", agent, credentials).map((credential) => credential.id);
+  expect(ids("claude-code")).toEqual(["anthropic", "router"]);
+  expect(ids("codex")).toEqual(["router"]);
+  const on = (agent: "claude-code" | "codex", credentialId?: string) => ({
+    agent,
+    subagent: subagentOn("claude-haiku-5-5", "", credentialId),
+  });
+  expect(staleSubagentCredential(on("claude-code", "anthropic"), credentials)).toBe(false);
+  expect(staleSubagentCredential(on("codex", "anthropic"), credentials)).toBe(true);
+  expect(staleSubagentCredential(on("codex", "deleted"), credentials)).toBe(true);
+  // None named runs on the first that serves it, and nothing is flagged before credentials load.
+  expect(staleSubagentCredential(on("codex"), credentials)).toBe(false);
+  expect(staleSubagentCredential(on("codex", "anthropic"), undefined)).toBe(false);
+  const html = renderToStaticMarkup(
+    <SubagentFields
+      agent="codex"
+      models={[{ id: "claude-haiku-5-5", label: "Claude Haiku 5.5" }]}
+      credentials={credentials}
+      value={subagentOn("claude-haiku-5-5", "", "anthropic")}
+      disabled={false}
+      onChange={() => undefined}
+    />,
+  );
+  expect(html).toContain('aria-label="Subagent Credential"');
+  expect(html).toContain("no longer serves this model");
 });

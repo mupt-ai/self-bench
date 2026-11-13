@@ -92,7 +92,7 @@ export function EnvironmentDialog({
               <label htmlFor="environment-name" className={fieldStyles}>
                 <span className="flex items-center gap-1.5">
                   Name
-                  <InfoTooltip label="What this repo ablation changes, as conditions and results will name it." />
+                  <InfoTooltip label="What this repo ablation changes, as the Run page and results will name it." />
                 </span>
                 <Input
                   id="environment-name"

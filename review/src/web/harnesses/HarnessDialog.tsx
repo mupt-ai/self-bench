@@ -4,53 +4,61 @@ import {
   type HarnessOptionValue,
   harnessOptionsFor,
 } from "../../../../src/contracts/harness-options";
+import type { CredentialInfo } from "../../../../src/db/credentials";
 import { type Harness, harnessIds, harnessLabels } from "../../../../src/evaluation/models";
 import { subagentSupport } from "../../../../src/evaluation/subagents";
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
 import { InfoTooltip } from "../primitives/tooltip";
 import { Button, fieldStyles, Input, Notice, Select } from "../ui";
-import { InstructionsField, type Page, PageSteps, SkillFields } from "./ConditionPages";
-import { type SavedCondition, saveCondition } from "./condition-api";
-import {
-  blankCondition,
-  type ConditionDraft,
-  conditionProblem,
-  draftOf,
-  submittedCondition,
-  withHarness,
-} from "./condition-draft";
 import { HarnessOptionFields } from "./HarnessOptionFields";
-import { SubagentFields } from "./SubagentFields";
+import { InstructionsField, type Page, PageSteps, SkillFields } from "./HarnessPages";
+import { type SavedHarness, saveHarness } from "./harness-api";
+import {
+  blankHarness,
+  draftOf,
+  type HarnessDraft,
+  harnessProblem,
+  submittedHarness,
+  withAgent,
+} from "./harness-draft";
+import { SubagentFields, staleSubagentCredential } from "./SubagentFields";
 
 /**
- * A saved condition's editor: its name and the harness changes it makes, which every run that
- * picks it applies to every task. Nothing here names a repository, an environment, or a
- * credential: those are the run's.
+ * A saved harness's editor: its name and the changes it makes to one agent, which every run that
+ * picks it applies to every task, with the credential its subagent model runs on. Nothing here
+ * names a repository or an environment: those are the run's.
  */
-export function ConditionDialog({
+export function HarnessDialog({
   org,
-  condition,
+  harness: editing,
   subagentModels,
+  credentials,
   onClose,
   onSaved,
 }: {
   org: string;
-  /** The condition to edit; none for a new one. */
-  condition?: SavedCondition;
+  /** The harness to edit; none for a new one. */
+  harness?: SavedHarness;
   subagentModels: { id: string; label: string }[];
+  /** The workspace's credentials; undefined until they load. */
+  credentials: readonly CredentialInfo[] | undefined;
   onClose: () => void;
-  onSaved: (saved: SavedCondition) => void;
+  onSaved: (saved: SavedHarness) => void;
 }) {
-  const [draft, setDraft] = React.useState<ConditionDraft>(() =>
-    condition ? draftOf(condition) : blankCondition(),
+  const [draft, setDraft] = React.useState<HarnessDraft>(() =>
+    editing ? draftOf(editing) : blankHarness(),
   );
   const [busy, setBusy] = React.useState(false);
   const [page, setPage] = React.useState<Page>(1);
   const [error, setError] = React.useState<string | null>(null);
   const closeButton = React.useRef<HTMLButtonElement>(null);
-  const problem = conditionProblem(draft);
-  const update = (patch: Partial<ConditionDraft>) => setDraft({ ...draft, ...patch });
-  const harness = draft.harness;
+  const problem =
+    harnessProblem(draft) ??
+    (staleSubagentCredential(draft, credentials)
+      ? "Choose a credential that serves the subagent model."
+      : undefined);
+  const update = (patch: Partial<HarnessDraft>) => setDraft({ ...draft, ...patch });
+  const harness = draft.agent;
   const skillsOn = !!harness && SKILL_HARNESSES.includes(harness);
   const subagentOn = !!harness && subagentSupport[harness].configurable;
   const optionsOn = !!harness && harnessOptionsFor(harness).length > 0;
@@ -68,7 +76,7 @@ export function ConditionDialog({
     setBusy(true);
     setError(null);
     try {
-      onSaved(await saveCondition(org, submittedCondition(draft), condition?.id));
+      onSaved(await saveHarness(org, submittedHarness(draft), editing?.id));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
       setBusy(false);
@@ -81,13 +89,13 @@ export function ConditionDialog({
       onDismiss={onClose}
       busy={busy}
       size="large"
-      aria-labelledby="condition-title"
+      aria-labelledby="harness-title"
     >
-      <section className="flex min-w-0 flex-col" aria-labelledby="condition-title">
+      <section className="flex min-w-0 flex-col" aria-labelledby="harness-title">
         <DialogHeader
-          title={condition ? "Edit Condition" : "New Condition"}
-          titleId="condition-title"
-          description="Harness changes a run applies to every task, beside the baseline."
+          title={editing ? "Edit Harness" : "New Harness"}
+          titleId="harness-title"
+          description="Changes to an agent that a run applies to every task, beside the baseline."
           onClose={onClose}
           closeRef={closeButton}
           busy={busy}
@@ -96,13 +104,13 @@ export function ConditionDialog({
           <PageSteps page={page} disabled={busy} onPick={setPage} />
           {page === 1 && (
             <>
-              <label htmlFor="condition-name" className={fieldStyles}>
+              <label htmlFor="harness-name" className={fieldStyles}>
                 <span className="flex items-center gap-1.5">
                   Name
-                  <InfoTooltip label="What this condition changes, as the Run page and results will name it." />
+                  <InfoTooltip label="What this harness changes, as the Run page and results will name it." />
                 </span>
                 <Input
-                  id="condition-name"
+                  id="harness-name"
                   aria-label="Name"
                   autoComplete="off"
                   data-1p-ignore
@@ -113,23 +121,23 @@ export function ConditionDialog({
                   onChange={(event) => update({ name: event.target.value })}
                 />
               </label>
-              <label htmlFor="condition-harness" className={fieldStyles}>
+              <label htmlFor="harness-agent" className={fieldStyles}>
                 <span className="flex items-center gap-1.5">
-                  Harness
-                  <InfoTooltip label="The harness this condition changes. Its skills, options, and subagent model are for it alone, so a run with other harnesses leaves them out." />
+                  Agent
+                  <InfoTooltip label="The agent this harness changes. Its skills, options, and subagent model are for it alone, so a run with other agents leaves them out." />
                 </span>
                 <Select
-                  id="condition-harness"
-                  aria-label="Harness"
+                  id="harness-agent"
+                  aria-label="Agent"
                   value={harness ?? ""}
                   disabled={busy}
                   onChange={(event) => {
                     const next = harnessIds.find((entry) => entry === event.target.value);
-                    if (next) setDraft(withHarness(draft, next));
-                    else update({ harness: undefined });
+                    if (next) setDraft(withAgent(draft, next));
+                    else update({ agent: undefined });
                   }}
                 >
-                  <option value="">Choose a Harness</option>
+                  <option value="">Choose an Agent</option>
                   {harnessIds.map((entry: Harness) => (
                     <option key={entry} value={entry}>
                       {harnessLabels[entry]}
@@ -144,7 +152,7 @@ export function ConditionDialog({
               <HarnessOptionFields
                 harness={harness}
                 options={draft.harnessOptions[harness] ?? {}}
-                idPrefix={`condition-${harness}`}
+                idPrefix={`harness-${harness}`}
                 disabled={busy}
                 onSet={setOption}
               />
@@ -152,7 +160,7 @@ export function ConditionDialog({
               <p className="text-sm text-muted-foreground">
                 {harness
                   ? `${harnessLabels[harness]} has no options to set.`
-                  : "Pick a harness to set its options."}
+                  : "Pick an agent to set its options."}
               </p>
             ))}
           {page === 3 && (
@@ -169,9 +177,11 @@ export function ConditionDialog({
                 disabled={busy}
                 onChange={(patch) => update(patch)}
               />
-              {subagentOn && (
+              {subagentOn && harness && (
                 <SubagentFields
+                  agent={harness}
                   models={subagentModels}
+                  credentials={credentials}
                   value={draft.subagent}
                   disabled={busy}
                   onChange={(subagent) => {
@@ -213,7 +223,7 @@ export function ConditionDialog({
               </Button>
             ) : (
               <Button variant="primary" disabled={busy || !!problem} onClick={() => void submit()}>
-                {busy ? "Saving…" : condition ? "Save Changes" : "Save Condition"}
+                {busy ? "Saving…" : editing ? "Save Changes" : "Save Harness"}
               </Button>
             )}
           </span>

@@ -11,7 +11,7 @@ import type { Harness } from "../../../../src/evaluation/models";
 import { cn } from "../primitives/cn";
 import { InfoTooltip } from "../primitives/tooltip";
 import { controlStyles, fieldStyles, Input, Select } from "../ui";
-import { isSystemPromptOption, optionText } from "./condition-draft";
+import { isSystemPromptOption, optionText } from "./harness-draft";
 
 /** What each harness's native config is, where Harbor's description says only "config". */
 const NATIVE_CONFIG: Partial<Record<Harness, string>> = {

@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { savedConditionSchema } from "../../contracts/conditions.js";
-import { ConditionNameTaken } from "../../db/saved-conditions.js";
+import { savedHarnessSchema } from "../../contracts/saved-harnesses.js";
+import { HarnessNameTaken } from "../../db/saved-harnesses.js";
 import type { User } from "../../db/users.js";
 import { evaluationCatalog } from "../../evaluation/catalog.js";
 import { modelHarnesses } from "../../evaluation/models.js";
@@ -9,10 +9,11 @@ import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
 import type { EvaluationRoutesOptions } from "./evaluations.js";
 
-const route = /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/conditions(?:\/(\d{1,15}|models))?$/;
+// `conditions` is what they were called before they were harnesses, kept for older clients.
+const route = /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/(harnesses|conditions)(?:\/(\d{1,15}|models))?$/;
 
 /**
- * The catalog models a condition's subagents can run on: those some credential serves by name to
+ * The catalog models a saved harness's subagents can run on: those some credential serves by name to
  * a harness that takes a subagent model, which Dari's router and custom endpoints do not.
  */
 function subagentModels(): { id: string; label: string }[] {
@@ -26,17 +27,19 @@ function subagentModels(): { id: string; label: string }[] {
 }
 
 /**
- * A workspace's saved conditions (condition-schema.ts): named harness changes any member saves,
- * and any comparison in the workspace picks by id (`conditions: [{ saved }]`).
+ * A workspace's saved harnesses (saved-harness-schema.ts): named agent changes any member saves,
+ * and any comparison in the workspace picks by id (`harnesses: [id]`).
  *
- * - `GET conditions`: every saved condition, by name.
- * - `POST conditions {name, skills?, instructions?, harnessOptions?, subagent?}`: saves one.
- * - `GET conditions/{id}`: one.
- * - `PUT conditions/{id} {…}`: replaces one. Runs that already used it keep what they ran.
- * - `DELETE conditions/{id}`: removes one.
- * - `GET conditions/models`: the models a condition's subagents can run on.
+ * - `GET harnesses`: every saved harness, by name.
+ * - `POST harnesses {name, agent?, skills?, instructions?, harnessOptions?, subagent?}`: saves one.
+ * - `GET harnesses/{id}`: one.
+ * - `PUT harnesses/{id} {…}`: replaces one. Runs that already used it keep what they ran.
+ * - `DELETE harnesses/{id}`: removes one.
+ * - `GET harnesses/models`: the models a harness's subagents can run on.
+ *
+ * Under the older `conditions` path, replies name them `conditions` and `condition`.
  */
-export async function conditionRoutes(
+export async function savedHarnessRoutes(
   options: Pick<EvaluationRoutesOptions, "users" | "vault" | "publicUrl">,
   request: IncomingMessage,
   url: URL,
@@ -47,8 +50,10 @@ export async function conditionRoutes(
   if (!match) return false;
   response.setHeader("cache-control", "no-store");
   const method = request.method ?? "GET";
-  const listing = match[2] === "models";
-  const id = match[2] && !listing ? Number(match[2]) : undefined;
+  const [one, many] =
+    match[2] === "conditions" ? ["condition", "conditions"] : ["harness", "harnesses"];
+  const listing = match[3] === "models";
+  const id = match[3] && !listing ? Number(match[3]) : undefined;
   const allowed = listing ? ["GET"] : id === undefined ? ["GET", "POST"] : ["GET", "PUT", "DELETE"];
   if (!allowed.includes(method)) {
     sendJson(response, 405, { error: "Method not allowed" });
@@ -67,17 +72,17 @@ export async function conditionRoutes(
     sendJson(response, 200, { models: subagentModels() });
     return true;
   }
-  const store = options.vault?.conditions;
+  const store = options.vault?.harnesses;
   if (!store) {
-    sendJson(response, 503, { error: "Saved conditions are unavailable" });
+    sendJson(response, 503, { error: "Saved harnesses are unavailable" });
     return true;
   }
-  const missing = () => sendJson(response, 404, { error: "condition not found" });
+  const missing = () => sendJson(response, 404, { error: "harness not found" });
   if (method === "GET") {
-    if (id === undefined) sendJson(response, 200, { conditions: await store.list(org.id) });
+    if (id === undefined) sendJson(response, 200, { [many]: await store.list(org.id) });
     else {
-      const condition = await store.find(org.id, id);
-      if (condition) sendJson(response, 200, { condition });
+      const harness = await store.find(org.id, id);
+      if (harness) sendJson(response, 200, { [one]: harness });
       else missing();
     }
     return true;
@@ -91,16 +96,14 @@ export async function conditionRoutes(
   try {
     body = JSON.parse((await readBody(request, 100_000)).toString("utf8"));
   } catch {
-    sendJson(response, 400, { error: "Send the condition as JSON." });
+    sendJson(response, 400, { error: "Send the harness as JSON." });
     return true;
   }
-  const parsed = savedConditionSchema.safeParse(body);
+  const parsed = savedHarnessSchema.safeParse(body);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
     sendJson(response, 400, {
-      error: issue
-        ? `${issue.path.join(".") || "condition"}: ${issue.message}`
-        : "Invalid condition",
+      error: issue ? `${issue.path.join(".") || "harness"}: ${issue.message}` : "Invalid harness",
     });
     return true;
   }
@@ -111,15 +114,26 @@ export async function conditionRoutes(
     });
     return true;
   }
+  const credentialId = subagent?.credentialId;
+  if (
+    credentialId &&
+    credentialId !== "managed-model" &&
+    !(await options.vault?.credentials.find(org.id, credentialId))
+  ) {
+    sendJson(response, 400, {
+      error: "subagent.credentialId: no such credential in this workspace",
+    });
+    return true;
+  }
   try {
-    const condition =
+    const harness =
       id === undefined
         ? await store.create(org.id, parsed.data, user.id)
         : await store.update(org.id, id, parsed.data);
-    if (condition) sendJson(response, id === undefined ? 201 : 200, { condition });
+    if (harness) sendJson(response, id === undefined ? 201 : 200, { [one]: harness });
     else missing();
   } catch (error) {
-    if (!(error instanceof ConditionNameTaken)) throw error;
+    if (!(error instanceof HarnessNameTaken)) throw error;
     sendJson(response, 409, { error: error.message });
   }
   return true;

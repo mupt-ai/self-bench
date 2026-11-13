@@ -10,7 +10,7 @@ icon: "play"
 | Command | Does |
 | --- | --- |
 | `catalog R` | Models available for evaluations |
-| `catalog R --harness H` | Options a condition can set on harness `H` |
+| `catalog R --harness H` | Options a [saved harness](/cli/harnesses) can set on agent `H` |
 | `compare R --model ID [--model ID ...]` | Run each model on every approved task |
 | `comparisons R` · `comparison show\|resume\|cancel ID R` | Follow, resume, or stop comparisons |
 | `runs R` · `run show\|cancel\|delete EVALUATION_ID R` | One model's evaluation, with every trial |
@@ -26,13 +26,11 @@ icon: "play"
 | `--task RUN_ID/TASK_ID` (repeatable) | every approved task |
 | `--skip-completed` | rerun everything |
 | `--judge-credential ID` | required for tasks graded by an LLM judge |
-| `--saved-condition ID[:ENVIRONMENT_ID]` (repeatable): a [saved condition](/cli/conditions), in a repository [environment](/cli/environments) when it names one | none: only the tasks as they are |
-| `--subagent-credential ID`: the credential that serves the saved conditions' subagent models | the first that can |
-| `--condition JSON\|@FILE` (repeatable): a condition written out, `{"name": "…", "environment": ID, "skills": ["org/repo"], "instructions": "…", "harnessOptions": {"claude-code": {"max_turns": 30}}, "subagent": {"catalogId": "…", "prompt": "…"}}`, or `{"environment": ID}` for an environment alone | none |
-| `--harness-option HARNESS.OPTION=VALUE` (repeatable), with `--options-name NAME`: one more condition setting these options. `VALUE` is JSON when it parses, text otherwise, or `@FILE`, as in `claude-code.config=@settings.json` | none |
+| `--saved-harness ID` (repeatable): a [saved harness](/cli/harnesses) | none |
+| `--environment ID` (repeatable): a repository [environment](/cli/environments) | none |
 | `--no-baseline` | the tasks as they are run too |
 | `--selection JSON\|@FILE` | a full [comparison body](/api/evaluate#request-body) in place of the flags |
 
-A condition runs every task again with its skills, extra instructions, harness options, or subagent model, in an [environment](/cli/environments) when it names one; see [Conditions](/concepts/how-it-works#conditions).
+Every task runs again with each saved harness, in each environment, and with each harness in each environment (at most 12), beside the tasks as they are; see [Harnesses and Environments](/api/evaluate#harnesses-and-environments). The older `--saved-condition`, `--condition`, and `--harness-option` flags still work.
 
-A condition with a subagent model runs each model as the orchestrator and the subagent model for delegated work; see [Subagent Models](/api/evaluate#subagent-models).
+A harness with a subagent model runs each model as the orchestrator and the subagent model for delegated work, on the credential the harness names; see [Subagent Models](/api/evaluate#subagent-models).

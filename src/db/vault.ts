@@ -4,7 +4,7 @@ import type { Database } from "./client.js";
 import { type ComparisonStore, createComparisonStore } from "./comparisons.js";
 import { type CredentialStore, createCredentialStore } from "./credentials.js";
 import { createEncryptedRecords, type EncryptedRecordStore } from "./encrypted-records.js";
-import { createSavedConditionStore, type SavedConditionStore } from "./saved-conditions.js";
+import { createSavedHarnessStore, type SavedHarnessStore } from "./saved-harnesses.js";
 import type { repos } from "./schema.js";
 import { scopeTables } from "./scope-tables.js";
 
@@ -13,8 +13,8 @@ export interface Vault {
   readonly records: EncryptedRecordStore;
   readonly credentials: CredentialStore;
   readonly comparisons: ComparisonStore;
-  /** The workspace's saved conditions, which a comparison picks by id; unsealed, like comparisons. */
-  readonly conditions?: SavedConditionStore;
+  /** The workspace's saved harnesses, which a comparison picks by id; unsealed, like comparisons. */
+  readonly harnesses?: SavedHarnessStore;
   /**
    * Current repository or benchmark ownership, checked before a queued BYOK explanation decrypts
    * a key.
@@ -27,7 +27,7 @@ export function createVault(db: Database, key: string): Vault {
     records: createEncryptedRecords(db, key),
     credentials: createCredentialStore(db, key),
     comparisons: createComparisonStore(db),
-    conditions: createSavedConditionStore(db),
+    harnesses: createSavedHarnessStore(db),
     async scopeOrg(scope) {
       const { owner: table, id } = scopeTables(scope);
       // Each owning table has an id and the org it belongs to.
