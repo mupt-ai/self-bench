@@ -60,7 +60,7 @@ export function ToolPicker({
   const write = (names: string[]) => onChange(names.join(","));
   return (
     <div className="grid gap-2">
-      <div role="group" aria-label={label} className="flex flex-wrap gap-1.5">
+      <fieldset aria-label={label} className="flex flex-wrap gap-1.5 border-0 p-0">
         {known.map((tool) => {
           const on = picked.includes(tool);
           return (
@@ -80,7 +80,7 @@ export function ToolPicker({
             </button>
           );
         })}
-      </div>
+      </fieldset>
       <Input
         id={id}
         aria-label={`Other ${label}`}

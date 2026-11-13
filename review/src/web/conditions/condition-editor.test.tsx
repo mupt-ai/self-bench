@@ -223,9 +223,7 @@ test("every option a harness takes is a field, left at Harbor's default until se
       ),
     );
     expect(browser.document.querySelector('[aria-label="Append System Prompt"]')).toBeNull();
-    expect(
-      browser.document.querySelector('[role="group"][aria-label="Allowed Tools"]'),
-    ).not.toBeNull();
+    expect(browser.document.querySelector('fieldset[aria-label="Allowed Tools"]')).not.toBeNull();
     await act(async () => root.render(<Fields />));
     // Back to Harbor's default, the option is no longer set at all.
     await pick("Disable Web Search", "");
