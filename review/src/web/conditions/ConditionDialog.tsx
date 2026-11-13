@@ -50,6 +50,7 @@ export function ConditionDialog({
     condition ? draftOf(condition) : blankCondition(),
   );
   const [busy, setBusy] = React.useState(false);
+  const [page, setPage] = React.useState<Page>(1);
   const [error, setError] = React.useState<string | null>(null);
   const closeButton = React.useRef<HTMLButtonElement>(null);
   const problem = conditionProblem(draft);
@@ -97,134 +98,152 @@ export function ConditionDialog({
           busy={busy}
         />
         <DialogBody className="grid gap-6 space-y-0">
-          <label htmlFor="condition-name" className={fieldStyles}>
-            <span className="flex items-center gap-1.5">
-              Name
-              <InfoTooltip label="What this condition changes, as the Run page and results will name it." />
-            </span>
-            <Input
-              id="condition-name"
-              aria-label="Name"
-              autoComplete="off"
-              data-1p-ignore
-              maxLength={60}
-              placeholder="With Next.js Skills"
-              value={draft.name}
-              disabled={busy}
-              onChange={(event) => update({ name: event.target.value })}
-            />
-          </label>
-          <label htmlFor="condition-harness" className={fieldStyles}>
-            <span className="flex items-center gap-1.5">
-              Harness
-              <InfoTooltip label="The harness this condition changes. Its skills, options, and subagent model are for it alone, so a run with other harnesses leaves them out." />
-            </span>
-            <Select
-              id="condition-harness"
-              aria-label="Harness"
-              value={harness ?? ""}
-              disabled={busy}
-              onChange={(event) => {
-                const next = harnessIds.find((entry) => entry === event.target.value);
-                if (next) setDraft(withHarness(draft, next));
-                else update({ harness: undefined });
-              }}
-            >
-              <option value="">Choose a Harness</option>
-              {harnessIds.map((entry: Harness) => (
-                <option key={entry} value={entry}>
-                  {harnessLabels[entry]}
-                </option>
-              ))}
-            </Select>
-          </label>
-          {skillsOn && (
-            <div className={fieldStyles}>
-              <span className="flex items-center gap-1.5">
-                Skills
-                <InfoTooltip label="A GitHub repository whose skills/ folder holds the skills, as org/repo, org/repo@ref, or a URL. Claude Code, Codex, and Pi load them." />
-              </span>
-              {draft.skills.map((skill, at) => (
-                <div
-                  // biome-ignore lint/suspicious/noArrayIndexKey: rows have no identity of their own.
-                  key={at}
-                  className="flex gap-2"
+          <PageSteps page={page} disabled={busy} onPick={setPage} />
+          {page === 1 && (
+            <>
+              <label htmlFor="condition-name" className={fieldStyles}>
+                <span className="flex items-center gap-1.5">
+                  Name
+                  <InfoTooltip label="What this condition changes, as the Run page and results will name it." />
+                </span>
+                <Input
+                  id="condition-name"
+                  aria-label="Name"
+                  autoComplete="off"
+                  data-1p-ignore
+                  maxLength={60}
+                  placeholder="With Next.js Skills"
+                  value={draft.name}
+                  disabled={busy}
+                  onChange={(event) => update({ name: event.target.value })}
+                />
+              </label>
+              <label htmlFor="condition-harness" className={fieldStyles}>
+                <span className="flex items-center gap-1.5">
+                  Harness
+                  <InfoTooltip label="The harness this condition changes. Its skills, options, and subagent model are for it alone, so a run with other harnesses leaves them out." />
+                </span>
+                <Select
+                  id="condition-harness"
+                  aria-label="Harness"
+                  value={harness ?? ""}
+                  disabled={busy}
+                  onChange={(event) => {
+                    const next = harnessIds.find((entry) => entry === event.target.value);
+                    if (next) setDraft(withHarness(draft, next));
+                    else update({ harness: undefined });
+                  }}
                 >
-                  <Input
-                    aria-label={`Skill ${at + 1}`}
-                    className="font-mono"
-                    maxLength={MAX_SKILL_LENGTH}
-                    placeholder="vercel/next.js@canary"
-                    value={skill}
-                    disabled={busy}
-                    onChange={(event) =>
-                      update({
-                        skills: draft.skills.map((value, row) =>
-                          row === at ? event.target.value : value,
-                        ),
-                      })
-                    }
-                  />
-                  <Button
-                    variant="ghost"
-                    aria-label={`Remove Skill ${at + 1}`}
-                    disabled={busy}
-                    onClick={() => update({ skills: draft.skills.filter((_, row) => row !== at) })}
-                  >
-                    <Trash2 aria-hidden="true" />
-                  </Button>
-                </div>
-              ))}
-              {draft.skills.length < MAX_SKILLS && (
-                <div>
-                  <Button
-                    size="small"
-                    disabled={busy}
-                    onClick={() => update({ skills: [...draft.skills, ""] })}
-                  >
-                    <Plus aria-hidden="true" />
-                    Add Skill
-                  </Button>
+                  <option value="">Choose a Harness</option>
+                  {harnessIds.map((entry: Harness) => (
+                    <option key={entry} value={entry}>
+                      {harnessLabels[entry]}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+            </>
+          )}
+          {page === 2 &&
+            (harness && optionsOn ? (
+              <HarnessOptionFields
+                harness={harness}
+                options={draft.harnessOptions[harness] ?? {}}
+                idPrefix={`condition-${harness}`}
+                disabled={busy}
+                onSet={setOption}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {harness
+                  ? `${harnessLabels[harness]} has no options to set.`
+                  : "Pick a harness to set its options."}
+              </p>
+            ))}
+          {page === 3 && (
+            <>
+              {skillsOn && (
+                <div className={fieldStyles}>
+                  <span className="flex items-center gap-1.5">
+                    Skills
+                    <InfoTooltip label="A GitHub repository whose skills/ folder holds the skills, as org/repo, org/repo@ref, or a URL. Claude Code, Codex, and Pi load them." />
+                  </span>
+                  {draft.skills.map((skill, at) => (
+                    <div
+                      // biome-ignore lint/suspicious/noArrayIndexKey: rows have no identity of their own.
+                      key={at}
+                      className="flex gap-2"
+                    >
+                      <Input
+                        aria-label={`Skill ${at + 1}`}
+                        className="font-mono"
+                        maxLength={MAX_SKILL_LENGTH}
+                        placeholder="vercel/next.js@canary"
+                        value={skill}
+                        disabled={busy}
+                        onChange={(event) =>
+                          update({
+                            skills: draft.skills.map((value, row) =>
+                              row === at ? event.target.value : value,
+                            ),
+                          })
+                        }
+                      />
+                      <Button
+                        variant="ghost"
+                        aria-label={`Remove Skill ${at + 1}`}
+                        disabled={busy}
+                        onClick={() =>
+                          update({ skills: draft.skills.filter((_, row) => row !== at) })
+                        }
+                      >
+                        <Trash2 aria-hidden="true" />
+                      </Button>
+                    </div>
+                  ))}
+                  {draft.skills.length < MAX_SKILLS && (
+                    <div>
+                      <Button
+                        size="small"
+                        disabled={busy}
+                        onClick={() => update({ skills: [...draft.skills, ""] })}
+                      >
+                        <Plus aria-hidden="true" />
+                        Add Skill
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
-          )}
-          <label htmlFor="condition-instructions" className={fieldStyles}>
-            <span className="flex items-center gap-1.5">
-              Extra Instructions
-              <InfoTooltip label="Appended to every task's instruction under this condition." />
-            </span>
-            <textarea
-              id="condition-instructions"
-              aria-label="Extra Instructions"
-              rows={3}
-              maxLength={4000}
-              className={cn(controlStyles, "h-auto resize-y py-2")}
-              placeholder="For example: read node_modules/next/dist/docs before changing caching."
-              value={draft.instructions}
-              disabled={busy}
-              onChange={(event) => update({ instructions: event.target.value })}
-            />
-          </label>
-          {subagentOn && (
-            <SubagentFields
-              models={subagentModels}
-              value={draft.subagent}
-              disabled={busy}
-              onChange={(subagent) => {
-                const { subagent: _, ...rest } = draft;
-                setDraft(subagent ? { ...rest, subagent } : rest);
-              }}
-            />
-          )}
-          {harness && optionsOn && (
-            <HarnessOptionFields
-              harness={harness}
-              options={draft.harnessOptions[harness] ?? {}}
-              idPrefix={`condition-${harness}`}
-              disabled={busy}
-              onSet={setOption}
-            />
+              <label htmlFor="condition-instructions" className={fieldStyles}>
+                <span className="flex items-center gap-1.5">
+                  Extra Instructions
+                  <InfoTooltip label="Appended to every task's instruction under this condition." />
+                </span>
+                <textarea
+                  id="condition-instructions"
+                  aria-label="Extra Instructions"
+                  rows={3}
+                  maxLength={4000}
+                  className={cn(controlStyles, "h-auto resize-y py-2")}
+                  placeholder="For example: read node_modules/next/dist/docs before changing caching."
+                  value={draft.instructions}
+                  disabled={busy}
+                  onChange={(event) => update({ instructions: event.target.value })}
+                />
+              </label>
+              {subagentOn && (
+                <SubagentFields
+                  models={subagentModels}
+                  value={draft.subagent}
+                  disabled={busy}
+                  onChange={(subagent) => {
+                    const { subagent: _, ...rest } = draft;
+                    setDraft(subagent ? { ...rest, subagent } : rest);
+                  }}
+                />
+              )}
+            </>
           )}
           {error && <Notice>{error}</Notice>}
         </DialogBody>
@@ -232,11 +251,65 @@ export function ConditionDialog({
           <span className="text-sm text-muted-foreground" role="status">
             {problem ?? ""}
           </span>
-          <Button variant="primary" disabled={busy || !!problem} onClick={() => void submit()}>
-            {busy ? "Saving…" : condition ? "Save Changes" : "Save Condition"}
-          </Button>
+          <span className="flex gap-2">
+            {page > 1 && (
+              <Button variant="ghost" disabled={busy} onClick={() => setPage((page - 1) as Page)}>
+                Back
+              </Button>
+            )}
+            {page < 3 ? (
+              <Button
+                variant="primary"
+                disabled={busy || !draft.name.trim()}
+                onClick={() => setPage((page + 1) as Page)}
+              >
+                Next
+              </Button>
+            ) : (
+              <Button variant="primary" disabled={busy || !!problem} onClick={() => void submit()}>
+                {busy ? "Saving…" : condition ? "Save Changes" : "Save Condition"}
+              </Button>
+            )}
+          </span>
         </DialogFooter>
       </section>
     </Dialog>
+  );
+}
+
+type Page = 1 | 2 | 3;
+const PAGES = ["Harness", "Options", "Skills and Instructions"] as const;
+
+/** The editor's pages, each one a step that can be opened directly. */
+function PageSteps({
+  page,
+  disabled,
+  onPick,
+}: {
+  page: Page;
+  disabled: boolean;
+  onPick: (page: Page) => void;
+}) {
+  return (
+    <ol
+      aria-label="Condition Steps"
+      className="flex gap-6 border-b border-border pb-4 text-sm font-medium"
+    >
+      {PAGES.map((label, index) => (
+        <li key={label}>
+          <button
+            type="button"
+            disabled={disabled}
+            aria-current={page === index + 1 ? "step" : undefined}
+            className={
+              page === index + 1 ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+            }
+            onClick={() => onPick((index + 1) as Page)}
+          >
+            {index + 1}. {label}
+          </button>
+        </li>
+      ))}
+    </ol>
   );
 }
