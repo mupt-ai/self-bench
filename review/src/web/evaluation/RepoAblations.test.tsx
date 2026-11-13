@@ -86,3 +86,75 @@ test("the Tasks box shows no repo ablations where there are none, and keeps a de
   expect(loading).toContain("Original Tasks");
   expect(render(ablationPick({}, undefined, () => undefined))).not.toContain("Repo Ablations");
 });
+
+test("past six repo ablations, the Tasks box picks them from a searchable list, up to the limit", async () => {
+  const many = Array.from({ length: 8 }, (_, at) => ({
+    ...environment,
+    id: 100 + at,
+    name: `Ablation ${at}`,
+  }));
+  let latest: Picks = {};
+  function Picker() {
+    const [draft, setDraft] = useState<Picks>({});
+    latest = draft;
+    return (
+      <MemoryRouter>
+        <RunTaskPicker
+          scope={{ kind: "repository", repo: "owner/repo", pages: "/repos/owner/repo" }}
+          availableTasks={[]}
+          picked={[]}
+          tasksReady
+          disabled={false}
+          onChange={() => undefined}
+          ablations={ablationPick(draft, many, setDraft)}
+        />
+      </MemoryRouter>
+    );
+  }
+  // Rendered as it opens: a trigger that counts, and no checkbox per ablation.
+  const closed = renderToStaticMarkup(
+    <MemoryRouter>
+      <RunTaskPicker
+        scope={{ kind: "repository", repo: "owner/repo", pages: "/repos/owner/repo" }}
+        availableTasks={[]}
+        picked={[]}
+        tasksReady
+        disabled={false}
+        onChange={() => undefined}
+        ablations={ablationPick({}, many, () => undefined)}
+      />
+    </MemoryRouter>,
+  );
+  expect(closed).toContain("None of 8 Picked");
+  expect(closed).not.toContain('aria-label="Ablation 0"');
+  await inBrowser(async (browser, container) => {
+    const root = createRoot(container);
+    await act(async () => root.render(<Picker />));
+    const trigger = () =>
+      container.querySelector<HTMLButtonElement>('button[aria-label="Repo Ablations"]');
+    const options = () =>
+      [...browser.document.querySelectorAll('[role="option"]')] as unknown as HTMLButtonElement[];
+    const toggle = async (name: string) => {
+      // The list stays open after a pick, so only a closed one is opened.
+      if (!browser.document.querySelector('[role="listbox"]'))
+        await act(async () => trigger()?.click());
+      const option = options().find((entry) => entry.textContent?.startsWith(name));
+      if (!option) throw new Error(`Missing ${name}`);
+      await act(async () => option.click());
+    };
+    await toggle("Ablation 0");
+    await toggle("Ablation 3");
+    expect(latest.environments).toEqual([100, 103]);
+    // The list stays open while a run of picks is made, and the trigger counts them.
+    expect(options().length).toBe(8);
+    expect(trigger()?.textContent).toBe("2 of 8 Picked");
+    await toggle("Ablation 5");
+    await toggle("Ablation 6");
+    // At the limit, the rest cannot be picked.
+    const rest = options().find((entry) => entry.textContent?.startsWith("Ablation 7"));
+    expect(rest?.disabled).toBe(true);
+    await toggle("Ablation 0");
+    expect(latest.environments).toEqual([103, 105, 106]);
+    await act(async () => root.unmount());
+  });
+});

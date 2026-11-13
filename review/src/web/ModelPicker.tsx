@@ -63,10 +63,14 @@ export function ModelPicker<Model extends PickableModel>({
   placeholder = "Select Model",
   noun = "Models",
   disabled = false,
+  picked,
+  onToggle,
+  full = false,
+  summary,
 }: {
   models: Model[];
   value: string;
-  onSelect(model: Model): void;
+  onSelect?(model: Model): void;
   id?: string;
   label?: string;
   /** What the trigger shows while no model is chosen. */
@@ -74,7 +78,17 @@ export function ModelPicker<Model extends PickableModel>({
   /** What it lists, in Title Case, for its search box and list: "Models", "Harnesses". */
   noun?: string;
   disabled?: boolean;
+  /**
+   * Multi-select: the picked ids. Choosing an entry toggles it and the list stays open; with `full`,
+   * an entry not yet picked cannot be.
+   */
+  picked?: readonly string[];
+  onToggle?(model: Model): void;
+  full?: boolean;
+  /** What the trigger shows in multi-select, such as "2 of 100 Picked". */
+  summary?: string;
 }) {
+  const multi = picked !== undefined;
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const [active, setActive] = React.useState(0);
@@ -92,9 +106,10 @@ export function ModelPicker<Model extends PickableModel>({
   }, []);
   const choose = (model: Model | undefined) => {
     if (!model) return;
+    if (multi) return onToggle?.(model);
     close();
     trigger.current?.focus();
-    if (model.id !== value) onSelect(model);
+    if (model.id !== value) onSelect?.(model);
   };
 
   React.useEffect(() => {
@@ -149,8 +164,8 @@ export function ModelPicker<Model extends PickableModel>({
           }
         }}
       >
-        <span className={cn("truncate", !selected && "text-muted-foreground")}>
-          {selected?.label ?? placeholder}
+        <span className={cn("truncate", !selected && !multi && "text-muted-foreground")}>
+          {multi ? (summary ?? placeholder) : (selected?.label ?? placeholder)}
         </span>
         <ChevronDown aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
       </button>
@@ -204,7 +219,8 @@ export function ModelPicker<Model extends PickableModel>({
                   data-index={index}
                   role="option"
                   tabIndex={-1}
-                  aria-selected={model.id === value}
+                  aria-selected={multi ? picked.includes(model.id) : model.id === value}
+                  disabled={multi && full && !picked.includes(model.id)}
                   className={cn(
                     "flex w-full cursor-default items-center justify-between gap-2 px-3 py-2 text-left text-sm",
                     index === active && "bg-foreground/[0.06]",
@@ -221,7 +237,9 @@ export function ModelPicker<Model extends PickableModel>({
                       </span>
                     )}
                   </span>
-                  {model.id === value && <Check aria-hidden="true" className="size-3.5 shrink-0" />}
+                  {(multi ? picked.includes(model.id) : model.id === value) && (
+                    <Check aria-hidden="true" className="size-3.5 shrink-0" />
+                  )}
                 </button>
               </React.Fragment>
             ))}
