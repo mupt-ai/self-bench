@@ -57,10 +57,10 @@ On the Run page's **Conditions** panel, each row picks a saved condition, a repo
 | Condition Field | Does |
 | --- | --- |
 | Skills | GitHub repositories whose `skills/` folder Harbor installs for the agent: `org/repo`, `org/repo@ref`, or a URL. Claude Code, Codex, and Pi load them. |
-| Instructions | Added to the end of every task's instruction, or, on Claude Code, to its system prompt instead |
+| Instructions | Added to the end of every task's instruction, or to the harness's system prompt instead (Claude Code and Codex) |
 | Harness | The one harness it changes. Its skills, options and subagent model are for it alone. |
 | Harness Options | Options on that harness's agent, as Harbor takes them: Claude Code's appended system prompt, turn limit, allowed and disallowed tools, CLI version, and `settings.json`; Codex's web search, reasoning summary, and `config.toml`; and so on. A condition runs only on its harness. |
-| Subagent Model | Runs Claude Code's and Codex's subagents on another model, with a **Delegation Prompt** telling the harness to hand part of each task to one. Edit the prompt, or empty it to tell the harness nothing. The Run page picks the credential that serves the model. See [Subagent Models](/api/evaluate#subagent-models). |
+| Subagent Model | Runs Claude Code's and Codex's subagents on another model, Picking one starts Instructions on a system prompt telling the harness to delegate part of each task; edit or clear it there. The Run page picks the credential that serves the model. See [Subagent Models](/api/evaluate#subagent-models). |
 
 Harness options come from the Harbor version SelfBench runs, so the list grows when Harbor adds one. A few stay with SelfBench: the model, its reasoning level, and where it is served. A native config that sets a model, a subagent model, a provider, a base URL, or a key is refused.
 

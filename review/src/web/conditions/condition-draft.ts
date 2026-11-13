@@ -1,6 +1,5 @@
 import {
   conditionHarness,
-  DEFAULT_SUBAGENT_PROMPT,
   MAX_SKILLS,
   type SavedConditionDraft,
   SKILL_HARNESSES,
@@ -46,39 +45,67 @@ export const blankCondition = (): ConditionDraft => ({
 });
 
 /**
- * The option that appends to a harness's system prompt, where it has one. The editor shows it as
- * the Instructions field's "System Prompt" choice, not as an option of its own.
+ * Where a harness takes text for its system prompt: Claude Code's append_system_prompt option, and
+ * Codex's developer_instructions in its native config. The editor shows it as the Instructions
+ * field's "System Prompt" choice, not as an option of its own.
  */
-const SYSTEM_PROMPT_OPTIONS: Partial<Record<Harness, string>> = {
-  "claude-code": "append_system_prompt",
+const SYSTEM_PROMPTS: Partial<Record<Harness, { option: string; key?: string }>> = {
+  "claude-code": { option: "append_system_prompt" },
+  codex: { option: "config", key: "developer_instructions" },
 };
 export const systemPromptOption = (harness: Harness | undefined) =>
-  harness ? SYSTEM_PROMPT_OPTIONS[harness] : undefined;
+  harness ? SYSTEM_PROMPTS[harness]?.option : undefined;
+/** Whether the option is shown as the Instructions field rather than among the options. */
+export const isSystemPromptOption = (harness: Harness, name: string) => {
+  const place = SYSTEM_PROMPTS[harness];
+  return !!place && !place.key && place.option === name;
+};
 
 /** Where the draft's instructions go, given its harness: the task's prompt unless it can take them. */
 export const instructionsWhere = (draft: ConditionDraft) =>
   draft.instructionsWhere === "system" && systemPromptOption(draft.harness) ? "system" : "task";
 
+/** The system prompt text a harness's saved options carry, and the options without it. */
+function takeSystemPrompt(
+  harness: Harness | undefined,
+  options: Readonly<Record<string, HarnessOptionValue>>,
+): { text?: string; rest: Record<string, HarnessOptionValue> } {
+  const place = harness ? SYSTEM_PROMPTS[harness] : undefined;
+  const value = place ? options[place.option] : undefined;
+  if (!place || value === undefined) return { rest: { ...options } };
+  const { [place.option]: _, ...rest } = options;
+  if (!place.key)
+    return typeof value === "string" ? { text: value, rest } : { rest: { ...options } };
+  if (typeof value !== "object") return { rest: { ...options } };
+  const { [place.key]: text, ...others } = value as Record<string, unknown>;
+  if (typeof text !== "string") return { rest: { ...options } };
+  return {
+    text,
+    rest: Object.keys(others).length ? { ...rest, [place.option]: others } : rest,
+  };
+}
+
 /** A saved condition as its editor opens it. */
 export function draftOf(saved: SavedCondition): ConditionDraft {
   const harness = conditionHarness(saved);
   const harnessOptions: OptionsDraft = { ...saved.harnessOptions };
-  const option = systemPromptOption(harness);
-  const system = harness && option ? harnessOptions[harness]?.[option] : undefined;
-  // A system prompt with no task instructions opens as the Instructions field, set to System Prompt.
-  const asSystem = !saved.instructions && typeof system === "string" && harness && option;
-  if (asSystem) {
-    const { [option]: _, ...rest } = harnessOptions[harness] ?? {};
-    harnessOptions[harness] = rest;
-  }
+  const taken = takeSystemPrompt(harness, (harness && harnessOptions[harness]) || {});
+  // The system prompt, and a delegation prompt (which goes to the same place), open as the
+  // Instructions field set to System Prompt, when there are no task instructions to show there.
+  const delegation = saved.subagent?.prompt ?? "";
+  const system = [taken.text, delegation].filter(Boolean).join("\n\n");
+  const asSystem = !saved.instructions && !!system && !!harness;
+  if (asSystem && harness) harnessOptions[harness] = taken.rest;
   return {
     name: saved.name,
     ...(harness ? { harness } : {}),
     skills: [...saved.skills],
-    instructions: asSystem ? (system as string) : (saved.instructions ?? ""),
+    instructions: asSystem ? system : (saved.instructions ?? ""),
     ...(asSystem ? { instructionsWhere: "system" as const } : {}),
     harnessOptions,
-    ...(saved.subagent ? { subagent: { ...saved.subagent } } : {}),
+    ...(saved.subagent
+      ? { subagent: { catalogId: saved.subagent.catalogId, prompt: asSystem ? "" : delegation } }
+      : {}),
   };
 }
 
@@ -100,7 +127,7 @@ export function withHarness(draft: ConditionDraft, harness: Harness): ConditionD
 }
 
 /** A subagent model as the editor first shows it: with the delegation prompt runs have always had. */
-export const subagentOn = (catalogId: string, prompt = DEFAULT_SUBAGENT_PROMPT) => ({
+export const subagentOn = (catalogId: string, prompt = "") => ({
   catalogId,
   prompt,
 });
@@ -140,15 +167,20 @@ function typedOptions(draft: ConditionDraft): { options: HarnessOptions } | { pr
   const harness = draft.harness;
   if (!harness) return { options: {} };
   const options: Record<string, unknown> = {};
-  const system = systemPromptOption(harness);
-  const text = draft.instructions.trim();
-  if (system && instructionsWhere(draft) === "system" && text) options[system] = text;
   for (const [name, given] of Object.entries(draft.harnessOptions[harness] ?? {})) {
     const option = harnessOptionsFor(harness).find((entry) => entry.name === name);
-    if (!option || name in options) continue;
+    if (!option) continue;
     const typed = optionValue(harness, option, given);
     if ("problem" in typed) return typed;
     options[name] = typed.value;
+  }
+  const place = SYSTEM_PROMPTS[harness];
+  const text = draft.instructions.trim();
+  if (place && instructionsWhere(draft) === "system" && text) {
+    const current = options[place.option];
+    options[place.option] = place.key
+      ? { ...(typeof current === "object" && current ? current : {}), [place.key]: text }
+      : text;
   }
   return Object.keys(options).length
     ? { options: { [harness]: options } as HarnessOptions }

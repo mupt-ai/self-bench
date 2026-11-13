@@ -48,7 +48,7 @@ export const MAX_SKILLS = 10;
 export const MAX_SKILL_LENGTH = 300;
 const MAX_INSTRUCTIONS = 4_000;
 /** The longest delegation prompt a condition gives a harness beside its subagent model. */
-export const MAX_SUBAGENT_PROMPT = 4_000;
+const MAX_SUBAGENT_PROMPT = 4_000;
 
 /**
  * What a harness is told when its subagents run on another model, unless the condition says

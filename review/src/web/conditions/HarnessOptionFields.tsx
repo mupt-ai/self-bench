@@ -10,7 +10,7 @@ import type { Harness } from "../../../../src/evaluation/models";
 import { cn } from "../primitives/cn";
 import { InfoTooltip } from "../primitives/tooltip";
 import { controlStyles, fieldStyles, Input, Select } from "../ui";
-import { optionText, systemPromptOption } from "./condition-draft";
+import { isSystemPromptOption, optionText } from "./condition-draft";
 import { TOOL_PICKERS, ToolPicker } from "./ToolPicker";
 
 /** What each harness's native config is, where Harbor's description says only "config". */
@@ -51,7 +51,7 @@ export function HarnessOptionFields({
     >
       {harnessOptionsFor(harness)
         // The system prompt is the Instructions field's other place, not an option of its own.
-        .filter((option) => option.name !== systemPromptOption(harness))
+        .filter((option) => !isSystemPromptOption(harness, option.name))
         .map((option) => (
           <OptionField
             key={option.name}

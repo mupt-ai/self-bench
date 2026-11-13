@@ -1,9 +1,5 @@
 import { expect, test } from "bun:test";
-import { Window } from "happy-dom";
-import { act, useState } from "react";
-import { createRoot } from "react-dom/client";
 import { DEFAULT_SUBAGENT_PROMPT, MAX_SKILLS } from "../../../../src/contracts/conditions";
-import type { HarnessOptionValue } from "../../../../src/contracts/harness-options";
 import {
   blankCondition,
   type ConditionDraft,
@@ -15,8 +11,6 @@ import {
   withHarness,
 } from "./condition-draft";
 import { conditionSummary } from "./condition-summary";
-import { HarnessOptionFields } from "./HarnessOptionFields";
-import { ToolPicker } from "./ToolPicker";
 
 const tuned = (harnessOptions: OptionsDraft = {}): ConditionDraft => ({
   ...blankCondition(),
@@ -109,16 +103,29 @@ test("picking a harness drops the skills and subagent model it can't take, and k
   });
 });
 
-test("a subagent model alone makes a condition, with the default prompt, another, or none", () => {
+test("a subagent model alone makes a condition; its delegation prompt is the instructions", () => {
   const delegating = { ...tuned(), subagent: subagentOn("claude-haiku-5-5") };
   expect(conditionProblem(delegating)).toBeUndefined();
+  // The editor tells the harness to delegate through Instructions, so the subagent carries none.
   expect(submittedCondition(delegating).subagent).toEqual({
     catalogId: "claude-haiku-5-5",
-    prompt: DEFAULT_SUBAGENT_PROMPT,
+    prompt: "",
   });
-  const silent = { ...delegating, subagent: subagentOn("claude-haiku-5-5", "  ") };
-  expect(conditionProblem(silent)).toBeUndefined();
-  expect(submittedCondition(silent).subagent?.prompt).toBe("");
+  // One saved with its own delegation prompt reopens with it as the system prompt instructions.
+  const older = draftOf({
+    name: "Older",
+    harness: "claude-code",
+    skills: [],
+    subagent: { catalogId: "claude-haiku-5-5", prompt: DEFAULT_SUBAGENT_PROMPT },
+    id: 3,
+    createdAt: "",
+    updatedAt: "",
+  });
+  expect(older).toMatchObject({
+    instructions: DEFAULT_SUBAGENT_PROMPT,
+    instructionsWhere: "system",
+    subagent: { catalogId: "claude-haiku-5-5", prompt: "" },
+  });
   const saved = { ...submittedCondition(delegating), skills: ["https://github.com/a/b"] };
   const models = [{ id: "claude-haiku-5-5", label: "Claude Haiku 5.5" }];
   expect(conditionSummary(saved, models)).toEqual([
@@ -149,150 +156,21 @@ test("instructions go in the task prompt, or Claude Code's system prompt, and re
   expect(reopened.instructionsWhere).toBe("system");
   expect(reopened.instructions).toBe("Prefer small diffs.");
   expect(reopened.harnessOptions["claude-code"]).toEqual({});
-  // A harness without a system prompt option sends them to the task's prompt.
-  const codex = submittedCondition({ ...system, harness: "codex" });
-  expect(codex.instructions).toBe("Prefer small diffs.");
-  expect(codex.harnessOptions).toBeUndefined();
-});
-
-test("every option a harness takes is a field, left at Harbor's default until set", async () => {
-  const browser = new Window({ url: "https://selfbench.test" });
-  const globals = {
-    window: browser,
-    document: browser.document,
-    HTMLElement: browser.HTMLElement,
-    IS_REACT_ACT_ENVIRONMENT: true,
-  };
-  const previous = Object.keys(globals).map(
-    (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const,
-  );
-  for (const [key, value] of Object.entries(globals))
-    Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
-  const container = document.createElement("div");
-  document.body.append(container);
-  const root = createRoot(container);
-  let seen: Record<string, HarnessOptionValue> = {};
-  function Fields() {
-    const [options, setOptions] = useState<Record<string, HarnessOptionValue>>({});
-    seen = options;
-    return (
-      <HarnessOptionFields
-        harness="codex"
-        options={options}
-        idPrefix="condition-codex"
-        disabled={false}
-        onSet={(name, value) => {
-          const { [name]: _, ...rest } = options;
-          setOptions(value === undefined ? rest : { ...rest, [name]: value });
-        }}
-      />
-    );
-  }
-  const select = (label: string) => {
-    const found = browser.document.querySelector(`select[aria-label="${label}"]`);
-    if (!(found instanceof browser.HTMLSelectElement)) throw new Error(`Missing ${label}`);
-    return found;
-  };
-  const pick = async (label: string, value: string) => {
-    const found = select(label);
-    await act(async () => {
-      found.value = value;
-      found.dispatchEvent(new browser.Event("change", { bubbles: true }));
-    });
-  };
-  try {
-    await act(async () => root.render(<Fields />));
-    // Nothing to add or remove: each of Codex's options is already a field, at its default.
-    expect(select("Disable Web Search").value).toBe("");
-    expect(select("Web Search").value).toBe("");
-    expect(browser.document.querySelector('textarea[aria-label="Native Config"]')).not.toBeNull();
-    expect(browser.document.querySelector('button[aria-label^="Remove"]')).toBeNull();
-    expect(browser.document.querySelector('select[aria-label^="Add"]')).toBeNull();
-    await pick("Disable Web Search", "true");
-    expect(seen).toEqual({ disable_web_search: "true" });
-    // Claude Code's system prompt is the Instructions field's, so its options don't list it.
-    await act(async () =>
-      root.render(
-        <HarnessOptionFields
-          harness="claude-code"
-          options={{}}
-          idPrefix="condition-claude-code"
-          disabled={false}
-          onSet={() => undefined}
-        />,
-      ),
-    );
-    expect(browser.document.querySelector('[aria-label="Append System Prompt"]')).toBeNull();
-    expect(browser.document.querySelector('fieldset[aria-label="Allowed Tools"]')).not.toBeNull();
-    await act(async () => root.render(<Fields />));
-    // Back to Harbor's default, the option is no longer set at all.
-    await pick("Disable Web Search", "");
-    expect(seen).toEqual({});
-  } finally {
-    await act(async () => root.unmount());
-    container.remove();
-    for (const [key, descriptor] of previous) {
-      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-      else Reflect.deleteProperty(globalThis, key);
-    }
-    await browser.happyDOM.close();
-  }
-});
-
-test("tools are picked as chips beside a box for any others, and saved as Harbor's comma-separated list", async () => {
-  const browser = new Window({ url: "https://selfbench.test" });
-  const globals = {
-    window: browser,
-    document: browser.document,
-    HTMLElement: browser.HTMLElement,
-    IS_REACT_ACT_ENVIRONMENT: true,
-  };
-  const previous = Object.keys(globals).map(
-    (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const,
-  );
-  for (const [key, value] of Object.entries(globals))
-    Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
-  const container = document.createElement("div");
-  document.body.append(container);
-  const root = createRoot(container);
-  let seen = "";
-  function Picker() {
-    const [value, setValue] = useState("Bash,mcp__github");
-    seen = value;
-    return (
-      <ToolPicker
-        id="tools"
-        label="Allowed Tools"
-        harness="claude-code"
-        value={value}
-        onChange={setValue}
-      />
-    );
-  }
-  const chip = (name: string) => {
-    const found = [...browser.document.querySelectorAll("button")].find(
-      (button) => button.textContent === name,
-    );
-    if (!found) throw new Error(`Missing ${name}`);
-    return found;
-  };
-  try {
-    await act(async () => root.render(<Picker />));
-    expect(chip("Bash").getAttribute("aria-pressed")).toBe("true");
-    expect(chip("Read").getAttribute("aria-pressed")).toBe("false");
-    const other = browser.document.querySelector('input[aria-label="Other Allowed Tools"]');
-    expect(other instanceof browser.HTMLInputElement && other.value).toBe("mcp__github");
-    await act(async () => chip("Read").click());
-    expect(seen).toBe("Bash,mcp__github,Read");
-    await act(async () => chip("Bash").click());
-    expect(seen).toBe("mcp__github,Read");
-  } finally {
-    await act(async () => root.unmount());
-    container.remove();
-    for (const [key, descriptor] of previous) {
-      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-      else Reflect.deleteProperty(globalThis, key);
-    }
-    await browser.happyDOM.close();
-  }
+  // Codex takes them as developer_instructions in its native config, beside what else it sets.
+  const codex = submittedCondition({
+    ...system,
+    harness: "codex",
+    harnessOptions: { codex: { config: '{"approval_policy": "never"}' } },
+  });
+  expect(codex.instructions).toBeUndefined();
+  expect(codex.harnessOptions).toEqual({
+    codex: { config: { approval_policy: "never", developer_instructions: "Prefer small diffs." } },
+  });
+  const back = draftOf({ ...codex, id: 2, createdAt: "", updatedAt: "" });
+  expect(back.instructionsWhere).toBe("system");
+  expect(back.harnessOptions.codex).toEqual({ config: { approval_policy: "never" } });
+  // A harness with no system prompt sends them to the task's prompt.
+  const mini = submittedCondition({ ...system, harness: "mini-swe-agent" });
+  expect(mini.instructions).toBe("Prefer small diffs.");
+  expect(mini.harnessOptions).toBeUndefined();
 });

@@ -1,5 +1,5 @@
 import React from "react";
-import { SKILL_HARNESSES } from "../../../../src/contracts/conditions";
+import { DEFAULT_SUBAGENT_PROMPT, SKILL_HARNESSES } from "../../../../src/contracts/conditions";
 import {
   type HarnessOptionValue,
   harnessOptionsFor,
@@ -176,7 +176,16 @@ export function ConditionDialog({
                   disabled={busy}
                   onChange={(subagent) => {
                     const { subagent: _, ...rest } = draft;
-                    setDraft(subagent ? { ...rest, subagent } : rest);
+                    // A first subagent model starts the instructions on the delegation prompt, in
+                    // the system prompt, where the harness has always been told it.
+                    const prompt =
+                      subagent && !draft.subagent && !draft.instructions.trim()
+                        ? {
+                            instructions: DEFAULT_SUBAGENT_PROMPT,
+                            instructionsWhere: "system" as const,
+                          }
+                        : {};
+                    setDraft(subagent ? { ...rest, ...prompt, subagent } : rest);
                   }}
                 />
               )}

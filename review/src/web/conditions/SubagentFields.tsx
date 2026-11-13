@@ -1,8 +1,6 @@
-import { DEFAULT_SUBAGENT_PROMPT, MAX_SUBAGENT_PROMPT } from "../../../../src/contracts/conditions";
 import { ModelPicker } from "../ModelPicker";
-import { cn } from "../primitives/cn";
 import { InfoTooltip } from "../primitives/tooltip";
-import { Button, controlStyles, fieldStyles } from "../ui";
+import { Button, fieldStyles } from "../ui";
 import { type ConditionDraft, subagentOn } from "./condition-draft";
 
 /**
@@ -54,33 +52,6 @@ export function SubagentFields({
           )}
         </div>
       </div>
-      {value && (
-        <div className={fieldStyles}>
-          <div className="flex items-center gap-1.5">
-            <label htmlFor="condition-subagent-prompt">Delegation Prompt</label>
-            <InfoTooltip label="Added to the harness's system prompt, so it hands part of each task to a subagent: left to itself it may do the whole task on the run's own model. Leave it empty to tell the harness nothing." />
-            {value.prompt !== DEFAULT_SUBAGENT_PROMPT && (
-              <Button
-                size="small"
-                variant="ghost"
-                className="ml-auto"
-                onClick={() => onChange(subagentOn(value.catalogId))}
-              >
-                Reset to Default
-              </Button>
-            )}
-          </div>
-          <textarea
-            id="condition-subagent-prompt"
-            aria-label="Delegation Prompt"
-            rows={4}
-            maxLength={MAX_SUBAGENT_PROMPT}
-            className={cn(controlStyles, "h-auto resize-y py-2")}
-            value={value.prompt}
-            onChange={(event) => onChange(subagentOn(value.catalogId, event.target.value))}
-          />
-        </div>
-      )}
     </fieldset>
   );
 }
