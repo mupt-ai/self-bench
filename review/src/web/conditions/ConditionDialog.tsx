@@ -1,10 +1,20 @@
 import { Plus, Trash2 } from "lucide-react";
 import React from "react";
-import { MAX_SKILL_LENGTH, MAX_SKILLS } from "../../../../src/contracts/conditions";
+import {
+  MAX_SKILL_LENGTH,
+  MAX_SKILLS,
+  SKILL_HARNESSES,
+} from "../../../../src/contracts/conditions";
+import {
+  type HarnessOptionValue,
+  harnessOptionsFor,
+} from "../../../../src/contracts/harness-options";
+import { type Harness, harnessIds, harnessLabels } from "../../../../src/evaluation/models";
+import { subagentSupport } from "../../../../src/evaluation/subagents";
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
 import { cn } from "../primitives/cn";
 import { InfoTooltip } from "../primitives/tooltip";
-import { Button, controlStyles, fieldStyles, Input, Notice } from "../ui";
+import { Button, controlStyles, fieldStyles, Input, Notice, Select } from "../ui";
 import { type SavedCondition, saveCondition } from "./condition-api";
 import {
   blankCondition,
@@ -12,8 +22,9 @@ import {
   conditionProblem,
   draftOf,
   submittedCondition,
+  withHarness,
 } from "./condition-draft";
-import { HarnessOptionsEditor } from "./HarnessOptionsEditor";
+import { HarnessOptionFields } from "./HarnessOptionFields";
 import { SubagentFields } from "./SubagentFields";
 
 /**
@@ -43,6 +54,18 @@ export function ConditionDialog({
   const closeButton = React.useRef<HTMLButtonElement>(null);
   const problem = conditionProblem(draft);
   const update = (patch: Partial<ConditionDraft>) => setDraft({ ...draft, ...patch });
+  const harness = draft.harness;
+  const skillsOn = !!harness && SKILL_HARNESSES.includes(harness);
+  const subagentOn = !!harness && subagentSupport[harness].configurable;
+  const optionsOn = !!harness && harnessOptionsFor(harness).length > 0;
+  // A harness's options are kept as typed, so a value set under one harness stays put when another is picked.
+  const setOption = (name: string, value: string | undefined) => {
+    if (!harness) return;
+    const { [name]: _, ...rest } = draft.harnessOptions[harness] ?? {};
+    const next: Record<string, HarnessOptionValue> =
+      value === undefined ? rest : { ...rest, [name]: value };
+    setDraft({ ...draft, harnessOptions: { ...draft.harnessOptions, [harness]: next } });
+  };
 
   const submit = async () => {
     if (busy || problem) return;
@@ -91,55 +114,81 @@ export function ConditionDialog({
               onChange={(event) => update({ name: event.target.value })}
             />
           </label>
-          <div className={fieldStyles}>
+          <label htmlFor="condition-harness" className={fieldStyles}>
             <span className="flex items-center gap-1.5">
-              Skills
-              <InfoTooltip label="A GitHub repository whose skills/ folder holds the skills, as org/repo, org/repo@ref, or a URL. Claude Code, Codex, and Pi load them." />
+              Harness
+              <InfoTooltip label="The harness this condition changes. Its skills, options, and subagent model are for it alone, so a run with other harnesses leaves them out." />
             </span>
-            {draft.skills.map((skill, at) => (
-              <div
-                // biome-ignore lint/suspicious/noArrayIndexKey: rows have no identity of their own.
-                key={at}
-                className="flex gap-2"
-              >
-                <Input
-                  aria-label={`Skill ${at + 1}`}
-                  className="font-mono"
-                  maxLength={MAX_SKILL_LENGTH}
-                  placeholder="vercel/next.js@canary"
-                  value={skill}
-                  disabled={busy}
-                  onChange={(event) =>
-                    update({
-                      skills: draft.skills.map((value, row) =>
-                        row === at ? event.target.value : value,
-                      ),
-                    })
-                  }
-                />
-                <Button
-                  variant="ghost"
-                  aria-label={`Remove Skill ${at + 1}`}
-                  disabled={busy}
-                  onClick={() => update({ skills: draft.skills.filter((_, row) => row !== at) })}
+            <Select
+              id="condition-harness"
+              aria-label="Harness"
+              value={harness ?? ""}
+              disabled={busy}
+              onChange={(event) => {
+                const next = harnessIds.find((entry) => entry === event.target.value);
+                if (next) setDraft(withHarness(draft, next));
+                else update({ harness: undefined });
+              }}
+            >
+              <option value="">Choose a Harness</option>
+              {harnessIds.map((entry: Harness) => (
+                <option key={entry} value={entry}>
+                  {harnessLabels[entry]}
+                </option>
+              ))}
+            </Select>
+          </label>
+          {skillsOn && (
+            <div className={fieldStyles}>
+              <span className="flex items-center gap-1.5">
+                Skills
+                <InfoTooltip label="A GitHub repository whose skills/ folder holds the skills, as org/repo, org/repo@ref, or a URL. Claude Code, Codex, and Pi load them." />
+              </span>
+              {draft.skills.map((skill, at) => (
+                <div
+                  // biome-ignore lint/suspicious/noArrayIndexKey: rows have no identity of their own.
+                  key={at}
+                  className="flex gap-2"
                 >
-                  <Trash2 aria-hidden="true" />
-                </Button>
-              </div>
-            ))}
-            {draft.skills.length < MAX_SKILLS && (
-              <div>
-                <Button
-                  size="small"
-                  disabled={busy}
-                  onClick={() => update({ skills: [...draft.skills, ""] })}
-                >
-                  <Plus aria-hidden="true" />
-                  Add Skill
-                </Button>
-              </div>
-            )}
-          </div>
+                  <Input
+                    aria-label={`Skill ${at + 1}`}
+                    className="font-mono"
+                    maxLength={MAX_SKILL_LENGTH}
+                    placeholder="vercel/next.js@canary"
+                    value={skill}
+                    disabled={busy}
+                    onChange={(event) =>
+                      update({
+                        skills: draft.skills.map((value, row) =>
+                          row === at ? event.target.value : value,
+                        ),
+                      })
+                    }
+                  />
+                  <Button
+                    variant="ghost"
+                    aria-label={`Remove Skill ${at + 1}`}
+                    disabled={busy}
+                    onClick={() => update({ skills: draft.skills.filter((_, row) => row !== at) })}
+                  >
+                    <Trash2 aria-hidden="true" />
+                  </Button>
+                </div>
+              ))}
+              {draft.skills.length < MAX_SKILLS && (
+                <div>
+                  <Button
+                    size="small"
+                    disabled={busy}
+                    onClick={() => update({ skills: [...draft.skills, ""] })}
+                  >
+                    <Plus aria-hidden="true" />
+                    Add Skill
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
           <label htmlFor="condition-instructions" className={fieldStyles}>
             <span className="flex items-center gap-1.5">
               Extra Instructions
@@ -157,22 +206,26 @@ export function ConditionDialog({
               onChange={(event) => update({ instructions: event.target.value })}
             />
           </label>
-          <SubagentFields
-            models={subagentModels}
-            value={draft.subagent}
-            disabled={busy}
-            onChange={(subagent) => {
-              const { subagent: _, ...rest } = draft;
-              setDraft(subagent ? { ...rest, subagent } : rest);
-            }}
-          />
-          <fieldset disabled={busy} className="min-w-0 border-0 p-0" aria-label="Harness Options">
-            <HarnessOptionsEditor
-              value={draft.harnessOptions}
-              idPrefix="condition"
-              onChange={(harnessOptions) => update({ harnessOptions })}
+          {subagentOn && (
+            <SubagentFields
+              models={subagentModels}
+              value={draft.subagent}
+              disabled={busy}
+              onChange={(subagent) => {
+                const { subagent: _, ...rest } = draft;
+                setDraft(subagent ? { ...rest, subagent } : rest);
+              }}
             />
-          </fieldset>
+          )}
+          {harness && optionsOn && (
+            <HarnessOptionFields
+              harness={harness}
+              options={draft.harnessOptions[harness] ?? {}}
+              idPrefix={`condition-${harness}`}
+              disabled={busy}
+              onSet={setOption}
+            />
+          )}
           {error && <Notice>{error}</Notice>}
         </DialogBody>
         <DialogFooter className="sticky bottom-0 justify-between">

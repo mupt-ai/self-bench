@@ -1,7 +1,9 @@
 import {
+  conditionHarness,
   DEFAULT_SUBAGENT_PROMPT,
   MAX_SKILLS,
   type SavedConditionDraft,
+  SKILL_HARNESSES,
   skillSource,
 } from "../../../../src/contracts/conditions";
 import {
@@ -10,17 +12,23 @@ import {
   type HarnessOptionValue,
   harnessOptionProblem,
   harnessOptionsFor,
-  OPTION_HARNESSES,
 } from "../../../../src/contracts/harness-options";
 import { type Harness, harnessLabels } from "../../../../src/evaluation/models";
+import { subagentSupport } from "../../../../src/evaluation/subagents";
 import type { SavedCondition } from "./condition-api";
 
 /** Harness options as their fields hold them: every value typed text until the condition is saved. */
 export type OptionsDraft = Partial<Record<Harness, Record<string, HarnessOptionValue>>>;
 
-/** A saved condition as its editor holds it: text as typed, checked when it is saved. */
+/**
+ * A saved condition as its editor holds it: text as typed, checked when it is saved. It changes one
+ * harness: its skills, options and subagent model belong to that harness, and are kept by harness
+ * as they are typed, so switching harnesses and back loses nothing. Only the chosen harness's are
+ * saved.
+ */
 export interface ConditionDraft {
   name: string;
+  harness?: Harness;
   skills: string[];
   instructions: string;
   harnessOptions: OptionsDraft;
@@ -37,12 +45,31 @@ export const blankCondition = (): ConditionDraft => ({
 
 /** A saved condition as its editor opens it. */
 export function draftOf(saved: SavedCondition): ConditionDraft {
+  const harness = conditionHarness(saved);
   return {
     name: saved.name,
+    ...(harness ? { harness } : {}),
     skills: [...saved.skills],
     instructions: saved.instructions ?? "",
     harnessOptions: { ...saved.harnessOptions },
     ...(saved.subagent ? { subagent: { ...saved.subagent } } : {}),
+  };
+}
+
+/**
+ * The harness picked, with what its fields cannot keep: skills it cannot load, and a subagent model
+ * it cannot take, are dropped. Its options are kept, since they are kept by harness.
+ */
+export function withHarness(draft: ConditionDraft, harness: Harness): ConditionDraft {
+  const skills = SKILL_HARNESSES.includes(harness) ? draft.skills : [];
+  const { subagent: _, ...rest } = draft;
+  return {
+    ...rest,
+    harness,
+    skills,
+    ...(subagentSupport[harness].configurable && draft.subagent
+      ? { subagent: draft.subagent }
+      : {}),
   };
 }
 
@@ -82,19 +109,21 @@ function optionValue(
   return problem ? { problem: `${problem}.` } : { value };
 }
 
-/** The draft's options, typed, or the first problem with them. */
+/** The chosen harness's options, typed, or the first problem with them. */
 function typedOptions(draft: ConditionDraft): { options: HarnessOptions } | { problem: string } {
-  const options: Record<string, Record<string, unknown>> = {};
-  for (const harness of OPTION_HARNESSES) {
-    for (const [name, given] of Object.entries(draft.harnessOptions[harness] ?? {})) {
-      const option = harnessOptionsFor(harness).find((entry) => entry.name === name);
-      if (!option) continue;
-      const typed = optionValue(harness, option, given);
-      if ("problem" in typed) return typed;
-      options[harness] = { ...options[harness], [name]: typed.value };
-    }
+  const harness = draft.harness;
+  if (!harness) return { options: {} };
+  const options: Record<string, unknown> = {};
+  for (const [name, given] of Object.entries(draft.harnessOptions[harness] ?? {})) {
+    const option = harnessOptionsFor(harness).find((entry) => entry.name === name);
+    if (!option) continue;
+    const typed = optionValue(harness, option, given);
+    if ("problem" in typed) return typed;
+    options[name] = typed.value;
   }
-  return { options: options as HarnessOptions };
+  return Object.keys(options).length
+    ? { options: { [harness]: options } as HarnessOptions }
+    : { options: {} };
 }
 
 /** Why the draft can't be saved, if it can't; undefined when it can. */
@@ -103,6 +132,8 @@ export function conditionProblem(draft: ConditionDraft): string | undefined {
   const skills = draft.skills.filter((skill) => skill.trim());
   const typed = typedOptions(draft);
   if ("problem" in typed) return typed.problem;
+  if (!draft.harness && (skills.length || draft.subagent || Object.keys(typed.options).length))
+    return "Pick a harness for its skills, options, or subagent model.";
   if (
     !skills.length &&
     !draft.instructions.trim() &&
@@ -110,6 +141,10 @@ export function conditionProblem(draft: ConditionDraft): string | undefined {
     !Object.keys(typed.options).length
   )
     return "Add a skill, instructions, a harness option, or a subagent model.";
+  if (draft.harness && skills.length && !SKILL_HARNESSES.includes(draft.harness))
+    return `${harnessLabels[draft.harness]} can't load skills. Skills run on Claude Code, Codex, and Pi.`;
+  if (draft.subagent && draft.harness && !subagentSupport[draft.harness].configurable)
+    return `${harnessLabels[draft.harness]} takes no subagent model.`;
   if (skills.length > MAX_SKILLS) return `A condition can add at most ${MAX_SKILLS} skills.`;
   if (skills.some((skill) => !skillSource(skill)))
     return "Write each skill as a GitHub org/repo, org/repo@ref, or URL.";
@@ -123,6 +158,7 @@ export function submittedCondition(draft: ConditionDraft): SavedConditionDraft {
   const instructions = draft.instructions.trim();
   return {
     name: draft.name.trim(),
+    ...(draft.harness ? { harness: draft.harness } : {}),
     skills: draft.skills.map((skill) => skill.trim()).filter(Boolean),
     ...(instructions ? { instructions } : {}),
     ...(Object.keys(options).length ? { harnessOptions: options } : {}),

@@ -3,6 +3,7 @@ import { Window } from "happy-dom";
 import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { DEFAULT_SUBAGENT_PROMPT, MAX_SKILLS } from "../../../../src/contracts/conditions";
+import type { HarnessOptionValue } from "../../../../src/contracts/harness-options";
 import {
   blankCondition,
   type ConditionDraft,
@@ -11,17 +12,19 @@ import {
   type OptionsDraft,
   subagentOn,
   submittedCondition,
+  withHarness,
 } from "./condition-draft";
 import { conditionSummary } from "./condition-summary";
-import { HarnessOptionsEditor } from "./HarnessOptionsEditor";
+import { HarnessOptionFields } from "./HarnessOptionFields";
 
-const tuned = (harnessOptions: OptionsDraft): ConditionDraft => ({
+const tuned = (harnessOptions: OptionsDraft = {}): ConditionDraft => ({
   ...blankCondition(),
   name: " Tuned ",
+  harness: "claude-code",
   harnessOptions,
 });
 
-test("a condition is saved with typed option values, trimmed text, and no blank skills", () => {
+test("a condition is saved with its harness, typed option values, trimmed text, and no blank skills", () => {
   const draft: ConditionDraft = {
     ...tuned({
       "claude-code": {
@@ -30,6 +33,8 @@ test("a condition is saved with typed option values, trimmed text, and no blank 
         config: '{ "env": { "A": "1" } }',
         append_system_prompt: "Run the tests first.",
       },
+      // Typed under another harness before switching: kept in the draft, never saved.
+      codex: { web_search: "live" },
     }),
     skills: ["vercel/next.js@canary", "  "],
     instructions: "  Read the docs.  ",
@@ -38,6 +43,7 @@ test("a condition is saved with typed option values, trimmed text, and no blank 
   const submitted = submittedCondition(draft);
   expect(submitted).toEqual({
     name: "Tuned",
+    harness: "claude-code",
     skills: ["vercel/next.js@canary"],
     instructions: "Read the docs.",
     harnessOptions: {
@@ -52,6 +58,9 @@ test("a condition is saved with typed option values, trimmed text, and no blank 
   // Reopened for editing, a saved condition's typed values save as the same condition.
   const saved = { ...submitted, id: 1, createdAt: "", updatedAt: "" };
   expect(submittedCondition(draftOf(saved))).toEqual(submitted);
+  // One saved before conditions named their harness takes it from its options.
+  const { harness: _, ...older } = saved;
+  expect(draftOf(older).harness).toBe("claude-code");
 });
 
 test("a condition says what stops it from being saved", () => {
@@ -61,20 +70,46 @@ test("a condition says what stops it from being saved", () => {
   expect(broken({ max_turns: "" })).toBe("Claude Code Max Turns is a whole number.");
   expect(broken({ config: '{"model": "opus"}' })).toContain("can't set model");
   expect(conditionProblem(blankCondition())).toBe("Name the condition.");
-  expect(conditionProblem(tuned({}))).toBe(
+  expect(conditionProblem(tuned())).toBe(
     "Add a skill, instructions, a harness option, or a subagent model.",
   );
-  expect(conditionProblem({ ...tuned({}), skills: ["not a repo"] })).toBe(
+  expect(conditionProblem({ ...tuned(), skills: ["not a repo"] })).toBe(
     "Write each skill as a GitHub org/repo, org/repo@ref, or URL.",
   );
   const many = Array.from({ length: MAX_SKILLS + 1 }, (_, at) => `acme/skills-${at}`);
-  expect(conditionProblem({ ...tuned({}), skills: many })).toBe(
+  expect(conditionProblem({ ...tuned(), skills: many })).toBe(
     `A condition can add at most ${MAX_SKILLS} skills.`,
   );
+  // Skills and a subagent model belong to a harness; extra instructions alone need none.
+  const { harness: _, ...unpicked } = tuned();
+  expect(conditionProblem({ ...unpicked, skills: ["acme/skills"] })).toBe(
+    "Pick a harness for its skills, options, or subagent model.",
+  );
+  expect(conditionProblem({ ...unpicked, instructions: "Read the docs." })).toBeUndefined();
+});
+
+test("picking a harness drops the skills and subagent model it can't take, and keeps typed options", () => {
+  const draft: ConditionDraft = {
+    ...tuned({ "claude-code": { max_turns: "30" } }),
+    skills: ["acme/skills"],
+    subagent: subagentOn("claude-haiku-5-5"),
+  };
+  const mini = withHarness(draft, "mini-swe-agent");
+  expect(mini.harness).toBe("mini-swe-agent");
+  expect(mini.skills).toEqual([]);
+  expect(mini.subagent).toBeUndefined();
+  // Pi loads skills but takes no subagent model.
+  const pi = withHarness(draft, "pi");
+  expect(pi.skills).toEqual(["acme/skills"]);
+  expect(pi.subagent).toBeUndefined();
+  // Back to Claude Code, its typed options are still there.
+  expect(withHarness(mini, "claude-code").harnessOptions["claude-code"]).toEqual({
+    max_turns: "30",
+  });
 });
 
 test("a subagent model alone makes a condition, with the default prompt, another, or none", () => {
-  const delegating = { ...tuned({}), subagent: subagentOn("claude-haiku-5-5") };
+  const delegating = { ...tuned(), subagent: subagentOn("claude-haiku-5-5") };
   expect(conditionProblem(delegating)).toBeUndefined();
   expect(submittedCondition(delegating).subagent).toEqual({
     catalogId: "claude-haiku-5-5",
@@ -85,12 +120,20 @@ test("a subagent model alone makes a condition, with the default prompt, another
   expect(submittedCondition(silent).subagent?.prompt).toBe("");
   const saved = { ...submittedCondition(delegating), skills: ["https://github.com/a/b"] };
   const models = [{ id: "claude-haiku-5-5", label: "Claude Haiku 5.5" }];
-  expect(conditionSummary(saved, models)).toEqual(["1 skill", "subagents on Claude Haiku 5.5"]);
+  expect(conditionSummary(saved, models)).toEqual([
+    "Claude Code",
+    "1 skill",
+    "subagents on Claude Haiku 5.5",
+  ]);
   // A model the catalog no longer lists is named by its id.
-  expect(conditionSummary(saved)).toEqual(["1 skill", "subagents on claude-haiku-5-5"]);
+  expect(conditionSummary(saved)).toEqual([
+    "Claude Code",
+    "1 skill",
+    "subagents on claude-haiku-5-5",
+  ]);
 });
 
-test("a harness is added before its options, which start on a value that changes something", async () => {
+test("every option a harness takes is a field, left at Harbor's default until set", async () => {
   const browser = new Window({ url: "https://selfbench.test" });
   const globals = {
     window: browser,
@@ -106,39 +149,48 @@ test("a harness is added before its options, which start on a value that changes
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
-  let seen: OptionsDraft = {};
-  function Editor() {
-    const [options, setOptions] = useState<OptionsDraft>({
-      "claude-code": { append_system_prompt: "Run the tests first." },
-    });
+  let seen: Record<string, HarnessOptionValue> = {};
+  function Fields() {
+    const [options, setOptions] = useState<Record<string, HarnessOptionValue>>({});
     seen = options;
-    return <HarnessOptionsEditor value={options} idPrefix="condition" onChange={setOptions} />;
+    return (
+      <HarnessOptionFields
+        harness="codex"
+        options={options}
+        idPrefix="condition-codex"
+        disabled={false}
+        onSet={(name, value) => {
+          const { [name]: _, ...rest } = options;
+          setOptions(value === undefined ? rest : { ...rest, [name]: value });
+        }}
+      />
+    );
   }
+  const select = (label: string) => {
+    const found = browser.document.querySelector(`select[aria-label="${label}"]`);
+    if (!(found instanceof browser.HTMLSelectElement)) throw new Error(`Missing ${label}`);
+    return found;
+  };
   const pick = async (label: string, value: string) => {
-    const select = browser.document.querySelector(`select[aria-label="${label}"]`);
-    if (!(select instanceof browser.HTMLSelectElement)) throw new Error(`Missing ${label}`);
+    const found = select(label);
     await act(async () => {
-      select.value = value;
-      select.dispatchEvent(new browser.Event("change", { bubbles: true }));
+      found.value = value;
+      found.dispatchEvent(new browser.Event("change", { bubbles: true }));
     });
   };
   try {
-    await act(async () => root.render(<Editor />));
-    // A harness with an option set shows its options; the option set is not offered again.
-    const claude = browser.document.querySelector('select[aria-label="Add Claude Code Option"]');
-    expect(claude?.querySelector('option[value="append_system_prompt"]')).toBeNull();
-    expect(browser.document.querySelector('select[aria-label="Add Codex Option"]')).toBeNull();
-    await pick("Add Harness", "codex");
-    await pick("Add Codex Option", "disable_web_search");
-    expect(seen.codex).toEqual({ disable_web_search: "true" });
-    const box = browser.document.querySelector('input[aria-label="Codex Disable Web Search"]');
-    expect(box instanceof browser.HTMLInputElement && box.checked).toBe(true);
-    const remove = browser.document.querySelector(
-      'button[aria-label="Remove Codex Disable Web Search"]',
-    );
-    if (!(remove instanceof browser.HTMLButtonElement)) throw new Error("Missing remove button");
-    await act(async () => remove.click());
-    expect(seen).toEqual({ "claude-code": { append_system_prompt: "Run the tests first." } });
+    await act(async () => root.render(<Fields />));
+    // Nothing to add or remove: each of Codex's options is already a field, at its default.
+    expect(select("Disable Web Search").value).toBe("");
+    expect(select("Web Search").value).toBe("");
+    expect(browser.document.querySelector('textarea[aria-label="Native Config"]')).not.toBeNull();
+    expect(browser.document.querySelector('button[aria-label^="Remove"]')).toBeNull();
+    expect(browser.document.querySelector('select[aria-label^="Add"]')).toBeNull();
+    await pick("Disable Web Search", "true");
+    expect(seen).toEqual({ disable_web_search: "true" });
+    // Back to Harbor's default, the option is no longer set at all.
+    await pick("Disable Web Search", "");
+    expect(seen).toEqual({});
   } finally {
     await act(async () => root.unmount());
     container.remove();

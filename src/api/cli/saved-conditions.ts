@@ -5,6 +5,7 @@ import { print, table } from "./output.js";
 
 const FLAGS = {
   name: { type: "string" },
+  harness: { type: "string" },
   skill: { type: "string", multiple: true },
   instructions: { type: "string" },
   "instructions-file": { type: "string" },
@@ -81,7 +82,7 @@ export async function savedConditionCommand(args: string[], listing: boolean): P
 }
 
 /**
- * A saved condition from `--condition JSON|@FILE`, or from `--name` with `--skill`,
+ * A saved condition from `--condition JSON|@FILE`, or from `--name` with `--harness`, `--skill`,
  * `--instructions[-file]`, `--harness-option HARNESS.OPTION=VALUE`, and `--subagent-model ID` with
  * `--subagent-prompt[-file]` (an empty prompt tells the harness nothing; none, the default).
  */
@@ -96,8 +97,10 @@ async function conditionFromFlags(values: Values): Promise<unknown> {
   const prompt = await textOption(values, "subagent-prompt");
   if (prompt !== undefined && !catalogId)
     throw new Error("--subagent-prompt needs --subagent-model");
+  const harness = flag(values, "harness");
   return {
     name,
+    ...(harness ? { harness } : {}),
     skills: list(values, "skill"),
     ...(instructions ? { instructions } : {}),
     ...(harnessOptions ? { harnessOptions } : {}),

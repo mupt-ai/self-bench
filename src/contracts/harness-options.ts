@@ -42,9 +42,6 @@ export function harnessOptionsFor(harness: Harness): readonly HarborAgentOption[
   return harborAgentOptions[harness];
 }
 
-/** The harnesses that have any option to set. */
-export const OPTION_HARNESSES = harnessIds.filter((harness) => harnessOptionsFor(harness).length);
-
 /**
  * Settings the trial's own route owns, refused anywhere in a native config: a model (its
  * subagents' too, which a run names as its subagent model), where it is served, and the key that

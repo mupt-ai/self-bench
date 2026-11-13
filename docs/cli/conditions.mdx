@@ -20,6 +20,7 @@ A saved condition is a workspace's named set of harness changes. Run it with `co
 | --- | --- |
 | `--skill ORG/REPO[@REF]` (repeatable) | A GitHub repository whose `skills/` folder Harbor installs |
 | `--instructions TEXT` · `--instructions-file F` | Appended to every task's instruction |
+| `--harness HARNESS` | The one harness it changes: its skills, options, and subagent model are for it alone |
 | `--harness-option HARNESS.OPTION=VALUE` (repeatable) | An option on that harness's agent; `VALUE` as in [compare](/cli/evaluate#compare-flags) |
 | `--subagent-model ID` | The model Claude Code's and Codex's subagents run on |
 | `--subagent-prompt TEXT` · `--subagent-prompt-file F` | What the harness is told about delegating. Default: delegate a meaningful part of each task. `""` tells it nothing. |
