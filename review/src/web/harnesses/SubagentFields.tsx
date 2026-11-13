@@ -1,38 +1,34 @@
 import type { CredentialInfo } from "../../../../src/db/credentials";
-import { catalog } from "../../../../src/evaluation/catalog";
+import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import type { Harness } from "../../../../src/evaluation/models";
-import { providerServesSubagent } from "../../../../src/evaluation/subagents";
-import { credentialRunsAll } from "../evaluation/model-selection";
+import { subagentCredentials } from "../../../../src/evaluation/subagents";
 import { ModelPicker } from "../ModelPicker";
 import { InfoTooltip } from "../primitives/tooltip";
 import { Button, fieldStyles, Select } from "../ui";
 import { type HarnessDraft, subagentOn } from "./harness-draft";
 
-/**
- * The workspace credentials that can serve a subagent model to `agent`, through SelfBench's
- * gateway: a credential whose provider serves subagents and routes the model to that agent.
- */
-export function subagentCredentials(
+/** The credentials that can serve a subagent model to `agent`, on the served catalog. */
+function servingCredentials(
   catalogId: string,
   agent: Harness,
   credentials: readonly CredentialInfo[],
+  models: readonly CatalogModel[],
 ): CredentialInfo[] {
-  const model = catalog.find((entry) => entry.id === catalogId);
-  if (!model) return [];
-  return credentials.filter(
-    (credential) =>
-      providerServesSubagent(credential.kind) && credentialRunsAll(model, credential, [agent]),
-  );
+  const model = models.find((entry) => entry.id === catalogId);
+  return model ? subagentCredentials(model, [agent], credentials) : [];
 }
 
 /** Whether the draft's subagent credential no longer serves its model, or is gone. */
 export function staleSubagentCredential(
   draft: Pick<HarnessDraft, "agent" | "subagent">,
   credentials: readonly CredentialInfo[] | undefined,
+  models: readonly CatalogModel[],
 ): boolean {
   const { subagent, agent } = draft;
   if (!subagent?.credentialId || !credentials || !agent) return false;
-  return !subagentCredentials(subagent.catalogId, agent, credentials).some(
+  // Nothing is flagged for a model the catalog hasn't listed yet, or no longer lists.
+  if (!models.some((model) => model.id === subagent.catalogId)) return false;
+  return !servingCredentials(subagent.catalogId, agent, credentials, models).some(
     (credential) => credential.id === subagent.credentialId,
   );
 }
@@ -50,7 +46,7 @@ export function SubagentFields({
   onChange,
 }: {
   agent: Harness;
-  models: { id: string; label: string }[];
+  models: CatalogModel[];
   /** The workspace's credentials; undefined until they load. */
   credentials: readonly CredentialInfo[] | undefined;
   value: HarnessDraft["subagent"];
@@ -62,9 +58,10 @@ export function SubagentFields({
     value && !models.some((model) => model.id === value.catalogId)
       ? [{ id: value.catalogId, label: value.catalogId }, ...models]
       : models;
-  const able = value && credentials ? subagentCredentials(value.catalogId, agent, credentials) : [];
+  const able =
+    value && credentials ? servingCredentials(value.catalogId, agent, credentials, models) : [];
   // A credential saved earlier that no longer serves the model, or was deleted.
-  const stale = staleSubagentCredential({ agent, subagent: value }, credentials);
+  const stale = staleSubagentCredential({ agent, subagent: value }, credentials, models);
   return (
     <fieldset
       disabled={disabled}
@@ -85,7 +82,7 @@ export function SubagentFields({
               value={value?.catalogId ?? ""}
               onSelect={(model) => {
                 const first =
-                  credentials && subagentCredentials(model.id, agent, credentials)[0]?.id;
+                  credentials && servingCredentials(model.id, agent, credentials, models)[0]?.id;
                 onChange(subagentOn(model.id, value?.prompt, first || undefined));
               }}
             />

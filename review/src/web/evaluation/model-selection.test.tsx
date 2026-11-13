@@ -184,7 +184,9 @@ test("an empty inline row offers the model picker and disables dependent control
   );
   expect(html).toContain("Select Model");
   expect(html).toContain('aria-haspopup="listbox"');
-  expect(html.match(/<select[^>]*disabled=""/g)).toHaveLength(3);
+  expect(html.match(/<select[^>]*disabled=""/g)).toHaveLength(2);
+  // The Harness picker is a button like the Model picker's, and waits for a model too.
+  expect(html).toMatch(/<button[^>]*aria-label="Model Harness"[^>]*disabled=""/);
   expect(html).not.toContain('role="dialog"');
 });
 

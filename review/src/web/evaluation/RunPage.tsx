@@ -15,6 +15,7 @@ import {
   submitComparison,
   UnsavedComparisonError,
 } from "./comparison-submission";
+import { ablationPick } from "./RepoAblations";
 import { ResourceWarnings } from "./ResourceWarnings";
 import {
   RunBlockerNotice,
@@ -23,7 +24,6 @@ import {
   RunSetupCallout,
   runBlocker,
 } from "./RunExecution";
-import { RunHarnessesPanel, useHarnessChoices } from "./RunHarnessesPanel";
 import { judgeCredentials, RunJudgePanel } from "./RunJudgePanel";
 import { RunMissing } from "./RunMissing";
 import { RunModelsPanel } from "./RunModelsPanel";
@@ -33,6 +33,7 @@ import { restoreRunDraft } from "./run-draft";
 import { harnessesProblem } from "./run-harnesses";
 import { runCredentials, selectionReady } from "./run-readiness";
 import { type EvaluationScope, useEvaluationScope } from "./useEvaluationScope";
+import { useHarnessChoices } from "./useHarnessChoices";
 
 type RunState = { draft: RunDraft; submitted: boolean; sandboxDefaultPending?: boolean };
 
@@ -253,12 +254,10 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
           setState((current) => ({ ...current, draft: { ...current.draft, tasks } }))
         }
         disabled={busy || state.submitted}
-      />
-      <RunHarnessesPanel
-        draft={draft}
-        choices={choices}
-        disabled={busy || state.submitted}
-        onChange={(value) => setState((current) => ({ ...current, draft: value }))}
+        // A benchmark or a group has no repo ablations, so the line shows for a repository alone.
+        ablations={ablationPick(draft, choices.environments, (update) =>
+          setState((current) => ({ ...current, draft: update(current.draft) })),
+        )}
       />
       {judge?.variables.length ? (
         <RunJudgePanel
@@ -277,6 +276,7 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
           models={models}
           credentials={availableCredentials}
           draft={draft}
+          saved={choices.saved}
           disabled={busy || state.submitted}
           onChange={(value) => setState({ ...state, draft: value, submitted: false })}
         />

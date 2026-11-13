@@ -20,7 +20,7 @@ icon: "play"
 
 | Route | Body |
 | --- | --- |
-| `POST {scope}/evaluations/comparisons` | `{ id (UUID you generate; retries never start twice), models: [{ catalogId, credentialId, harnesses, thinking? }] (≤12), sandbox, sandboxCredentialId, tasks?: [{ runId, taskId }], skipCompleted?, judgeCredentialId?, harnesses?: [id] (≤4), environments?: [id] (≤4), baseline? }` |
+| `POST {scope}/evaluations/comparisons` | `{ id (UUID you generate; retries never start twice), models: [{ catalogId, credentialId, harnesses, thinking?, harness? }] (≤12), sandbox, sandboxCredentialId, tasks?: [{ runId, taskId }], skipCompleted?, judgeCredentialId?, harnesses?: [id] (≤4), environments?: [id] (≤4), baseline? }` |
 
 `credentialId` in a model choice is a saved credential's ID, or `managed-model`. `models[].harnesses` are `pi`, `codex`, `claude-code`, `mini-swe-agent`, `terminus-2`, or `muse-code`. `thinking` is `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`.
 
@@ -33,6 +33,8 @@ For scores, read [results](/api/inspect) rather than adding up trials.
 ## Harnesses and Environments
 
 `harnesses` (≤4) are [saved harnesses'](/api/harnesses) ids; `environments` (≤4) are [environments'](/api/environments) ids. Every task runs again with each harness, in each environment, and with each harness in each environment, at most 12 in all, beside the tasks as they are. `baseline: false` leaves out the tasks as they are. Results report each as its own configuration.
+
+`models[].harness` is one saved harness's id, which that model runs in place of its agent as it is: on the tasks as they are and in each environment. Its agent must be the row's. The app's Run page picks harnesses this way.
 
 | Rule | Detail |
 | --- | --- |

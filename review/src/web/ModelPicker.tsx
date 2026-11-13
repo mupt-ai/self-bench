@@ -4,10 +4,14 @@ import { cn } from "./primitives/cn";
 import { controlStyles, SearchInput } from "./ui";
 import { matchesQuery } from "./word-search";
 
-/** What the picker needs of a model. */
+/** What the picker needs of a model, or of anything else it lists (a harness, say). */
 interface PickableModel {
   id: string;
   label: string;
+  /** A heading the list shows above the first of each run of entries that share it. */
+  group?: string;
+  /** A second, quieter line under the label. */
+  detail?: string;
 }
 
 /** The list's tallest, as max-h-72; less where the window has less room. */
@@ -40,13 +44,15 @@ export function matchingModels<Model extends PickableModel>(
   models: Model[],
   query: string,
 ): Model[] {
-  return models.filter((model) => matchesQuery(`${model.label} ${model.id}`, query));
+  return models.filter((model) =>
+    matchesQuery(`${model.label} ${model.id} ${model.detail ?? ""}`, query),
+  );
 }
 
 /**
  * The one model select, shared by the run page and generation settings, with its search inside
  * the list: the trigger looks like the form's other selects, and opening it focuses a search box
- * above the models.
+ * above the models. The run page lists a row's harnesses with it too (`noun`), under headings.
  */
 export function ModelPicker<Model extends PickableModel>({
   models,
@@ -55,14 +61,22 @@ export function ModelPicker<Model extends PickableModel>({
   id,
   label = "Model",
   placeholder = "Select Model",
+  noun = "Models",
+  disabled = false,
+  icon,
 }: {
   models: Model[];
   value: string;
-  onSelect(model: Model): void;
+  onSelect?(model: Model): void;
   id?: string;
   label?: string;
   /** What the trigger shows while no model is chosen. */
   placeholder?: string;
+  /** What it lists, in Title Case, for its search box and list: "Models", "Harnesses". */
+  noun?: string;
+  disabled?: boolean;
+  /** An icon the trigger shows alone, as a small button ("+" to add one), in place of a select. */
+  icon?: React.ReactNode;
 }) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
@@ -83,7 +97,7 @@ export function ModelPicker<Model extends PickableModel>({
     if (!model) return;
     close();
     trigger.current?.focus();
-    if (model.id !== value) onSelect(model);
+    if (model.id !== value) onSelect?.(model);
   };
 
   React.useEffect(() => {
@@ -123,7 +137,12 @@ export function ModelPicker<Model extends PickableModel>({
         aria-label={label}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className={cn(controlStyles, "flex items-center justify-between gap-2 text-left text-sm")}
+        disabled={disabled}
+        className={
+          icon
+            ? "flex size-7 items-center justify-center rounded-md border border-dashed border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground disabled:opacity-40"
+            : cn(controlStyles, "flex items-center justify-between gap-2 text-left text-sm")
+        }
         onClick={() => {
           if (open) close();
           else {
@@ -137,22 +156,26 @@ export function ModelPicker<Model extends PickableModel>({
           }
         }}
       >
-        <span className={cn("truncate", !selected && "text-muted-foreground")}>
-          {selected?.label ?? placeholder}
-        </span>
-        <ChevronDown aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+        {icon ?? (
+          <>
+            <span className={cn("truncate", !selected && "text-muted-foreground")}>
+              {selected?.label ?? placeholder}
+            </span>
+            <ChevronDown aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+          </>
+        )}
       </button>
       {open && (
         <div className="panel fixed z-50 bg-background p-1 font-normal" style={place?.panel}>
           <SearchInput
             autoFocus
             role="combobox"
-            aria-label="Search Models"
+            aria-label={`Search ${noun}`}
             aria-controls={listId}
             aria-expanded="true"
             aria-autocomplete="list"
             aria-activedescendant={shown[active] ? `${listId}-${active}` : undefined}
-            placeholder="Search Models"
+            placeholder={`Search ${noun}`}
             value={query}
             onChange={(event) => {
               setQuery(event.target.value);
@@ -175,33 +198,48 @@ export function ModelPicker<Model extends PickableModel>({
             id={listId}
             role="listbox"
             tabIndex={-1}
-            aria-label="Models"
+            aria-label={noun}
             className="mt-1 overflow-y-auto"
             style={{ maxHeight: place?.list ?? LIST_HEIGHT }}
           >
             {shown.map((model, index) => (
-              <button
-                type="button"
-                key={model.id}
-                id={`${listId}-${index}`}
-                data-index={index}
-                role="option"
-                tabIndex={-1}
-                aria-selected={model.id === value}
-                className={cn(
-                  "flex w-full cursor-default items-center justify-between gap-2 px-3 py-2 text-left text-sm",
-                  index === active && "bg-foreground/[0.06]",
+              <React.Fragment key={model.id}>
+                {model.group && model.group !== shown[index - 1]?.group && (
+                  <p className="px-3 pb-1 pt-2 text-xs font-semibold text-muted-foreground">
+                    {model.group}
+                  </p>
                 )}
-                onPointerEnter={() => setActive(index)}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => choose(model)}
-              >
-                <span className="truncate">{model.label}</span>
-                {model.id === value && <Check aria-hidden="true" className="size-3.5 shrink-0" />}
-              </button>
+                <button
+                  type="button"
+                  id={`${listId}-${index}`}
+                  data-index={index}
+                  role="option"
+                  tabIndex={-1}
+                  aria-selected={model.id === value}
+                  className={cn(
+                    "flex w-full cursor-default items-center justify-between gap-2 px-3 py-2 text-left text-sm",
+                    index === active && "bg-foreground/[0.06]",
+                  )}
+                  onPointerEnter={() => setActive(index)}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => choose(model)}
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate">{model.label}</span>
+                    {model.detail && (
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {model.detail}
+                      </span>
+                    )}
+                  </span>
+                  {model.id === value && <Check aria-hidden="true" className="size-3.5 shrink-0" />}
+                </button>
+              </React.Fragment>
             ))}
             {!shown.length && (
-              <p className="px-3 py-2 text-sm text-muted-foreground">No models match.</p>
+              <p className="px-3 py-2 text-sm text-muted-foreground">
+                No {noun.toLowerCase()} match.
+              </p>
             )}
           </div>
         </div>

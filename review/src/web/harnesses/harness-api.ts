@@ -1,5 +1,6 @@
 import type { SavedHarnessDraft } from "../../../../src/contracts/saved-harnesses";
 import type { SavedHarness } from "../../../../src/db/saved-harnesses";
+import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import { requestJson } from "../api";
 
 export type { SavedHarness };
@@ -19,7 +20,7 @@ export async function listHarnesses(org: string): Promise<SavedHarness[]> {
 /** The models a saved harness's subagents can run on, and whether the managed key serves them. */
 export async function listSubagentModels(
   org: string,
-): Promise<{ models: { id: string; label: string }[]; managed?: boolean }> {
+): Promise<{ models: CatalogModel[]; managed?: boolean }> {
   return requestJson(`${harnessesPath(org)}/models`);
 }
 

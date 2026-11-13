@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MAX_CONDITIONS, MAX_PICKED } from "../../../../src/contracts/conditions";
+import { MAX_PICKED } from "../../../../src/contracts/conditions";
 import { thinkingLevels } from "../../../../src/contracts/models";
 import { harnessIds } from "../../../../src/evaluation/models";
 import { evaluationRequestId } from "./api";
@@ -7,7 +7,6 @@ import { evaluationRequestId } from "./api";
 const tasksSchema = z.array(
   z.object({ runId: z.string().min(1).max(100), taskId: z.string().min(1).max(200) }),
 );
-const pickedIds = z.array(z.number().int().positive()).max(MAX_PICKED).optional().catch(undefined);
 /** A saved Run draft: its tasks, models, where they run, and its LLM judge's credential. */
 const draftStateSchema = z.object({
   submitted: z.boolean(),
@@ -24,6 +23,8 @@ const draftStateSchema = z.object({
           thinking: z.enum(thinkingLevels).optional(),
           customModel: z.string().max(200).optional(),
           harnesses: z.array(z.enum(harnessIds)).max(harnessIds.length),
+          // The saved harness the row runs in place of its harness as it is.
+          harness: z.number().int().positive().optional().catch(undefined),
         }),
       )
       .max(12),
@@ -31,60 +32,32 @@ const draftStateSchema = z.object({
     sandboxCredentialId: z.string().max(36),
     skipCompleted: z.boolean().optional(),
     judgeCredentialId: z.string().max(36).optional(),
-    // The saved harnesses and repo ablations picked (RunHarnessesPanel), checked on submit.
-    harnesses: pickedIds,
-    environments: pickedIds,
-    // What drafts picked before the two lists: rows of a saved harness and a repo ablation, each
-    // moved into its list. A row written out on this page is dropped whole, rather than keeping
-    // its repo ablation and losing the rest.
-    conditions: z.array(z.unknown()).max(MAX_CONDITIONS).optional().catch(undefined),
+    // The repo ablations the tasks also run in, and whether they run as they are too. What older
+    // drafts picked for every row at once (`harnesses`, `conditions`) is dropped: a saved harness
+    // is now each row's own.
+    environments: z.array(z.number().int().positive()).max(MAX_PICKED).optional().catch(undefined),
     baseline: z.boolean().optional(),
   }),
 });
-/** A row as the Run page once picked it; any other key marks a written-out row, which is dropped. */
-const pickedConditionRow = z
-  .object({
-    saved: z.number().int().positive().optional(),
-    environment: z.number().int().positive().optional(),
-    subagentCredentialId: z.string().max(36).optional(),
-  })
-  .strict();
-
-/** A draft's picked harnesses and repo ablations, with an older draft's rows moved into them. */
-function withPicked<Draft extends z.infer<typeof draftStateSchema>["draft"]>(
-  draft: Draft,
-): Omit<Draft, "conditions"> {
-  const { conditions, ...rest } = draft;
-  const rows = (conditions ?? []).flatMap((row) => {
-    const parsed = pickedConditionRow.safeParse(row);
-    return parsed.success ? [parsed.data] : [];
-  });
-  const merged = (given: number[] | undefined, more: (number | undefined)[]) => {
-    const ids = [...new Set([...(given ?? []), ...more.filter((id) => id !== undefined)])].slice(
-      0,
-      MAX_PICKED,
-    );
-    return ids.length ? ids : undefined;
-  };
-  const harnesses = merged(
-    draft.harnesses,
-    rows.map((row) => row.saved),
-  );
-  const environments = merged(
-    draft.environments,
-    rows.map((row) => row.environment),
-  );
-  const { harnesses: _, environments: __, ...others } = rest;
+/**
+ * The draft without the keys it left unset, and with the tasks as they are run again once no repo
+ * ablation is picked: there would be nothing else to run.
+ */
+function withoutUnset(draft: z.infer<typeof draftStateSchema>["draft"]) {
+  const { environments, baseline, models, ...rest } = draft;
   return {
-    ...others,
-    ...(harnesses ? { harnesses } : {}),
-    ...(environments ? { environments } : {}),
-  } as Omit<Draft, "conditions">;
+    ...rest,
+    models: models.map(({ harness, ...model }) => ({
+      ...model,
+      ...(harness !== undefined ? { harness } : {}),
+    })),
+    ...(environments?.length ? { environments } : {}),
+    ...(baseline === false && environments?.length ? { baseline } : {}),
+  };
 }
 const blankModel = () => ({ catalogId: "", credentialId: "", harnesses: [] });
 
-type DraftState = z.infer<typeof draftStateSchema>;
-type RestoredDraft = Omit<DraftState, "draft"> & { draft: Omit<DraftState["draft"], "conditions"> };
+type RestoredDraft = z.infer<typeof draftStateSchema>;
 
 /** The Run page's saved draft, or a new one with the tasks a link picked (`?tasks=`). */
 export function restoreRunDraft(saved: string | null, selectedTasks: string | null): RestoredDraft {
@@ -92,7 +65,7 @@ export function restoreRunDraft(saved: string | null, selectedTasks: string | nu
     try {
       const parsed = draftStateSchema.safeParse(JSON.parse(saved));
       if (parsed.success) {
-        const draft = withPicked(parsed.data.draft);
+        const draft = withoutUnset(parsed.data.draft);
         if (!draft.models.length) draft.models = [blankModel()];
         return { ...parsed.data, draft };
       }

@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import type { ComparisonSelection } from "../../../../src/evaluation/comparisons";
+import type { SavedHarness } from "../harnesses/harness-api";
 import { Notice } from "../ui";
 import { evaluationRequestId } from "./api";
 import { hasDuplicateModelSelections } from "./model-selection";
@@ -12,11 +13,14 @@ export function RunModelTable<D extends ComparisonSelection>({
   models,
   credentials,
   draft,
+  saved,
   onChange,
 }: {
   models: CatalogModel[];
   credentials: CredentialInfo[];
   draft: D;
+  /** The workspace's saved harnesses, which each row's Harness also offers. */
+  saved?: SavedHarness[];
   onChange(value: NoInfer<D>): void;
 }) {
   const [rowKeys] = useState(() => new WeakMap<ComparisonSelection["models"][number], string>());
@@ -45,6 +49,7 @@ export function RunModelTable<D extends ComparisonSelection>({
               models={models}
               credentials={credentials}
               selection={draft.models[index]}
+              saved={saved}
               onChange={(selection) => {
                 rowKeys.set(selection, rowKey);
                 onChange({

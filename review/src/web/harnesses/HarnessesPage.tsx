@@ -1,5 +1,6 @@
 import { Plus } from "lucide-react";
 import React from "react";
+import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import { formatAgo } from "../api";
 import { runCredentials } from "../evaluation/run-readiness";
 import { useOrg } from "../SiteLayout";
@@ -22,7 +23,7 @@ export function HarnessesPage() {
   const [harnesses, setHarnesses] = React.useState<SavedHarness[]>();
   const [saved] = useOrgCredentials(org.login);
   // Where the managed key serves models, it can serve subagents too, as on the Run page.
-  const [models, setModels] = React.useState<{ id: string; label: string }[]>([]);
+  const [models, setModels] = React.useState<CatalogModel[]>([]);
   const [managed, setManaged] = React.useState(false);
   const credentials = saved && runCredentials(saved, managed);
   const [error, setError] = React.useState<string | null>(null);

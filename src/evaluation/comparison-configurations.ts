@@ -3,7 +3,7 @@ import type { CatalogModel } from "./catalog.js";
 import type { ComparisonSelection } from "./comparisons.js";
 import { defaultThinking, type Harness, routeFor, signInRefusal } from "./models.js";
 import { subagentPart } from "./setting.js";
-import { providerServesSubagent, subagentRefusal } from "./subagents.js";
+import { subagentCredentials, subagentRefusal } from "./subagents.js";
 import type { EvaluationRun, SubagentModel } from "./types.js";
 
 /**
@@ -54,6 +54,13 @@ export function completedConfigurationTasks(runs: EvaluationRun[]) {
   return completed;
 }
 
+/** SelfBench's own OpenRouter key, where the deployment manages models. */
+const MANAGED_CREDENTIAL = {
+  id: "managed-model",
+  kind: "openrouter" as const,
+  auth: "api-key" as const,
+};
+
 /**
  * The subagent model a selection names, frozen for its runs: a catalog model other than the
  * run's own, on a saved credential (or the managed one) that serves it by name on every selected
@@ -76,9 +83,7 @@ export function selectedSubagent(
   const managed = selected.credentialId === "managed-model";
   if (managed && !known.managed)
     throw new Error("Managed models are not available on this deployment.");
-  const credential = managed
-    ? { id: "managed-model", kind: "openrouter" as const, auth: "api-key" as const }
-    : known.saved.get(selected.credentialId);
+  const credential = managed ? MANAGED_CREDENTIAL : known.saved.get(selected.credentialId);
   const route = subagent && credential && routeFor(subagent, credential.kind);
   if (!subagent || !credential || !route)
     throw new Error("Select a subagent model and its matching provider credential");
@@ -122,12 +127,10 @@ export function conditionSubagent(
   if (!subagent) throw new Error(`${row.name}: unknown subagent model ${picked.catalogId}`);
   const candidates = picked.credentialId
     ? [picked.credentialId]
-    : [
-        ...[...known.saved.values()]
-          .filter(({ kind }) => providerServesSubagent(kind) && routeFor(subagent, kind))
-          .map(({ id }) => id),
-        ...(known.managed && routeFor(subagent, "openrouter") ? ["managed-model"] : []),
-      ];
+    : subagentCredentials(subagent, row.harnesses, [
+        ...known.saved.values(),
+        ...(known.managed ? [MANAGED_CREDENTIAL] : []),
+      ]).map(({ id }) => id);
   let refusal: unknown;
   for (const credentialId of candidates) {
     try {

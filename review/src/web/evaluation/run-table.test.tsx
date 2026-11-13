@@ -9,6 +9,7 @@ import { CredentialGroup } from "./CredentialGroup";
 import { RunModelRow } from "./RunModelRow";
 import { RunModelTable } from "./RunModelTable";
 import { RunTaskPicker } from "./RunTaskPicker";
+import { rowHarnessOptions } from "./row-harness-options";
 import { thinkingLabel } from "./run-presentation";
 
 test("thinking levels use lowercase in selectors and run summaries", () => {
@@ -266,18 +267,12 @@ test("harness dropdown follows the selected credential's route", () => {
     { id: "gateway", name: "OpenRouter", kind: "openrouter", auth: "api-key" },
   ] as CredentialInfo[];
   const harnesses = (credentialId: string) =>
-    [
-      ...(renderToStaticMarkup(
-        <RunModelRow
-          model={astra}
-          credentials={credentials}
-          selection={{ catalogId: astra.id, credentialId, harnesses: [] }}
-          onChange={() => {}}
-        />,
-      )
-        .split('aria-label="GPT-6 Astra Harness"')[1]
-        ?.matchAll(/value="([^"]+)"/g) ?? []),
-    ].map((match) => match[1]);
+    rowHarnessOptions(
+      astra,
+      credentials.find((entry) => entry.id === credentialId),
+      undefined,
+      undefined,
+    ).map((option) => option.id);
   expect(harnesses("login")).toEqual(["codex"]);
   expect(harnesses("key")).toEqual(["codex", "pi", "mini-swe-agent", "terminus-2"]);
   expect(harnesses("gateway")).toEqual([

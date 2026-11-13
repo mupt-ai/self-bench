@@ -1,4 +1,6 @@
-import { type Harness, harnessLabels } from "./models.js";
+import type { CredentialInfo } from "../db/credentials.js";
+import type { CatalogModel } from "./catalog.js";
+import { type Harness, harnessLabels, routeFor, signInRefusal } from "./models.js";
 
 /**
  * A subagent model: the model a run's delegated agents call in place of the run's own, so one
@@ -49,6 +51,28 @@ function providerTakesSubagent(provider: string): boolean {
  */
 export function providerServesSubagent(provider: string): boolean {
   return provider !== "custom" && provider !== "dari";
+}
+
+/**
+ * The credentials, of `credentials`, that can serve `model` to the subagents of `harnesses`: a kind
+ * that serves models by name and routes this one to each harness (through its own API or a
+ * gateway that lists it), on a sign-in that runs them. A comparison, the Run page, and the harness
+ * editor all pick a subagent credential from these, so `model` must come from the served catalog
+ * (evaluationCatalog), which knows every gateway's listings.
+ */
+export function subagentCredentials<Credential extends Pick<CredentialInfo, "kind" | "auth">>(
+  model: CatalogModel,
+  harnesses: readonly Harness[],
+  credentials: Iterable<Credential>,
+): Credential[] {
+  return [...credentials].filter((credential) => {
+    const route = providerServesSubagent(credential.kind) && routeFor(model, credential.kind);
+    return (
+      !!route &&
+      harnesses.every((harness) => route.harnesses.includes(harness)) &&
+      !signInRefusal(credential.auth, harnesses)
+    );
+  });
 }
 
 /**

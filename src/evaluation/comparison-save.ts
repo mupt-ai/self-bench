@@ -6,7 +6,11 @@ import type { CredentialInfo } from "../db/credentials.js";
 import type { Vault } from "../db/vault.js";
 import { type ManagedOffer, managedHarborEnvironment } from "../generation/billing/managed.js";
 import { type CatalogModel, evaluationCatalog } from "./catalog.js";
-import { comparisonConditions, NOTHING_TO_RUN } from "./comparison-conditions.js";
+import {
+  type comparisonConditions,
+  NOTHING_TO_RUN,
+  rowConditions,
+} from "./comparison-conditions.js";
 import {
   completedConfigurationTasks,
   conditionSubagent,
@@ -15,7 +19,7 @@ import {
   selectedSubagent,
 } from "./comparison-configurations.js";
 import type { ComparisonSelection } from "./comparisons.js";
-import { conditionRefusal, conditionUnmatched } from "./conditions.js";
+import { conditionRefusal } from "./conditions.js";
 import { trialRoute } from "./gateway-trial.js";
 import { defaultThinking, routeFor, signInRefusal, thinkingOptions } from "./models.js";
 import { assertTasksFitSandbox } from "./resource-check.js";
@@ -109,28 +113,12 @@ export async function saveComparison(
     selection.baseline === false &&
     !selection.conditions?.length &&
     !selection.harnesses?.length &&
-    !selection.environments?.length
+    !selection.environments?.length &&
+    selection.models.every((model) => model.harness === undefined)
   )
     throw new Error(NOTHING_TO_RUN);
   const frozen = await freeze();
-  // The baseline runs the tasks as they are; each harness and environment pair runs them again,
-  // kept apart in results.
-  const conditions = await comparisonConditions(selection, frozen, known);
-  const picked = selection.models.flatMap((model) => model.harnesses);
-  for (const { condition } of conditions) {
-    const unmatched = condition && conditionUnmatched(condition, picked);
-    if (unmatched) throw new Error(unmatched);
-    // A row on the subagent model itself has nothing to delegate to, and is left out.
-    const alone = selection.models.every(
-      (model) =>
-        model.catalogId === condition?.subagent?.catalogId ||
-        !model.harnesses.some((harness) => conditionRunsOn(condition, harness)),
-    );
-    if (condition?.subagent && alone)
-      throw new Error(
-        `${condition.name} runs subagents on ${condition.subagent.catalogId}: pick another model for it to work beside`,
-      );
-  }
+  const byRow = await rowConditions(selection, frozen, known);
   const resourceWarnings = assertTasksFitSandbox(frozen, sandbox);
   const judgeCredentialId = judge?.(frozen, saved);
   const seen = new Set<string>();
@@ -174,8 +162,13 @@ export async function saveComparison(
     if (!levels.includes(thinking))
       throw new Error("Unsupported thinking level for this model and harness");
     const modelIdentity = selected.catalogId === "custom" ? route.model : model.id;
+    const conditions = byRow.get(selected.harness) ?? [];
     for (const harness of selected.harnesses) {
-      const pair = configurationIdentity(modelIdentity, thinking, harness, { subagent });
+      // The same model on a harness as it is and on a saved harness are two rows, not one twice.
+      const pair = configurationIdentity(modelIdentity, thinking, harness, {
+        subagent,
+        ...(selected.harness !== undefined ? { condition: `saved:${selected.harness}` } : {}),
+      });
       if (seen.has(pair))
         throw new Error("Select each model, harness, and thinking configuration once");
       seen.add(pair);
