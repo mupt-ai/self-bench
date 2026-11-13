@@ -77,6 +77,8 @@ test("a workspace saves, replaces, and deletes its harnesses, which another work
   const older = await (await server.request("/api/orgs/avyay/conditions")).json();
   expect(older.conditions.map((entry: { id: number }) => entry.id)).toEqual([id]);
   const models = await (await server.request(`${harnesses}/models`)).json();
+  // No managed key is configured here, so the editor offers none to subagents.
+  expect(models.managed).toBe(false);
   expect(models.models.map((model: { id: string }) => model.id)).toContain(DEEPSEEK);
   expect(models.models.map((model: { id: string }) => model.id)).not.toContain("dari/routing");
 

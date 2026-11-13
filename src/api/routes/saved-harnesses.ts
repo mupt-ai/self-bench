@@ -5,6 +5,7 @@ import type { User } from "../../db/users.js";
 import { evaluationCatalog } from "../../evaluation/catalog.js";
 import { modelHarnesses } from "../../evaluation/models.js";
 import { providerServesSubagent, subagentSupport } from "../../evaluation/subagents.js";
+import { managedOffer } from "../../generation/billing/managed.js";
 import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
 import type { EvaluationRoutesOptions } from "./evaluations.js";
@@ -35,7 +36,8 @@ function subagentModels(): { id: string; label: string }[] {
  * - `GET harnesses/{id}`: one.
  * - `PUT harnesses/{id} {…}`: replaces one. Runs that already used it keep what they ran.
  * - `DELETE harnesses/{id}`: removes one.
- * - `GET harnesses/models`: the models a harness's subagents can run on.
+ * - `GET harnesses/models`: the models a harness's subagents can run on, and whether the
+ *   managed key serves them (`managed`).
  *
  * Under the older `conditions` path, replies name them `conditions` and `condition`.
  */
@@ -69,7 +71,8 @@ export async function savedHarnessRoutes(
     return true;
   }
   if (listing) {
-    sendJson(response, 200, { models: subagentModels() });
+    // Whether SelfBench's own key serves models here, so the editor can offer it to subagents.
+    sendJson(response, 200, { models: subagentModels(), managed: managedOffer().models });
     return true;
   }
   const store = options.vault?.harnesses;

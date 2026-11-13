@@ -16,11 +16,11 @@ export async function listHarnesses(org: string): Promise<SavedHarness[]> {
   return (await requestJson<{ harnesses: SavedHarness[] }>(harnessesPath(org))).harnesses;
 }
 
-/** The models a saved harness's subagents can run on. */
-export async function listSubagentModels(org: string): Promise<{ id: string; label: string }[]> {
-  return (
-    await requestJson<{ models: { id: string; label: string }[] }>(`${harnessesPath(org)}/models`)
-  ).models;
+/** The models a saved harness's subagents can run on, and whether the managed key serves them. */
+export async function listSubagentModels(
+  org: string,
+): Promise<{ models: { id: string; label: string }[]; managed?: boolean }> {
+  return requestJson(`${harnessesPath(org)}/models`);
 }
 
 /** Saves a new harness, or replaces the one with `id`. */

@@ -17,13 +17,14 @@ import { harnessSummary } from "./harness-summary";
  * environments do that, and a run runs every harness in every environment.
  */
 export function HarnessesPage() {
-  const { org, managedOffering } = useOrg();
+  const { org } = useOrg();
   useDocumentTitle(`Harnesses · ${org.login}`);
   const [harnesses, setHarnesses] = React.useState<SavedHarness[]>();
   const [saved] = useOrgCredentials(org.login);
-  // With the managed offering, its key can serve subagents too, as on the Run page.
-  const credentials = saved && runCredentials(saved, managedOffering);
+  // Where the managed key serves models, it can serve subagents too, as on the Run page.
   const [models, setModels] = React.useState<{ id: string; label: string }[]>([]);
+  const [managed, setManaged] = React.useState(false);
+  const credentials = saved && runCredentials(saved, managed);
   const [error, setError] = React.useState<string | null>(null);
   // The harness being edited, "new" for one being written, or nothing while the dialog is shut.
   const [editing, setEditing] = React.useState<SavedHarness | "new">();
@@ -33,10 +34,11 @@ export function HarnessesPage() {
   React.useEffect(() => {
     let stopped = false;
     Promise.all([listHarnesses(org.login), listSubagentModels(org.login)]).then(
-      ([found, subagentModels]) => {
+      ([found, subagents]) => {
         if (stopped) return;
         setHarnesses(found);
-        setModels(subagentModels);
+        setModels(subagents.models);
+        setManaged(subagents.managed === true);
         setError(null);
       },
       (cause) => {
