@@ -7,13 +7,13 @@ const REPEAT_WINDOW_MS = 60 * 60 * 1000;
 const lastReported = new Map<string, number>();
 
 /**
- * Error reporting for the API and the worker, on when `SENTRY_DSN` is set. Only errors: no
- * tracing. Reports carry a request's method and path but never its query string, headers,
- * cookies, body, or stack-frame variables, and error messages pass through `redactSecrets`
- * (command output can carry tokens).
+ * Error reporting for the API, the model gateway, and the worker, on when `SENTRY_DSN` is set.
+ * Only errors: no tracing. Reports carry a request's method and path but never its query string,
+ * headers, cookies, body, or stack-frame variables, and error messages pass through
+ * `redactSecrets` (command output can carry tokens).
  */
 export function initSentry(
-  service: "api" | "worker",
+  service: "api" | "gateway" | "worker",
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): void {
   const dsn = envValue(env, "SENTRY_DSN");

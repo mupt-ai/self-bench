@@ -98,7 +98,7 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
       // An eval has no GitHub repository, so no pull requests; it still has generation options.
       if (!configuring && repo.kind === "eval") {
         sendJson(response, 409, {
-          error: "An eval has no pull requests; add workspace scenarios.",
+          error: "An eval has no pull requests; add workspace vibe evals.",
         });
         return true;
       }

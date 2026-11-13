@@ -65,9 +65,9 @@ export function useEvaluationScope(): EvaluationScope {
         url: evaluationUrl(org.login, full),
         pages: `/repos/${full}`,
         label: full,
-        // An eval's pages are a repository's, but it is listed under Scenarios.
+        // An eval's pages are a repository's, but it is listed under Vibe Evals.
         parent: isEvalName(full)
-          ? { label: "Scenarios", to: "/evals" }
+          ? { label: "Vibe Evals", to: "/evals" }
           : { label: "Mined Repos", to: "/" },
       };
 }

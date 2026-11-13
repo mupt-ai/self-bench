@@ -99,7 +99,7 @@ export function TaskList({
                 ) : task.title ? (
                   <span className="flex min-w-0 items-center gap-1.5" title={task.title}>
                     <NotebookPen className="size-3.5 shrink-0" aria-hidden="true" />
-                    <span className="truncate font-sans">Scenario</span>
+                    <span className="truncate font-sans">Vibe Eval</span>
                   </span>
                 ) : (
                   "—"

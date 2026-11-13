@@ -210,6 +210,26 @@ resource "google_compute_url_map" "api" {
       default_service = path_matcher.value.id
     }
   }
+  # Trials' model calls go to the gateway service (gateway.tf); everything else on the app's
+  # hosts stays on the API.
+  dynamic "host_rule" {
+    for_each = length(local.gateway_hosts) > 0 ? [local.gateway_hosts] : []
+    content {
+      hosts        = host_rule.value
+      path_matcher = "app"
+    }
+  }
+  dynamic "path_matcher" {
+    for_each = length(local.gateway_hosts) > 0 ? [1] : []
+    content {
+      name            = "app"
+      default_service = google_compute_backend_service.api.id
+      path_rule {
+        paths   = ["/gateway", "/gateway/*"]
+        service = google_compute_backend_service.gateway.id
+      }
+    }
+  }
 }
 
 # Certificates are authorized by DNS (a CNAME per domain, listed in the deployment output), so

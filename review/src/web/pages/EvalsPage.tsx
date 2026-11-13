@@ -26,7 +26,7 @@ import { Button, fieldStyles, Input, Notice, PageFrame, PageHeader } from "../ui
 export function EvalsPage() {
   const { org } = useOrg();
   const navigate = useNavigate();
-  useDocumentTitle(`Scenarios · ${org.login}`);
+  useDocumentTitle(`Vibe Evals · ${org.login}`);
   const [evals, setEvals] = React.useState<ConnectedRepo[]>();
   const [counts, setCounts] = React.useState<Record<string, RepoTaskCounts>>({});
   const [error, setError] = React.useState("");
@@ -55,9 +55,9 @@ export function EvalsPage() {
   };
   return (
     <PageFrame>
-      <PageHeader title="Scenarios" description="Evals built from scenarios you describe." />
+      <PageHeader title="Vibe Evals" description="Evals built from tasks you describe." />
       {error && <Notice className="mb-4">{error}</Notice>}
-      {!evals && !error && <CardGridSkeleton label="Loading Scenarios" />}
+      {!evals && !error && <CardGridSkeleton label="Loading Vibe Evals" />}
       {evals && (
         <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {evals.map((entry) => {
@@ -159,7 +159,7 @@ function NewEvalDialog({
           <label htmlFor="eval-name" className={fieldStyles}>
             <span className="flex items-center gap-1.5">
               Name
-              <InfoTooltip label="A collection of workspace scenarios with no repository behind it, such as the tasks one capability or product area should handle. It gets its own dataset, Run, and Results." />
+              <InfoTooltip label="A collection of workspace vibe evals with no repository behind it, such as the tasks one capability or product area should handle. It gets its own dataset, Run, and Results." />
             </span>
             <Input
               id="eval-name"
