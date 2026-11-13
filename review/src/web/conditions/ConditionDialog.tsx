@@ -1,10 +1,5 @@
-import { Plus, Trash2 } from "lucide-react";
 import React from "react";
-import {
-  MAX_SKILL_LENGTH,
-  MAX_SKILLS,
-  SKILL_HARNESSES,
-} from "../../../../src/contracts/conditions";
+import { SKILL_HARNESSES } from "../../../../src/contracts/conditions";
 import {
   type HarnessOptionValue,
   harnessOptionsFor,
@@ -15,6 +10,7 @@ import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
 import { cn } from "../primitives/cn";
 import { InfoTooltip } from "../primitives/tooltip";
 import { Button, controlStyles, fieldStyles, Input, Notice, Select } from "../ui";
+import { type Page, PageSteps, SkillFields } from "./ConditionPages";
 import { type SavedCondition, saveCondition } from "./condition-api";
 import {
   blankCondition,
@@ -163,57 +159,11 @@ export function ConditionDialog({
           {page === 3 && (
             <>
               {skillsOn && (
-                <div className={fieldStyles}>
-                  <span className="flex items-center gap-1.5">
-                    Skills
-                    <InfoTooltip label="A GitHub repository whose skills/ folder holds the skills, as org/repo, org/repo@ref, or a URL. Claude Code, Codex, and Pi load them." />
-                  </span>
-                  {draft.skills.map((skill, at) => (
-                    <div
-                      // biome-ignore lint/suspicious/noArrayIndexKey: rows have no identity of their own.
-                      key={at}
-                      className="flex gap-2"
-                    >
-                      <Input
-                        aria-label={`Skill ${at + 1}`}
-                        className="font-mono"
-                        maxLength={MAX_SKILL_LENGTH}
-                        placeholder="vercel/next.js@canary"
-                        value={skill}
-                        disabled={busy}
-                        onChange={(event) =>
-                          update({
-                            skills: draft.skills.map((value, row) =>
-                              row === at ? event.target.value : value,
-                            ),
-                          })
-                        }
-                      />
-                      <Button
-                        variant="ghost"
-                        aria-label={`Remove Skill ${at + 1}`}
-                        disabled={busy}
-                        onClick={() =>
-                          update({ skills: draft.skills.filter((_, row) => row !== at) })
-                        }
-                      >
-                        <Trash2 aria-hidden="true" />
-                      </Button>
-                    </div>
-                  ))}
-                  {draft.skills.length < MAX_SKILLS && (
-                    <div>
-                      <Button
-                        size="small"
-                        disabled={busy}
-                        onClick={() => update({ skills: [...draft.skills, ""] })}
-                      >
-                        <Plus aria-hidden="true" />
-                        Add Skill
-                      </Button>
-                    </div>
-                  )}
-                </div>
+                <SkillFields
+                  skills={draft.skills}
+                  disabled={busy}
+                  onChange={(skills) => update({ skills })}
+                />
               )}
               <label htmlFor="condition-instructions" className={fieldStyles}>
                 <span className="flex items-center gap-1.5">
@@ -274,42 +224,5 @@ export function ConditionDialog({
         </DialogFooter>
       </section>
     </Dialog>
-  );
-}
-
-type Page = 1 | 2 | 3;
-const PAGES = ["Harness", "Options", "Skills and Instructions"] as const;
-
-/** The editor's pages, each one a step that can be opened directly. */
-function PageSteps({
-  page,
-  disabled,
-  onPick,
-}: {
-  page: Page;
-  disabled: boolean;
-  onPick: (page: Page) => void;
-}) {
-  return (
-    <ol
-      aria-label="Condition Steps"
-      className="flex gap-6 border-b border-border pb-4 text-sm font-medium"
-    >
-      {PAGES.map((label, index) => (
-        <li key={label}>
-          <button
-            type="button"
-            disabled={disabled}
-            aria-current={page === index + 1 ? "step" : undefined}
-            className={
-              page === index + 1 ? "text-foreground" : "text-muted-foreground hover:text-foreground"
-            }
-            onClick={() => onPick((index + 1) as Page)}
-          >
-            {index + 1}. {label}
-          </button>
-        </li>
-      ))}
-    </ol>
   );
 }
