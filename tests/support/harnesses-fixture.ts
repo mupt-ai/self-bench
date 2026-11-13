@@ -25,7 +25,7 @@ export async function harnessesWorkspace() {
     const response = await server.request(HARNESSES, send("POST", harness));
     return { status: response.status, ...(await response.json()) };
   };
-  const row = (catalogId: string, harness: string) => ({
+  const row = (catalogId: string, harness: string): Record<string, unknown> => ({
     catalogId,
     credentialId: router,
     harnesses: [harness],

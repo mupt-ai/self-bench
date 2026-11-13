@@ -1,7 +1,8 @@
-import { type ComparisonCondition, MAX_PAIRS } from "../contracts/conditions.js";
+import { type ComparisonCondition, conditionRunsOn, MAX_PAIRS } from "../contracts/conditions.js";
 import type { SavedHarness } from "../db/saved-harnesses.js";
-import { type RunCondition, runCondition } from "./conditions.js";
+import { conditionUnmatched, type RunCondition, runCondition } from "./conditions.js";
 import type { EvaluationDataset } from "./dataset.js";
+import type { Harness } from "./models.js";
 import type { EvaluationInput } from "./types.js";
 
 /** One thing a comparison runs every configuration under: the baseline, or a pair. */
@@ -45,6 +46,10 @@ function pairs(selection: {
  * each pair of its harnesses and environments, frozen as they are now. A saved harness is read
  * from the workspace and named with the environment beside it; a pair with an environment runs
  * each task that environment has ready, from its variant.
+ *
+ * For model rows that pick one saved harness (`row`), only that harness runs: on the tasks as they
+ * are, unless they were left out, and in each environment. Rows that pick none run the baseline
+ * and the environments alone.
  */
 export async function comparisonConditions(
   selection: {
@@ -60,9 +65,18 @@ export async function comparisonConditions(
     /** The scope's environments (EvaluationDataset.environment). */
     environments?: EvaluationDataset["environment"] | undefined;
   },
+  /** The saved harness the model rows run, by id; none for rows on a harness as it is. */
+  row?: number,
 ): Promise<ConditionRuns[]> {
-  const runs: ConditionRuns[] = selection.baseline === false ? [] : [{ tasks: frozen }];
-  const picks = [...pairs(selection), ...(selection.conditions ?? [])];
+  const original = selection.baseline !== false;
+  const runs: ConditionRuns[] = original && row === undefined ? [{ tasks: frozen }] : [];
+  const picks: ComparisonCondition[] =
+    row === undefined
+      ? [...pairs(selection), ...(selection.conditions ?? [])]
+      : [
+          ...(original ? [{ saved: row }] : []),
+          ...(selection.environments ?? []).map((environment) => ({ saved: row, environment })),
+        ];
   if (picks.length > MAX_PAIRS)
     throw new Error(
       `That is ${picks.length} harness and environment pairs; pick at most ${MAX_PAIRS}`,
@@ -119,4 +133,44 @@ export async function comparisonConditions(
   const ids = runs.flatMap(({ condition }) => (condition ? [condition.id] : []));
   if (new Set(ids).size !== ids.length) throw new Error("Pick each harness and environment once");
   return runs;
+}
+
+/**
+ * What each model row runs under, by the saved harness the row picks (none for a row on a harness
+ * as it is), checked against the rows that picked it: some row must run each harness's agent, and
+ * a harness with a subagent model needs a row on another model to work beside.
+ */
+export async function rowConditions(
+  selection: Parameters<typeof comparisonConditions>[0] & {
+    models: readonly {
+      catalogId: string;
+      harnesses: readonly Harness[];
+      harness?: number | undefined;
+    }[];
+  },
+  frozen: EvaluationInput["tasks"],
+  known: Parameters<typeof comparisonConditions>[2],
+): Promise<Map<number | undefined, ConditionRuns[]>> {
+  const byRow = new Map<number | undefined, ConditionRuns[]>();
+  for (const row of new Set(selection.models.map((model) => model.harness))) {
+    const rows = selection.models.filter((model) => model.harness === row);
+    const conditions = await comparisonConditions(selection, frozen, known, row);
+    byRow.set(row, conditions);
+    const picked = rows.flatMap((model) => model.harnesses);
+    for (const { condition } of conditions) {
+      const unmatched = condition && conditionUnmatched(condition, picked);
+      if (unmatched) throw new Error(unmatched);
+      // A row on the subagent model itself has nothing to delegate to, and is left out.
+      const alone = rows.every(
+        (model) =>
+          model.catalogId === condition?.subagent?.catalogId ||
+          !model.harnesses.some((harness) => conditionRunsOn(condition, harness)),
+      );
+      if (condition?.subagent && alone)
+        throw new Error(
+          `${condition.name} runs subagents on ${condition.subagent.catalogId}: pick another model for it to work beside`,
+        );
+    }
+  }
+  return byRow;
 }

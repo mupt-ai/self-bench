@@ -2,6 +2,7 @@ import { Plus } from "lucide-react";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import type { ComparisonSelection } from "../../../../src/evaluation/comparisons";
+import type { SavedHarness } from "../harnesses/harness-api";
 import { InfoTooltip } from "../primitives/tooltip";
 import { Button } from "../ui";
 import { customModel, savedCustomModels } from "./model-selection";
@@ -12,12 +13,15 @@ export function RunModelsPanel<D extends ComparisonSelection>({
   models,
   credentials,
   draft,
+  saved,
   disabled,
   onChange,
 }: {
   models: CatalogModel[];
   credentials: CredentialInfo[];
   draft: D;
+  /** The workspace's saved harnesses, which each row's Harness also offers. */
+  saved?: SavedHarness[];
   disabled: boolean;
   onChange(value: NoInfer<D>): void;
 }) {
@@ -51,6 +55,7 @@ export function RunModelsPanel<D extends ComparisonSelection>({
         models={[...savedCustomModels(credentials), ...models, customModel]}
         credentials={credentials}
         draft={draft}
+        saved={saved}
         onChange={onChange}
       />
     </fieldset>

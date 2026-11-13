@@ -1,7 +1,6 @@
 import {
   conditionHarness,
   conditionRunsOn,
-  MAX_PAIRS,
   SKILL_HARNESSES,
 } from "../../../../src/contracts/conditions";
 import type { CredentialInfo } from "../../../../src/db/credentials";
@@ -18,11 +17,11 @@ export interface HarnessChoices {
   saved: SavedHarness[] | undefined;
   /** The repository's repo ablations; none for a benchmark or a group, undefined until they load. */
   environments: EnvironmentItem[] | undefined;
-  /** The repository whose repo ablations these are, when the page is a repository's. */
-  repo?: string;
   models: CatalogModel[];
   credentials: CredentialInfo[];
 }
+
+type Row = RunDraft["models"][number];
 
 /** A saved harness as the run contracts read it: its agent is the harness it changes. */
 const changes = (saved: SavedHarness) => ({
@@ -31,72 +30,70 @@ const changes = (saved: SavedHarness) => ({
   subagent: saved.subagent,
 });
 
-/** The harnesses the draft's models run, in the order they were picked. */
-function pickedHarnesses(draft: Pick<RunDraft, "models">): Harness[] {
-  return [...new Set(draft.models.flatMap((model) => model.harnesses))];
-}
-
 /**
- * The rows a saved harness with a subagent model runs on, as the harnesses of each that take one:
- * a row on the subagent model itself has nothing to delegate to, and is left out.
+ * The agent a saved harness runs on in a row whose agent is `current`: its own, or the row's when it
+ * names none and fits it. Undefined when it can't run on that agent at all.
  */
-function delegatingRows(saved: SavedHarness, draft: Pick<RunDraft, "models">): Harness[][] {
-  return draft.models
-    .filter((row) => row.catalogId !== saved.subagent?.catalogId)
-    .map((row) => row.harnesses.filter((harness) => conditionRunsOn(changes(saved), harness)))
-    .filter((harnesses) => harnesses.length > 0);
+export function savedHarnessAgent(
+  saved: SavedHarness,
+  current: Harness | undefined,
+): Harness | undefined {
+  const agent = conditionHarness(changes(saved)) ?? current;
+  if (!agent || !conditionRunsOn(changes(saved), agent)) return undefined;
+  if (saved.skills.length && !SKILL_HARNESSES.includes(agent)) return undefined;
+  return agent;
 }
 
 /**
- * The credential a saved harness's subagents run on beside the picked models: its own while it can
- * serve them, else, when it names none, the first that can. None when nothing can.
+ * The credential a saved harness's subagents run on beside a row: its own while it can serve them,
+ * else, when it names none, the first that can. None when nothing can.
  */
 export function subagentCredential(
   saved: SavedHarness,
-  draft: Pick<RunDraft, "models">,
+  row: Row,
   { models, credentials }: Pick<HarnessChoices, "models" | "credentials">,
 ): CredentialInfo | undefined {
   const model = models.find((entry) => entry.id === saved.subagent?.catalogId);
   if (!model) return undefined;
-  const able = subagentCredentials(model, delegatingRows(saved, draft).flat(), credentials);
+  const able = subagentCredentials(model, row.harnesses, credentials);
   const named = saved.subagent?.credentialId;
   return named ? able.find((credential) => credential.id === named) : able[0];
 }
 
-/** Why the draft's harnesses and repo ablations can't run, if they can't; undefined when they can. */
+/** Why a row's saved harness can't run on it, if it can't. */
+function rowProblem(row: Row, choices: HarnessChoices): string | undefined {
+  if (row.harness === undefined || !choices.saved || !row.catalogId) return undefined;
+  const saved = choices.saved.find((entry) => entry.id === row.harness);
+  if (!saved) return "A row's saved harness was deleted. Pick another harness for it.";
+  const [agent] = row.harnesses;
+  if (!agent) return undefined;
+  const { name, subagent } = saved;
+  if (subagent && !conditionRunsOn({ subagent }, agent))
+    return `${name} sets a subagent model, which only Claude Code and Codex take.`;
+  const own = conditionHarness(changes(saved));
+  if (own && own !== agent)
+    return `${name} is for ${harnessLabels[own]}, not ${harnessLabels[agent]}.`;
+  if (saved.skills.length && !SKILL_HARNESSES.includes(agent))
+    return `${name} adds skills, which ${harnessLabels[agent]} can't load. Skills run on Claude Code, Codex, and Pi.`;
+  if (!subagent) return undefined;
+  if (subagent.catalogId === row.catalogId)
+    return `${name} runs subagents on this row's own model. Pick another harness or model.`;
+  if (!subagentCredential(saved, row, choices))
+    return subagent.credentialId
+      ? `${name}'s subagent credential can't serve its model beside this row's. Change it under Harnesses.`
+      : `${name} needs a credential that serves its subagent model.`;
+  return undefined;
+}
+
+/** Why the draft's saved harnesses and repo ablations can't run, if they can't. */
 export function harnessesProblem(draft: RunDraft, choices: HarnessChoices): string | undefined {
-  const picked = draft.harnesses ?? [];
-  const ablations = draft.environments ?? [];
-  if (draft.baseline === false && picked.length === 0 && ablations.length === 0)
-    return "Run the tasks as they are, or pick a harness or a repo ablation.";
-  const pairs = (picked.length + 1) * (ablations.length + 1) - 1;
-  if (pairs > MAX_PAIRS)
-    return `That is ${pairs} harness and repo ablation pairs. Pick at most ${MAX_PAIRS}.`;
-  const harnesses = pickedHarnesses(draft);
-  for (const id of picked) {
-    if (!choices.saved) break;
-    const saved = choices.saved.find((entry) => entry.id === id);
-    if (!saved) return "A picked harness was deleted. Unpick it.";
-    const { name, subagent } = saved;
-    // Nothing more to check until a model is picked; the models panel asks for one.
-    if (harnesses.length === 0) continue;
-    const runsOn = harnesses.filter((harness) => conditionRunsOn(changes(saved), harness));
-    const only = conditionHarness(changes(saved));
-    if (runsOn.length === 0)
-      return subagent && !harnesses.some((harness) => conditionRunsOn({ subagent }, harness))
-        ? `${name} sets a subagent model, which only Claude Code and Codex take.`
-        : `${name} is for ${only ? harnessLabels[only] : "an agent"}, which no picked model runs.`;
-    const unsupported = runsOn.find((harness) => !SKILL_HARNESSES.includes(harness));
-    if (saved.skills.length && unsupported)
-      return `${name} adds skills, which ${harnessLabels[unsupported]} can't load. Skills run on Claude Code, Codex, and Pi.`;
-    if (!subagent) continue;
-    if (delegatingRows(saved, draft).length === 0)
-      return `${name} runs subagents on a model every picked row already runs. Add another model.`;
-    if (!subagentCredential(saved, draft, choices))
-      return subagent.credentialId
-        ? `${name}'s subagent credential can't serve its model beside the picked models. Change it under Harnesses.`
-        : `${name} needs a credential that serves its subagent model.`;
+  for (const row of draft.models) {
+    const problem = rowProblem(row, choices);
+    if (problem) return problem;
   }
+  const ablations = draft.environments ?? [];
+  if (draft.baseline === false && ablations.length === 0)
+    return "Pick a repo ablation, or include the original tasks.";
   const { environments } = choices;
   if (environments && ablations.some((id) => !environments.some((entry) => entry.id === id)))
     return "A picked repo ablation was deleted. Unpick it.";

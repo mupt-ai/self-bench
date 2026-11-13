@@ -231,6 +231,58 @@ test("a run takes every pair of its harnesses and environments", async () => {
   expect(none.error).toBe("Run the tasks as they are, or pick a harness or an environment");
 });
 
+test("a model row that picks a saved harness runs it in place of its harness as it is", async () => {
+  const { server, save, row, compare } = await workspace();
+  const task = await server.tasks.find(server.repo.id, "run-one", "task-one");
+  if (!task) throw new Error("Missing fixture task");
+  const built = await server.tasks.variants.createEnvironment({
+    repoId: server.repo.id,
+    name: "No AGENTS.md",
+    script: "rm -f AGENTS.md",
+    createdBy: server.user.id,
+  });
+  const variant = await server.tasks.variants.reserve({
+    environmentId: built.id,
+    parentId: task.id,
+    repoId: server.repo.id,
+    runId: "row-variant",
+    candidateId: task.candidateId,
+    taskId: task.taskId,
+    startedBy: server.user.id,
+  });
+  await server.tasks.variants.settle(variant.runId, variant.candidateId, {
+    pipelineStatus: "accepted",
+    stage: "accepted",
+    bundleKey: "runs/row-variant/harbor-task.tar.gz",
+  });
+  const { harness } = await save({ name: "Codex Pack", agent: "codex", skills: ["acme/skills"] });
+  const plain = row("gpt-6-sol", "codex");
+  const named = (started: { condition?: { name: string } }[]) =>
+    started.map((input) => input.condition?.name ?? "Baseline");
+  // One row as it is, one on the saved harness: the same model twice, compared, in each
+  // environment too.
+  const both = await compare({
+    models: [plain, { ...plain, harness: harness.id }],
+    environments: [built.id],
+  });
+  expect(both.error).toBeUndefined();
+  expect(named(both.started)).toEqual([
+    "Baseline",
+    "No AGENTS.md",
+    "Codex Pack",
+    "Codex Pack · No AGENTS.md",
+  ]);
+  // Leaving out the tasks as they are leaves them out for the saved harness's row too.
+  const ablated = await compare({
+    models: [{ ...plain, harness: harness.id }],
+    environments: [built.id],
+    baseline: false,
+  });
+  expect(named(ablated.started)).toEqual(["Codex Pack · No AGENTS.md"]);
+  const elsewhere = await compare({ models: [{ ...row("gpt-6-sol", "pi"), harness: harness.id }] });
+  expect(elsewhere.error).toBe("Codex Pack is for Codex, which no picked model runs");
+});
+
 test("a saved harness runs only on the agent it names, with no options to say so", async () => {
   const { save, row, compare } = await workspace();
   const { harness } = await save({ name: "Codex Pack", agent: "codex", skills: ["acme/skills"] });

@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { evaluationTaskKey } from "../../../../src/evaluation/models";
 import { Button } from "../ui";
 import type { EvaluationOptions } from "./api";
+import { type AblationPick, RepoAblations } from "./RepoAblations";
 import type { RunDraft } from "./RunExecution";
 import type { EvaluationScope } from "./useEvaluationScope";
 
@@ -18,6 +19,7 @@ export function RunTaskPicker({
   tasksReady,
   disabled,
   readOnly = false,
+  ablations,
 }: {
   scope: Pick<EvaluationScope, "kind" | "pages" | "repo">;
   availableTasks: EvaluationOptions["tasks"];
@@ -27,6 +29,8 @@ export function RunTaskPicker({
   tasksReady: boolean;
   disabled: boolean;
   readOnly?: boolean;
+  /** The repository's repo ablations to run the tasks in too; none for a benchmark or a group. */
+  ablations?: AblationPick;
 }) {
   // A repository's (or group's) tasks are the ones review accepted; a benchmark's are its whole
   // dataset.
@@ -37,126 +41,130 @@ export function RunTaskPicker({
   const difficulty = availableTasks.some((task) => task.difficulty);
   const selected = new Set(picked.map((task) => evaluationTaskKey(task.runId, task.taskId)));
   return (
-    <details className="group panel mb-5">
-      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 marker:hidden [&::-webkit-details-marker]:hidden">
-        <Database className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold">
-            {picked.length} {noun(picked.length)}
+    <div className="panel mb-5">
+      <details className="group">
+        <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 marker:hidden [&::-webkit-details-marker]:hidden">
+          <Database className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold">
+              {picked.length} {noun(picked.length)}
+            </span>
+            <span className="mt-1 block text-xs text-muted-foreground">
+              {availableTasks.length
+                ? "Choose which tasks every configuration runs against."
+                : tasksReady
+                  ? none
+                  : loading}
+            </span>
           </span>
-          <span className="mt-1 block text-xs text-muted-foreground">
-            {availableTasks.length
-              ? "Choose which tasks every configuration runs against."
-              : tasksReady
-                ? none
-                : loading}
+          <span className="hidden text-xs text-muted-foreground sm:inline">
+            {picked.length} of {availableTasks.length} Selected
           </span>
-        </span>
-        <span className="hidden text-xs text-muted-foreground sm:inline">
-          {picked.length} of {availableTasks.length} Selected
-        </span>
-        <ChevronDown
-          className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
-          aria-hidden="true"
-        />
-      </summary>
-      <div className="border-t border-border">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              size="small"
-              disabled={disabled || readOnly}
-              onClick={() =>
-                onChange(availableTasks.map(({ runId, taskId }) => ({ runId, taskId })))
-              }
-            >
-              Select All
-            </Button>
-            <Button
-              type="button"
-              size="small"
-              disabled={disabled || readOnly}
-              onClick={() => onChange([])}
-            >
-              Clear All
-            </Button>
+          <ChevronDown
+            className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
+            aria-hidden="true"
+          />
+        </summary>
+        <div className="border-t border-border">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="small"
+                disabled={disabled || readOnly}
+                onClick={() =>
+                  onChange(availableTasks.map(({ runId, taskId }) => ({ runId, taskId })))
+                }
+              >
+                Select All
+              </Button>
+              <Button
+                type="button"
+                size="small"
+                disabled={disabled || readOnly}
+                onClick={() => onChange([])}
+              >
+                Clear All
+              </Button>
+            </div>
+            {!readOnly && (
+              <Link
+                className="text-sm font-medium text-muted-foreground hover:text-foreground"
+                to={scope.pages}
+              >
+                Review Dataset →
+              </Link>
+            )}
           </div>
-          {!readOnly && (
-            <Link
-              className="text-sm font-medium text-muted-foreground hover:text-foreground"
-              to={scope.pages}
-            >
-              Review Dataset →
-            </Link>
+          {availableTasks.length ? (
+            <div className="max-h-72 overflow-auto">
+              <table className="w-full border-collapse text-left text-sm">
+                <thead className="sticky top-0 bg-muted text-xs text-muted-foreground">
+                  <tr>
+                    <th scope="col" className="w-12 px-4 py-2.5 font-semibold">
+                      Include
+                    </th>
+                    <th scope="col" className="px-4 py-2.5 font-semibold">
+                      Task
+                    </th>
+                    {difficulty && (
+                      <th scope="col" className="hidden px-4 py-2.5 font-semibold sm:table-cell">
+                        Difficulty
+                      </th>
+                    )}
+                    <th scope="col" className="hidden px-4 py-2.5 font-semibold lg:table-cell">
+                      Source Run
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {availableTasks.map((task) => {
+                    const key = evaluationTaskKey(task.runId, task.taskId);
+                    const checked = selected.has(key);
+                    return (
+                      <tr key={key} className="border-t border-border hover:bg-muted/60">
+                        <td className="px-4 py-3">
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${task.taskId}`}
+                            checked={checked}
+                            disabled={disabled || readOnly}
+                            onChange={() =>
+                              onChange(
+                                checked
+                                  ? picked.filter(
+                                      (candidate) =>
+                                        evaluationTaskKey(candidate.runId, candidate.taskId) !==
+                                        key,
+                                    )
+                                  : [...picked, { runId: task.runId, taskId: task.taskId }],
+                              )
+                            }
+                            className="size-4 accent-brand"
+                          />
+                        </td>
+                        <td className="px-4 py-3 font-mono text-xs wrap-anywhere">{task.taskId}</td>
+                        {difficulty && (
+                          <td className="hidden px-4 py-3 text-xs text-muted-foreground sm:table-cell">
+                            {task.difficulty?.[0]?.toUpperCase()}
+                            {task.difficulty?.slice(1)}
+                          </td>
+                        )}
+                        <td className="hidden px-4 py-3 font-mono text-xs text-muted-foreground lg:table-cell">
+                          {task.runId}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="px-4 py-6 text-sm text-muted-foreground">{tasksReady ? none : loading}</p>
           )}
         </div>
-        {availableTasks.length ? (
-          <div className="max-h-72 overflow-auto">
-            <table className="w-full border-collapse text-left text-sm">
-              <thead className="sticky top-0 bg-muted text-xs text-muted-foreground">
-                <tr>
-                  <th scope="col" className="w-12 px-4 py-2.5 font-semibold">
-                    Include
-                  </th>
-                  <th scope="col" className="px-4 py-2.5 font-semibold">
-                    Task
-                  </th>
-                  {difficulty && (
-                    <th scope="col" className="hidden px-4 py-2.5 font-semibold sm:table-cell">
-                      Difficulty
-                    </th>
-                  )}
-                  <th scope="col" className="hidden px-4 py-2.5 font-semibold lg:table-cell">
-                    Source Run
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {availableTasks.map((task) => {
-                  const key = evaluationTaskKey(task.runId, task.taskId);
-                  const checked = selected.has(key);
-                  return (
-                    <tr key={key} className="border-t border-border hover:bg-muted/60">
-                      <td className="px-4 py-3">
-                        <input
-                          type="checkbox"
-                          aria-label={`Select ${task.taskId}`}
-                          checked={checked}
-                          disabled={disabled || readOnly}
-                          onChange={() =>
-                            onChange(
-                              checked
-                                ? picked.filter(
-                                    (candidate) =>
-                                      evaluationTaskKey(candidate.runId, candidate.taskId) !== key,
-                                  )
-                                : [...picked, { runId: task.runId, taskId: task.taskId }],
-                            )
-                          }
-                          className="size-4 accent-brand"
-                        />
-                      </td>
-                      <td className="px-4 py-3 font-mono text-xs wrap-anywhere">{task.taskId}</td>
-                      {difficulty && (
-                        <td className="hidden px-4 py-3 text-xs text-muted-foreground sm:table-cell">
-                          {task.difficulty?.[0]?.toUpperCase()}
-                          {task.difficulty?.slice(1)}
-                        </td>
-                      )}
-                      <td className="hidden px-4 py-3 font-mono text-xs text-muted-foreground lg:table-cell">
-                        {task.runId}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="px-4 py-6 text-sm text-muted-foreground">{tasksReady ? none : loading}</p>
-        )}
-      </div>
-    </details>
+      </details>
+      {ablations && <RepoAblations {...ablations} disabled={disabled || readOnly} />}
+    </div>
   );
 }

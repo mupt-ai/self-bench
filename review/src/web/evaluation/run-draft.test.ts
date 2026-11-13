@@ -28,28 +28,35 @@ test("restoring a submitted draft keeps its request identity and a new dataset s
   expect(next.submitted).toBe(false);
   expect(next.draft.tasks).toEqual([{ runId: "two", taskId: "two" }]);
 });
-test("a draft keeps its picked harnesses and repo ablations, and moves an older draft's rows into them", () => {
+test("a draft keeps each row's saved harness and its repo ablations, and drops what older drafts picked for every row", () => {
   const state = restoreRunDraft(null, null);
   const restored = (draft: Record<string, unknown>) =>
     restoreRunDraft(JSON.stringify({ ...state, draft: { ...state.draft, ...draft } }), null).draft;
-  expect(restored({ harnesses: [4], environments: [3] })).toMatchObject({
+  const models = [
+    { catalogId: "gpt-6-sol", credentialId: "router", harnesses: ["codex"], harness: 4 },
+    { catalogId: "gpt-6-sol", credentialId: "router", harnesses: ["codex"] },
+  ];
+  const kept = restored({ models, environments: [3], baseline: false });
+  expect(kept).toMatchObject({ models, environments: [3], baseline: false });
+  expect(kept.models[1]).not.toHaveProperty("harness");
+  // Saved harnesses were once picked for every row at once, and before that as rows of pairs.
+  const older = restored({
+    models: [models[1]],
     harnesses: [4],
     environments: [3],
-  });
-  const older = restored({
-    models: [{ catalogId: "gpt-6-sol", credentialId: "router", harnesses: ["codex"] }],
     conditions: [
-      // Written out before harnesses were saved: its repo ablation alone would lose its skills.
-      { name: "Pack", environment: 3, skills: ["acme/skills"] },
-      { saved: 4, environment: 3, subagentCredentialId: "managed-model" },
-      { environment: 5 },
-      { saved: 4 },
+      { saved: 4, environment: 5 },
+      { name: "Pack", skills: ["acme/skills"] },
     ],
   });
-  expect(older).toMatchObject({ harnesses: [4], environments: [3, 5] });
+  expect(older).toMatchObject({ environments: [3] });
+  expect(older).not.toHaveProperty("harnesses");
   expect(older).not.toHaveProperty("conditions");
   expect(older.models).toHaveLength(1);
+  expect(older.models[0]).toMatchObject({ catalogId: "gpt-6-sol", harnesses: ["codex"] });
   expect(older.id).toBe(state.draft.id);
+  // Without a repo ablation, a draft that left out the original tasks runs them again.
+  expect(restored({ baseline: false })).not.toHaveProperty("baseline");
 });
 
 test("large selections round-trip through task links and saved drafts without truncation", () => {

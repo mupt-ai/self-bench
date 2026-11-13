@@ -39,6 +39,12 @@ const selectionFields = {
             .strict()
             .optional(),
           harnesses: z.array(z.enum(harnessIds)).min(1).max(harnessIds.length),
+          /**
+           * One of the workspace's saved harnesses, by id, which this row runs in place of its
+           * harness as it is: on the tasks as they are (unless `baseline` is false) and in each
+           * environment. Its agent must be the row's harness.
+           */
+          harness: z.number().int().positive().optional(),
         })
         .strict(),
     )
@@ -59,7 +65,10 @@ const selectionFields = {
    * written out, as a retry repeats a run. What older clients send in place of the two lists.
    */
   conditions: z.array(comparisonConditionSchema).max(MAX_CONDITIONS).optional(),
-  /** Whether the tasks also run as they are, with no harness or environment. Default true. */
+  /**
+   * Whether the tasks also run as they are, in no environment: with no harness change, or with a
+   * row's saved harness. Default true.
+   */
   baseline: z.boolean().optional(),
 };
 const comparisonSelection = z.object(selectionFields).strict();
