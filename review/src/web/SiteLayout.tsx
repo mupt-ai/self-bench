@@ -16,6 +16,8 @@ import { Button } from "./ui";
 export interface OrgContext {
   org: SiteOrg;
   orgs: SiteOrg[];
+  /** Whether the deployment offers its own model and sandbox keys ("Managed"). */
+  managedOffering?: boolean;
 }
 
 /** The org the page is showing, chosen in the sidebar and remembered in this browser. */
@@ -145,7 +147,7 @@ export function SiteLayout({
             </div>
           </header>
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
-            <Outlet context={{ org, orgs } satisfies OrgContext} key={org.login} />
+            <Outlet context={{ org, orgs, managedOffering } satisfies OrgContext} key={org.login} />
           </div>
         </SidebarInset>
         {menuOpen && (

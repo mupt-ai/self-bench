@@ -5,6 +5,7 @@ import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { HarnessOptionValue } from "../../../../src/contracts/harness-options";
 import type { CredentialInfo } from "../../../../src/db/credentials";
+import { runCredentials } from "../evaluation/run-readiness";
 import { HarnessOptionFields } from "./HarnessOptionFields";
 import { subagentOn } from "./harness-draft";
 import { SubagentFields, staleSubagentCredential, subagentCredentials } from "./SubagentFields";
@@ -125,6 +126,13 @@ test("a harness's subagent credential is one that serves its model to its agent,
   // None named runs on the first that serves it, and nothing is flagged before credentials load.
   expect(staleSubagentCredential(on("codex"), credentials)).toBe(false);
   expect(staleSubagentCredential(on("codex", "anthropic"), undefined)).toBe(false);
+  // With the managed offering, its key is listed as the Run page lists it, so one pinned to it
+  // stays saved.
+  const managed = runCredentials(credentials, true);
+  expect(
+    subagentCredentials("claude-haiku-5-5", "codex", managed).map((credential) => credential.id),
+  ).toEqual(["managed-model", "router"]);
+  expect(staleSubagentCredential(on("codex", "managed-model"), managed)).toBe(false);
   const html = renderToStaticMarkup(
     <SubagentFields
       agent="codex"

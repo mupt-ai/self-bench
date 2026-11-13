@@ -1,6 +1,7 @@
 import { Plus } from "lucide-react";
 import React from "react";
 import { formatAgo } from "../api";
+import { runCredentials } from "../evaluation/run-readiness";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { useOrgCredentials } from "../setup/SetupStatus";
@@ -16,10 +17,12 @@ import { harnessSummary } from "./harness-summary";
  * environments do that, and a run runs every harness in every environment.
  */
 export function HarnessesPage() {
-  const { org } = useOrg();
+  const { org, managedOffering } = useOrg();
   useDocumentTitle(`Harnesses · ${org.login}`);
   const [harnesses, setHarnesses] = React.useState<SavedHarness[]>();
-  const [credentials] = useOrgCredentials(org.login);
+  const [saved] = useOrgCredentials(org.login);
+  // With the managed offering, its key can serve subagents too, as on the Run page.
+  const credentials = saved && runCredentials(saved, managedOffering);
   const [models, setModels] = React.useState<{ id: string; label: string }[]>([]);
   const [error, setError] = React.useState<string | null>(null);
   // The harness being edited, "new" for one being written, or nothing while the dialog is shut.
