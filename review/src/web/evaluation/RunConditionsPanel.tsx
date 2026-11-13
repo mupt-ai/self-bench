@@ -1,4 +1,4 @@
-import { ChevronDown, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
+import { ChevronDown, Plus, SlidersHorizontal } from "lucide-react";
 import React from "react";
 import { Link } from "react-router";
 import { MAX_CONDITIONS, type PickedCondition } from "../../../../src/contracts/conditions";
@@ -215,7 +215,7 @@ export function RunConditionsPanel({
                   aria-label={`Remove ${named(picked)}`}
                   onClick={() => set(conditions.filter((_, at) => at !== index))}
                 >
-                  <Trash2 aria-hidden="true" />
+                  Remove
                 </Button>
               </div>
               {condition && (

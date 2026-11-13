@@ -1,4 +1,4 @@
-import { Plus, Trash2 } from "lucide-react";
+import { Plus } from "lucide-react";
 import { MAX_SKILL_LENGTH, MAX_SKILLS } from "../../../../src/contracts/conditions";
 import { harnessLabels } from "../../../../src/evaluation/models";
 import { cn } from "../primitives/cn";
@@ -82,7 +82,7 @@ export function SkillFields({
             disabled={disabled}
             onClick={() => onChange(skills.filter((_, row) => row !== at))}
           >
-            <Trash2 aria-hidden="true" />
+            Remove
           </Button>
         </div>
       ))}

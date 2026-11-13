@@ -1,4 +1,4 @@
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Plus } from "lucide-react";
 import React from "react";
 import { formatAgo } from "../api";
 import { useOrg } from "../SiteLayout";
@@ -89,7 +89,7 @@ export function ConditionsPage() {
               <th>Harness</th>
               <th>Changes</th>
               <th className="text-right">Updated</th>
-              <th className="w-24" aria-label="Actions" />
+              <th className="w-36" aria-label="Actions" />
             </tr>
           </thead>
           <tbody>
@@ -107,19 +107,19 @@ export function ConditionsPage() {
                 <td className="text-right whitespace-nowrap">
                   <Button
                     variant="ghost"
-                    size="icon"
+                    size="small"
                     aria-label={`Edit ${condition.name}`}
                     onClick={() => setEditing(condition)}
                   >
-                    <Pencil className="size-4" aria-hidden="true" />
+                    Edit
                   </Button>
                   <Button
                     variant="ghost"
-                    size="icon"
+                    size="small"
                     aria-label={`Delete ${condition.name}`}
                     onClick={() => void remove(condition)}
                   >
-                    <Trash2 className="size-4" aria-hidden="true" />
+                    Delete
                   </Button>
                 </td>
               </tr>
