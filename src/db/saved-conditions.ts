@@ -34,6 +34,8 @@ export function createSavedConditionStore(db: Database) {
     id: condition.id,
     name: condition.name,
     ...condition.changes,
+    // Rows written before a field existed, or by hand, may omit it; the schema's default is [].
+    skills: condition.changes.skills ?? [],
     ...(createdBy ? { createdBy } : {}),
     createdAt: condition.createdAt.toISOString(),
     updatedAt: condition.updatedAt.toISOString(),
