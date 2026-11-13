@@ -225,12 +225,19 @@ export function startUpstream() {
         request.headers.get("content-encoding") === "zstd" ? Bun.zstdDecompressSync(raw) : raw;
       const body = JSON.parse(new TextDecoder().decode(text)) as {
         model: string;
+        messages?: { role?: string; output_config?: { effort?: string } }[];
         output_config?: { effort?: string };
         reasoning?: { effort?: string };
       };
       const authorization = request.headers.get("authorization");
       const xApiKey = request.headers.get("x-api-key");
-      const effort = body.output_config?.effort ?? body.reasoning?.effort;
+      // Pi keeps Anthropic's top-level effort at a fixed anchor so the cached prefix holds, and
+      // sends the call's level in a trailing system marker.
+      const marker = body.messages?.at(-1);
+      const effort =
+        (marker?.role === "system" ? marker.output_config?.effort : undefined) ??
+        body.output_config?.effort ??
+        body.reasoning?.effort;
       calls.push({
         path: url.pathname,
         authorization,
