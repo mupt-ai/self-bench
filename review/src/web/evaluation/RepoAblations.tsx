@@ -1,10 +1,8 @@
+import { Plus, X } from "lucide-react";
 import { MAX_PICKED } from "../../../../src/contracts/conditions";
 import type { EnvironmentItem } from "../environments/environment-api";
 import { ModelPicker } from "../ModelPicker";
 import { InfoTooltip } from "../primitives/tooltip";
-
-/** Up to this many ablations show as checkboxes in a row; more open a searchable list. */
-const CHIP_LIMIT = 6;
 
 /** What the Tasks box picks beside its tasks: the repo ablations to run them in too. */
 export interface AblationPick {
@@ -39,12 +37,12 @@ export function ablationPick<Draft extends { environments?: number[]; baseline?:
   };
 }
 
-const chip =
-  "flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs has-[:checked]:border-foreground/40 has-[:checked]:bg-muted has-[:disabled]:opacity-60";
+const badge =
+  "flex items-center gap-1 rounded-md border border-border bg-muted px-2 py-0.5 text-xs";
 
 /**
- * One line in the Tasks box: the repository's repo ablations, each a checkbox, and whether the
- * original tasks run beside the picked ones. Nothing for a repository with no repo ablations.
+ * One line in the Tasks box: the picked repo ablations as badges, a "+" that adds one from a
+ * searchable list, and whether the original tasks run beside them. Nothing for a repository with no repo ablations.
  */
 export function RepoAblations({
   environments,
@@ -64,8 +62,9 @@ export function RepoAblations({
       ]
     : picked.map((id) => ({ id, name: `Repo Ablation ${id}` }));
   if (entries.length === 0) return null;
-  const toggle = (id: number) => {
-    const next = picked.includes(id) ? picked.filter((pick) => pick !== id) : [...picked, id];
+  const unpicked = entries.filter((entry) => !picked.includes(entry.id));
+  const remove = (id: number) => {
+    const next = picked.filter((pick) => pick !== id);
     // With none picked, the original tasks are all there is to run.
     onChange(next, next.length ? original : true);
   };
@@ -81,45 +80,32 @@ export function RepoAblations({
           label={`Each picked repo ablation runs every row again on the tasks it built, with their files changed. Tasks it has no ready build for are left out. Pick up to ${MAX_PICKED}.`}
         />
       </span>
-      {entries.length > CHIP_LIMIT ? (
-        <div className="w-full sm:w-72">
-          <ModelPicker
-            models={entries.map((entry) => ({ id: String(entry.id), label: entry.name }))}
-            value=""
-            label="Repo Ablations"
-            noun="Repo Ablations"
-            placeholder="None Picked"
-            picked={picked.map(String)}
-            full={picked.length >= MAX_PICKED}
-            // The picks by name, so they show without opening the list.
-            summary={
-              picked.length
-                ? picked
-                    .map((id) => entries.find((entry) => entry.id === id)?.name ?? `${id}`)
-                    .join(", ")
-                : `None of ${entries.length} Picked`
-            }
-            onToggle={(entry) => toggle(Number(entry.id))}
-          />
-        </div>
-      ) : null}
-      {entries.length <= CHIP_LIMIT &&
-        entries.map((entry) => {
-          const checked = picked.includes(entry.id);
-          return (
-            <label key={entry.id} className={chip}>
-              <input
-                type="checkbox"
-                className="size-3.5 accent-brand"
-                aria-label={entry.name}
-                checked={checked}
-                disabled={!checked && picked.length >= MAX_PICKED}
-                onChange={() => toggle(entry.id)}
-              />
-              {entry.name}
-            </label>
-          );
-        })}
+      {picked.map((id) => {
+        const name = entries.find((entry) => entry.id === id)?.name ?? `${id}`;
+        return (
+          <span key={id} className={badge}>
+            {name}
+            <button
+              type="button"
+              aria-label={`Remove ${name}`}
+              className="flex text-muted-foreground hover:text-foreground"
+              onClick={() => remove(id)}
+            >
+              <X aria-hidden="true" className="size-3" />
+            </button>
+          </span>
+        );
+      })}
+      {picked.length < MAX_PICKED && unpicked.length > 0 && (
+        <ModelPicker
+          models={unpicked.map((entry) => ({ id: String(entry.id), label: entry.name }))}
+          value=""
+          label="Add Repo Ablation"
+          noun="Repo Ablations"
+          icon={<Plus aria-hidden="true" className="size-3.5" />}
+          onSelect={(entry) => onChange([...picked, Number(entry.id)], original)}
+        />
+      )}
       {picked.length > 0 && (
         <label className="ml-auto flex items-center gap-1.5 text-xs">
           <input
