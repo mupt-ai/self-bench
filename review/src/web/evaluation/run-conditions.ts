@@ -1,4 +1,5 @@
 import {
+  conditionHarness,
   conditionRunsOn,
   type PickedCondition,
   SKILL_HARNESSES,
@@ -87,10 +88,11 @@ export function conditionsProblem(draft: RunDraft, choices: ConditionChoices): s
     // Nothing more to check until a model is picked; the models panel asks for one.
     if (harnesses.length === 0) continue;
     const runsOn = harnesses.filter((harness) => conditionRunsOn(condition, harness));
+    const only = conditionHarness(condition);
     if (runsOn.length === 0)
       return subagent && !harnesses.some((harness) => conditionRunsOn({ subagent }, harness))
         ? `${name} sets a subagent model, which only Claude Code and Codex take.`
-        : `${name} sets harness options for a harness no picked model runs.`;
+        : `${name} is for ${only ? harnessLabels[only] : "a harness"}, which no picked model runs.`;
     const unsupported = runsOn.find((harness) => !SKILL_HARNESSES.includes(harness));
     if (condition.skills.length && unsupported)
       return `${name} adds skills, which ${harnessLabels[unsupported]} can't load. Skills run on Claude Code, Codex, and Pi.`;

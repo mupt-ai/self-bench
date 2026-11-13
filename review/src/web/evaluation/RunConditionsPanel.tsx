@@ -75,11 +75,15 @@ export function RunConditionsPanel({
       .filter(Boolean)
       .join(" · ") || "Unpicked Condition";
   const summary = [...(baseline ? ["Baseline"] : []), ...conditions.map(named)].join(", ");
-  // A new row starts on the first saved condition no row has picked, else the first environment.
+  // A new row starts on the first saved condition no row has picked, else the first environment no
+  // row has picked; once all are picked there is no new row to add.
   const next: PickedCondition | undefined = (() => {
     const unpicked = saved.find((entry) => !conditions.some((row) => row.saved === entry.id));
     if (unpicked) return { saved: unpicked.id };
-    return environments[0] ? { environment: environments[0].id } : undefined;
+    const environment = environments.find(
+      (entry) => !conditions.some((row) => row.environment === entry.id),
+    );
+    return environment ? { environment: environment.id } : undefined;
   })();
   return (
     <details className="group panel mb-5" open={conditions.length > 0 || undefined}>

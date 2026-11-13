@@ -51,7 +51,11 @@ export function HarnessOptionFields({
     >
       {harnessOptionsFor(harness)
         // The system prompt is the Instructions field's other place, not an option of its own.
-        .filter((option) => !isSystemPromptOption(harness, option.name))
+        // Shown only once set: it is then a value Instructions can't show, so it stays visible to edit.
+        .filter(
+          (option) =>
+            !isSystemPromptOption(harness, option.name) || options[option.name] !== undefined,
+        )
         .filter((option) => !UNOFFERED_OPTIONS[harness]?.includes(option.name))
         .map((option) => (
           <OptionField
@@ -126,6 +130,18 @@ function OptionField({
         maxLength={MAX_NATIVE_CONFIG}
         className={cn(controlStyles, "h-auto resize-y py-2 font-mono")}
         placeholder={'{"env": {"BASH_MAX_TIMEOUT_MS": "600000"}}'}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    );
+  else if (option.kind === "string" && option.name.includes("prompt"))
+    control = (
+      <textarea
+        id={id}
+        aria-label={label}
+        rows={4}
+        maxLength={MAX_OPTION_TEXT}
+        className={cn(controlStyles, "h-auto resize-y py-2")}
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />

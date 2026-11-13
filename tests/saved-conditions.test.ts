@@ -211,3 +211,23 @@ test("a run pairs a saved condition with a repository environment, or names the 
   });
   expect(twice.error).toBe("Pick each condition once");
 });
+
+test("a saved condition runs only on the harness it names, with no options to say so", async () => {
+  const { save, row, compare } = await workspace();
+  const { condition } = await save({
+    name: "Codex Pack",
+    harness: "codex",
+    skills: ["acme/skills"],
+  });
+  const models = [
+    row("gpt-6-sol", "claude-code"),
+    row("gpt-6-sol", "codex"),
+    row("gpt-6-sol", "pi"),
+  ];
+  const { error, started } = await compare({ models, conditions: [{ saved: condition.id }] });
+  expect(error).toBeUndefined();
+  // Claude Code and Pi load skills too, but the condition changes Codex only.
+  const scoped = started.filter((input) => input.condition);
+  expect(scoped.map((input) => input.harnesses)).toEqual([["codex"]]);
+  expect(scoped[0]?.condition?.harness).toBe("codex");
+});

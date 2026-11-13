@@ -99,7 +99,7 @@ test("the Run page says why a picked condition cannot run on the picked models",
     "Haiku Subagents sets a subagent model, which only Claude Code and Codex take.",
   );
   expect(on([{ saved: 3 }], "claude-code")).toBe(
-    "Codex Search Off sets harness options for a harness no picked model runs.",
+    "Codex Search Off is for Codex, which no picked model runs.",
   );
   expect(on([{ saved: 1 }], "terminus-2")).toContain("adds skills, which Terminus 2 can't load");
   // A row on the subagent model itself has nothing to delegate to.

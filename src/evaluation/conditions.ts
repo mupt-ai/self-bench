@@ -105,11 +105,11 @@ export function conditionUnmatched(
 ): string | undefined {
   if (harnesses.some((harness) => conditionRunsOn(condition, harness))) return undefined;
   const only = conditionHarness(condition);
-  const named = only ? [harnessLabels[only]] : [];
   // A subagent model is what rules the harnesses out when none of them takes one.
   if (condition.subagent && harnesses.every((harness) => !subagentSupport[harness].configurable))
     return `${condition.name} sets a subagent model, which only Claude Code and Codex take, and no picked model runs either`;
-  return `${condition.name} sets options for ${named.join(" and ")}, which no picked model runs`;
+  const named = only ? harnessLabels[only] : "a harness";
+  return `${condition.name} is for ${named}, which no picked model runs`;
 }
 
 /** The `harbor run` arguments that apply a condition to a trial on `harness`. */

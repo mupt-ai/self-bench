@@ -198,7 +198,7 @@ test("a condition with harness options runs only on the harnesses it names", asy
       }),
     );
     expect(await unmatched.json()).toEqual({
-      error: "30 Turns sets options for Claude Code, which no picked model runs",
+      error: "30 Turns is for Claude Code, which no picked model runs",
     });
     const invalid = await fixture.request(
       `${fixture.base}/comparisons`,

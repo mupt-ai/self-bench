@@ -3,7 +3,12 @@ import { MAX_SKILL_LENGTH, MAX_SKILLS } from "../../../../src/contracts/conditio
 import { cn } from "../primitives/cn";
 import { InfoTooltip } from "../primitives/tooltip";
 import { Button, controlStyles, fieldStyles, Input, Select } from "../ui";
-import { type ConditionDraft, instructionsWhere, systemPromptOption } from "./condition-draft";
+import {
+  type ConditionDraft,
+  instructionsWhere,
+  systemOptionSet,
+  systemPromptOption,
+} from "./condition-draft";
 
 export type Page = 1 | 2 | 3;
 const PAGES = ["Harness", "Options", "Skills and Instructions"] as const;
@@ -135,7 +140,9 @@ export function InstructionsField({
               }
             >
               <option value="task">Task Prompt</option>
-              <option value="system">System Prompt</option>
+              <option value="system" disabled={systemOptionSet(draft)}>
+                System Prompt
+              </option>
             </Select>
           </span>
         )}

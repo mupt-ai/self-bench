@@ -61,9 +61,26 @@ export const isSystemPromptOption = (harness: Harness, name: string) => {
   return !!place && !place.key && place.option === name;
 };
 
+/**
+ * Whether the chosen harness's system prompt is already set as a harness option, which the Options
+ * page shows as its own field. Instructions can't also go there, so the Instructions field stays on
+ * the task until that field is cleared.
+ */
+export function systemOptionSet(draft: ConditionDraft): boolean {
+  const place = draft.harness ? SYSTEM_PROMPTS[draft.harness] : undefined;
+  if (!place || !draft.harness) return false;
+  const value = draft.harnessOptions[draft.harness]?.[place.option];
+  if (value === undefined) return false;
+  return place.key ? typeof value === "object" && place.key in value : true;
+}
+
 /** Where the draft's instructions go, given its harness: the task's prompt unless it can take them. */
 export const instructionsWhere = (draft: ConditionDraft) =>
-  draft.instructionsWhere === "system" && systemPromptOption(draft.harness) ? "system" : "task";
+  draft.instructionsWhere === "system" &&
+  systemPromptOption(draft.harness) &&
+  !systemOptionSet(draft)
+    ? "system"
+    : "task";
 
 /** The system prompt text a harness's saved options carry, and the options without it. */
 function takeSystemPrompt(

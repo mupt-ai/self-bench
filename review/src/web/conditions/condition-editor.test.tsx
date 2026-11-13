@@ -5,9 +5,11 @@ import {
   type ConditionDraft,
   conditionProblem,
   draftOf,
+  instructionsWhere,
   type OptionsDraft,
   subagentOn,
   submittedCondition,
+  systemOptionSet,
   withHarness,
 } from "./condition-draft";
 import { conditionSummary } from "./condition-summary";
@@ -56,6 +58,11 @@ test("a condition is saved with its harness, typed option values, trimmed text, 
   // One saved before conditions named their harness takes it from its options.
   const { harness: _, ...older } = saved;
   expect(draftOf(older).harness).toBe("claude-code");
+  // With task instructions and a system prompt both set, the system prompt stays an option of its
+  // own, so Instructions can't also go there and overwrite it.
+  const both = draftOf(saved);
+  expect(systemOptionSet(both)).toBe(true);
+  expect(instructionsWhere({ ...both, instructionsWhere: "system" })).toBe("task");
 });
 
 test("a condition says what stops it from being saved", () => {

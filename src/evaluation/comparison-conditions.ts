@@ -47,6 +47,7 @@ export async function comparisonConditions(
       // Named for its environment too once that is found, so results tell the two apart.
       written = {
         name: saved?.name ?? "",
+        harness: saved?.harness,
         skills: saved?.skills ?? [],
         instructions: saved?.instructions,
         harnessOptions: saved?.harnessOptions,

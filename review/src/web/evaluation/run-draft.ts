@@ -31,24 +31,32 @@ const draftStateSchema = z.object({
     skipCompleted: z.boolean().optional(),
     judgeCredentialId: z.string().max(36).optional(),
     // The saved conditions and environments picked (RunConditionsPanel), checked on submit. A
-    // draft from when conditions were written out on this page keeps everything but them.
+    // draft from when conditions were written out on this page drops each written-out row whole,
+    // rather than keeping its environment and losing the rest.
     conditions: z
-      .array(
-        z.object({
-          saved: z.number().int().positive().optional(),
-          environment: z.number().int().positive().optional(),
-          subagentCredentialId: z.string().max(36).optional(),
-        }),
-      )
+      .array(z.unknown())
       .max(MAX_CONDITIONS)
-      .transform((picked) =>
-        picked.filter((entry) => entry.saved !== undefined || entry.environment !== undefined),
+      .transform((rows) =>
+        rows.flatMap((row) => {
+          const parsed = pickedConditionRow.safeParse(row);
+          if (!parsed.success) return [];
+          const { saved, environment } = parsed.data;
+          return saved !== undefined || environment !== undefined ? [parsed.data] : [];
+        }),
       )
       .optional()
       .catch(undefined),
     baseline: z.boolean().optional(),
   }),
 });
+/** A row as RunConditionsPanel picks it; any other key marks a written-out condition, which is dropped. */
+const pickedConditionRow = z
+  .object({
+    saved: z.number().int().positive().optional(),
+    environment: z.number().int().positive().optional(),
+    subagentCredentialId: z.string().max(36).optional(),
+  })
+  .strict();
 const blankModel = () => ({ catalogId: "", credentialId: "", harnesses: [] });
 
 /** The Run page's saved draft, or a new one with the tasks a link picked (`?tasks=`). */
