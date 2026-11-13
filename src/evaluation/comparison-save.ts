@@ -6,7 +6,7 @@ import type { CredentialInfo } from "../db/credentials.js";
 import type { Vault } from "../db/vault.js";
 import { type ManagedOffer, managedHarborEnvironment } from "../generation/billing/managed.js";
 import { type CatalogModel, evaluationCatalog } from "./catalog.js";
-import { comparisonConditions } from "./comparison-conditions.js";
+import { comparisonConditions, NOTHING_TO_RUN } from "./comparison-conditions.js";
 import {
   completedConfigurationTasks,
   conditionSubagent,
@@ -62,7 +62,7 @@ export async function saveComparison(
     tasks: EvaluationInput["tasks"],
     saved: ReadonlyMap<string, CredentialInfo>,
   ) => string | undefined,
-  /** The workspace's saved conditions and the scope's environments, for conditions that name one. */
+  /** The workspace's saved harnesses and the scope's environments, for the pairs that name one. */
   known: Parameters<typeof comparisonConditions>[2] = {},
 ): Promise<ComparisonRecord> {
   const owned = (record: ComparisonRecord) => {
@@ -105,10 +105,16 @@ export async function saveComparison(
       : sandbox.kind !== selection.sandbox)
   )
     throw new Error("Select your matching sandbox credential");
-  if (selection.baseline === false && !selection.conditions?.length)
-    throw new Error("Run the baseline or at least one condition");
+  if (
+    selection.baseline === false &&
+    !selection.conditions?.length &&
+    !selection.harnesses?.length &&
+    !selection.environments?.length
+  )
+    throw new Error(NOTHING_TO_RUN);
   const frozen = await freeze();
-  // The baseline runs the tasks as they are; each condition runs them again, kept apart in results.
+  // The baseline runs the tasks as they are; each harness and environment pair runs them again,
+  // kept apart in results.
   const conditions = await comparisonConditions(selection, frozen, known);
   const picked = selection.models.flatMap((model) => model.harnesses);
   for (const { condition } of conditions) {

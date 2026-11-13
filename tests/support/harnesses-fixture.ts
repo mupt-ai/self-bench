@@ -1,16 +1,16 @@
 import { evaluationServer } from "./evaluation-fixture.js";
 
-export const CONDITIONS = "/api/orgs/avyay/conditions";
+export const HARNESSES = "/api/orgs/avyay/harnesses";
 export const send = (method: string, body?: unknown) => ({
   method,
   ...(body === undefined ? {} : { body: JSON.stringify(body) }),
 });
 
 /**
- * An evaluation server with a gateway key and a sandbox key, and requests that save a condition
+ * An evaluation server with a gateway key and a sandbox key, and requests that save a harness
  * and start a comparison. The caller closes `server`.
  */
-export async function conditionsWorkspace() {
+export async function harnessesWorkspace() {
   const server = await evaluationServer();
   const credential = async (kind: string, name = kind) => {
     const response = await server.request(
@@ -21,8 +21,8 @@ export async function conditionsWorkspace() {
   };
   const router = await credential("openrouter");
   const sandbox = await credential("e2b");
-  const save = async (condition: unknown) => {
-    const response = await server.request(CONDITIONS, send("POST", condition));
+  const save = async (harness: unknown) => {
+    const response = await server.request(HARNESSES, send("POST", harness));
     return { status: response.status, ...(await response.json()) };
   };
   const row = (catalogId: string, harness: string) => ({
@@ -32,7 +32,13 @@ export async function conditionsWorkspace() {
     thinking: "high",
   });
   /** Starts a comparison, returning the runs it started or why it was refused. */
-  const compare = async (body: { models: unknown[]; conditions: unknown[]; baseline?: false }) => {
+  const compare = async (body: {
+    models: unknown[];
+    harnesses?: number[];
+    environments?: number[];
+    conditions?: unknown[];
+    baseline?: false;
+  }) => {
     const before = server.starts.length;
     const response = await server.request(
       `${server.base}/comparisons`,

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ArtifactStore } from "../artifacts/index.js";
-import { comparisonConditionSchema, MAX_CONDITIONS } from "../contracts/conditions.js";
+import { comparisonConditionSchema, MAX_CONDITIONS, MAX_PICKED } from "../contracts/conditions.js";
 import { modelIdPattern, thinkingLevels } from "../contracts/models.js";
 import type { ComparisonRecord } from "../db/comparisons.js";
 import type { CredentialInfo } from "../db/credentials.js";
@@ -48,11 +48,18 @@ const selectionFields = {
   sandboxCredentialId: z.union([z.uuid(), z.literal("managed-sandbox")]),
   skipCompleted: z.boolean().optional(),
   /**
-   * Run conditions (conditions.ts): every configuration also runs every task under each. Each is
-   * one of the workspace's saved conditions, picked by id, or one written out.
+   * The workspace's saved harnesses, by id, and the repository's environments, by id. Every
+   * configuration also runs every task with each harness, in each environment, and with each
+   * harness in each environment.
+   */
+  harnesses: z.array(z.number().int().positive()).max(MAX_PICKED).optional(),
+  environments: z.array(z.number().int().positive()).max(MAX_PICKED).optional(),
+  /**
+   * Pairs named one by one (conditions.ts): a saved harness and environment, or the changes
+   * written out, as a retry repeats a run. What older clients send in place of the two lists.
    */
   conditions: z.array(comparisonConditionSchema).max(MAX_CONDITIONS).optional(),
-  /** Whether the tasks also run as they are; false runs only the conditions. Default true. */
+  /** Whether the tasks also run as they are, with no harness or environment. Default true. */
   baseline: z.boolean().optional(),
 };
 const comparisonSelection = z.object(selectionFields).strict();
@@ -85,7 +92,7 @@ export type { ComparisonOwner } from "./comparison-save.js";
  * dataset gives them now.
  */
 export async function createComparison(
-  vault: Pick<Vault, "credentials" | "comparisons" | "conditions">,
+  vault: Pick<Vault, "credentials" | "comparisons" | "harnesses">,
   dataset: Pick<EvaluationDataset, "select" | "environment">,
   store: ArtifactStore,
   managed: ManagedOffer,
@@ -106,7 +113,7 @@ export async function createComparison(
     (tasks, saved) => judgeCredential(tasks, saved, selection.judgeCredentialId),
     {
       environments: dataset.environment?.bind(dataset),
-      saved: async (id) => vault.conditions?.find(owner.orgId, id),
+      saved: async (id) => vault.harnesses?.find(owner.orgId, id),
     },
   );
 }

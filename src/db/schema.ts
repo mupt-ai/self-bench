@@ -276,11 +276,11 @@ export const releases = pgTable(
 );
 
 export * from "./billing-schema.js";
-export * from "./condition-schema.js";
 export * from "./credential-schema.js";
 export * from "./evaluation-schema.js";
 export * from "./gateway-schema.js";
 export * from "./group-schema.js";
 export * from "./registry-grant-schema.js";
+export * from "./saved-harness-schema.js";
 export * from "./task-variant-schema.js";
 export * from "./workspace-schema.js";

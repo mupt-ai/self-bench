@@ -9,7 +9,6 @@ import { BenchmarkLayout } from "./benchmarks/BenchmarkLayout";
 import { BenchmarkReleasesPage } from "./benchmarks/BenchmarkReleasesPage";
 import { BenchmarksPage } from "./benchmarks/BenchmarksPage";
 import { BenchmarkTaskPage } from "./benchmarks/BenchmarkTaskPage";
-import { ConditionsPage } from "./conditions/ConditionsPage";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { EnvironmentsPage } from "./environments/EnvironmentsPage";
 import { CredentialsPage } from "./evaluation/CredentialsPage";
@@ -20,6 +19,7 @@ import { GroupDatasetPage } from "./groups/GroupDatasetPage";
 import { GroupLayout } from "./groups/GroupLayout";
 import { GroupReleasesPage } from "./groups/GroupReleasesPage";
 import { GroupSettingsPage } from "./groups/GroupSettingsPage";
+import { HarnessesPage } from "./harnesses/HarnessesPage";
 import { SiteSkeleton } from "./LoadingSkeleton";
 import { AddPrPage } from "./pages/AddPrPage";
 import { AddScenarioPage } from "./pages/AddScenarioPage";
@@ -94,7 +94,11 @@ export function WebApp() {
                   <Route path="settings/credentials" element={<CredentialsPage />} />
                   <Route path="settings/api-keys" element={<ApiKeysPage />} />
                   <Route path="settings/members" element={<MembersPage />} />
-                  <Route path="settings/conditions" element={<ConditionsPage />} />
+                  <Route path="settings/harnesses" element={<HarnessesPage />} />
+                  <Route
+                    path="settings/conditions"
+                    element={<Navigate to="/settings/harnesses" replace />}
+                  />
                   {session.status === "signed-in" && session.managedOffering && (
                     <Route path="settings/billing" element={<BillingPage />} />
                   )}

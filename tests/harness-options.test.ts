@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { harnessOptionsFromFlags } from "../src/api/cli/conditions.js";
+import { harnessOptionsFromFlags } from "../src/api/cli/harness-flags.js";
 import { conditionSchema } from "../src/contracts/conditions.js";
 import { harnessOptionsSchema } from "../src/contracts/harness-options.js";
 import type { ComparisonDraft } from "../src/evaluation/comparisons.js";
@@ -119,7 +119,7 @@ test("a condition's id follows its options, not how they were written", () => {
   expect(options({ "claude-code": {} })).toBe(runCondition(legacy).id);
 });
 
-test("the CLI reads HARNESS.OPTION=VALUE as JSON when it is, as text otherwise, or from a file", async () => {
+test("the CLI reads AGENT.OPTION=VALUE as JSON when it is, as text otherwise, or from a file", async () => {
   const directory = await mkdtemp(join(tmpdir(), "harness-options-"));
   try {
     const settings = join(directory, "settings.json");
@@ -146,7 +146,7 @@ test("the CLI reads HARNESS.OPTION=VALUE as JSON when it is, as text otherwise, 
     });
     expect(await harnessOptionsFromFlags([])).toBeUndefined();
     await expect(harnessOptionsFromFlags(["max_turns=30"])).rejects.toThrow(
-      "write HARNESS.OPTION=VALUE",
+      "write AGENT.OPTION=VALUE",
     );
   } finally {
     await rm(directory, { recursive: true, force: true });

@@ -38,7 +38,7 @@
               "cli/build",
               "cli/review",
               "cli/environments",
-              "cli/conditions",
+              "cli/harnesses",
               "cli/evaluate",
               "cli/inspect",
               "cli/publish",
@@ -54,7 +54,7 @@
               "api/build",
               "api/review",
               "api/environments",
-              "api/conditions",
+              "api/harnesses",
               "api/evaluate",
               "api/inspect",
               "api/publish",
@@ -94,6 +94,8 @@
     { "source": "/api-reference/results", "destination": "/api/inspect" },
     { "source": "/api-reference/failure-analysis", "destination": "/api/inspect" },
     { "source": "/api-reference/create-benchmark", "destination": "/api/benchmarks-and-groups" },
-    { "source": "/api-reference/publish-release", "destination": "/api/publish" }
+    { "source": "/api-reference/publish-release", "destination": "/api/publish" },
+    { "source": "/cli/conditions", "destination": "/cli/harnesses" },
+    { "source": "/api/conditions", "destination": "/api/harnesses" }
   ]
 }

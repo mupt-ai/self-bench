@@ -7,7 +7,7 @@ import { credentialRunsAll, customModel, hasDuplicateModelSelections } from "./m
 /**
  * Whether a Run page's models and sandbox can start a comparison: every row has a model, a
  * credential that runs its harnesses, and a thinking level it offers, no row repeats another, and
- * the sandbox has its credential. The tasks and conditions are each page's own to check.
+ * the sandbox has its credential. The tasks, harnesses, and repo ablations are each page's own to check.
  */
 export function selectionReady({
   draft,

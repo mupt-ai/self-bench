@@ -20,8 +20,8 @@ const coverage = ({ tasks }: EnvironmentItem) =>
 
 /**
  * A repository's environments: scripts that change every approved task's files, such as no
- * AGENTS.md or a framework build, each task built and checked once. A Conditions row on the Run page
- * picks one to run every task as it built them, beside the tasks as they are.
+ * AGENTS.md or a framework build, each task built and checked once. The Run page's Repo Ablations
+ * pick one to run every task as it built them, beside the tasks as they are.
  */
 export function EnvironmentsPage() {
   const { org } = useOrg();
@@ -90,7 +90,7 @@ export function EnvironmentsPage() {
       ) : environments.length === 0 ? (
         <EmptyState title="No Repo Ablations Yet">
           Remove AGENTS.md, add a docs block, or swap a package build for every approved task. Then
-          pick it in a Conditions row's Repo Ablation field on the Run page.
+          pick it under Repo Ablations on the Run page.
         </EmptyState>
       ) : (
         <DataTable>

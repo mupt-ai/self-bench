@@ -104,11 +104,11 @@ function sectionsOf(billing: boolean): { label: string; items: NavItem[] }[] {
           active: (path) => path.startsWith("/settings/credentials"),
         },
         {
-          // Saved harness changes, which any repository's or benchmark's runs pick.
+          // Saved changes to an agent, which any repository's or benchmark's runs pick.
           label: "Harnesses",
-          to: "/settings/conditions",
+          to: "/settings/harnesses",
           icon: SlidersHorizontal,
-          active: (path) => path.startsWith("/settings/conditions"),
+          active: (path) => path.startsWith("/settings/harnesses"),
         },
         {
           label: "API Keys",

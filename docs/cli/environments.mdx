@@ -1,11 +1,11 @@
 ---
 title: "CLI: Repo Ablations"
 sidebarTitle: "Repo Ablations"
-description: "Change every approved task's files once, then run the tasks as built, alone or beside a saved condition."
+description: "Change every approved task's files once, then run the tasks as built, alone or with a saved harness."
 icon: "box"
 ---
 
-An environment runs one script in every approved task's image and builds each task with the change. Run it with `compare --condition '{"environment": ID}'`, or beside a [saved condition](/cli/conditions) with `--saved-condition ID:ENVIRONMENT_ID` ([Evaluate](/cli/evaluate)). `R` is `--repo OWNER/NAME`.
+An environment runs one script in every approved task's image and builds each task with the change. Run it with `compare --environment ID`, alone or with each [saved harness](/cli/harnesses) picked by `--saved-harness ID` ([Evaluate](/cli/evaluate)). `R` is `--repo OWNER/NAME`.
 
 | Command | Does |
 | --- | --- |

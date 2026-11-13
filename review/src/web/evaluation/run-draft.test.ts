@@ -28,24 +28,28 @@ test("restoring a submitted draft keeps its request identity and a new dataset s
   expect(next.submitted).toBe(false);
   expect(next.draft.tasks).toEqual([{ runId: "two", taskId: "two" }]);
 });
-test("a draft drops each condition written out on the Run page, keeping picked ones", () => {
+test("a draft keeps its picked harnesses and repo ablations, and moves an older draft's rows into them", () => {
   const state = restoreRunDraft(null, null);
-  const saved = JSON.stringify({
-    ...state,
-    draft: {
-      ...state.draft,
-      conditions: [
-        // Written out before conditions were saved: its environment alone would lose its skills.
-        { name: "Pack", environment: 3, skills: ["acme/skills"] },
-        { saved: 4, environment: 3 },
-        { environment: 5 },
-      ],
-    },
+  const restored = (draft: Record<string, unknown>) =>
+    restoreRunDraft(JSON.stringify({ ...state, draft: { ...state.draft, ...draft } }), null).draft;
+  expect(restored({ harnesses: [4], environments: [3] })).toMatchObject({
+    harnesses: [4],
+    environments: [3],
   });
-  expect(restoreRunDraft(saved, null).draft.conditions).toEqual([
-    { saved: 4, environment: 3 },
-    { environment: 5 },
-  ]);
+  const older = restored({
+    models: [{ catalogId: "gpt-6-sol", credentialId: "router", harnesses: ["codex"] }],
+    conditions: [
+      // Written out before harnesses were saved: its repo ablation alone would lose its skills.
+      { name: "Pack", environment: 3, skills: ["acme/skills"] },
+      { saved: 4, environment: 3, subagentCredentialId: "managed-model" },
+      { environment: 5 },
+      { saved: 4 },
+    ],
+  });
+  expect(older).toMatchObject({ harnesses: [4], environments: [3, 5] });
+  expect(older).not.toHaveProperty("conditions");
+  expect(older.models).toHaveLength(1);
+  expect(older.id).toBe(state.draft.id);
 });
 
 test("large selections round-trip through task links and saved drafts without truncation", () => {

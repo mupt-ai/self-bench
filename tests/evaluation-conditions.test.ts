@@ -151,7 +151,9 @@ test("a comparison runs every model under the baseline and each condition, kept 
       `${fixture.base}/comparisons`,
       post({ ...draft, id: crypto.randomUUID(), baseline: false, conditions: [] }),
     );
-    expect(await nothing.json()).toEqual({ error: "Run the baseline or at least one condition" });
+    expect(await nothing.json()).toEqual({
+      error: "Run the tasks as they are, or pick a harness or an environment",
+    });
     const muse = await fixture.request(
       `${fixture.base}/comparisons`,
       post({

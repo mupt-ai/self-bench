@@ -2,16 +2,25 @@ import { readFile } from "node:fs/promises";
 import { harborAgentOptions } from "../../contracts/harbor-agent-options.js";
 import { flag, list, type Values } from "./args.js";
 
+/** A repeatable ID flag's values, as numbers. */
+function ids(values: Values, name: string): number[] {
+  return list(values, name).map((entry) => {
+    if (!/^\d+$/.test(entry)) throw new Error(`--${name} ${entry}: write an ID`);
+    return Number(entry);
+  });
+}
+
 /**
- * `--saved-condition ID[:ENVIRONMENT_ID]`, repeatable: one of the workspace's saved conditions,
- * run in a repository environment when it names one; `--subagent-credential ID` serves their
- * subagent models. `--condition JSON|@FILE`, repeatable: each an object `{name, skills?,
- * instructions?, environment?, harnessOptions?, subagent?}` or `{saved, environment?,
- * subagentCredentialId?}`, or a file holding one or a list. `--harness-option
- * HARNESS.OPTION=VALUE`, repeatable, adds one more condition that sets those options, named by
- * `--options-name`. `--no-baseline` runs only the conditions.
+ * What a comparison runs besides the tasks as they are: `--saved-harness ID` and `--environment
+ * ID`, both repeatable, and every pair of the two. `--no-baseline` leaves out the tasks as they
+ * are. Older flags still work: `--saved-condition ID[:ENVIRONMENT_ID]` (with `--subagent-credential
+ * ID` in place of the harness's own), `--condition JSON|@FILE` writing one pair out, and
+ * `--harness-option AGENT.OPTION=VALUE` adding one more that sets those options, named by
+ * `--options-name`.
  */
-export async function conditionsFromFlags(values: Values): Promise<Record<string, unknown>> {
+export async function harnessesFromFlags(values: Values): Promise<Record<string, unknown>> {
+  const harnesses = ids(values, "saved-harness");
+  const environments = ids(values, "environment");
   const subagentCredentialId = flag(values, "subagent-credential");
   const saved = list(values, "saved-condition").map((entry) => {
     const match = /^(\d+)(?::(\d+))?$/.exec(entry);
@@ -23,7 +32,9 @@ export async function conditionsFromFlags(values: Values): Promise<Record<string
     };
   });
   if (subagentCredentialId && !saved.length)
-    throw new Error("--subagent-credential needs --saved-condition");
+    throw new Error(
+      "--subagent-credential needs --saved-condition; a saved harness names its own credential",
+    );
   const given = [
     ...saved,
     ...(
@@ -38,12 +49,11 @@ export async function conditionsFromFlags(values: Values): Promise<Record<string
   ];
   const options = await harnessOptionsFromFlags(list(values, "harness-option"));
   const conditions = options
-    ? [
-        ...given,
-        { name: flag(values, "options-name") ?? "Harness Options", harnessOptions: options },
-      ]
+    ? [...given, { name: flag(values, "options-name") ?? "Options", harnessOptions: options }]
     : given;
   return {
+    ...(harnesses.length ? { harnesses } : {}),
+    ...(environments.length ? { environments } : {}),
     ...(conditions.length ? { conditions } : {}),
     ...(values["no-baseline"] === true ? { baseline: false } : {}),
   };
@@ -60,7 +70,7 @@ function textOption(harness: string, name: string): boolean {
 }
 
 /**
- * `HARNESS.OPTION=VALUE` entries as a condition's harnessOptions. A text option's value is taken
+ * `AGENT.OPTION=VALUE` entries as a harness's harnessOptions. A text option's value is taken
  * as written; any other is read as JSON when it is JSON (`30`, `true`, `{...}`) and as text
  * otherwise, as Harbor reads its own `--ak`. `@FILE` reads it from a file, such as a settings.json
  * for Claude Code's `config`.
@@ -72,7 +82,7 @@ export async function harnessOptionsFromFlags(
   const options: Record<string, Record<string, unknown>> = {};
   for (const entry of entries) {
     const match = /^([a-z0-9-]+)\.([a-z0-9_]+)=([\s\S]*)$/.exec(entry);
-    if (!match) throw new Error(`--harness-option ${entry}: write HARNESS.OPTION=VALUE`);
+    if (!match) throw new Error(`--harness-option ${entry}: write AGENT.OPTION=VALUE`);
     const [, harness = "", name = "", raw = ""] = match;
     const text = raw.startsWith("@") ? await readFile(raw.slice(1), "utf8") : raw;
     let value: unknown = text;

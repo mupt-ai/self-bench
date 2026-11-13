@@ -43,6 +43,10 @@ export function conditionRunsOn(
 }
 
 export const MAX_CONDITIONS = 4;
+/** The most saved harnesses, and the most environments, one run picks; it runs every pair. */
+export const MAX_PICKED = 4;
+/** The most pairs one comparison runs beside the baseline, each a full run of every task. */
+export const MAX_PAIRS = 12;
 export const MAX_SKILLS = 10;
 /** The longest skill source a condition takes: a GitHub URL with a ref. */
 export const MAX_SKILL_LENGTH = 300;
@@ -79,13 +83,13 @@ export function skillSource(value: string): string | undefined {
   return `https://github.com/${org}/${repo}${ref ? `/tree/${ref}` : ""}`;
 }
 
-const credentialId = z.union([z.uuid(), z.literal("managed-model")]);
+export const credentialId = z.union([z.uuid(), z.literal("managed-model")]);
 
 /**
  * The model a condition's subagents run on (evaluation/subagents.ts), by its catalog id, and what
  * the harness is told about delegating: DEFAULT_SUBAGENT_PROMPT when left out, nothing when empty.
  */
-const subagentSchema = z
+export const subagentSchema = z
   .object({
     catalogId: z.string().trim().min(1).max(200),
     prompt: z.string().trim().max(MAX_SUBAGENT_PROMPT).default(DEFAULT_SUBAGENT_PROMPT),
@@ -93,7 +97,7 @@ const subagentSchema = z
   .strict();
 
 /** What a condition changes about the harness: the same for every repository and benchmark. */
-const harnessChanges = {
+export const harnessChanges = {
   name: z.string().trim().min(1).max(60),
   /** The harness it changes: its options, skills, and subagent model all belong to it. */
   harness: z.enum(harnessIds).optional(),
@@ -112,7 +116,7 @@ const harnessChanges = {
   harnessOptions: harnessOptionsSchema.optional(),
 };
 
-const changesSomething = (condition: {
+export const changesSomething = (condition: {
   skills: readonly string[];
   instructions?: string | undefined;
   environment?: number | undefined;
@@ -130,7 +134,7 @@ const changesSomething = (condition: {
  * it is given must all fit it: skills need a harness that loads them, and a subagent model one that
  * takes it (SKILL_HARNESSES, subagentSupport).
  */
-function harnessFits(
+export function harnessFits(
   condition: {
     harness?: Harness | undefined;
     skills: readonly string[];
@@ -141,11 +145,11 @@ function harnessFits(
 ) {
   const named = Object.keys(condition.harnessOptions ?? {});
   if (named.length > 1)
-    context.addIssue({ code: "custom", message: "a condition changes one harness: pick one" });
+    context.addIssue({ code: "custom", message: "it changes one agent: pick one" });
   if (condition.harness && named.some((harness) => harness !== condition.harness))
     context.addIssue({
       code: "custom",
-      message: `its harness options are for ${harnessLabels[named[0] as Harness]}, not ${harnessLabels[condition.harness]}`,
+      message: `its options are for ${harnessLabels[named[0] as Harness]}, not ${harnessLabels[condition.harness]}`,
     });
   const harness = conditionHarness(condition);
   if (!harness) return;
@@ -161,20 +165,6 @@ function harnessFits(
     });
 }
 
-/**
- * A saved condition (`/api/orgs/{org}/conditions`): a workspace's named set of harness changes,
- * which any of its runs can pick. It names no environment and no credential, which belong to the
- * repository and the run.
- */
-export const savedConditionSchema = z
-  .object({ ...harnessChanges, subagent: subagentSchema.optional() })
-  .strict()
-  .refine(changesSomething, {
-    message: "a condition adds a skill, instructions, harness options, or a subagent model",
-  })
-  .superRefine(harnessFits);
-export type SavedConditionDraft = z.infer<typeof savedConditionSchema>;
-
 /** A condition as a comparison names it; `runCondition` gives it its id. */
 export const conditionSchema = z
   .object({
@@ -186,16 +176,15 @@ export const conditionSchema = z
   })
   .strict()
   .refine(changesSomething, {
-    message:
-      "a condition adds a skill, instructions, an environment, harness options, or a subagent model",
+    message: "each one adds a skill, instructions, an environment, options, or a subagent model",
   })
   .superRefine(harnessFits);
 
 /**
- * A condition as a comparison picks it: one of the workspace's saved conditions by id, the
- * repository environment its tasks run in, or both, and the credential that serves the saved
- * condition's subagent model (the first that can, when left out). An environment alone runs the
- * tasks it built with the harness as it is, named after the environment.
+ * One pair a comparison runs, as older clients and retries name it: one of the workspace's saved
+ * harnesses by id, the repository environment its tasks run in, or both. A credential named here
+ * serves the saved harness's subagent model in place of its own. Newer clients send `harnesses`
+ * and `environments` (comparisons.ts), which run every pair.
  */
 const pickedConditionSchema = z
   .object({
@@ -205,10 +194,9 @@ const pickedConditionSchema = z
   })
   .strict()
   .refine((picked) => picked.saved !== undefined || picked.environment !== undefined, {
-    message: "pick a saved condition, an environment, or both",
+    message: "pick a saved harness, an environment, or both",
   });
-export type PickedCondition = z.infer<typeof pickedConditionSchema>;
 
-/** One of a comparison's conditions: one picked from what is saved, or one written out. */
+/** One of a comparison's pairs: one picked from what is saved, or one written out (retries). */
 export const comparisonConditionSchema = z.union([pickedConditionSchema, conditionSchema]);
 export type ComparisonCondition = z.infer<typeof comparisonConditionSchema>;

@@ -56,9 +56,9 @@ export const facets: Facet[] = [
   },
   {
     key: "condition",
-    label: "Condition",
-    all: "All Conditions",
-    // The tasks as they are, or the run condition (skills, instructions) a comparison added.
+    label: "Setup",
+    all: "All Setups",
+    // The tasks as they are, or the saved harness and repo ablation a comparison added.
     values: ({ condition }) => [condition?.name ?? "Baseline"],
   },
 ];

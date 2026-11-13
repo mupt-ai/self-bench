@@ -1,42 +1,44 @@
 import { Plus } from "lucide-react";
 import React from "react";
 import { formatAgo } from "../api";
+import { runCredentials } from "../evaluation/run-readiness";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
+import { useOrgCredentials } from "../setup/SetupStatus";
 import { Button, DataTable, EmptyState, Notice, PageFrame, PageHeader } from "../ui";
-import { ConditionDialog } from "./ConditionDialog";
-import {
-  deleteCondition,
-  listConditions,
-  listSubagentModels,
-  type SavedCondition,
-} from "./condition-api";
-import { conditionSummary } from "./condition-summary";
+import { HarnessDialog } from "./HarnessDialog";
+import { deleteHarness, listHarnesses, listSubagentModels, type SavedHarness } from "./harness-api";
+import { harnessSummary } from "./harness-summary";
 
 /**
- * The workspace's saved conditions: named harness changes (skills, instructions, harness options,
- * a subagent model) that any repository's or benchmark's Run page picks, to run every task again
- * beside the baseline. They change the harness, never the tasks: a repository's environments do
- * that, and a run pairs the two.
+ * The workspace's saved harnesses: named changes to an agent (skills, instructions, options, a
+ * subagent model and its credential) that any repository's or benchmark's Run page picks, to run
+ * every task again beside the baseline. They change the agent, never the tasks: a repository's
+ * environments do that, and a run runs every harness in every environment.
  */
-export function ConditionsPage() {
+export function HarnessesPage() {
   const { org } = useOrg();
   useDocumentTitle(`Harnesses · ${org.login}`);
-  const [conditions, setConditions] = React.useState<SavedCondition[]>();
+  const [harnesses, setHarnesses] = React.useState<SavedHarness[]>();
+  const [saved] = useOrgCredentials(org.login);
+  // Where the managed key serves models, it can serve subagents too, as on the Run page.
   const [models, setModels] = React.useState<{ id: string; label: string }[]>([]);
+  const [managed, setManaged] = React.useState(false);
+  const credentials = saved && runCredentials(saved, managed);
   const [error, setError] = React.useState<string | null>(null);
-  // The condition being edited, "new" for one being written, or nothing while the dialog is shut.
-  const [editing, setEditing] = React.useState<SavedCondition | "new">();
+  // The harness being edited, "new" for one being written, or nothing while the dialog is shut.
+  const [editing, setEditing] = React.useState<SavedHarness | "new">();
   const [refresh, setRefresh] = React.useState(0);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `refresh` reloads after a change.
   React.useEffect(() => {
     let stopped = false;
-    Promise.all([listConditions(org.login), listSubagentModels(org.login)]).then(
-      ([found, subagentModels]) => {
+    Promise.all([listHarnesses(org.login), listSubagentModels(org.login)]).then(
+      ([found, subagents]) => {
         if (stopped) return;
-        setConditions(found);
-        setModels(subagentModels);
+        setHarnesses(found);
+        setModels(subagents.models);
+        setManaged(subagents.managed === true);
         setError(null);
       },
       (cause) => {
@@ -48,10 +50,10 @@ export function ConditionsPage() {
     };
   }, [org.login, refresh]);
 
-  const remove = async (condition: SavedCondition) => {
-    if (!window.confirm(`Delete ${condition.name}? Runs that used it keep their results.`)) return;
+  const remove = async (harness: SavedHarness) => {
+    if (!window.confirm(`Delete ${harness.name}? Runs that used it keep their results.`)) return;
     try {
-      await deleteCondition(org.login, condition.id);
+      await deleteHarness(org.login, harness.id);
       setRefresh((count) => count + 1);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -63,7 +65,7 @@ export function ConditionsPage() {
       <PageHeader
         className="mb-6"
         title="Harnesses"
-        description="Save a change to a harness once, then run any tasks with and without it."
+        description="Save a change to an agent once, then run any tasks with and without it."
       >
         <Button variant="primary" onClick={() => setEditing("new")}>
           <Plus aria-hidden="true" />
@@ -71,16 +73,16 @@ export function ConditionsPage() {
         </Button>
       </PageHeader>
       {error && <Notice className="mb-5">{error}</Notice>}
-      {!conditions ? (
+      {!harnesses ? (
         !error && (
           <p role="status" className="text-sm text-muted-foreground">
             Loading harnesses…
           </p>
         )
-      ) : conditions.length === 0 ? (
+      ) : harnesses.length === 0 ? (
         <EmptyState title="No Harnesses Yet">
-          Add skills, extra instructions, harness options, or a subagent model. Then pick the
-          condition on any Run page to compare it with the baseline.
+          Add skills, extra instructions, options, or a subagent model to an agent. Then pick the
+          harness on any Run page to compare it with the baseline.
         </EmptyState>
       ) : (
         <DataTable>
@@ -93,31 +95,29 @@ export function ConditionsPage() {
             </tr>
           </thead>
           <tbody>
-            {conditions.map((condition) => (
-              <tr key={condition.id}>
-                <td className="font-semibold">{condition.name}</td>
+            {harnesses.map((harness) => (
+              <tr key={harness.id}>
+                <td className="font-semibold">{harness.name}</td>
                 <td className="text-muted-foreground">
-                  {conditionSummary(condition, models).join(" · ")}
+                  {harnessSummary(harness, models).join(" · ")}
                 </td>
                 <td className="text-right whitespace-nowrap text-muted-foreground">
-                  {[condition.createdBy, formatAgo(condition.updatedAt)]
-                    .filter(Boolean)
-                    .join(" · ")}
+                  {[harness.createdBy, formatAgo(harness.updatedAt)].filter(Boolean).join(" · ")}
                 </td>
                 <td className="text-right whitespace-nowrap">
                   <Button
                     variant="ghost"
                     size="small"
-                    aria-label={`Edit ${condition.name}`}
-                    onClick={() => setEditing(condition)}
+                    aria-label={`Edit ${harness.name}`}
+                    onClick={() => setEditing(harness)}
                   >
                     Edit
                   </Button>
                   <Button
                     variant="ghost"
                     size="small"
-                    aria-label={`Delete ${condition.name}`}
-                    onClick={() => void remove(condition)}
+                    aria-label={`Delete ${harness.name}`}
+                    onClick={() => void remove(harness)}
                   >
                     Delete
                   </Button>
@@ -128,10 +128,11 @@ export function ConditionsPage() {
         </DataTable>
       )}
       {editing && (
-        <ConditionDialog
+        <HarnessDialog
           org={org.login}
-          {...(editing === "new" ? {} : { condition: editing })}
+          {...(editing === "new" ? {} : { harness: editing })}
           subagentModels={models}
+          credentials={credentials}
           onClose={() => setEditing(undefined)}
           onSaved={() => {
             setEditing(undefined);
