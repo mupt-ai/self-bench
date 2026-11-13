@@ -1,7 +1,10 @@
 import { Plus, Trash2 } from "lucide-react";
 import { MAX_SKILL_LENGTH, MAX_SKILLS } from "../../../../src/contracts/conditions";
+import { harnessLabels } from "../../../../src/evaluation/models";
+import { cn } from "../primitives/cn";
 import { InfoTooltip } from "../primitives/tooltip";
-import { Button, fieldStyles, Input } from "../ui";
+import { Button, controlStyles, fieldStyles, Input, Select } from "../ui";
+import { type ConditionDraft, instructionsWhere, systemPromptOption } from "./condition-draft";
 
 export type Page = 1 | 2 | 3;
 const PAGES = ["Harness", "Options", "Skills and Instructions"] as const;
@@ -91,6 +94,64 @@ export function SkillFields({
           </Button>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * A condition's instructions, and where they go: the end of each task's prompt, which every
+ * harness reads, or the harness's system prompt, where it has one (Claude Code's append_system_prompt).
+ */
+export function InstructionsField({
+  draft,
+  disabled,
+  onChange,
+}: {
+  draft: ConditionDraft;
+  disabled: boolean;
+  onChange: (patch: Partial<ConditionDraft>) => void;
+}) {
+  const system = !!systemPromptOption(draft.harness);
+  return (
+    <div className={fieldStyles}>
+      <div className="flex items-center gap-3">
+        <label htmlFor="condition-instructions" className="flex flex-1 items-center gap-1.5">
+          Instructions
+          <InfoTooltip
+            label={
+              system
+                ? "Task Prompt adds them to the end of every task's instruction. System Prompt appends them to the harness's system prompt instead."
+                : "Added to the end of every task's instruction under this condition."
+            }
+          />
+        </label>
+        {system && draft.harness && (
+          <span className="w-40">
+            <Select
+              aria-label="Instructions Go In"
+              value={instructionsWhere(draft)}
+              disabled={disabled}
+              onChange={(event) =>
+                onChange({ instructionsWhere: event.target.value === "system" ? "system" : "task" })
+              }
+            >
+              <option value="task">Task Prompt</option>
+              <option value="system">{harnessLabels[draft.harness]} System Prompt</option>
+            </Select>
+          </span>
+        )}
+      </div>
+      <textarea
+        id="condition-instructions"
+        aria-label="Instructions"
+        rows={3}
+        maxLength={4000}
+        className={cn(controlStyles, "h-auto resize-y py-2")}
+        placeholder="For example: read node_modules/next/dist/docs before changing caching."
+        value={draft.instructions}
+        disabled={disabled}
+        onChange={(event) => onChange({ instructions: event.target.value })}
+      />
     </div>
   );
 }

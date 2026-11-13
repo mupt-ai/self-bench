@@ -16,6 +16,7 @@ import {
 } from "./condition-draft";
 import { conditionSummary } from "./condition-summary";
 import { HarnessOptionFields } from "./HarnessOptionFields";
+import { ToolPicker } from "./ToolPicker";
 
 const tuned = (harnessOptions: OptionsDraft = {}): ConditionDraft => ({
   ...blankCondition(),
@@ -133,6 +134,27 @@ test("a subagent model alone makes a condition, with the default prompt, another
   ]);
 });
 
+test("instructions go in the task prompt, or Claude Code's system prompt, and reopen where they went", () => {
+  const system: ConditionDraft = {
+    ...tuned(),
+    instructions: "  Prefer small diffs.  ",
+    instructionsWhere: "system",
+  };
+  const saved = submittedCondition(system);
+  expect(saved.instructions).toBeUndefined();
+  expect(saved.harnessOptions).toEqual({
+    "claude-code": { append_system_prompt: "Prefer small diffs." },
+  });
+  const reopened = draftOf({ ...saved, id: 1, createdAt: "", updatedAt: "" });
+  expect(reopened.instructionsWhere).toBe("system");
+  expect(reopened.instructions).toBe("Prefer small diffs.");
+  expect(reopened.harnessOptions["claude-code"]).toEqual({});
+  // A harness without a system prompt option sends them to the task's prompt.
+  const codex = submittedCondition({ ...system, harness: "codex" });
+  expect(codex.instructions).toBe("Prefer small diffs.");
+  expect(codex.harnessOptions).toBeUndefined();
+});
+
 test("every option a harness takes is a field, left at Harbor's default until set", async () => {
   const browser = new Window({ url: "https://selfbench.test" });
   const globals = {
@@ -188,9 +210,84 @@ test("every option a harness takes is a field, left at Harbor's default until se
     expect(browser.document.querySelector('select[aria-label^="Add"]')).toBeNull();
     await pick("Disable Web Search", "true");
     expect(seen).toEqual({ disable_web_search: "true" });
+    // Claude Code's system prompt is the Instructions field's, so its options don't list it.
+    await act(async () =>
+      root.render(
+        <HarnessOptionFields
+          harness="claude-code"
+          options={{}}
+          idPrefix="condition-claude-code"
+          disabled={false}
+          onSet={() => undefined}
+        />,
+      ),
+    );
+    expect(browser.document.querySelector('[aria-label="Append System Prompt"]')).toBeNull();
+    expect(
+      browser.document.querySelector('[role="group"][aria-label="Allowed Tools"]'),
+    ).not.toBeNull();
+    await act(async () => root.render(<Fields />));
     // Back to Harbor's default, the option is no longer set at all.
     await pick("Disable Web Search", "");
     expect(seen).toEqual({});
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+    for (const [key, descriptor] of previous) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else Reflect.deleteProperty(globalThis, key);
+    }
+    await browser.happyDOM.close();
+  }
+});
+
+test("tools are picked as chips beside a box for any others, and saved as Harbor's comma-separated list", async () => {
+  const browser = new Window({ url: "https://selfbench.test" });
+  const globals = {
+    window: browser,
+    document: browser.document,
+    HTMLElement: browser.HTMLElement,
+    IS_REACT_ACT_ENVIRONMENT: true,
+  };
+  const previous = Object.keys(globals).map(
+    (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const,
+  );
+  for (const [key, value] of Object.entries(globals))
+    Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  let seen = "";
+  function Picker() {
+    const [value, setValue] = useState("Bash,mcp__github");
+    seen = value;
+    return (
+      <ToolPicker
+        id="tools"
+        label="Allowed Tools"
+        harness="claude-code"
+        value={value}
+        onChange={setValue}
+      />
+    );
+  }
+  const chip = (name: string) => {
+    const found = [...browser.document.querySelectorAll("button")].find(
+      (button) => button.textContent === name,
+    );
+    if (!found) throw new Error(`Missing ${name}`);
+    return found;
+  };
+  try {
+    await act(async () => root.render(<Picker />));
+    expect(chip("Bash").getAttribute("aria-pressed")).toBe("true");
+    expect(chip("Read").getAttribute("aria-pressed")).toBe("false");
+    const other = browser.document.querySelector('input[aria-label="Other Allowed Tools"]');
+    expect(other instanceof browser.HTMLInputElement && other.value).toBe("mcp__github");
+    await act(async () => chip("Read").click());
+    expect(seen).toBe("Bash,mcp__github,Read");
+    await act(async () => chip("Bash").click());
+    expect(seen).toBe("mcp__github,Read");
   } finally {
     await act(async () => root.unmount());
     container.remove();

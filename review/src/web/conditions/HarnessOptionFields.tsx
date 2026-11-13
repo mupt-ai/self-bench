@@ -10,7 +10,8 @@ import type { Harness } from "../../../../src/evaluation/models";
 import { cn } from "../primitives/cn";
 import { InfoTooltip } from "../primitives/tooltip";
 import { controlStyles, fieldStyles, Input, Select } from "../ui";
-import { optionText } from "./condition-draft";
+import { optionText, systemPromptOption } from "./condition-draft";
+import { TOOL_PICKERS, ToolPicker } from "./ToolPicker";
 
 /** What each harness's native config is, where Harbor's description says only "config". */
 const NATIVE_CONFIG: Partial<Record<Harness, string>> = {
@@ -48,16 +49,19 @@ export function HarnessOptionFields({
       className="grid min-w-0 gap-4 border-0 p-0"
       aria-label="Harness Options"
     >
-      {harnessOptionsFor(harness).map((option) => (
-        <OptionField
-          key={option.name}
-          id={`${idPrefix}-${option.name}`}
-          harness={harness}
-          option={option}
-          value={optionText(option, options[option.name])}
-          onChange={(value) => onSet(option.name, value === DEFAULT ? undefined : value)}
-        />
-      ))}
+      {harnessOptionsFor(harness)
+        // The system prompt is the Instructions field's other place, not an option of its own.
+        .filter((option) => option.name !== systemPromptOption(harness))
+        .map((option) => (
+          <OptionField
+            key={option.name}
+            id={`${idPrefix}-${option.name}`}
+            harness={harness}
+            option={option}
+            value={optionText(option, options[option.name])}
+            onChange={(value) => onSet(option.name, value === DEFAULT ? undefined : value)}
+          />
+        ))}
     </fieldset>
   );
 }
@@ -83,7 +87,12 @@ function OptionField({
   const defaultLabel =
     option.default === undefined ? "Harbor Default" : `Harbor Default (${String(option.default)})`;
   let control: ReactNode;
-  if (option.kind === "boolean")
+  const tools = TOOL_PICKERS[harness]?.includes(option.name);
+  if (tools)
+    control = (
+      <ToolPicker id={id} label={label} harness={harness} value={value} onChange={onChange} />
+    );
+  else if (option.kind === "boolean")
     control = (
       <Select
         id={id}

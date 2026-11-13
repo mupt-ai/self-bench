@@ -7,10 +7,9 @@ import {
 import { type Harness, harnessIds, harnessLabels } from "../../../../src/evaluation/models";
 import { subagentSupport } from "../../../../src/evaluation/subagents";
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
-import { cn } from "../primitives/cn";
 import { InfoTooltip } from "../primitives/tooltip";
-import { Button, controlStyles, fieldStyles, Input, Notice, Select } from "../ui";
-import { type Page, PageSteps, SkillFields } from "./ConditionPages";
+import { Button, fieldStyles, Input, Notice, Select } from "../ui";
+import { InstructionsField, type Page, PageSteps, SkillFields } from "./ConditionPages";
 import { type SavedCondition, saveCondition } from "./condition-api";
 import {
   blankCondition,
@@ -165,23 +164,11 @@ export function ConditionDialog({
                   onChange={(skills) => update({ skills })}
                 />
               )}
-              <label htmlFor="condition-instructions" className={fieldStyles}>
-                <span className="flex items-center gap-1.5">
-                  Extra Instructions
-                  <InfoTooltip label="Appended to every task's instruction under this condition." />
-                </span>
-                <textarea
-                  id="condition-instructions"
-                  aria-label="Extra Instructions"
-                  rows={3}
-                  maxLength={4000}
-                  className={cn(controlStyles, "h-auto resize-y py-2")}
-                  placeholder="For example: read node_modules/next/dist/docs before changing caching."
-                  value={draft.instructions}
-                  disabled={busy}
-                  onChange={(event) => update({ instructions: event.target.value })}
-                />
-              </label>
+              <InstructionsField
+                draft={draft}
+                disabled={busy}
+                onChange={(patch) => update(patch)}
+              />
               {subagentOn && (
                 <SubagentFields
                   models={subagentModels}
