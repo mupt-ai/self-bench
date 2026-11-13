@@ -6,10 +6,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { HarnessOptionValue } from "../../../../src/contracts/harness-options";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import { evaluationCatalog } from "../../../../src/evaluation/catalog";
+import { subagentCredentials } from "../../../../src/evaluation/subagents";
 import { runCredentials } from "../evaluation/run-readiness";
 import { HarnessOptionFields } from "./HarnessOptionFields";
 import { subagentOn } from "./harness-draft";
-import { SubagentFields, staleSubagentCredential, subagentCredentials } from "./SubagentFields";
+import { SubagentFields, staleSubagentCredential } from "./SubagentFields";
 
 test("every option a harness takes is a field, left at Harbor's default until set", async () => {
   const browser = new Window({ url: "https://selfbench.test" });
@@ -113,11 +114,13 @@ test("a harness's subagent credential is one that serves its model to its agent,
     key("e2b", "e2b"),
   ];
   const models = evaluationCatalog();
+  const serving = (id: string, agent: "claude-code" | "codex", given: CredentialInfo[]) => {
+    const model = models.find((entry) => entry.id === id);
+    if (!model) throw new Error(`No catalog model ${id}`);
+    return subagentCredentials(model, [agent], given).map((credential) => credential.id);
+  };
   // An Anthropic key serves Haiku to Claude Code alone; a gateway key serves it to Codex too.
-  const ids = (agent: "claude-code" | "codex") =>
-    subagentCredentials("claude-haiku-5-5", agent, credentials, models).map(
-      (credential) => credential.id,
-    );
+  const ids = (agent: "claude-code" | "codex") => serving("claude-haiku-5-5", agent, credentials);
   expect(ids("claude-code")).toEqual(["anthropic", "router"]);
   expect(ids("codex")).toEqual(["router"]);
   const on = (agent: "claude-code" | "codex", credentialId?: string) => ({
@@ -134,19 +137,11 @@ test("a harness's subagent credential is one that serves its model to its agent,
   // A model a gateway lists under its own name, as Vercel's AI Gateway lists DeepSeek, is served
   // by that gateway's key, as on the Run page.
   const vercel = [key("vercel", "vercel-ai-gateway")];
-  expect(
-    subagentCredentials("deepseek-v4-pro-0813", "codex", vercel, models).map(
-      (credential) => credential.id,
-    ),
-  ).toEqual(["vercel"]);
+  expect(serving("deepseek-v4-pro-0813", "codex", vercel)).toEqual(["vercel"]);
   // With the managed offering, its key is listed as the Run page lists it, so one pinned to it
   // stays saved.
   const managed = runCredentials(credentials, true);
-  expect(
-    subagentCredentials("claude-haiku-5-5", "codex", managed, models).map(
-      (credential) => credential.id,
-    ),
-  ).toEqual(["managed-model", "router"]);
+  expect(serving("claude-haiku-5-5", "codex", managed)).toEqual(["managed-model", "router"]);
   expect(staleSubagentCredential(on("codex", "managed-model"), managed, models)).toBe(false);
   const html = renderToStaticMarkup(
     <SubagentFields

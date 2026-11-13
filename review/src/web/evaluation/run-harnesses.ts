@@ -7,10 +7,9 @@ import {
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import { type Harness, harnessLabels } from "../../../../src/evaluation/models";
-import { providerServesSubagent } from "../../../../src/evaluation/subagents";
+import { subagentCredentials } from "../../../../src/evaluation/subagents";
 import type { EnvironmentItem } from "../environments/environment-api";
 import type { SavedHarness } from "../harnesses/harness-api";
-import { credentialRunsAll } from "./model-selection";
 import type { RunDraft } from "./RunExecution";
 
 /** What the Run page picks from: saved harnesses and repo ablations, and what serves subagents. */
@@ -59,12 +58,7 @@ export function subagentCredential(
 ): CredentialInfo | undefined {
   const model = models.find((entry) => entry.id === saved.subagent?.catalogId);
   if (!model) return undefined;
-  const rows = delegatingRows(saved, draft);
-  const able = credentials.filter(
-    (credential) =>
-      providerServesSubagent(credential.kind) &&
-      rows.every((harnesses) => credentialRunsAll(model, credential, harnesses)),
-  );
+  const able = subagentCredentials(model, delegatingRows(saved, draft).flat(), credentials);
   const named = saved.subagent?.credentialId;
   return named ? able.find((credential) => credential.id === named) : able[0];
 }
