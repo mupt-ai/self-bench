@@ -4,7 +4,6 @@ import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { HarnessOptionValue } from "../../../../src/contracts/harness-options";
 import { HarnessOptionFields } from "./HarnessOptionFields";
-import { ToolPicker } from "./ToolPicker";
 
 test("every option a harness takes is a field, left at Harbor's default until set", async () => {
   const browser = new Window({ url: "https://selfbench.test" });
@@ -74,69 +73,15 @@ test("every option a harness takes is a field, left at Harbor's default until se
       ),
     );
     expect(browser.document.querySelector('[aria-label="Append System Prompt"]')).toBeNull();
-    expect(browser.document.querySelector('fieldset[aria-label="Allowed Tools"]')).not.toBeNull();
+    // Claude Code runs in bypass mode, so its permission mode and tool lists aren't fields.
+    expect(browser.document.querySelector('[aria-label="Permission Mode"]')).toBeNull();
+    expect(browser.document.querySelector('[aria-label="Allowed Tools"]')).toBeNull();
+    expect(browser.document.querySelector('[aria-label="Disallowed Tools"]')).toBeNull();
+    expect(browser.document.querySelector('fieldset[aria-label="Harness Options"]')).not.toBeNull();
     await act(async () => root.render(<Fields />));
     // Back to Harbor's default, the option is no longer set at all.
     await pick("Disable Web Search", "");
     expect(seen).toEqual({});
-  } finally {
-    await act(async () => root.unmount());
-    container.remove();
-    for (const [key, descriptor] of previous) {
-      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-      else Reflect.deleteProperty(globalThis, key);
-    }
-    await browser.happyDOM.close();
-  }
-});
-
-test("tools are picked as chips beside a box for any others, and saved as Harbor's comma-separated list", async () => {
-  const browser = new Window({ url: "https://selfbench.test" });
-  const globals = {
-    window: browser,
-    document: browser.document,
-    HTMLElement: browser.HTMLElement,
-    IS_REACT_ACT_ENVIRONMENT: true,
-  };
-  const previous = Object.keys(globals).map(
-    (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const,
-  );
-  for (const [key, value] of Object.entries(globals))
-    Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
-  const container = document.createElement("div");
-  document.body.append(container);
-  const root = createRoot(container);
-  let seen = "";
-  function Picker() {
-    const [value, setValue] = useState("Bash,mcp__github");
-    seen = value;
-    return (
-      <ToolPicker
-        id="tools"
-        label="Allowed Tools"
-        harness="claude-code"
-        value={value}
-        onChange={setValue}
-      />
-    );
-  }
-  const chip = (name: string) => {
-    const found = [...browser.document.querySelectorAll("button")].find(
-      (button) => button.textContent === name,
-    );
-    if (!found) throw new Error(`Missing ${name}`);
-    return found;
-  };
-  try {
-    await act(async () => root.render(<Picker />));
-    expect(chip("Bash").getAttribute("aria-pressed")).toBe("true");
-    expect(chip("Read").getAttribute("aria-pressed")).toBe("false");
-    const other = browser.document.querySelector('input[aria-label="Other Allowed Tools"]');
-    expect(other instanceof browser.HTMLInputElement && other.value).toBe("mcp__github");
-    await act(async () => chip("Read").click());
-    expect(seen).toBe("Bash,mcp__github,Read");
-    await act(async () => chip("Bash").click());
-    expect(seen).toBe("mcp__github,Read");
   } finally {
     await act(async () => root.unmount());
     container.remove();

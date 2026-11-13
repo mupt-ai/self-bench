@@ -5,13 +5,13 @@ import {
   harnessOptionsFor,
   MAX_NATIVE_CONFIG,
   MAX_OPTION_TEXT,
+  UNOFFERED_OPTIONS,
 } from "../../../../src/contracts/harness-options";
 import type { Harness } from "../../../../src/evaluation/models";
 import { cn } from "../primitives/cn";
 import { InfoTooltip } from "../primitives/tooltip";
 import { controlStyles, fieldStyles, Input, Select } from "../ui";
 import { isSystemPromptOption, optionText } from "./condition-draft";
-import { TOOL_PICKERS, ToolPicker } from "./ToolPicker";
 
 /** What each harness's native config is, where Harbor's description says only "config". */
 const NATIVE_CONFIG: Partial<Record<Harness, string>> = {
@@ -52,6 +52,7 @@ export function HarnessOptionFields({
       {harnessOptionsFor(harness)
         // The system prompt is the Instructions field's other place, not an option of its own.
         .filter((option) => !isSystemPromptOption(harness, option.name))
+        .filter((option) => !UNOFFERED_OPTIONS[harness]?.includes(option.name))
         .map((option) => (
           <OptionField
             key={option.name}
@@ -87,12 +88,7 @@ function OptionField({
   const defaultLabel =
     option.default === undefined ? "Harbor Default" : `Harbor Default (${String(option.default)})`;
   let control: ReactNode;
-  const tools = TOOL_PICKERS[harness]?.includes(option.name);
-  if (tools)
-    control = (
-      <ToolPicker id={id} label={label} harness={harness} value={value} onChange={onChange} />
-    );
-  else if (option.kind === "boolean")
+  if (option.kind === "boolean")
     control = (
       <Select
         id={id}
