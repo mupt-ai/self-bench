@@ -178,7 +178,12 @@ export function RunExecution({
           </div>
           <div className="mt-3 flex justify-between gap-3 border-t border-border pt-3">
             <dt className="text-muted-foreground">Total Trials</dt>
-            <dd className="font-mono tabular-nums">{pairs * draft.tasks.length}</dd>
+            <dd className="font-mono tabular-nums">
+              {/* Each picked repo ablation runs every pair again, beside the original tasks. */}
+              {pairs *
+                draft.tasks.length *
+                ((draft.baseline === false ? 0 : 1) + (draft.environments?.length ?? 0))}
+            </dd>
           </div>
         </dl>
       </div>

@@ -36,37 +36,51 @@ test("a row's Harness offers the saved harnesses it can run, and picking one set
   await inBrowser(async (browser, container) => {
     const root = createRoot(container);
     await act(async () => root.render(<Table />));
-    const select = () => {
-      const found = container.querySelector<HTMLSelectElement>(
-        'select[aria-label="GPT-6 Sol Harness"]',
+    const trigger = () => {
+      const found = container.querySelector<HTMLButtonElement>(
+        'button[aria-label="GPT-6 Sol Harness"]',
       );
-      if (!found) throw new Error("Missing Harness select");
+      if (!found) throw new Error("Missing Harness picker");
       return found;
     };
-    const options = () =>
-      [...select().querySelectorAll('optgroup[label="Saved Harnesses"] option')].map(
-        (option) => option.textContent,
-      );
+    const listed = () =>
+      [...browser.document.querySelectorAll('[role="option"]')] as unknown as HTMLElement[];
+    /** Opens the picker and reads its saved harnesses, each with what it changes. */
+    const open = async () => {
+      await act(async () => trigger().click());
+      return listed()
+        .map((option) => [...option.querySelectorAll("span span")].map((part) => part.textContent))
+        .filter((parts) => parts.length === 2)
+        .map((parts) => parts.join(": "));
+    };
+    const pick = async (label: string) => {
+      const option = listed().find((entry) => entry.textContent?.startsWith(label));
+      if (!option) throw new Error(`Missing ${label}`);
+      await act(async () => option.click());
+    };
     // On Pi: skills load there, Codex's own harness is offered on Codex, and Pi takes no subagents.
-    expect(options()).toEqual(["With Skills (Pi)", "Codex Search Off (Codex)"]);
-    const pick = async (value: string) =>
-      act(async () => {
-        select().value = value;
-        select().dispatchEvent(new browser.Event("change", { bubbles: true }) as unknown as Event);
-      });
-    await pick("saved:3");
+    expect(await open()).toEqual([
+      "With Skills: Pi · 1 skill",
+      "Codex Search Off: Codex · 1 option",
+    ]);
+    // Agents and saved harnesses are headed apart.
+    expect(browser.document.querySelector('[role="listbox"]')?.textContent).toContain(
+      "Saved Harnesses",
+    );
+    await pick("Codex Search Off");
     expect(latest[0]).toMatchObject({ harnesses: ["codex"], harness: 3 });
-    expect(select().value).toBe("saved:3");
+    expect(trigger().textContent).toBe("Codex Search Off");
     // On Codex, the subagent harness is offered too.
-    expect(options()).toEqual([
-      "With Skills (Codex)",
-      "Haiku Subagents (Codex)",
-      "Codex Search Off (Codex)",
+    expect((await open()).map((entry) => entry.split(":")[0])).toEqual([
+      "With Skills",
+      "Haiku Subagents",
+      "Codex Search Off",
     ]);
     // Picking the agent as it is drops the saved harness.
-    await pick("codex");
+    await pick("Codex");
     expect(latest[0]).not.toHaveProperty("harness");
     expect(latest[0]?.harnesses).toEqual(["codex"]);
+    expect(trigger().textContent).toBe("Codex");
     await act(async () => root.unmount());
   });
   // A row whose saved harness was deleted says so, so it can be changed.

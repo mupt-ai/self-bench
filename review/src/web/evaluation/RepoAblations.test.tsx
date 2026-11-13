@@ -77,4 +77,12 @@ test("the Tasks box shows no repo ablations where there are none, and keeps a de
   expect(render(ablationPick({ environments: [8] }, [environment], () => undefined))).toContain(
     "Deleted (8)",
   );
+  // While the list loads, or when it could not, a pick still shows, with Original Tasks, so
+  // nothing runs unseen.
+  const loading = render(
+    ablationPick({ environments: [8], baseline: false }, undefined, () => undefined),
+  );
+  expect(loading).toContain("Repo Ablation 8");
+  expect(loading).toContain("Original Tasks");
+  expect(render(ablationPick({}, undefined, () => undefined))).not.toContain("Repo Ablations");
 });

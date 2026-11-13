@@ -5,25 +5,18 @@ import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
 import {
   credentialRunsHarness,
   defaultThinking,
-  harnessLabels,
-  harnessOptions,
-  modelHarnesses,
   routeFor,
   thinkingOptions,
 } from "../../../../src/evaluation/models";
 import type { SavedHarness } from "../harnesses/harness-api";
 import { ModelPicker } from "../ModelPicker";
 import { Input, Select } from "../ui";
-import type { Harness } from "./api";
 import { nextModelSelection, pickerValue, savedSelection } from "./model-selection";
-import { savedHarnessAgent } from "./run-harnesses";
+import { rowHarnessOptions, savedHarnessOption } from "./row-harness-options";
 
 const mobileLabel = "mb-2 block text-xs font-semibold text-muted-foreground xl:hidden";
 
 type ModelSelection = ComparisonDraft["models"][number];
-
-/** A saved harness's option value in the Harness select, beside the agents' own ids. */
-const SAVED_HARNESS = "saved:";
 
 export function RunModelRow({
   model,
@@ -69,21 +62,12 @@ export function RunModelRow({
     const nextHarnesses = harnesses.length ? harnesses : (available?.slice(0, 1) ?? []);
     onChange(keepingSaved({ ...selected, credentialId, harnesses: nextHarnesses }));
   };
-  // Until a credential is chosen, every harness some credential runs the model on.
-  const supportsHarness = (harness: Harness) =>
-    (route?.harnesses ?? modelHarnesses(model)).includes(harness) &&
-    credentialRunsHarness(credential?.auth ?? "api-key", harness);
-
-  // Saved harnesses this row can run: each on its own agent, or the row's when it names none.
   const current = selected.harnesses.length === 1 ? selected.harnesses[0] : undefined;
-  const offered = (saved ?? []).flatMap((entry) => {
-    const agent = savedHarnessAgent(entry, current);
-    return agent && supportsHarness(agent) ? [{ saved: entry, agent }] : [];
-  });
+  const offered = rowHarnessOptions(model, credential, current, saved, models);
   // The row's saved harness when it is no longer offered, so the select can show it and change it.
   const own = saved?.find((entry) => entry.id === selected.harness);
   const unlisted =
-    selected.harness !== undefined && !offered.some((entry) => entry.saved.id === selected.harness)
+    selected.harness !== undefined && !offered.some((entry) => entry.saved === selected.harness)
       ? own
         ? own.name
         : saved
@@ -177,67 +161,30 @@ export function RunModelRow({
       </div>
       <div className="min-w-0">
         <span className={mobileLabel}>Harness</span>
-        <Select
-          className="text-sm md:text-sm"
-          aria-label={`${model.label} Harness`}
+        <ModelPicker
+          models={offered}
+          label={`${model.label} Harness`}
+          noun="Harnesses"
           disabled={!selected.catalogId}
-          value={
-            selected.harness !== undefined
-              ? `${SAVED_HARNESS}${selected.harness}`
-              : selected.harnesses.length > 1
-                ? "multiple"
-                : (selected.harnesses[0] ?? "")
+          // A row on several agents, or on a saved harness no longer offered, names what it has.
+          placeholder={
+            unlisted ??
+            (selected.harnesses.length > 1 ? selected.harnesses.join(" + ") : "Choose Harness")
           }
-          onChange={(event) => {
-            const { value } = event.target;
-            const savedId = value.startsWith(SAVED_HARNESS)
-              ? Number(value.slice(SAVED_HARNESS.length))
-              : undefined;
-            const agent =
-              savedId === undefined
-                ? (value as Harness)
-                : offered.find((entry) => entry.saved.id === savedId)?.agent;
-            if (!agent) return;
+          value={
+            selected.harness !== undefined ? savedHarnessOption(selected.harness) : (current ?? "")
+          }
+          onSelect={(option) => {
             const { harness: _, ...rest } = selected;
             onChange({
               ...rest,
-              harnesses: [agent],
-              ...(savedId !== undefined ? { harness: savedId } : {}),
+              harnesses: [option.agent],
+              ...(option.saved !== undefined ? { harness: option.saved } : {}),
               // A level picked for one agent may not be another's.
-              ...(agent === selected.harnesses[0] ? {} : { thinking: undefined }),
+              ...(option.agent === selected.harnesses[0] ? {} : { thinking: undefined }),
             });
           }}
-        >
-          <option value="" disabled>
-            Choose Harness
-          </option>
-          {selected.harnesses.length > 1 && (
-            <option value="multiple" disabled>
-              {selected.harnesses.join(" + ")}
-            </option>
-          )}
-          {harnessOptions
-            .filter((harness) => supportsHarness(harness.id))
-            .map((harness) => (
-              <option key={harness.id} value={harness.id}>
-                {harness.label}
-              </option>
-            ))}
-          {(offered.length > 0 || unlisted) && (
-            <optgroup label="Saved Harnesses">
-              {offered.map(({ saved: entry, agent }) => (
-                <option key={entry.id} value={`${SAVED_HARNESS}${entry.id}`}>
-                  {entry.name} ({harnessLabels[agent]})
-                </option>
-              ))}
-              {unlisted && (
-                <option value={`${SAVED_HARNESS}${selected.harness}`} disabled>
-                  {unlisted}
-                </option>
-              )}
-            </optgroup>
-          )}
-        </Select>
+        />
       </div>
     </div>
   );

@@ -49,14 +49,16 @@ export function RepoAblations({
   onChange,
   disabled,
 }: AblationPick & { disabled: boolean }) {
-  // A pick whose repo ablation is gone (deleted since) still shows, so it can be unpicked.
-  const gone = environments
-    ? picked.filter((id) => !environments.some((entry) => entry.id === id))
-    : [];
-  const entries = [
-    ...(environments ?? []).map(({ id, name }) => ({ id, name })),
-    ...gone.map((id) => ({ id, name: `Deleted (${id})` })),
-  ];
+  // A pick always shows, so nothing runs unseen: by its id while the list loads or when it could
+  // not load, and as deleted once the list no longer has it. Either way it can be unpicked.
+  const entries = environments
+    ? [
+        ...environments.map(({ id, name }) => ({ id, name })),
+        ...picked
+          .filter((id) => !environments.some((entry) => entry.id === id))
+          .map((id) => ({ id, name: `Deleted (${id})` })),
+      ]
+    : picked.map((id) => ({ id, name: `Repo Ablation ${id}` }));
   if (entries.length === 0) return null;
   return (
     <fieldset

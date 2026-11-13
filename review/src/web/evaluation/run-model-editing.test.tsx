@@ -132,14 +132,16 @@ test("same-model rows remain editable while duplicate configurations cannot run"
       });
       expect(browser.document.querySelector('[role="alert"]')).not.toBeNull();
       const harness = browser.document.querySelectorAll(
-        'select[aria-label="GPT-6 Astra Harness"]',
+        'button[aria-label="GPT-6 Astra Harness"]',
       )[1];
-      if (!(harness instanceof browser.HTMLSelectElement))
-        throw new Error("Missing harness dropdown");
-      await act(async () => {
-        harness.value = "pi";
-        harness.dispatchEvent(new browser.Event("change", { bubbles: true }));
-      });
+      if (!(harness instanceof browser.HTMLButtonElement))
+        throw new Error("Missing harness picker");
+      await act(async () => harness.click());
+      const pi = [...browser.document.querySelectorAll('[role="option"]')].find(
+        (entry) => entry.textContent === "Pi",
+      );
+      if (!(pi instanceof browser.HTMLButtonElement)) throw new Error("Missing Pi option");
+      await act(async () => pi.click());
       expect(browser.document.querySelector('[role="alert"]')).toBeNull();
       expect(
         browser.document.querySelector('button[aria-label="Run"]')?.hasAttribute("disabled"),
