@@ -5,6 +5,7 @@ import {
   harnessOptionsFor,
 } from "../../../../src/contracts/harness-options";
 import type { CredentialInfo } from "../../../../src/db/credentials";
+import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import { type Harness, harnessIds, harnessLabels } from "../../../../src/evaluation/models";
 import { subagentSupport } from "../../../../src/evaluation/subagents";
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
@@ -39,7 +40,7 @@ export function HarnessDialog({
   org: string;
   /** The harness to edit; none for a new one. */
   harness?: SavedHarness;
-  subagentModels: { id: string; label: string }[];
+  subagentModels: CatalogModel[];
   /** The workspace's credentials; undefined until they load. */
   credentials: readonly CredentialInfo[] | undefined;
   onClose: () => void;
@@ -54,7 +55,7 @@ export function HarnessDialog({
   const closeButton = React.useRef<HTMLButtonElement>(null);
   const problem =
     harnessProblem(draft) ??
-    (staleSubagentCredential(draft, credentials)
+    (staleSubagentCredential(draft, credentials, subagentModels)
       ? "Choose a credential that serves the subagent model."
       : undefined);
   const update = (patch: Partial<HarnessDraft>) => setDraft({ ...draft, ...patch });

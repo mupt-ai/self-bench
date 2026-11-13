@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { savedHarnessSchema } from "../../contracts/saved-harnesses.js";
 import { HarnessNameTaken } from "../../db/saved-harnesses.js";
 import type { User } from "../../db/users.js";
-import { evaluationCatalog } from "../../evaluation/catalog.js";
+import { type CatalogModel, evaluationCatalog } from "../../evaluation/catalog.js";
 import { modelHarnesses } from "../../evaluation/models.js";
 import { providerServesSubagent, subagentSupport } from "../../evaluation/subagents.js";
 import { managedOffer } from "../../generation/billing/managed.js";
@@ -15,16 +15,16 @@ const route = /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/(harnesses|conditions)(?:\/(\d{1
 
 /**
  * The catalog models a saved harness's subagents can run on: those some credential serves by name to
- * a harness that takes a subagent model, which Dari's router and custom endpoints do not.
+ * a harness that takes a subagent model, which Dari's router and custom endpoints do not. Each comes
+ * whole, with the gateways that list it, so the editor finds the credentials that serve it as the
+ * Run page does.
  */
-function subagentModels(): { id: string; label: string }[] {
-  return evaluationCatalog()
-    .filter(
-      (model) =>
-        providerServesSubagent(model.provider) &&
-        modelHarnesses(model).some((harness) => subagentSupport[harness].configurable),
-    )
-    .map(({ id, label }) => ({ id, label }));
+function subagentModels(): CatalogModel[] {
+  return evaluationCatalog().filter(
+    (model) =>
+      providerServesSubagent(model.provider) &&
+      modelHarnesses(model).some((harness) => subagentSupport[harness].configurable),
+  );
 }
 
 /**
