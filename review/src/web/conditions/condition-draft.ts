@@ -71,7 +71,17 @@ export function systemOptionSet(draft: ConditionDraft): boolean {
   if (!place || !draft.harness) return false;
   const value = draft.harnessOptions[draft.harness]?.[place.option];
   if (value === undefined) return false;
-  return place.key ? typeof value === "object" && place.key in value : true;
+  if (!place.key) return true;
+  // The Options page holds a native config as typed JSON text.
+  let config: unknown = value;
+  if (typeof value === "string") {
+    try {
+      config = JSON.parse(value);
+    } catch {
+      return false;
+    }
+  }
+  return !!config && typeof config === "object" && place.key in config;
 }
 
 /** Where the draft's instructions go, given its harness: the task's prompt unless it can take them. */

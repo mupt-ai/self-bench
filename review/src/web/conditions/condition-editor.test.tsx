@@ -63,6 +63,14 @@ test("a condition is saved with its harness, typed option values, trimmed text, 
   const both = draftOf(saved);
   expect(systemOptionSet(both)).toBe(true);
   expect(instructionsWhere({ ...both, instructionsWhere: "system" })).toBe("task");
+  // Codex's native config, as typed on the Options page, guards the same way.
+  const typed = (config: string): ConditionDraft => ({
+    ...blankCondition(),
+    harness: "codex",
+    harnessOptions: { codex: { config } },
+  });
+  expect(systemOptionSet(typed('{"developer_instructions": "Be brief."}'))).toBe(true);
+  expect(systemOptionSet(typed('{"sandbox_mode": "workspace-write"}'))).toBe(false);
 });
 
 test("a condition says what stops it from being saved", () => {
