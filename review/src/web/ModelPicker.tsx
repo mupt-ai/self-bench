@@ -85,7 +85,7 @@ export function ModelPicker<Model extends PickableModel>({
   picked?: readonly string[];
   onToggle?(model: Model): void;
   full?: boolean;
-  /** What the trigger shows in multi-select, such as "2 of 100 Picked". */
+  /** What the trigger shows in multi-select, such as the picks by name. */
   summary?: string;
 }) {
   const multi = picked !== undefined;

@@ -91,9 +91,12 @@ export function RepoAblations({
             placeholder="None Picked"
             picked={picked.map(String)}
             full={picked.length >= MAX_PICKED}
+            // The picks by name, so they show without opening the list.
             summary={
               picked.length
-                ? `${picked.length} of ${entries.length} Picked`
+                ? picked
+                    .map((id) => entries.find((entry) => entry.id === id)?.name ?? `${id}`)
+                    .join(", ")
                 : `None of ${entries.length} Picked`
             }
             onToggle={(entry) => toggle(Number(entry.id))}

@@ -145,9 +145,9 @@ test("past six repo ablations, the Tasks box picks them from a searchable list, 
     await toggle("Ablation 0");
     await toggle("Ablation 3");
     expect(latest.environments).toEqual([100, 103]);
-    // The list stays open while a run of picks is made, and the trigger counts them.
+    // The list stays open while a run of picks is made, and the trigger names them.
     expect(options().length).toBe(8);
-    expect(trigger()?.textContent).toBe("2 of 8 Picked");
+    expect(trigger()?.textContent).toBe("Ablation 0, Ablation 3");
     await toggle("Ablation 5");
     await toggle("Ablation 6");
     // At the limit, the rest cannot be picked.
