@@ -14,7 +14,7 @@ export const SETTING_KINDS: readonly { kind: SettingKind; label: string }[] = [
  * Catalog models that are routers, though served like any other model. Add a router here when one
  * joins the catalog; custom endpoints and Dari's own provider count as routers without a listing.
  */
-export const ROUTER_MODELS: ReadonlySet<string> = new Set(["dari/routing", "typesafe/jev-router"]);
+const ROUTER_MODELS: ReadonlySet<string> = new Set(["dari/routing", "typesafe/jev-router"]);
 
 const ROUTER_PROVIDERS: ReadonlySet<string> = new Set(["dari", "fireworks", "shift"]);
 
