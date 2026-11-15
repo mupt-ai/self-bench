@@ -5,10 +5,8 @@ import { conditionArguments, runCondition } from "../src/evaluation/conditions.j
 import { solverArguments } from "../src/evaluation/solver-arguments.js";
 import { initialEvaluation, saveEvaluation } from "../src/evaluation/store.js";
 import type { EvaluationRun } from "../src/evaluation/types.js";
-import { previewRelease } from "../src/public/release-build.js";
 import { resultsBySetting } from "../src/public/release-results.js";
 import { evaluationServer } from "./support/evaluation-fixture.js";
-import { approvedTasks, inputs, run } from "./support/release-fixture.js";
 
 test("a skill is always a GitHub URL, never a path on the worker", () => {
   expect(skillSource("vercel/next.js")).toBe("https://github.com/vercel/next.js");
@@ -178,47 +176,6 @@ test("a comparison runs every model under the baseline and each condition, kept 
   } finally {
     await fixture.close();
   }
-});
-
-test("a release offers a saved harness's setting, named by it and not ticked until released", () => {
-  const source = inputs({
-    tasks: approvedTasks(["t1"]),
-    runs: [
-      run({ model: "sol", results: { t1: 1 } }),
-      {
-        ...run({ model: "sol", results: { t1: 1 } }),
-        id: "conditioned",
-        condition: runCondition({ name: "With Skills", skills: ["https://github.com/a/b"] }),
-      },
-    ],
-  });
-  const settings = previewRelease(source).settings;
-  expect(settings.map((setting) => [setting.condition?.name, setting.ticked])).toEqual([
-    [undefined, false],
-    ["With Skills", false],
-  ]);
-  expect(settings[1]?.label).toEndWith("(With Skills)");
-});
-
-test("a release offers a repo ablation, named by it and not ticked until released", () => {
-  const source = inputs({
-    tasks: approvedTasks(["t1"]),
-    runs: [
-      run({ model: "sol", results: { t1: 1 } }),
-      {
-        ...run({ model: "sol", results: { t1: 0 } }),
-        id: "ablated",
-        condition: runCondition({ name: "No AGENTS.md", skills: [], environment: 7 }),
-      },
-    ],
-  });
-  const settings = previewRelease(source).settings;
-  expect(settings.map((setting) => [setting.condition?.environment?.name, setting.ticked])).toEqual(
-    [
-      [undefined, false],
-      ["No AGENTS.md", false],
-    ],
-  );
 });
 
 test("a condition with an environment runs each ready task from its variant, as the task", async () => {

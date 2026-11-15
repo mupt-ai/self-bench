@@ -244,6 +244,13 @@ export function scores(chosen: readonly Candidate[], tasks: readonly string[]): 
       onFrontier: false,
     };
   });
-  const frontier = frontierOf(scored.filter((setting) => setting.costedTasks > 0));
+  // The frontier is the tasks as they are, under each harness as it ships: a repo ablation ran
+  // other tasks and a saved harness is a variant, so neither may displace a model from it, nor
+  // become a card's pick or a page's headline (directory.ts, seo.ts).
+  const frontier = frontierOf(
+    scored.filter(
+      (setting) => setting.costedTasks > 0 && !setting.ablation && !setting.customHarness,
+    ),
+  );
   return scored.map((setting) => ({ ...setting, onFrontier: frontier.has(setting.id) }));
 }
