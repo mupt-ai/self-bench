@@ -76,9 +76,11 @@ interface Evaluated {
 
 function evaluate(inputs: ReleaseInputs): Evaluated {
   const approved = approvedKeys(inputs.tasks);
-  // A release publishes how agents do on the tasks as they are, never under a run condition.
-  const baseline = inputs.runs.filter((run) => !run.condition);
-  return { approved, all: candidates(resultsBySetting(baseline, inputs.credentials), approved) };
+  // Settings under a saved harness (a run condition) are offered beside the rest, and named by it.
+  return {
+    approved,
+    all: candidates(resultsBySetting(inputs.runs, inputs.credentials), approved),
+  };
 }
 
 /** Changes whenever anything the release would contain, or the line's head, changes. */
@@ -153,6 +155,9 @@ export function previewRelease(inputs: ReleaseInputs): ReleasePreview {
     unrun: approved.filter((key) => !covered.has(key)).length,
     settings: all.map((entry) => ({
       ...entry.setting,
+      label: entry.setting.condition
+        ? `${entry.setting.label} (${entry.setting.condition.name})`
+        : entry.setting.label,
       coverage: [...entry.coverage].flatMap((key) => {
         const position = index.get(key);
         return position === undefined ? [] : [position];

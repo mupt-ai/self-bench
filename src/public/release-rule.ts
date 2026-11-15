@@ -82,8 +82,15 @@ export function defaultTicks(
   // Every setting covers the empty set, so an empty base must not pre-tick anything.
   if (base.length === 0) return [];
   const declined = new Set(previous?.declined.map(currentKey) ?? []);
+  const released = new Set(previous?.settings ?? []);
   return all
-    .filter((entry) => covers(entry, base) && !declined.has(entry.setting.key))
+    .filter(
+      (entry) =>
+        covers(entry, base) &&
+        !declined.has(entry.setting.key) &&
+        // A saved harness's setting starts ticked only once its publisher has released it.
+        (!entry.setting.condition || released.has(entry.setting.key)),
+    )
     .map((entry) => entry.setting.key);
 }
 
@@ -193,6 +200,7 @@ function publicSetting(
     reasoningLevel: setting.reasoningLevel,
     provider: setting.provider,
     custom: setting.custom,
+    ...(setting.condition ? { customHarness: setting.condition.name } : {}),
   };
 }
 

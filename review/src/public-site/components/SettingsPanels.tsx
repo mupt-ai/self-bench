@@ -2,7 +2,6 @@ import { useState } from "react";
 import { SETTING_KINDS, type SettingKind, settingKind } from "../../../../src/public/setting-kinds";
 import type { PublicSetting } from "../contract";
 import { pageBody, revealGroup } from "../effects/marks";
-import { harnessLabel } from "../format";
 import { PANEL } from "../frame";
 import { ModelTable } from "./ModelTable";
 import { ResultsChart } from "./ResultsChart";
@@ -73,15 +72,15 @@ export function SettingsPanels({
         className={`flex min-w-0 flex-col gap-3 ${side ? "min-[90rem]:sticky min-[90rem]:top-[calc(var(--bar-top)_+_1rem)]" : ""}`}
       >
         <h2 className="text-base font-medium">Model Tradeoffs</h2>
-        <SettingFilters
-          kinds={filters.kinds}
-          harnesses={filters.harnesses}
-          hiddenKinds={filters.hiddenKinds}
-          hiddenHarnesses={filters.hiddenHarnesses}
-          toggleKind={filters.toggleKind}
-          toggleHarness={filters.toggleHarness}
-        />
         <div className={`p-2 ${PANEL}`}>
+          <SettingFilters
+            kinds={filters.kinds}
+            harnesses={filters.harnesses}
+            hiddenKinds={filters.hiddenKinds}
+            hiddenHarnesses={filters.hiddenHarnesses}
+            toggleKind={filters.toggleKind}
+            toggleHarness={filters.toggleHarness}
+          />
           {shown.length === 0 ? (
             <p className="p-2 text-sm text-muted-foreground">No settings match these filters.</p>
           ) : (
@@ -114,22 +113,27 @@ export function SettingsPanels({
   );
 }
 
+const HARNESS_KINDS: Option<string>[] = [
+  { value: "default", label: "Default" },
+  { value: "custom", label: "Custom" },
+];
+
+const harnessKind = (setting: PublicSetting) => (setting.customHarness ? "custom" : "default");
+
 interface Option<T extends string> {
   value: T;
   label: string;
 }
 
-/** The filters' state: which kinds and harnesses show, with the options this page has. */
+/** The filters' state: which kinds, and which harnesses (default or saved), show, with the options this page has. */
 function useSettingFilters(settings: PublicSetting[], release: string) {
   const kinds: Option<SettingKind>[] = SETTING_KINDS.filter(({ kind }) =>
     settings.some((setting) => settingKind(setting) === kind),
   ).map(({ kind, label }) => ({ value: kind, label }));
-  const harnesses: Option<string>[] = [...new Set(settings.map((setting) => setting.harness))]
-    .sort()
-    .map((harness) => ({
-      value: harness,
-      label: harnessLabel({ harness } as PublicSetting),
-    }));
+  // The harness as it ships, or one of the publisher's saved harnesses.
+  const harnesses: Option<string>[] = HARNESS_KINDS.filter(({ value }) =>
+    settings.some((setting) => harnessKind(setting) === value),
+  );
   // Models first, as the page opens; a page with no plain models shows what it has. Another
   // release (`release`) starts the filters afresh, since its kinds and harnesses differ.
   const fresh = () => ({
@@ -154,7 +158,7 @@ function useSettingFilters(settings: PublicSetting[], release: string) {
     toggleHarness: (value: string) =>
       setStored({ ...hidden, harnesses: toggled(hiddenHarnesses, value) }),
     shows: (setting: PublicSetting) =>
-      !hiddenKinds.has(settingKind(setting)) && !hiddenHarnesses.has(setting.harness),
+      !hiddenKinds.has(settingKind(setting)) && !hiddenHarnesses.has(harnessKind(setting)),
     filterKey: [...hiddenKinds, "|", ...hiddenHarnesses].join(","),
   };
 }
@@ -165,7 +169,10 @@ function toggled(set: ReadonlySet<string>, value: string): ReadonlySet<string> {
   return next;
 }
 
-/** Checkboxes over the chart and table: kinds (Models, Routers) and harnesses. */
+/**
+ * Chips over the chart, in its panel: kinds (Models, Routers) and harnesses (Default, Custom). Each is a checkbox
+ * drawn as a chip, so it reads like the vendor chips the plot draws, and a tap takes a finger.
+ */
 function SettingFilters({
   kinds,
   harnesses,
@@ -174,8 +181,9 @@ function SettingFilters({
   toggleKind,
   toggleHarness,
 }: Omit<ReturnType<typeof useSettingFilters>, "shows" | "filterKey">) {
+  if (kinds.length < 2 && harnesses.length < 2) return null;
   return (
-    <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+    <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-2 px-1">
       {kinds.length > 1 && (
         <FilterGroup label="Show" options={kinds} hidden={hiddenKinds} onToggle={toggleKind} />
       )}
@@ -203,24 +211,35 @@ function FilterGroup({
   onToggle: (value: string) => void;
 }) {
   return (
-    <fieldset aria-label={label} className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
-      <legend className="float-left mr-1 text-xs text-muted-foreground compact:text-[11px]">
+    <fieldset aria-label={label} className="flex min-w-0 flex-wrap items-center gap-1.5">
+      <legend className="float-left mr-1 font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
         {label}
       </legend>
-      {options.map((option) => (
-        <label
-          key={option.value}
-          className="flex cursor-pointer items-center gap-1.5 text-sm touch:min-h-11 touch:min-w-11"
-        >
-          <input
-            type="checkbox"
-            className="accent-(--foreground)"
-            checked={!hidden.has(option.value)}
-            onChange={() => onToggle(option.value)}
-          />
-          {option.label}
-        </label>
-      ))}
+      {options.map((option) => {
+        const on = !hidden.has(option.value);
+        return (
+          <label
+            key={option.value}
+            className={`hit relative inline-flex cursor-pointer items-center gap-1.5 border px-2 py-0.5 text-xs transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-(--foreground) touch:min-h-11 ${
+              on
+                ? "border-foreground/40 bg-foreground/5 text-foreground"
+                : "border-border text-muted-foreground"
+            }`}
+          >
+            <input
+              type="checkbox"
+              className="sr-only"
+              checked={on}
+              onChange={() => onToggle(option.value)}
+            />
+            <span
+              aria-hidden
+              className={`size-2 shrink-0 border ${on ? "border-foreground bg-foreground" : "border-muted-foreground"}`}
+            />
+            {option.label}
+          </label>
+        );
+      })}
     </fieldset>
   );
 }

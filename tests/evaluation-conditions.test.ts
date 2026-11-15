@@ -180,7 +180,7 @@ test("a comparison runs every model under the baseline and each condition, kept 
   }
 });
 
-test("a release publishes the baseline, never a run condition", () => {
+test("a release offers a saved harness's setting, named by it and not ticked until released", () => {
   const source = inputs({
     tasks: approvedTasks(["t1"]),
     runs: [
@@ -192,7 +192,12 @@ test("a release publishes the baseline, never a run condition", () => {
       },
     ],
   });
-  expect(previewRelease(source).settings.map((setting) => setting.condition)).toEqual([undefined]);
+  const settings = previewRelease(source).settings;
+  expect(settings.map((setting) => [setting.condition?.name, setting.ticked])).toEqual([
+    [undefined, false],
+    ["With Skills", false],
+  ]);
+  expect(settings[1]?.label).toEndWith("(With Skills)");
 });
 
 test("a condition with an environment runs each ready task from its variant, as the task", async () => {
