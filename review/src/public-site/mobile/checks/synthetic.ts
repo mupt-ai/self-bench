@@ -74,6 +74,14 @@ function syntheticPages(): PublicRepoPage[] {
       tasks: 36,
       settings: [
         setting({ id: "alpha-codex", model: alpha, accuracy: 94, costPerTaskUsd: 3.1 }),
+        // Under a repo ablation: the Ablation tasks filter.
+        setting({
+          id: "alpha-codex|no-agents",
+          model: alpha,
+          ablation: "No AGENTS.md",
+          accuracy: 88,
+          costPerTaskUsd: 2.9,
+        }),
         // Under a saved harness: the Custom harness filter.
         setting({
           id: "alpha-codex|skills",
