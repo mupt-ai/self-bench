@@ -33,33 +33,16 @@ const COMPOSE_MAX_BYTES = 256 * 1024;
  * `docker_image` is set only by SelfBench (see registry-pull.ts), after this check: a run that can
  * pull task images would pull whatever image a bundle named.
  */
-const HOST_KEYS = new Set([
-  "env",
-  "mcp_servers",
-  "steps",
-  "skills_dir",
-  "docker_image",
-]);
+const HOST_KEYS = new Set(["env", "mcp_servers", "steps", "skills_dir", "docker_image"]);
 /** Host values that are paths or locale, never credentials; compose may mention them. */
-const HARMLESS_VARIABLES = new Set([
-  "PATH",
-  "HOME",
-  "TMPDIR",
-  "TEMP",
-  "TMP",
-  "LANG",
-  "LC_ALL",
-]);
+const HARMLESS_VARIABLES = new Set(["PATH", "HOME", "TMPDIR", "TEMP", "TMP", "LANG", "LC_ALL"]);
 /** Harbor's own pattern for the host variables a compose file pulls in. */
 const COMPOSE_REFERENCE =
   /\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-[^}]*)?\}|\$([A-Za-z_][A-Za-z0-9_]*)\b/g;
 
 /** A task or trial that attacks the worker fails outright inside an activity; a retry repeats it. */
 export function refuseWithoutRetry(error: unknown): never {
-  if (
-    error instanceof UnsafeHarborTaskError ||
-    error instanceof HarborOutputLimitError
-  )
+  if (error instanceof UnsafeHarborTaskError || error instanceof HarborOutputLimitError)
     throw ApplicationFailure.nonRetryable(error.message, error.name);
   throw error;
 }
@@ -133,9 +116,7 @@ export async function assertHostSafePublishedTask(
   await assertHostSafeCompose(taskDirectory, harborEnv);
 }
 
-export async function readTaskConfig(
-  taskDirectory: string,
-): Promise<Record<string, unknown>> {
+export async function readTaskConfig(taskDirectory: string): Promise<Record<string, unknown>> {
   const raw = await readFile(join(taskDirectory, "task.toml"));
   if (raw.byteLength > TASK_TOML_MAX_BYTES)
     throw new UnsafeHarborTaskError("task.toml is too large");
@@ -145,8 +126,7 @@ export async function readTaskConfig(
   } catch {
     throw new UnsafeHarborTaskError("task.toml does not parse");
   }
-  if (!isRecord(config))
-    throw new UnsafeHarborTaskError("task.toml is not a table");
+  if (!isRecord(config)) throw new UnsafeHarborTaskError("task.toml is not a table");
   return config;
 }
 
@@ -161,9 +141,7 @@ async function assertHostSafeCompose(
     for (const match of text.matchAll(COMPOSE_REFERENCE)) {
       const name = match[1] ?? match[2] ?? "";
       if (harborEnv[name] !== undefined && !HARMLESS_VARIABLES.has(name)) {
-        throw new UnsafeHarborTaskError(
-          `a compose file references the host variable ${name}`,
-        );
+        throw new UnsafeHarborTaskError(`a compose file references the host variable ${name}`);
       }
     }
   }
@@ -171,8 +149,7 @@ async function assertHostSafeCompose(
 
 function rejectHostKeys(value: unknown, path: string): void {
   if (Array.isArray(value)) {
-    for (const [index, item] of value.entries())
-      rejectHostKeys(item, `${path}[${index}]`);
+    for (const [index, item] of value.entries()) rejectHostKeys(item, `${path}[${index}]`);
     return;
   }
   if (!isRecord(value)) return;
@@ -180,8 +157,7 @@ function rejectHostKeys(value: unknown, path: string): void {
     const at = path ? `${path}.${key}` : key;
     // Metadata is free-form and Harbor only records it.
     if (at === "metadata") continue;
-    if (HOST_KEYS.has(key))
-      throw new UnsafeHarborTaskError(`task.toml sets ${at}`);
+    if (HOST_KEYS.has(key)) throw new UnsafeHarborTaskError(`task.toml sets ${at}`);
     rejectHostKeys(child, at);
   }
 }
