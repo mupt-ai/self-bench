@@ -191,6 +191,15 @@ test.each([
     },
   ],
   [
+    "an MCP header reading a host secret",
+    {
+      "task.toml": `${harborTaskToml("x/y").replace(
+        "mcp_servers = []",
+        'mcp_servers = [{ name = "x", transport = "sse", url = "http://mcp:3080/sse", headers = { Authorization = "Bearer ${MODAL_TOKEN_SECRET}" } }]',
+      )}`,
+    },
+  ],
+  [
     "a compose file reading a host secret",
     {
       "environment/docker-compose.yaml":

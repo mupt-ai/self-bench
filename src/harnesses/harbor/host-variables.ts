@@ -58,6 +58,37 @@ export function hostVariables(config: Record<string, unknown>): HostVariable[] {
 }
 
 /**
+ * A `${NAME}` (no default) anywhere in the task outside its `env` tables, such as an MCP server's
+ * `headers`: Harbor interpolates those from the worker's environment too, and no run fills them.
+ */
+const INLINE_TEMPLATE = /\$\{([^}:]+)\}/g;
+
+function unreadHostVariable(config: Record<string, unknown>): string | undefined {
+  const visit = (value: unknown, path: string): string | undefined => {
+    if (typeof value === "string") {
+      if (path.split(".").includes("env")) return undefined;
+      for (const match of value.matchAll(INLINE_TEMPLATE)) if (match[1]) return match[1];
+      return undefined;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const found = visit(item, path);
+        if (found) return found;
+      }
+      return undefined;
+    }
+    if (!isRecord(value)) return undefined;
+    for (const [key, child] of Object.entries(value)) {
+      if (key === "metadata") continue;
+      const found = visit(child, path ? `${path}.${key}` : key);
+      if (found) return found;
+    }
+    return undefined;
+  };
+  return visit(config, "");
+}
+
+/**
  * Why a published task's `env` tables can't run, if they can't: each value is literal, a judge
  * variable, or another variable with a default (which applies, since runs never set it).
  */
@@ -65,7 +96,9 @@ export function hostVariableRefusal(config: Record<string, unknown>): string | u
   const unknown = hostVariables(config).find(
     (variable) => variable.required && !JUDGE_VARIABLES.has(variable.name),
   );
-  return unknown && `task.toml reads the host variable ${unknown.name}`;
+  if (unknown) return `task.toml reads the host variable ${unknown.name}`;
+  const elsewhere = unreadHostVariable(config);
+  return elsewhere && `task.toml reads the host variable ${elsewhere} outside its env tables`;
 }
 
 /**
