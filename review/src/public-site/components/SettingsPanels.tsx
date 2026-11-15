@@ -72,7 +72,8 @@ export function SettingsPanels({
         className={`flex min-w-0 flex-col gap-3 ${side ? "min-[90rem]:sticky min-[90rem]:top-[calc(var(--bar-top)_+_1rem)]" : ""}`}
       >
         <h2 className="text-base font-medium">Model Tradeoffs</h2>
-        <div className={`p-2 ${PANEL}`}>
+        {/* A container, so the filters move into the chart's top corner once it is wide enough. */}
+        <div className={`@container relative p-2 ${PANEL}`}>
           <SettingFilters
             groups={filters.groups}
             hiddenOf={filters.hiddenOf}
@@ -209,7 +210,9 @@ function SettingFilters({
 }: Pick<ReturnType<typeof useSettingFilters>, "groups" | "hiddenOf" | "toggle">) {
   if (groups.length === 0) return null;
   return (
-    <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-2 px-1">
+    // Above the chart, or in its top corner, where the settings button sits, once the chart is
+    // wide enough for them beside its vendor chips (a container query on the panel).
+    <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-2 px-1 @min-[60rem]:absolute @min-[60rem]:top-3 @min-[60rem]:right-10 @min-[60rem]:z-10 @min-[60rem]:mb-0 @min-[60rem]:justify-end">
       {groups.map((group) => (
         <ChipGroup
           key={group.label}
