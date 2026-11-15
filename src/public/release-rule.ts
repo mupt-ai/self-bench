@@ -82,8 +82,15 @@ export function defaultTicks(
   // Every setting covers the empty set, so an empty base must not pre-tick anything.
   if (base.length === 0) return [];
   const declined = new Set(previous?.declined.map(currentKey) ?? []);
+  const released = new Set(previous?.settings ?? []);
   return all
-    .filter((entry) => covers(entry, base) && !declined.has(entry.setting.key))
+    .filter(
+      (entry) =>
+        covers(entry, base) &&
+        !declined.has(entry.setting.key) &&
+        // A saved harness's setting starts ticked only once its publisher has released it.
+        (!entry.setting.condition || released.has(entry.setting.key)),
+    )
     .map((entry) => entry.setting.key);
 }
 
@@ -186,6 +193,8 @@ function publicSetting(
   ReleaseSetting,
   "tasks" | "passed" | "accuracy" | "costPerTaskUsd" | "totalCostUsd" | "costedTasks" | "onFrontier"
 > {
+  const customHarness = harnessNameOf(setting.condition);
+  const ablation = setting.condition?.environment?.name;
   return {
     id: setting.id,
     model: { catalogId: setting.catalogId, name: setting.modelName, label: setting.label },
@@ -193,7 +202,23 @@ function publicSetting(
     reasoningLevel: setting.reasoningLevel,
     provider: setting.provider,
     custom: setting.custom,
+    ...(ablation !== undefined ? { ablation } : {}),
+    ...(customHarness !== undefined ? { customHarness } : {}),
   };
+}
+
+/**
+ * The saved harness a condition runs under, by its own name: a condition with an environment is
+ * named `Harness · Environment` (or just the environment, for an ablation on the harness as it is),
+ * and only the harness part is the saved harness.
+ */
+function harnessNameOf(condition: Setting["condition"]): string | undefined {
+  if (!condition) return undefined;
+  const environment = condition.environment?.name;
+  if (environment === undefined) return condition.name;
+  if (condition.name === environment) return undefined;
+  const suffix = ` · ${environment}`;
+  return condition.name.endsWith(suffix) ? condition.name.slice(0, -suffix.length) : condition.name;
 }
 
 /**
@@ -219,6 +244,13 @@ export function scores(chosen: readonly Candidate[], tasks: readonly string[]): 
       onFrontier: false,
     };
   });
-  const frontier = frontierOf(scored.filter((setting) => setting.costedTasks > 0));
+  // The frontier is the tasks as they are, under each harness as it ships: a repo ablation ran
+  // other tasks and a saved harness is a variant, so neither may displace a model from it, nor
+  // become a card's pick or a page's headline (directory.ts, seo.ts).
+  const frontier = frontierOf(
+    scored.filter(
+      (setting) => setting.costedTasks > 0 && !setting.ablation && !setting.customHarness,
+    ),
+  );
   return scored.map((setting) => ({ ...setting, onFrontier: frontier.has(setting.id) }));
 }

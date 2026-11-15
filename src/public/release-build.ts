@@ -76,9 +76,12 @@ interface Evaluated {
 
 function evaluate(inputs: ReleaseInputs): Evaluated {
   const approved = approvedKeys(inputs.tasks);
-  // A release publishes how agents do on the tasks as they are, never under a run condition.
-  const baseline = inputs.runs.filter((run) => !run.condition);
-  return { approved, all: candidates(resultsBySetting(baseline, inputs.credentials), approved) };
+  // Every run is offered, the tasks as they are beside each saved harness and repo ablation. Each
+  // of those is named by what it changes, and is not ticked until its publisher has released it.
+  return {
+    approved,
+    all: candidates(resultsBySetting(inputs.runs, inputs.credentials), approved),
+  };
 }
 
 /** Changes whenever anything the release would contain, or the line's head, changes. */
@@ -153,6 +156,9 @@ export function previewRelease(inputs: ReleaseInputs): ReleasePreview {
     unrun: approved.filter((key) => !covered.has(key)).length,
     settings: all.map((entry) => ({
       ...entry.setting,
+      label: entry.setting.condition
+        ? `${entry.setting.label} (${entry.setting.condition.name})`
+        : entry.setting.label,
       coverage: [...entry.coverage].flatMap((key) => {
         const position = index.get(key);
         return position === undefined ? [] : [position];

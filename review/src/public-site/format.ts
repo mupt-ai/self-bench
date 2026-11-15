@@ -35,8 +35,16 @@ export function cleanDescription(text: string): string {
  * access routes or numbered custom endpoints.
  */
 export function settingLabel(setting: PublicSetting, all: readonly PublicSetting[]): string {
-  const twins = all.filter((other) => other.model.label === setting.model.label);
-  if (twins.length < 2) return setting.model.label;
+  // A saved harness and a repo ablation name themselves: they set the setting apart from the model.
+  const parts = [setting.customHarness, setting.ablation].filter(Boolean);
+  const named = (label: string) => (parts.length ? [label, ...parts].join(" · ") : label);
+  const twins = all.filter(
+    (other) =>
+      other.model.label === setting.model.label &&
+      other.customHarness === setting.customHarness &&
+      other.ablation === setting.ablation,
+  );
+  if (twins.length < 2) return named(setting.model.label);
   const visible = (entry: PublicSetting) =>
     [accessLabel(entry), harnessLabel(entry), reasoningLabel(entry)].join("|");
   const differs = (pick: (entry: PublicSetting) => string) =>
@@ -47,7 +55,7 @@ export function settingLabel(setting: PublicSetting, all: readonly PublicSetting
     const number = /\|#(\d{1,3})$/.exec(setting.id)?.[1] ?? String(same.indexOf(setting) + 1);
     extra.push(`Endpoint ${number}`);
   }
-  return extra.length ? `${setting.model.label} (${extra.join(", ")})` : setting.model.label;
+  return named(extra.length ? `${setting.model.label} (${extra.join(", ")})` : setting.model.label);
 }
 
 export function percent(value: number): string {

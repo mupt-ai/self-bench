@@ -21,7 +21,12 @@ export interface Setting {
   provider: NonNullable<EvaluationInput["credentials"]>["provider"];
   custom: boolean;
   /** The run condition its trials ran under (conditions.ts); none for the baseline. */
-  condition?: { readonly id: string; readonly name: string };
+  condition?: {
+    readonly id: string;
+    readonly name: string;
+    /** The repo ablation its tasks ran in, when it names one; the name joins the saved harness's. */
+    readonly environment?: { readonly id: number; readonly name: string };
+  };
   /** The model its subagents ran on (subagents.ts), when not its own. */
   subagent?: { readonly catalogId: string; readonly label: string };
 }
@@ -72,7 +77,15 @@ export function settingOf(run: EvaluationRun, harness: Harness): Setting | undef
     // This describes the model's vendor, not the credential route of a selected trial.
     provider: custom ? "custom" : (catalog?.vendor ?? run.credentials.provider),
     custom,
-    ...(condition ? { condition: { id: condition.id, name: condition.name } } : {}),
+    ...(condition
+      ? {
+          condition: {
+            id: condition.id,
+            name: condition.name,
+            ...(condition.environment ? { environment: condition.environment } : {}),
+          },
+        }
+      : {}),
     ...(subagent ? { subagent: { catalogId: subagent.catalogId, label: subagent.label } } : {}),
   };
 }

@@ -29,6 +29,28 @@ test("twin model labels are told apart by what differs between them", () => {
   expect(settingLabel(other, all)).toBe("Luna");
 });
 
+test("a saved harness names itself beside the model, which then needs no other mark", () => {
+  const model = { catalogId: "sol", name: "openai/sol", label: "Sol" };
+  const plain = setting({ id: "sol", model });
+  const skilled = setting({ id: "sol|skills", model, customHarness: "With Skills" });
+  expect(settingLabel(plain, [plain, skilled])).toBe("Sol");
+  expect(settingLabel(skilled, [plain, skilled])).toBe("Sol · With Skills");
+});
+
+test("a repo ablation names itself too, and a saved harness and an ablation both name the setting", () => {
+  const model = { catalogId: "sol", name: "openai/sol", label: "Sol" };
+  const plain = setting({ id: "sol", model });
+  const ablated = setting({ id: "sol|ablation", model, ablation: "No AGENTS.md" });
+  const both = setting({
+    id: "sol|both",
+    model,
+    customHarness: "With Skills",
+    ablation: "No AGENTS.md",
+  });
+  expect(settingLabel(ablated, [plain, ablated])).toBe("Sol · No AGENTS.md");
+  expect(settingLabel(both, [plain, both])).toBe("Sol · With Skills · No AGENTS.md");
+});
+
 test("twins that differ only in reasoning keep the model's name, which has its own column", () => {
   const high = setting({ id: "sol-high", reasoningLevel: "high" });
   const low = setting({ id: "sol-low", reasoningLevel: "low" });

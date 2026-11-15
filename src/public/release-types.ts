@@ -53,6 +53,16 @@ export interface ReleaseSetting {
   signIn?: ReleaseSignIn;
   /** True for a custom model; endpoint hosts are not public. */
   custom: boolean;
+  /**
+   * The saved harness (run condition) its trials ran under, by the name its publisher gave it;
+   * absent for the harness as it ships.
+   */
+  customHarness?: string;
+  /**
+   * The repo ablation this setting ran in: its tasks were changed by that environment, so its
+   * results are not the released tasks as they are. Absent for the tasks as they are.
+   */
+  ablation?: string;
   tasks: number;
   passed: number;
   /** Percentage, 0 to 100. */

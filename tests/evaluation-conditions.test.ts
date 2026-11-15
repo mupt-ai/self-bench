@@ -5,10 +5,8 @@ import { conditionArguments, runCondition } from "../src/evaluation/conditions.j
 import { solverArguments } from "../src/evaluation/solver-arguments.js";
 import { initialEvaluation, saveEvaluation } from "../src/evaluation/store.js";
 import type { EvaluationRun } from "../src/evaluation/types.js";
-import { previewRelease } from "../src/public/release-build.js";
 import { resultsBySetting } from "../src/public/release-results.js";
 import { evaluationServer } from "./support/evaluation-fixture.js";
-import { approvedTasks, inputs, run } from "./support/release-fixture.js";
 
 test("a skill is always a GitHub URL, never a path on the worker", () => {
   expect(skillSource("vercel/next.js")).toBe("https://github.com/vercel/next.js");
@@ -178,21 +176,6 @@ test("a comparison runs every model under the baseline and each condition, kept 
   } finally {
     await fixture.close();
   }
-});
-
-test("a release publishes the baseline, never a run condition", () => {
-  const source = inputs({
-    tasks: approvedTasks(["t1"]),
-    runs: [
-      run({ model: "sol", results: { t1: 1 } }),
-      {
-        ...run({ model: "sol", results: { t1: 1 } }),
-        id: "conditioned",
-        condition: runCondition({ name: "With Skills", skills: ["https://github.com/a/b"] }),
-      },
-    ],
-  });
-  expect(previewRelease(source).settings.map((setting) => setting.condition)).toEqual([undefined]);
 });
 
 test("a condition with an environment runs each ready task from its variant, as the task", async () => {

@@ -63,8 +63,6 @@ export function ResultsChart({
         labelPlacement="auto"
         // Near enough counts: the pointer, or a finger, inspects the nearest point within reach.
         hoverRadius={36}
-        // A quiet corner button for making the chart's text smaller or larger.
-        showSettings
         points={settings
           // A log axis cannot place a setting that recorded no spend.
           .filter((setting) => setting.costPerTaskUsd > 0)
