@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { settingKind } from "../src/public/setting-kinds";
+import { settingKind } from "../src/public/setting-kinds.js";
 
 const setting = (catalogId: string, provider: string, custom = false) => ({
   custom,
