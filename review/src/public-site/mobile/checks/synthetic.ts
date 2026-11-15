@@ -5,6 +5,7 @@ import { page, setting } from "../../test-fixture";
 import { syntheticGroupRoutes, syntheticGroups, syntheticGroupTasks } from "./synthetic-groups";
 import { anthropic, type Model, openai, routed } from "./synthetic-models";
 import { OPENED_SETTING, OPENED_TASK, syntheticTasks } from "./synthetic-tasks";
+import { variantSettings } from "./synthetic-variants";
 
 const LONG = "Review its edge cases: it tends to cover the main path and miss the rest. ".repeat(3);
 
@@ -74,22 +75,8 @@ function syntheticPages(): PublicRepoPage[] {
       tasks: 36,
       settings: [
         setting({ id: "alpha-codex", model: alpha, accuracy: 94, costPerTaskUsd: 3.1 }),
-        // Under a repo ablation: the Ablation tasks filter.
-        setting({
-          id: "alpha-codex|no-agents",
-          model: alpha,
-          ablation: "No AGENTS.md",
-          accuracy: 88,
-          costPerTaskUsd: 2.9,
-        }),
-        // Under a saved harness: the Custom harness filter.
-        setting({
-          id: "alpha-codex|skills",
-          model: alpha,
-          customHarness: "With Skills",
-          accuracy: 96,
-          costPerTaskUsd: 3.6,
-        }),
+        // A repo ablation and a saved harness: the Tasks and Harness filters.
+        ...variantSettings(alpha),
         setting({
           id: "alpha-pi",
           model: alpha,
