@@ -150,13 +150,27 @@ const GROUPS: FilterGroup[] = [
   },
 ];
 
+/** What each filter opens with: its default value alone, the one the page leads with. */
+const DEFAULT_VALUE: Record<string, string> = {
+  Show: "model",
+  Harness: "default",
+  Tasks: "original",
+};
+
 /**
- * Which values a page hides when it opens: routers, when it has plain models to show instead. A
- * page with no plain models shows what it has.
+ * What a page hides when it opens: every value but its default, in each filter whose default it
+ * has (plain models, the harness as it ships, the tasks as they are). A page without a default
+ * shows all of that filter's values.
  */
 function hiddenWhenOpened(settings: PublicSetting[]): Record<string, readonly string[]> {
-  const kinds = new Set(settings.map(settingKind));
-  return kinds.has("model") ? { Show: [...kinds].filter((kind) => kind !== "model") } : {};
+  return Object.fromEntries(
+    GROUPS.flatMap((group) => {
+      const fallback = DEFAULT_VALUE[group.label];
+      const values = [...new Set(settings.map(group.value))];
+      if (fallback === undefined || !values.includes(fallback)) return [];
+      return [[group.label, values.filter((value) => value !== fallback)]];
+    }),
+  );
 }
 
 /** The filters' state: what each group hides, with the groups this page has. */
