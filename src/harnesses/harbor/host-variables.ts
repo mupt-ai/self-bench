@@ -58,10 +58,10 @@ export function hostVariables(config: Record<string, unknown>): HostVariable[] {
 }
 
 /**
- * A `${NAME}` (no default) anywhere in the task outside its `env` tables, such as an MCP server's
+ * A `${NAME}` or `${NAME:-default}` anywhere outside `env` tables, such as an MCP server's
  * `headers`: Harbor interpolates those from the worker's environment too, and no run fills them.
  */
-const INLINE_TEMPLATE = /\$\{([^}:]+)\}/g;
+const INLINE_TEMPLATE = /\$\{([^}:]+)(?::-[^}]*)?\}/g;
 
 function unreadHostVariable(config: Record<string, unknown>): string | undefined {
   const visit = (value: unknown, path: string): string | undefined => {
