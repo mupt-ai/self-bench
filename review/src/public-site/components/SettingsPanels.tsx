@@ -54,7 +54,7 @@ export function SettingsPanels({
   /** A line under the table's heading. */
   note?: string;
 }) {
-  const filters = useSettingFilters(settings);
+  const filters = useSettingFilters(settings, chartKey);
   const shown = settings.filter(filters.shows);
   return (
     // Side by side, the chart stays in view while the table scrolls past it.
@@ -73,15 +73,26 @@ export function SettingsPanels({
         className={`flex min-w-0 flex-col gap-3 ${side ? "min-[90rem]:sticky min-[90rem]:top-[calc(var(--bar-top)_+_1rem)]" : ""}`}
       >
         <h2 className="text-base font-medium">Model Tradeoffs</h2>
-        <SettingFilters {...filters} />
+        <SettingFilters
+          kinds={filters.kinds}
+          harnesses={filters.harnesses}
+          hiddenKinds={filters.hiddenKinds}
+          hiddenHarnesses={filters.hiddenHarnesses}
+          toggleKind={filters.toggleKind}
+          toggleHarness={filters.toggleHarness}
+        />
         <div className={`p-2 ${PANEL}`}>
-          <ResultsChart
-            key={`${chartKey}:${filters.key}`}
-            settings={shown}
-            onActiveChange={marks.onActiveChange}
-            onHighlightChange={marks.onHighlightChange}
-            selectedId={marks.rowId}
-          />
+          {shown.length === 0 ? (
+            <p className="p-2 text-sm text-muted-foreground">No settings match these filters.</p>
+          ) : (
+            <ResultsChart
+              key={`${chartKey}:${filters.filterKey}`}
+              settings={shown}
+              onActiveChange={marks.onActiveChange}
+              onHighlightChange={marks.onHighlightChange}
+              selectedId={marks.rowId}
+            />
+          )}
         </div>
       </section>
 
@@ -109,7 +120,7 @@ interface Option<T extends string> {
 }
 
 /** The filters' state: which kinds and harnesses show, with the options this page has. */
-function useSettingFilters(settings: PublicSetting[]) {
+function useSettingFilters(settings: PublicSetting[], release: string) {
   const kinds: Option<SettingKind>[] = SETTING_KINDS.filter(({ kind }) =>
     settings.some((setting) => settingKind(setting) === kind),
   ).map(({ kind, label }) => ({ value: kind, label }));
@@ -119,23 +130,32 @@ function useSettingFilters(settings: PublicSetting[]) {
       value: harness,
       label: harnessLabel({ harness } as PublicSetting),
     }));
-  // Models first, as the page opens; a page with no plain models shows what it has.
-  const [hiddenKinds, setHiddenKinds] = useState<ReadonlySet<string>>(() =>
-    kinds.some(({ value }) => value === "model")
-      ? new Set(kinds.flatMap(({ value }) => (value === "model" ? [] : [value])))
-      : new Set(),
-  );
-  const [hiddenHarnesses, setHiddenHarnesses] = useState<ReadonlySet<string>>(new Set());
+  // Models first, as the page opens; a page with no plain models shows what it has. Another
+  // release (`release`) starts the filters afresh, since its kinds and harnesses differ.
+  const fresh = () => ({
+    release,
+    kinds: new Set<string>(
+      kinds.some(({ value }) => value === "model")
+        ? kinds.flatMap(({ value }) => (value === "model" ? [] : [value]))
+        : [],
+    ) as ReadonlySet<string>,
+    harnesses: new Set<string>() as ReadonlySet<string>,
+  });
+  const [stored, setStored] = useState(fresh);
+  const hidden = stored.release === release ? stored : fresh();
+  const hiddenKinds = hidden.kinds;
+  const hiddenHarnesses = hidden.harnesses;
   return {
     kinds,
     harnesses,
     hiddenKinds,
     hiddenHarnesses,
-    toggleKind: (value: string) => setHiddenKinds((hidden) => toggled(hidden, value)),
-    toggleHarness: (value: string) => setHiddenHarnesses((hidden) => toggled(hidden, value)),
+    toggleKind: (value: string) => setStored({ ...hidden, kinds: toggled(hiddenKinds, value) }),
+    toggleHarness: (value: string) =>
+      setStored({ ...hidden, harnesses: toggled(hiddenHarnesses, value) }),
     shows: (setting: PublicSetting) =>
       !hiddenKinds.has(settingKind(setting)) && !hiddenHarnesses.has(setting.harness),
-    key: [...hiddenKinds, "|", ...hiddenHarnesses].join(","),
+    filterKey: [...hiddenKinds, "|", ...hiddenHarnesses].join(","),
   };
 }
 
@@ -153,7 +173,7 @@ function SettingFilters({
   hiddenHarnesses,
   toggleKind,
   toggleHarness,
-}: ReturnType<typeof useSettingFilters>) {
+}: Omit<ReturnType<typeof useSettingFilters>, "shows" | "filterKey">) {
   return (
     <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
       {kinds.length > 1 && (
@@ -190,7 +210,7 @@ function FilterGroup({
       {options.map((option) => (
         <label
           key={option.value}
-          className="hit relative flex cursor-pointer items-center gap-1.5 text-sm"
+          className="flex cursor-pointer items-center gap-1.5 text-sm touch:min-h-11 touch:min-w-11"
         >
           <input
             type="checkbox"
