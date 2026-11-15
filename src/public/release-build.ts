@@ -76,11 +76,11 @@ interface Evaluated {
 
 function evaluate(inputs: ReleaseInputs): Evaluated {
   const approved = approvedKeys(inputs.tasks);
-  // Settings under a saved harness (a run condition) are offered beside the rest, and named by it.
-  return {
-    approved,
-    all: candidates(resultsBySetting(inputs.runs, inputs.credentials), approved),
-  };
+  // A release publishes how agents do on the tasks as they are, never in a repo ablation (a run
+  // condition with an environment, which changes the tasks themselves). A saved harness changes
+  // the agent, not the tasks, so its runs are offered beside the rest, named by it.
+  const baseline = inputs.runs.filter((run) => !run.condition?.environment);
+  return { approved, all: candidates(resultsBySetting(baseline, inputs.credentials), approved) };
 }
 
 /** Changes whenever anything the release would contain, or the line's head, changes. */

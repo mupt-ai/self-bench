@@ -200,6 +200,21 @@ test("a release offers a saved harness's setting, named by it and not ticked unt
   expect(settings[1]?.label).toEndWith("(With Skills)");
 });
 
+test("a release never offers a repo ablation, which changes the tasks themselves", () => {
+  const source = inputs({
+    tasks: approvedTasks(["t1"]),
+    runs: [
+      run({ model: "sol", results: { t1: 1 } }),
+      {
+        ...run({ model: "sol", results: { t1: 0 } }),
+        id: "ablated",
+        condition: runCondition({ name: "No AGENTS.md", skills: [], environment: 7 }),
+      },
+    ],
+  });
+  expect(previewRelease(source).settings.map((setting) => setting.condition)).toEqual([undefined]);
+});
+
 test("a condition with an environment runs each ready task from its variant, as the task", async () => {
   const fixture = await evaluationServer();
   const post = (body: unknown) => ({ method: "POST", body: JSON.stringify(body) });
