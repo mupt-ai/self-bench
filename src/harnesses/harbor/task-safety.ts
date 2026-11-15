@@ -33,16 +33,33 @@ const COMPOSE_MAX_BYTES = 256 * 1024;
  * `docker_image` is set only by SelfBench (see registry-pull.ts), after this check: a run that can
  * pull task images would pull whatever image a bundle named.
  */
-const HOST_KEYS = new Set(["env", "mcp_servers", "steps", "skills_dir", "docker_image"]);
+const HOST_KEYS = new Set([
+  "env",
+  "mcp_servers",
+  "steps",
+  "skills_dir",
+  "docker_image",
+]);
 /** Host values that are paths or locale, never credentials; compose may mention them. */
-const HARMLESS_VARIABLES = new Set(["PATH", "HOME", "TMPDIR", "TEMP", "TMP", "LANG", "LC_ALL"]);
+const HARMLESS_VARIABLES = new Set([
+  "PATH",
+  "HOME",
+  "TMPDIR",
+  "TEMP",
+  "TMP",
+  "LANG",
+  "LC_ALL",
+]);
 /** Harbor's own pattern for the host variables a compose file pulls in. */
 const COMPOSE_REFERENCE =
   /\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-[^}]*)?\}|\$([A-Za-z_][A-Za-z0-9_]*)\b/g;
 
 /** A task or trial that attacks the worker fails outright inside an activity; a retry repeats it. */
 export function refuseWithoutRetry(error: unknown): never {
-  if (error instanceof UnsafeHarborTaskError || error instanceof HarborOutputLimitError)
+  if (
+    error instanceof UnsafeHarborTaskError ||
+    error instanceof HarborOutputLimitError
+  )
     throw ApplicationFailure.nonRetryable(error.message, error.name);
   throw error;
 }
@@ -67,7 +84,10 @@ export async function prepareHarborRun(
   const child = { ...env, TMPDIR: scratch };
   if (published) await assertHostSafePublishedTask(taskDirectory, child);
   else await assertHostSafeTask(taskDirectory, child, agentSeconds);
-  return { env: child, guard: guardHarborOutput([join(root, "jobs"), scratch], signal) };
+  return {
+    env: child,
+    guard: guardHarborOutput([join(root, "jobs"), scratch], signal),
+  };
 }
 
 /**
@@ -83,7 +103,7 @@ export async function assertHostSafeTask(
   agentSeconds: number,
 ): Promise<void> {
   const config = await readTaskConfig(taskDirectory);
-  rejectHostKeys(config, "", false);
+  rejectHostKeys(config, "");
   config.agent = {
     ...(isRecord(config.agent) ? config.agent : {}),
     timeout_sec: agentSeconds,
@@ -96,24 +116,26 @@ export async function assertHostSafeTask(
 
 /**
  * Refuses a task from Harbor's registry that would pull host environment into the sandbox, and
- * changes nothing in it. Its `env` tables may hold literal values, the judge variables a run fills
- * from the benchmark's judge credential (host-variables.ts), and other variables with defaults, which apply
- * since runs never set them. Harbor writes empty `mcp_servers` lists into every task, which reach
- * nothing, and a published task may name its own prebuilt `docker_image`: no SelfBench pull grant
- * is made for it (registry-pull.ts), so it is pulled as anyone would pull it.
+ * changes nothing in it. A published task runs as its authors wrote it, so every task.toml key is
+ * allowed (`mcp_servers`, `skills_dir`, `steps`, its own prebuilt `docker_image`, for which no
+ * SelfBench pull grant is made, registry-pull.ts). What stays refused is reading the host's
+ * variables: its `env` tables may hold literal values, the judge variables a run fills from the
+ * benchmark's judge credential (host-variables.ts), and other variables with defaults, which apply
+ * since runs never set them.
  */
 export async function assertHostSafePublishedTask(
   taskDirectory: string,
   harborEnv: NodeJS.ProcessEnv,
 ): Promise<void> {
   const config = await readTaskConfig(taskDirectory);
-  rejectHostKeys(config, "", true);
   const refusal = hostVariableRefusal(config);
   if (refusal) throw new UnsafeHarborTaskError(refusal);
   await assertHostSafeCompose(taskDirectory, harborEnv);
 }
 
-export async function readTaskConfig(taskDirectory: string): Promise<Record<string, unknown>> {
+export async function readTaskConfig(
+  taskDirectory: string,
+): Promise<Record<string, unknown>> {
   const raw = await readFile(join(taskDirectory, "task.toml"));
   if (raw.byteLength > TASK_TOML_MAX_BYTES)
     throw new UnsafeHarborTaskError("task.toml is too large");
@@ -123,7 +145,8 @@ export async function readTaskConfig(taskDirectory: string): Promise<Record<stri
   } catch {
     throw new UnsafeHarborTaskError("task.toml does not parse");
   }
-  if (!isRecord(config)) throw new UnsafeHarborTaskError("task.toml is not a table");
+  if (!isRecord(config))
+    throw new UnsafeHarborTaskError("task.toml is not a table");
   return config;
 }
 
@@ -138,16 +161,18 @@ async function assertHostSafeCompose(
     for (const match of text.matchAll(COMPOSE_REFERENCE)) {
       const name = match[1] ?? match[2] ?? "";
       if (harborEnv[name] !== undefined && !HARMLESS_VARIABLES.has(name)) {
-        throw new UnsafeHarborTaskError(`a compose file references the host variable ${name}`);
+        throw new UnsafeHarborTaskError(
+          `a compose file references the host variable ${name}`,
+        );
       }
     }
   }
 }
 
-function rejectHostKeys(value: unknown, path: string, published: boolean): void {
+function rejectHostKeys(value: unknown, path: string): void {
   if (Array.isArray(value)) {
     for (const [index, item] of value.entries())
-      rejectHostKeys(item, `${path}[${index}]`, published);
+      rejectHostKeys(item, `${path}[${index}]`);
     return;
   }
   if (!isRecord(value)) return;
@@ -155,17 +180,17 @@ function rejectHostKeys(value: unknown, path: string, published: boolean): void 
     const at = path ? `${path}.${key}` : key;
     // Metadata is free-form and Harbor only records it.
     if (at === "metadata") continue;
-    const empty = Array.isArray(child)
-      ? child.length === 0
-      : isRecord(child) && Object.keys(child).length === 0;
-    const allowed = published && (key === "docker_image" || key === "env" || empty);
-    if (HOST_KEYS.has(key) && !allowed) throw new UnsafeHarborTaskError(`task.toml sets ${at}`);
-    rejectHostKeys(child, at, published);
+    if (HOST_KEYS.has(key))
+      throw new UnsafeHarborTaskError(`task.toml sets ${at}`);
+    rejectHostKeys(child, at);
   }
 }
 
 async function composeFiles(taskDirectory: string): Promise<string[]> {
-  const entries = await readdir(taskDirectory, { recursive: true, withFileTypes: true });
+  const entries = await readdir(taskDirectory, {
+    recursive: true,
+    withFileTypes: true,
+  });
   return entries
     .filter((entry) => entry.isFile() && /compose\.ya?ml$/i.test(entry.name))
     .map((entry) => join(entry.parentPath, entry.name));

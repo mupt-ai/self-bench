@@ -9,11 +9,17 @@ import {
 } from "../../src/harnesses/harbor/registry-tasks.js";
 import { UnsafeHarborTaskError } from "../../src/harnesses/harbor/task-safety.js";
 import { runCommand } from "../../src/lib/process.js";
-import { fakeHarbor, harborTaskToml, publishedTask } from "../support/harbor-registry.js";
+import {
+  fakeHarbor,
+  harborTaskToml,
+  publishedTask,
+} from "../support/harbor-registry.js";
 
 const roots: string[] = [];
 afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+  await Promise.all(
+    roots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
+  );
 });
 
 async function temporary(): Promise<string> {
@@ -31,7 +37,11 @@ async function taskDirectory(files: Record<string, string>): Promise<string> {
   return root;
 }
 
-const harborEnv = { PATH: "/usr/bin", HOME: "/home/node", MODAL_TOKEN_SECRET: "as-secret" };
+const harborEnv = {
+  PATH: "/usr/bin",
+  HOME: "/home/node",
+  MODAL_TOKEN_SECRET: "as-secret",
+};
 
 test("registry references name an org's task or dataset, at latest unless a ref is given", () => {
   expect(registryReference("terminal-bench/terminal-bench-2")).toBe(
@@ -78,7 +88,11 @@ test("a download runs Harbor with only PATH and a HOME of its own, and reads eac
   expect(harbor.calls).toEqual([
     {
       args: ["download", "org/dataset@latest", "--cache"],
-      env: { PATH: "/usr/bin", HOME: join(root, "home"), HARBOR_TELEMETRY: "off" },
+      env: {
+        PATH: "/usr/bin",
+        HOME: join(root, "home"),
+        HARBOR_TELEMETRY: "off",
+      },
     },
   ]);
   expect(tasks.map(({ name, digest }) => ({ name, digest }))).toEqual([
@@ -95,18 +109,29 @@ test("a download runs Harbor with only PATH and a HOME of its own, and reads eac
 test("a download that finds no package tasks, or tasks outside the package cache, is refused", async () => {
   const empty = fakeHarbor({ "org/empty@latest": [] }, runCommand);
   await expect(
-    downloadRegistryTasks("org/empty", await temporary(), { command: empty.command, path: "" }),
+    downloadRegistryTasks("org/empty", await temporary(), {
+      command: empty.command,
+      path: "",
+    }),
   ).rejects.toThrow("has no tasks");
-  const legacy = fakeHarbor({ "org/legacy@latest": [publishedTask("org/task")] }, async () => {
-    throw new Error("not run");
-  });
+  const legacy = fakeHarbor(
+    { "org/legacy@latest": [publishedTask("org/task")] },
+    async () => {
+      throw new Error("not run");
+    },
+  );
   const command: typeof runCommand = async (program, args, options = {}) => {
     const result = await legacy.command(program, args, options);
-    await mkdir(join(options.env?.HOME ?? "", ".cache", "harbor", "tasks", "git-task"));
+    await mkdir(
+      join(options.env?.HOME ?? "", ".cache", "harbor", "tasks", "git-task"),
+    );
     return result;
   };
   await expect(
-    downloadRegistryTasks("org/legacy", await temporary(), { command, path: "" }),
+    downloadRegistryTasks("org/legacy", await temporary(), {
+      command,
+      path: "",
+    }),
   ).rejects.toThrow("outside Harbor's package registry");
 });
 
@@ -133,12 +158,14 @@ test("a registry task is checked as published and left unchanged, with its own l
   const { "environment/Dockerfile": _, ...withoutDockerfile } = published;
   const prebuilt = await taskDirectory({
     ...withoutDockerfile,
-    "task.toml": harborTaskToml("x/y", 'docker_image = "someone/build:1"\n').replace(
-      "[agent]\ntimeout_sec = 120.0\n",
-      "",
-    ),
+    "task.toml": harborTaskToml(
+      "x/y",
+      'docker_image = "someone/build:1"\n',
+    ).replace("[agent]\ntimeout_sec = 120.0\n", ""),
   });
-  expect((await checkRegistryTask(prebuilt, harborEnv)).minutes).toBe(10 + 40 + 2);
+  expect((await checkRegistryTask(prebuilt, harborEnv)).minutes).toBe(
+    10 + 40 + 2,
+  );
 
   // An LLM judge's key and literal settings are the task as published too: the run fills the key
   // from the benchmark's judge credential.
@@ -155,18 +182,30 @@ test("a registry task is checked as published and left unchanged, with its own l
   });
 });
 
+test("a registry task may set any task.toml key: MCP servers, skills, and steps run as published", async () => {
+  const toml = harborTaskToml("x/y")
+    .replace(
+      "mcp_servers = []",
+      'mcp_servers = [{ name = "x", transport = "sse", url = "http://mcp:3080/sse" }]',
+    )
+    .replace(
+      "[environment]\n",
+      '[environment]\nskills_dir = "/app/.agents/skills"\n',
+    );
+  const directory = await taskDirectory({
+    ...publishedTask("x/y").files,
+    "task.toml": `${toml}\n[[steps]]\nname = "one"\n`,
+  });
+  await expect(checkRegistryTask(directory, harborEnv)).resolves.toBeDefined();
+});
+
 test.each([
-  ["a solution env", { "task.toml": `${harborTaskToml("x/y")}LEAK = "\${MODAL_TOKEN_SECRET}"\n` }],
   [
-    "an MCP server",
+    "a solution env",
     {
-      "task.toml": harborTaskToml("x/y").replace(
-        "mcp_servers = []",
-        'mcp_servers = [{ name = "x", command = "sh" }]',
-      ),
+      "task.toml": `${harborTaskToml("x/y")}LEAK = "\${MODAL_TOKEN_SECRET}"\n`,
     },
   ],
-  ["steps", { "task.toml": `${harborTaskToml("x/y")}\n[[steps]]\nname = "one"\n` }],
   [
     "a compose file reading a host secret",
     {
