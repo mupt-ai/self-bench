@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { SlidersHorizontal } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { SETTING_KINDS, settingKind } from "../../../../src/public/setting-kinds";
 import type { PublicSetting } from "../contract";
 import { pageBody, revealGroup } from "../effects/marks";
@@ -72,9 +73,8 @@ export function SettingsPanels({
         className={`flex min-w-0 flex-col gap-3 ${side ? "min-[90rem]:sticky min-[90rem]:top-[calc(var(--bar-top)_+_1rem)]" : ""}`}
       >
         <h2 className="text-base font-medium">Model Tradeoffs</h2>
-        {/* A container, so the filters move into the chart's top corner once it is wide enough. */}
-        <div className={`@container relative p-2 ${PANEL}`}>
-          <SettingFilters
+        <div className={`relative p-2 ${PANEL}`}>
+          <ChartFilters
             groups={filters.groups}
             hiddenOf={filters.hiddenOf}
             toggle={filters.toggle}
@@ -199,29 +199,63 @@ function toggled(set: ReadonlySet<string>, value: string): ReadonlySet<string> {
 }
 
 /**
- * Chips over the chart, in its panel: Show (Models, Routers), Harness (Default, Custom), and Tasks
- * (Original, Ablation). Each is a checkbox drawn as a chip, so it reads like the vendor chips the
- * plot draws, and a tap takes a finger.
+ * The chart's filters: a sliders button in its top-right corner, which opens a panel with the
+ * chips (Show, Harness, Tasks). It replaces the plot's own settings button, whose text size the
+ * page does not offer. A tap takes a finger; Escape or a tap outside closes the panel.
  */
-function SettingFilters({
+function ChartFilters({
   groups,
   hiddenOf,
   toggle,
 }: Pick<ReturnType<typeof useSettingFilters>, "groups" | "hiddenOf" | "toggle">) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (event: PointerEvent) => {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", away);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", away);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
   if (groups.length === 0) return null;
   return (
-    // Above the chart, or in its top corner, where the settings button sits, once the chart is
-    // wide enough for them beside its vendor chips (a container query on the panel).
-    <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-2 px-1 @min-[60rem]:absolute @min-[60rem]:top-3 @min-[60rem]:right-10 @min-[60rem]:z-10 @min-[60rem]:mb-0 @min-[60rem]:justify-end">
-      {groups.map((group) => (
-        <ChipGroup
-          key={group.label}
-          label={group.label}
-          options={group.options}
-          hidden={hiddenOf(group.label)}
-          onToggle={(value) => toggle(group.label, value)}
-        />
-      ))}
+    <div ref={root} className="absolute top-2 right-2 z-20">
+      <button
+        type="button"
+        aria-label="Filters"
+        aria-expanded={open}
+        aria-controls="chart-filters"
+        onClick={() => setOpen((current) => !current)}
+        className={`hit relative grid size-7 place-items-center border text-muted-foreground transition-colors hover:text-foreground touch:size-11 ${
+          open ? "border-foreground/40 text-foreground" : "border-transparent"
+        }`}
+      >
+        <SlidersHorizontal aria-hidden size={16} strokeWidth={1.75} />
+      </button>
+      {open && (
+        <div
+          id="chart-filters"
+          className={`absolute top-9 right-0 flex w-max max-w-[calc(100vw-3rem)] flex-col gap-3 p-3 ${PANEL}`}
+        >
+          {groups.map((group) => (
+            <ChipGroup
+              key={group.label}
+              label={group.label}
+              options={group.options}
+              hidden={hiddenOf(group.label)}
+              onToggle={(value) => toggle(group.label, value)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
