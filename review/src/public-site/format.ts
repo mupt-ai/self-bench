@@ -35,12 +35,14 @@ export function cleanDescription(text: string): string {
  * access routes or numbered custom endpoints.
  */
 export function settingLabel(setting: PublicSetting, all: readonly PublicSetting[]): string {
-  // A saved harness always names itself: it is what sets the setting apart from the model alone.
-  const named = (label: string) =>
-    setting.customHarness ? `${label} · ${setting.customHarness}` : label;
+  // A saved harness and a repo ablation name themselves: they set the setting apart from the model.
+  const parts = [setting.customHarness, setting.ablation].filter(Boolean);
+  const named = (label: string) => (parts.length ? [label, ...parts].join(" · ") : label);
   const twins = all.filter(
     (other) =>
-      other.model.label === setting.model.label && other.customHarness === setting.customHarness,
+      other.model.label === setting.model.label &&
+      other.customHarness === setting.customHarness &&
+      other.ablation === setting.ablation,
   );
   if (twins.length < 2) return named(setting.model.label);
   const visible = (entry: PublicSetting) =>

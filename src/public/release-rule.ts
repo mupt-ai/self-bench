@@ -193,6 +193,8 @@ function publicSetting(
   ReleaseSetting,
   "tasks" | "passed" | "accuracy" | "costPerTaskUsd" | "totalCostUsd" | "costedTasks" | "onFrontier"
 > {
+  const customHarness = harnessNameOf(setting.condition);
+  const ablation = setting.condition?.environment?.name;
   return {
     id: setting.id,
     model: { catalogId: setting.catalogId, name: setting.modelName, label: setting.label },
@@ -200,8 +202,23 @@ function publicSetting(
     reasoningLevel: setting.reasoningLevel,
     provider: setting.provider,
     custom: setting.custom,
-    ...(setting.condition ? { customHarness: setting.condition.name } : {}),
+    ...(ablation !== undefined ? { ablation } : {}),
+    ...(customHarness !== undefined ? { customHarness } : {}),
   };
+}
+
+/**
+ * The saved harness a condition runs under, by its own name: a condition with an environment is
+ * named `Harness · Environment` (or just the environment, for an ablation on the harness as it is),
+ * and only the harness part is the saved harness.
+ */
+function harnessNameOf(condition: Setting["condition"]): string | undefined {
+  if (!condition) return undefined;
+  const environment = condition.environment?.name;
+  if (environment === undefined) return condition.name;
+  if (condition.name === environment) return undefined;
+  const suffix = ` · ${environment}`;
+  return condition.name.endsWith(suffix) ? condition.name.slice(0, -suffix.length) : condition.name;
 }
 
 /**

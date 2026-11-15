@@ -76,11 +76,12 @@ interface Evaluated {
 
 function evaluate(inputs: ReleaseInputs): Evaluated {
   const approved = approvedKeys(inputs.tasks);
-  // A release publishes how agents do on the tasks as they are, never in a repo ablation (a run
-  // condition with an environment, which changes the tasks themselves). A saved harness changes
-  // the agent, not the tasks, so its runs are offered beside the rest, named by it.
-  const baseline = inputs.runs.filter((run) => !run.condition?.environment);
-  return { approved, all: candidates(resultsBySetting(baseline, inputs.credentials), approved) };
+  // Every run is offered, the tasks as they are beside each saved harness and repo ablation. Each
+  // of those is named by what it changes, and is not ticked until its publisher has released it.
+  return {
+    approved,
+    all: candidates(resultsBySetting(inputs.runs, inputs.credentials), approved),
+  };
 }
 
 /** Changes whenever anything the release would contain, or the line's head, changes. */

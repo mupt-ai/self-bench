@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { SETTING_KINDS, type SettingKind, settingKind } from "../../../../src/public/setting-kinds";
+import { SETTING_KINDS, settingKind } from "../../../../src/public/setting-kinds";
 import type { PublicSetting } from "../contract";
 import { pageBody, revealGroup } from "../effects/marks";
 import { PANEL } from "../frame";
@@ -74,12 +74,9 @@ export function SettingsPanels({
         <h2 className="text-base font-medium">Model Tradeoffs</h2>
         <div className={`p-2 ${PANEL}`}>
           <SettingFilters
-            kinds={filters.kinds}
-            harnesses={filters.harnesses}
-            hiddenKinds={filters.hiddenKinds}
-            hiddenHarnesses={filters.hiddenHarnesses}
-            toggleKind={filters.toggleKind}
-            toggleHarness={filters.toggleHarness}
+            groups={filters.groups}
+            hiddenOf={filters.hiddenOf}
+            toggle={filters.toggle}
           />
           {shown.length === 0 ? (
             <p className="p-2 text-sm text-muted-foreground">No settings match these filters.</p>
@@ -113,53 +110,84 @@ export function SettingsPanels({
   );
 }
 
-const HARNESS_KINDS: Option<string>[] = [
-  { value: "default", label: "Default" },
-  { value: "custom", label: "Custom" },
-];
-
-const harnessKind = (setting: PublicSetting) => (setting.customHarness ? "custom" : "default");
-
 interface Option<T extends string> {
   value: T;
   label: string;
 }
 
-/** The filters' state: which kinds, and which harnesses (default or saved), show, with the options this page has. */
+/** One filter: a chip group, the setting's value under it, and the options it can take. */
+interface FilterGroup {
+  label: string;
+  options: Option<string>[];
+  value: (setting: PublicSetting) => string;
+}
+
+const harnessKind = (setting: PublicSetting) => (setting.customHarness ? "custom" : "default");
+const taskKind = (setting: PublicSetting) => (setting.ablation ? "ablation" : "original");
+
+const GROUPS: FilterGroup[] = [
+  {
+    label: "Show",
+    options: SETTING_KINDS.map(({ kind, label }) => ({ value: kind, label })),
+    value: settingKind,
+  },
+  {
+    label: "Harness",
+    options: [
+      { value: "default", label: "Default" },
+      { value: "custom", label: "Custom" },
+    ],
+    value: harnessKind,
+  },
+  {
+    label: "Tasks",
+    options: [
+      { value: "original", label: "Original" },
+      { value: "ablation", label: "Ablation" },
+    ],
+    value: taskKind,
+  },
+];
+
+/**
+ * Which values a page hides when it opens: routers, when it has plain models to show instead. A
+ * page with no plain models shows what it has.
+ */
+function hiddenWhenOpened(settings: PublicSetting[]): Record<string, readonly string[]> {
+  const kinds = new Set(settings.map(settingKind));
+  return kinds.has("model") ? { Show: [...kinds].filter((kind) => kind !== "model") } : {};
+}
+
+/** The filters' state: what each group hides, with the groups this page has. */
 function useSettingFilters(settings: PublicSetting[], release: string) {
-  const kinds: Option<SettingKind>[] = SETTING_KINDS.filter(({ kind }) =>
-    settings.some((setting) => settingKind(setting) === kind),
-  ).map(({ kind, label }) => ({ value: kind, label }));
-  // The harness as it ships, or one of the publisher's saved harnesses.
-  const harnesses: Option<string>[] = HARNESS_KINDS.filter(({ value }) =>
-    settings.some((setting) => harnessKind(setting) === value),
-  );
-  // Models first, as the page opens; a page with no plain models shows what it has. Another
-  // release (`release`) starts the filters afresh, since its kinds and harnesses differ.
-  const fresh = () => ({
-    release,
-    kinds: new Set<string>(
-      kinds.some(({ value }) => value === "model")
-        ? kinds.flatMap(({ value }) => (value === "model" ? [] : [value]))
-        : [],
-    ) as ReadonlySet<string>,
-    harnesses: new Set<string>() as ReadonlySet<string>,
-  });
-  const [stored, setStored] = useState(fresh);
-  const hidden = stored.release === release ? stored : fresh();
-  const hiddenKinds = hidden.kinds;
-  const hiddenHarnesses = hidden.harnesses;
+  // The groups a page has more than one value of: a filter over one value filters nothing.
+  const groups = GROUPS.map((group) => ({
+    ...group,
+    options: group.options.filter((option) =>
+      settings.some((setting) => group.value(setting) === option.value),
+    ),
+  })).filter((group) => group.options.length > 1);
+  // Another release (`release`) starts the filters afresh, since its values differ.
+  const [stored, setStored] = useState(() => ({ release, hidden: hiddenWhenOpened(settings) }));
+  const current =
+    stored.release === release ? stored : { release, hidden: hiddenWhenOpened(settings) };
+  const hiddenOf = (label: string): ReadonlySet<string> => new Set(current.hidden[label] ?? []);
   return {
-    kinds,
-    harnesses,
-    hiddenKinds,
-    hiddenHarnesses,
-    toggleKind: (value: string) => setStored({ ...hidden, kinds: toggled(hiddenKinds, value) }),
-    toggleHarness: (value: string) =>
-      setStored({ ...hidden, harnesses: toggled(hiddenHarnesses, value) }),
+    groups,
+    hiddenOf,
+    toggle: (label: string, value: string) =>
+      setStored({
+        release,
+        hidden: {
+          ...current.hidden,
+          [label]: [...toggled(hiddenOf(label), value)],
+        },
+      }),
     shows: (setting: PublicSetting) =>
-      !hiddenKinds.has(settingKind(setting)) && !hiddenHarnesses.has(harnessKind(setting)),
-    filterKey: [...hiddenKinds, "|", ...hiddenHarnesses].join(","),
+      GROUPS.every((group) => !hiddenOf(group.label).has(group.value(setting))),
+    filterKey: Object.entries(current.hidden)
+      .map(([label, values]) => `${label}:${values.join(",")}`)
+      .join("|"),
   };
 }
 
@@ -170,36 +198,32 @@ function toggled(set: ReadonlySet<string>, value: string): ReadonlySet<string> {
 }
 
 /**
- * Chips over the chart, in its panel: kinds (Models, Routers) and harnesses (Default, Custom). Each is a checkbox
- * drawn as a chip, so it reads like the vendor chips the plot draws, and a tap takes a finger.
+ * Chips over the chart, in its panel: Show (Models, Routers), Harness (Default, Custom), and Tasks
+ * (Original, Ablation). Each is a checkbox drawn as a chip, so it reads like the vendor chips the
+ * plot draws, and a tap takes a finger.
  */
 function SettingFilters({
-  kinds,
-  harnesses,
-  hiddenKinds,
-  hiddenHarnesses,
-  toggleKind,
-  toggleHarness,
-}: Omit<ReturnType<typeof useSettingFilters>, "shows" | "filterKey">) {
-  if (kinds.length < 2 && harnesses.length < 2) return null;
+  groups,
+  hiddenOf,
+  toggle,
+}: Pick<ReturnType<typeof useSettingFilters>, "groups" | "hiddenOf" | "toggle">) {
+  if (groups.length === 0) return null;
   return (
     <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-2 px-1">
-      {kinds.length > 1 && (
-        <FilterGroup label="Show" options={kinds} hidden={hiddenKinds} onToggle={toggleKind} />
-      )}
-      {harnesses.length > 1 && (
-        <FilterGroup
-          label="Harness"
-          options={harnesses}
-          hidden={hiddenHarnesses}
-          onToggle={toggleHarness}
+      {groups.map((group) => (
+        <ChipGroup
+          key={group.label}
+          label={group.label}
+          options={group.options}
+          hidden={hiddenOf(group.label)}
+          onToggle={(value) => toggle(group.label, value)}
         />
-      )}
+      ))}
     </div>
   );
 }
 
-function FilterGroup({
+function ChipGroup({
   label,
   options,
   hidden,

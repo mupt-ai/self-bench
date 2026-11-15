@@ -200,7 +200,7 @@ test("a release offers a saved harness's setting, named by it and not ticked unt
   expect(settings[1]?.label).toEndWith("(With Skills)");
 });
 
-test("a release never offers a repo ablation, which changes the tasks themselves", () => {
+test("a release offers a repo ablation, named by it and not ticked until released", () => {
   const source = inputs({
     tasks: approvedTasks(["t1"]),
     runs: [
@@ -212,7 +212,13 @@ test("a release never offers a repo ablation, which changes the tasks themselves
       },
     ],
   });
-  expect(previewRelease(source).settings.map((setting) => setting.condition)).toEqual([undefined]);
+  const settings = previewRelease(source).settings;
+  expect(settings.map((setting) => [setting.condition?.environment?.name, setting.ticked])).toEqual(
+    [
+      [undefined, false],
+      ["No AGENTS.md", false],
+    ],
+  );
 });
 
 test("a condition with an environment runs each ready task from its variant, as the task", async () => {
