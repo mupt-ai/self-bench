@@ -50,7 +50,8 @@ interface Setting {
 export function missingWork(
   runs: readonly EvaluationRun[],
   tasks: readonly TaskKey[],
-  credentials: readonly Pick<CredentialInfo, "id" | "kind" | "endpoint">[],
+  credentials: readonly (Pick<CredentialInfo, "id" | "kind" | "endpoint"> &
+    Partial<Pick<CredentialInfo, "name">>)[],
   /** A fresh comparison id, asked for once per comparison. */
   newId: () => string,
   sandboxCredentialId?: string,
@@ -74,8 +75,14 @@ export function missingWork(
         : run.credentials?.provider === "dari"
           ? run.router?.id
           : undefined;
+    // The credential's name is current; a run's recorded one is only a fallback, for a deleted key.
     const router = routerId
-      ? { id: routerId, name: run.router?.id === routerId ? run.router.name : routerId }
+      ? {
+          id: routerId,
+          name:
+            (credentialOf?.kind === "dari" ? credentialOf.name : undefined) ??
+            (run.router?.id === routerId ? run.router.name : routerId),
+        }
       : undefined;
     for (const harness of run.harnesses) {
       // A setting is its model, reasoning, harness and router, whatever credential reached the
