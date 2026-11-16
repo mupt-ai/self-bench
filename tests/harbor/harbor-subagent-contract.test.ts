@@ -11,8 +11,8 @@ packRuntime();
 
 const DEEPSEEK = "openrouter/deepseek/deepseek-v4-pro-0813";
 const PROMPT =
-  "You must figure out how to delegate a meaningful part of this task to at least one subagent. " +
-  "Spawn the subagent, wait for its result, and use that result before finishing.";
+  "You must do your planning, but move all implementation to subagents. " +
+  "Spawn subagents, wait for its result, and use that result before finishing.";
 
 /** A run with a subagent model, told `prompt` when its condition gave one. */
 function withSubagent(provider: string, modelName: string, prompt?: string): EvaluationInput {

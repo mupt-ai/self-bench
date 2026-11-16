@@ -28,7 +28,7 @@ A saved harness is a workspace's named change to one agent: its skills, instruct
 | `instructions` | Appended to every task's instruction |
 | `harnessOptions` | Options from the catalog's `harnessOptions`, for `agent` alone. Left out ones keep Harbor's default. |
 | `subagent.catalogId` | The model the agent's subagents run on; see [Subagent Models](/api/evaluate#subagent-models) |
-| `subagent.prompt` | What the agent is told about delegating. Left out, the default: delegate a meaningful part of each task. `""` tells it nothing. |
+| `subagent.prompt` | What the agent is told about delegating. Left out, the default: plan itself and move all implementation to subagents. `""` tells it nothing. |
 | `subagent.credentialId` | A saved credential that serves the subagent model, or `managed-model`. Left out, the first of the workspace's that can, when the run starts. |
 | `subagent.thinking` | The thinking level every subagent call is served at: one the model offers (`thinking` in the catalog), such as `low` or `high`. Left out, the model's default: `high` where it has one. |
 

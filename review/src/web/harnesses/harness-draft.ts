@@ -37,7 +37,8 @@ export interface HarnessDraft {
   /**
    * The model its subagents run on, what the agent is told about delegating, the credential that
    * serves the model (the first that can, when unset), and the thinking level its calls are served
-   * at (the model's default, when unset).
+   * at. The editor always picks a level; only a harness saved without one has none, and runs at
+   * the model's default, which its field shows.
    */
   subagent?: {
     catalogId: string;

@@ -58,12 +58,12 @@ const MAX_SUBAGENT_PROMPT = 4_000;
 /**
  * What a harness is told when its subagents run on another model, unless the condition says
  * otherwise: left to itself it may do the whole task on the run's own model, and the run measures
- * the two working together. Runs from before conditions named their prompt were told this
- * (harbor_gateway.py's SUBAGENT_REQUIRED_PROMPT).
+ * the two working together. A run that names its subagent model on a model row, with no prompt of
+ * its own, is told the same (harbor_gateway.py's SUBAGENT_REQUIRED_PROMPT).
  */
 export const DEFAULT_SUBAGENT_PROMPT =
-  "You must figure out how to delegate a meaningful part of this task to at least one subagent. " +
-  "Spawn the subagent, wait for its result, and use that result before finishing.";
+  "You must do your planning, but move all implementation to subagents. " +
+  "Spawn subagents, wait for its result, and use that result before finishing.";
 
 const part = "[A-Za-z0-9._-]+";
 const shorthand = new RegExp(`^(${part})/(${part})(?:@(${part}))?$`);
