@@ -3,8 +3,12 @@ import { savedHarnessSchema } from "../../contracts/saved-harnesses.js";
 import { HarnessNameTaken } from "../../db/saved-harnesses.js";
 import type { User } from "../../db/users.js";
 import { type CatalogModel, evaluationCatalog } from "../../evaluation/catalog.js";
-import { modelHarnesses } from "../../evaluation/models.js";
-import { providerServesSubagent, subagentSupport } from "../../evaluation/subagents.js";
+import { modelHarnesses, modelRoutes } from "../../evaluation/models.js";
+import {
+  providerServesSubagent,
+  subagentSupport,
+  subagentThinkingLevels,
+} from "../../evaluation/subagents.js";
 import { managedOffer } from "../../generation/billing/managed.js";
 import { tenantFor } from "../auth/tenant.js";
 import { readBody, sendJson, trustedMutation } from "../http.js";
@@ -33,6 +37,7 @@ function subagentModels(): CatalogModel[] {
  *
  * - `GET harnesses`: every saved harness, by name.
  * - `POST harnesses {name, agent?, skills?, instructions?, harnessOptions?, subagent?}`: saves one.
+ *   A subagent model's `thinking` must be a level the model offers.
  * - `GET harnesses/{id}`: one.
  * - `PUT harnesses/{id} {…}`: replaces one. Runs that already used it keep what they ran.
  * - `DELETE harnesses/{id}`: removes one.
@@ -111,22 +116,38 @@ export async function savedHarnessRoutes(
     return true;
   }
   const { subagent } = parsed.data;
-  if (subagent && !subagentModels().some((model) => model.id === subagent.catalogId)) {
+  const model = subagent && subagentModels().find((entry) => entry.id === subagent.catalogId);
+  if (subagent && !model) {
     sendJson(response, 400, {
       error: `subagent.catalogId: ${subagent.catalogId} is not a model subagents can run on`,
     });
     return true;
   }
   const credentialId = subagent?.credentialId;
-  if (
-    credentialId &&
-    credentialId !== "managed-model" &&
-    !(await options.vault?.credentials.find(org.id, credentialId))
-  ) {
+  const credential =
+    credentialId === "managed-model"
+      ? { kind: "openrouter" }
+      : credentialId && (await options.vault?.credentials.find(org.id, credentialId));
+  if (credentialId && !credential) {
     sendJson(response, 400, {
       error: "subagent.credentialId: no such credential in this workspace",
     });
     return true;
+  }
+  // A level must be one the model has: on its credential, or on any that could serve it.
+  if (model && subagent?.thinking) {
+    const kinds = credential
+      ? [credential.kind]
+      : modelRoutes(model).map((entry) => entry.provider);
+    const offered = [...new Set(kinds.flatMap((kind) => subagentThinkingLevels(model, kind)))];
+    if (!offered.includes(subagent.thinking)) {
+      sendJson(response, 400, {
+        error: offered.length
+          ? `subagent.thinking: ${model.label} has no ${subagent.thinking} level${credential ? " on this credential" : ""}; it offers ${offered.join(", ")}`
+          : `subagent.thinking: ${model.label} takes no thinking level${credential ? " on this credential" : ""}`,
+      });
+      return true;
+    }
   }
   try {
     const harness =

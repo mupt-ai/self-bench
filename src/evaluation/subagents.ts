@@ -1,3 +1,4 @@
+import type { SubagentThinking } from "../contracts/conditions.js";
 import type { CredentialInfo } from "../db/credentials.js";
 import type { CatalogModel } from "./catalog.js";
 import { type Harness, harnessLabels, routeFor, signInRefusal } from "./models.js";
@@ -54,9 +55,21 @@ export function providerServesSubagent(provider: string): boolean {
 }
 
 /**
+ * The thinking levels `model` offers its subagents on a credential of kind `provider`: every level
+ * a row of it has there, whatever harness delegates to it, since the gateway serves each subagent
+ * call at the run's level and drops the one the harness asks for (mount.ts). None where the model
+ * has only its provider's default.
+ */
+export function subagentThinkingLevels(model: CatalogModel, provider: string): SubagentThinking[] {
+  const levels = (providerServesSubagent(provider) && routeFor(model, provider)?.thinking) || [];
+  return levels.filter((level) => level !== "default");
+}
+
+/**
  * The credentials, of `credentials`, that can serve `model` to the subagents of `harnesses`: a kind
  * that serves models by name and routes this one to each harness (through its own API or a
- * gateway that lists it), on a sign-in that runs them. A comparison, the Run page, and the harness
+ * gateway that lists it), on a sign-in that runs them, and that offers the model at `thinking`
+ * when the subagents are to run at a picked level. A comparison, the Run page, and the harness
  * editor all pick a subagent credential from these, so `model` must come from the served catalog
  * (evaluationCatalog), which knows every gateway's listings.
  */
@@ -64,13 +77,15 @@ export function subagentCredentials<Credential extends Pick<CredentialInfo, "kin
   model: CatalogModel,
   harnesses: readonly Harness[],
   credentials: Iterable<Credential>,
+  thinking?: SubagentThinking,
 ): Credential[] {
   return [...credentials].filter((credential) => {
     const route = providerServesSubagent(credential.kind) && routeFor(model, credential.kind);
     return (
       !!route &&
       harnesses.every((harness) => route.harnesses.includes(harness)) &&
-      !signInRefusal(credential.auth, harnesses)
+      !signInRefusal(credential.auth, harnesses) &&
+      (!thinking || subagentThinkingLevels(model, credential.kind).includes(thinking))
     );
   });
 }

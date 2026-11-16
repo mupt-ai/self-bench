@@ -2,6 +2,7 @@ import { z } from "zod";
 import { type Harness, harnessIds, harnessLabels } from "../evaluation/models.js";
 import { subagentSupport } from "../evaluation/subagents.js";
 import { harnessOptionsSchema } from "./harness-options.js";
+import { thinkingLevels } from "./models.js";
 
 /**
  * Run conditions (evaluation/conditions.ts) as a comparison names them: shared with the Run page,
@@ -86,15 +87,19 @@ export function skillSource(value: string): string | undefined {
 export const credentialId = z.union([z.uuid(), z.literal("managed-model")]);
 
 /**
- * The model a condition's subagents run on (evaluation/subagents.ts), by its catalog id, and what
- * the harness is told about delegating: DEFAULT_SUBAGENT_PROMPT when left out, nothing when empty.
+ * The model a condition's subagents run on (evaluation/subagents.ts), by its catalog id, what
+ * the harness is told about delegating (DEFAULT_SUBAGENT_PROMPT when left out, nothing when
+ * empty), and the thinking level every subagent call is served at: the model's default when left
+ * out, which is why "default" is no level to name here.
  */
 export const subagentSchema = z
   .object({
     catalogId: z.string().trim().min(1).max(200),
     prompt: z.string().trim().max(MAX_SUBAGENT_PROMPT).default(DEFAULT_SUBAGENT_PROMPT),
+    thinking: z.enum(thinkingLevels).exclude(["default"]).optional(),
   })
   .strict();
+export type SubagentThinking = NonNullable<z.infer<typeof subagentSchema>["thinking"]>;
 
 /** What a condition changes about the harness: the same for every repository and benchmark. */
 export const harnessChanges = {

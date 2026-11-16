@@ -1,7 +1,7 @@
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
-import type { Harness } from "../../../../src/evaluation/models";
-import { subagentCredentials } from "../../../../src/evaluation/subagents";
+import { defaultThinking, type Harness } from "../../../../src/evaluation/models";
+import { subagentCredentials, subagentThinkingLevels } from "../../../../src/evaluation/subagents";
 import { ModelPicker } from "../ModelPicker";
 import { InfoTooltip } from "../primitives/tooltip";
 import { Button, fieldStyles, Select } from "../ui";
@@ -34,8 +34,9 @@ export function staleSubagentCredential(
 }
 
 /**
- * A saved harness's subagent model and the credential that serves it. With a model, the agent's
- * delegated agents call it instead of the run's own, on that credential wherever the harness runs.
+ * A saved harness's subagent model, the credential that serves it, and the thinking level its
+ * calls are served at. With a model, the agent's delegated agents call it instead of the run's
+ * own, on that credential and at that level wherever the harness runs.
  */
 export function SubagentFields({
   agent,
@@ -62,6 +63,15 @@ export function SubagentFields({
     value && credentials ? servingCredentials(value.catalogId, agent, credentials, models) : [];
   // A credential saved earlier that no longer serves the model, or was deleted.
   const stale = staleSubagentCredential({ agent, subagent: value }, credentials, models);
+  // The levels the model has on the credential that serves it: the one named, else the first.
+  const levelsOn = (credentialId: string | undefined) => {
+    const model = models.find((entry) => entry.id === value?.catalogId);
+    const serving = able.find((credential) => credential.id === credentialId) ?? able[0];
+    return model && serving ? subagentThinkingLevels(model, serving.kind) : [];
+  };
+  const levels = levelsOn(value?.credentialId);
+  // A level saved earlier that the model no longer has there still shows, until another is picked.
+  const unoffered = !!value?.thinking && !!able.length && !levels.includes(value.thinking);
   return (
     <fieldset
       disabled={disabled}
@@ -71,7 +81,7 @@ export function SubagentFields({
       <div className={fieldStyles}>
         <span className="flex items-center gap-1.5">
           Subagent Model
-          <InfoTooltip label="The model the agent's subagents run on, through SelfBench's gateway, at that model's default reasoning level. A trial's cost covers both models. A harness with one runs only on Claude Code and Codex, and skips a row whose own model it is." />
+          <InfoTooltip label="The model the agent's subagents run on, through SelfBench's gateway. A trial's cost covers both models. A harness with one runs only on Claude Code and Codex, and skips a row whose own model it is." />
         </span>
         <div className="flex gap-2">
           <div className="min-w-0 flex-1">
@@ -104,9 +114,12 @@ export function SubagentFields({
             id="harness-subagent-credential"
             aria-label="Subagent Credential"
             value={stale ? "" : (value.credentialId ?? "")}
-            onChange={(event) =>
-              onChange(subagentOn(value.catalogId, value.prompt, event.target.value || undefined))
-            }
+            onChange={(event) => {
+              const credentialId = event.target.value || undefined;
+              // The level is kept where the newly picked credential has it too.
+              const kept = levelsOn(credentialId).find((level) => level === value.thinking);
+              onChange(subagentOn(value.catalogId, value.prompt, credentialId, kept));
+            }}
           >
             <option value="">
               {able.length ? "First That Serves It" : "No Credential Serves It"}
@@ -120,6 +133,42 @@ export function SubagentFields({
           {stale && (
             <span role="alert" className="text-sm text-warning">
               Its saved credential no longer serves this model. Choose another.
+            </span>
+          )}
+        </label>
+      )}
+      {value && (levels.length > 0 || value.thinking) && (
+        <label htmlFor="harness-subagent-thinking" className={fieldStyles}>
+          <span className="flex items-center gap-1.5">
+            Subagent Thinking Level
+            <InfoTooltip label="The thinking level every subagent call is served at, whatever level the agent asks its subagents for. Only levels the model has on its credential are listed." />
+          </span>
+          <Select
+            id="harness-subagent-thinking"
+            aria-label="Subagent Thinking Level"
+            value={value.thinking ?? ""}
+            onChange={(event) => {
+              const level = levels.find((entry) => entry === event.target.value);
+              onChange(subagentOn(value.catalogId, value.prompt, value.credentialId, level));
+            }}
+          >
+            <option value="">
+              {levels.length ? `Model Default (${defaultThinking(levels)})` : "Model Default"}
+            </option>
+            {value.thinking && !levels.includes(value.thinking) && (
+              <option value={value.thinking} disabled>
+                {value.thinking}
+              </option>
+            )}
+            {levels.map((level) => (
+              <option key={level} value={level}>
+                {level}
+              </option>
+            ))}
+          </Select>
+          {unoffered && (
+            <span role="alert" className="text-sm text-warning">
+              The model no longer has this level on its credential. Choose another.
             </span>
           )}
         </label>

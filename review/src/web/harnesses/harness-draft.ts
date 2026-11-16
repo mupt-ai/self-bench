@@ -2,6 +2,7 @@ import {
   conditionHarness,
   MAX_SKILLS,
   SKILL_HARNESSES,
+  type SubagentThinking,
   skillSource,
 } from "../../../../src/contracts/conditions";
 import {
@@ -34,10 +35,16 @@ export interface HarnessDraft {
   instructionsWhere?: "task" | "system";
   harnessOptions: OptionsDraft;
   /**
-   * The model its subagents run on, what the agent is told about delegating, and the credential
-   * that serves the model (the first that can, when unset).
+   * The model its subagents run on, what the agent is told about delegating, the credential that
+   * serves the model (the first that can, when unset), and the thinking level its calls are served
+   * at (the model's default, when unset).
    */
-  subagent?: { catalogId: string; prompt: string; credentialId?: string };
+  subagent?: {
+    catalogId: string;
+    prompt: string;
+    credentialId?: string;
+    thinking?: SubagentThinking;
+  };
 }
 
 export const blankHarness = (): HarnessDraft => ({
@@ -137,6 +144,7 @@ export function draftOf(saved: SavedHarness): HarnessDraft {
             catalogId: saved.subagent.catalogId,
             prompt: asSystem ? "" : delegation,
             ...(saved.subagent.credentialId ? { credentialId: saved.subagent.credentialId } : {}),
+            ...(saved.subagent.thinking ? { thinking: saved.subagent.thinking } : {}),
           },
         }
       : {}),
@@ -165,10 +173,12 @@ export const subagentOn = (
   catalogId: string,
   prompt = "",
   credentialId?: string,
+  thinking?: SubagentThinking,
 ): NonNullable<HarnessDraft["subagent"]> => ({
   catalogId,
   prompt,
   ...(credentialId ? { credentialId } : {}),
+  ...(thinking ? { thinking } : {}),
 });
 
 /** An option's value as its field shows it. */
@@ -268,6 +278,7 @@ export function submittedHarness(draft: HarnessDraft): SavedHarnessDraft {
             catalogId: draft.subagent.catalogId,
             prompt: draft.subagent.prompt.trim(),
             ...(draft.subagent.credentialId ? { credentialId: draft.subagent.credentialId } : {}),
+            ...(draft.subagent.thinking ? { thinking: draft.subagent.thinking } : {}),
           },
         }
       : {}),

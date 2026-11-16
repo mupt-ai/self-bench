@@ -155,6 +155,16 @@ test("a subagent model alone makes a harness; its delegation prompt is the instr
     "1 skill",
     "subagents on claude-haiku-5-5",
   ]);
+  // A thinking level picked for the subagents is saved, reopened, and named.
+  const leveled = submittedHarness({
+    ...tuned(),
+    subagent: subagentOn("claude-haiku-5-5", "", "router", "low"),
+  });
+  expect(leveled.subagent?.thinking).toBe("low");
+  expect(draftOf({ ...leveled, id: 5, createdAt: "", updatedAt: "" }).subagent?.thinking).toBe(
+    "low",
+  );
+  expect(harnessSummary(leveled, models).at(-1)).toBe("subagents on Claude Haiku 5.5 at low");
 });
 
 test("instructions go in the task prompt, or Claude Code's system prompt, and reopen where they went", () => {

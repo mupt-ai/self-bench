@@ -1,9 +1,10 @@
+import type { SubagentThinking } from "../contracts/conditions.js";
 import type { CredentialInfo } from "../db/credentials.js";
 import type { CatalogModel } from "./catalog.js";
 import type { ComparisonSelection } from "./comparisons.js";
 import { defaultThinking, type Harness, routeFor, signInRefusal } from "./models.js";
 import { subagentPart } from "./setting.js";
-import { subagentCredentials, subagentRefusal } from "./subagents.js";
+import { subagentCredentials, subagentRefusal, subagentThinkingLevels } from "./subagents.js";
 import type { EvaluationRun, SubagentModel } from "./types.js";
 
 /**
@@ -64,10 +65,13 @@ const MANAGED_CREDENTIAL = {
 /**
  * The subagent model a selection names, frozen for its runs: a catalog model other than the
  * run's own, on a saved credential (or the managed one) that serves it by name on every selected
- * harness. Throws why it cannot be one (subagentRefusal).
+ * harness, at the thinking level it picks or else the model's default. Throws why it cannot be
+ * one (subagentRefusal).
  */
 export function selectedSubagent(
-  selected: NonNullable<ComparisonSelection["models"][number]["subagent"]>,
+  selected: NonNullable<ComparisonSelection["models"][number]["subagent"]> & {
+    thinking?: SubagentThinking | undefined;
+  },
   harnesses: readonly Harness[],
   model: Pick<CatalogModel, "id">,
   /** The kind of the credential serving the run's own model. */
@@ -95,9 +99,18 @@ export function selectedSubagent(
     throw new Error("The subagent model's credential does not run every selected harness");
   if (subagent.id === model.id)
     throw new Error("The subagent model is the run's own model; leave it out to use that");
+  const offered = subagentThinkingLevels(subagent, route.provider);
+  if (selected.thinking && !offered.includes(selected.thinking))
+    throw new Error(
+      offered.length
+        ? `${subagent.label} has no ${selected.thinking} thinking level on this credential: it offers ${offered.join(", ")}`
+        : `${subagent.label} takes no thinking level on this credential`,
+    );
   // The harness asks its subagents' model for the level it runs its own model at, which the
-  // subagent model may lack, so the gateway serves it at the level a row of it runs at by default.
-  const thinking = defaultThinking(route.thinking?.length ? route.thinking : ["default"]);
+  // subagent model may lack, so the gateway serves it at the level picked for it, or else the
+  // level a row of it runs at by default.
+  const thinking =
+    selected.thinking ?? defaultThinking(route.thinking?.length ? route.thinking : ["default"]);
   return {
     catalogId: subagent.id,
     model: `${route.provider}/${route.model}`,
@@ -108,12 +121,17 @@ export function selectedSubagent(
 }
 
 /**
- * The subagent model a condition's runs of one row use, with its delegation prompt: on the
- * credential the comparison picked for it, or else the first of the workspace's (then the managed
- * one) that can serve it beside this row. Throws why none can.
+ * The subagent model a condition's runs of one row use, with its delegation prompt and the
+ * thinking level it picked: on the credential the comparison picked for it, or else the first of
+ * the workspace's (then the managed one) that can serve it so beside this row. Throws why none can.
  */
 export function conditionSubagent(
-  picked: { catalogId: string; prompt: string; credentialId?: string | undefined },
+  picked: {
+    catalogId: string;
+    prompt: string;
+    thinking?: SubagentThinking | undefined;
+    credentialId?: string | undefined;
+  },
   row: {
     /** The condition's name, for the refusal. */
     name: string;
@@ -127,16 +145,18 @@ export function conditionSubagent(
   if (!subagent) throw new Error(`${row.name}: unknown subagent model ${picked.catalogId}`);
   const candidates = picked.credentialId
     ? [picked.credentialId]
-    : subagentCredentials(subagent, row.harnesses, [
-        ...known.saved.values(),
-        ...(known.managed ? [MANAGED_CREDENTIAL] : []),
-      ]).map(({ id }) => id);
+    : subagentCredentials(
+        subagent,
+        row.harnesses,
+        [...known.saved.values(), ...(known.managed ? [MANAGED_CREDENTIAL] : [])],
+        picked.thinking,
+      ).map(({ id }) => id);
   let refusal: unknown;
   for (const credentialId of candidates) {
     try {
       return {
         ...selectedSubagent(
-          { catalogId: picked.catalogId, credentialId },
+          { catalogId: picked.catalogId, credentialId, thinking: picked.thinking },
           row.harnesses,
           row.model,
           row.provider,
@@ -149,6 +169,6 @@ export function conditionSubagent(
     }
   }
   throw new Error(
-    `${row.name}: ${refusal instanceof Error ? refusal.message : `no saved credential serves ${subagent.label} to subagents`}`,
+    `${row.name}: ${refusal instanceof Error ? refusal.message : `no saved credential serves ${subagent.label} to subagents${picked.thinking ? ` at ${picked.thinking} thinking` : ""}`}`,
   );
 }

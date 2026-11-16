@@ -101,6 +101,7 @@ export async function comparisonConditions(
         subagent: saved?.subagent && {
           catalogId: saved.subagent.catalogId,
           prompt: saved.subagent.prompt,
+          thinking: saved.subagent.thinking,
         },
         environment: picked.environment,
       };

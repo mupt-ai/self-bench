@@ -87,6 +87,26 @@ test("results and releases keep a model apart from itself with a subagent model"
     passed("other-task"),
   ]);
   const conditioned = run("conditioned", { subagent, condition }, [passed("task")]);
+  // A harness that picks its subagents' thinking level is a setting of its own, named for it.
+  const leveled = run(
+    "leveled",
+    {
+      subagent: { ...subagent, thinking: "low" as const },
+      condition: {
+        id: "decaf1234567",
+        name: "Low Subagents",
+        skills: [],
+        subagent: { catalogId: subagent.catalogId, prompt: "", thinking: "low" as const },
+      },
+    },
+    [passed("task")],
+  );
+  expect(configurationsOf([mixed, leveled], credentials, NOW).map((entry) => entry.label)).toEqual(
+    expect.arrayContaining([
+      `${alone.modelLabel} + DeepSeek V4 Pro Subagents`,
+      `${alone.modelLabel} + DeepSeek V4 Pro (Low) Subagents`,
+    ]),
+  );
   const app = configurationsOf([alone, mixed, rerouted, conditioned], credentials, NOW);
   expect(app.map((entry) => [entry.label, entry.condition?.name, entry.latest.length])).toEqual(
     expect.arrayContaining([
