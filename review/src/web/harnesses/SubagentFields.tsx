@@ -1,3 +1,4 @@
+import type { SubagentThinking } from "../../../../src/contracts/conditions";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import { defaultThinking, type Harness } from "../../../../src/evaluation/models";
@@ -17,6 +18,13 @@ function servingCredentials(
   const model = models.find((entry) => entry.id === catalogId);
   return model ? subagentCredentials(model, [agent], credentials) : [];
 }
+
+/**
+ * The level a subagent model starts on among those its credential offers: the one a row of the
+ * model runs at when none is chosen, which is the one a harness saved without a level runs at.
+ */
+const startingLevel = (levels: readonly SubagentThinking[]) =>
+  levels.find((level) => level === defaultThinking(levels));
 
 /** Whether the draft's subagent credential no longer serves its model, or is gone. */
 export function staleSubagentCredential(
@@ -63,13 +71,15 @@ export function SubagentFields({
     value && credentials ? servingCredentials(value.catalogId, agent, credentials, models) : [];
   // A credential saved earlier that no longer serves the model, or was deleted.
   const stale = staleSubagentCredential({ agent, subagent: value }, credentials, models);
-  // The levels the model has on the credential that serves it: the one named, else the first.
-  const levelsOn = (credentialId: string | undefined) => {
-    const model = models.find((entry) => entry.id === value?.catalogId);
-    const serving = able.find((credential) => credential.id === credentialId) ?? able[0];
-    return model && serving ? subagentThinkingLevels(model, serving.kind) : [];
+  // The levels a model has on the credential that serves it: the one named, else the first.
+  const levelsOn = (catalogId: string | undefined, credentialId: string | undefined) => {
+    const model = models.find((entry) => entry.id === catalogId);
+    if (!model || !credentials) return [];
+    const serving = subagentCredentials(model, [agent], credentials);
+    const picked = serving.find((credential) => credential.id === credentialId) ?? serving[0];
+    return picked ? subagentThinkingLevels(model, picked.kind) : [];
   };
-  const levels = levelsOn(value?.credentialId);
+  const levels = levelsOn(value?.catalogId, value?.credentialId);
   // A level saved earlier that the model no longer has there still shows, until another is picked.
   const unoffered = !!value?.thinking && !!able.length && !levels.includes(value.thinking);
   return (
@@ -93,7 +103,9 @@ export function SubagentFields({
               onSelect={(model) => {
                 const first =
                   credentials && servingCredentials(model.id, agent, credentials, models)[0]?.id;
-                onChange(subagentOn(model.id, value?.prompt, first || undefined));
+                // A newly picked model starts on its default level there, as a level of its own.
+                const level = startingLevel(levelsOn(model.id, first || undefined));
+                onChange(subagentOn(model.id, value?.prompt, first || undefined, level));
               }}
             />
           </div>
@@ -116,9 +128,13 @@ export function SubagentFields({
             value={stale ? "" : (value.credentialId ?? "")}
             onChange={(event) => {
               const credentialId = event.target.value || undefined;
-              // The level is kept where the newly picked credential has it too.
-              const kept = levelsOn(credentialId).find((level) => level === value.thinking);
-              onChange(subagentOn(value.catalogId, value.prompt, credentialId, kept));
+              // A picked level is kept where the newly picked credential has it too, and is the
+              // model's default there otherwise.
+              const offered = levelsOn(value.catalogId, credentialId);
+              const level =
+                value.thinking &&
+                (offered.find((entry) => entry === value.thinking) ?? startingLevel(offered));
+              onChange(subagentOn(value.catalogId, value.prompt, credentialId, level));
             }}
           >
             <option value="">
@@ -146,15 +162,13 @@ export function SubagentFields({
           <Select
             id="harness-subagent-thinking"
             aria-label="Subagent Thinking Level"
-            value={value.thinking ?? ""}
+            // One saved without a level shows the level it runs at: the model's default.
+            value={value.thinking ?? startingLevel(levels) ?? ""}
             onChange={(event) => {
               const level = levels.find((entry) => entry === event.target.value);
               onChange(subagentOn(value.catalogId, value.prompt, value.credentialId, level));
             }}
           >
-            <option value="">
-              {levels.length ? `Model Default (${defaultThinking(levels)})` : "Model Default"}
-            </option>
             {value.thinking && !levels.includes(value.thinking) && (
               <option value={value.thinking} disabled>
                 {value.thinking}
