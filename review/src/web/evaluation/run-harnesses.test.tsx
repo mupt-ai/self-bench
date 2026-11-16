@@ -53,6 +53,15 @@ test("a harness's subagents run on its own credential while it serves the row, e
   expect(harnessesProblem(draft([codex]), unserved)).toBe(
     "Haiku Subagents needs a credential that serves its subagent model.",
   );
+  // A credential serves a harness's subagents only at a thinking level the model has on it.
+  const leveled = (thinking: "low" | "off") =>
+    saved(2, "Haiku Subagents", {
+      subagent: { catalogId: "claude-haiku-5-5", prompt: "", thinking },
+    });
+  expect(subagentCredential(leveled("low"), codex, choices)?.id).toBe("router");
+  expect(harnessesProblem(draft([codex]), { ...choices, saved: [leveled("off")] })).toBe(
+    "Haiku Subagents needs a credential that serves its subagent model at off thinking.",
+  );
 });
 
 test("the Run page says why a row's saved harness or a repo ablation cannot run", () => {

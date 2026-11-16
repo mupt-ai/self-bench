@@ -29,7 +29,7 @@ export interface RetrySelection {
     instructions?: string;
     environment?: number;
     harnessOptions?: HarnessOptions;
-    subagent?: { catalogId: string; prompt: string; credentialId?: string };
+    subagent?: { catalogId: string; prompt: string; thinking?: string; credentialId?: string };
   }[];
   baseline?: false;
 }

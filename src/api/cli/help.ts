@@ -69,10 +69,11 @@ Harnesses (the workspace's saved changes to an agent, which any comparison can r
       [--skill ORG/REPO[@REF] ...] [--instructions TEXT | --instructions-file FILE]
       [--option AGENT.OPTION=VALUE|@FILE ...]
       [--subagent-model ID [--subagent-prompt TEXT | --subagent-prompt-file FILE]
-        [--subagent-credential ID]]
+        [--subagent-credential ID] [--subagent-thinking LEVEL]]
       | --body JSON|@FILE
       --subagent-model runs Claude Code's and Codex's subagents on another catalog model, on
-      --subagent-credential (the first credential that serves it, without one);
+      --subagent-credential (the first credential that serves it, without one), at
+      --subagent-thinking (low, high, ...; the model's default level, without one);
       --subagent-prompt is what the agent is told about delegating ("" for nothing).
       --option claude-code.append_system_prompt="Run tests first."
       --option claude-code.config=@settings.json

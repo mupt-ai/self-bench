@@ -4,7 +4,7 @@ import type { SavedHarness } from "./harness-api";
 
 /**
  * What a saved harness changes, as short parts: its agent, then "2 skills", "subagents on Claude
- * Haiku 5.5".
+ * Haiku 5.5", with the thinking level picked for them ("at low"), if one was.
  */
 export function harnessSummary(
   harness: Pick<SavedHarness, "agent" | "skills" | "instructions" | "harnessOptions" | "subagent">,
@@ -26,7 +26,7 @@ export function harnessSummary(
     ...(options ? [count(options, "option")] : []),
     ...(subagent
       ? [
-          `subagents on ${models.find((model) => model.id === subagent.catalogId)?.label ?? subagent.catalogId}`,
+          `subagents on ${models.find((model) => model.id === subagent.catalogId)?.label ?? subagent.catalogId}${subagent.thinking ? ` at ${subagent.thinking}` : ""}`,
         ]
       : []),
   ];

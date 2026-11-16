@@ -42,8 +42,9 @@ export interface SubagentModel {
   credentialId: string;
   /**
    * The level the gateway serves every subagent call at, whatever level the harness asks its
-   * subagents' model for: the one a row of this model runs at when none is chosen
-   * (defaultThinking). Absent, the model's own default.
+   * subagents' model for: the one its condition picked (RunCondition.subagent), or else the one a
+   * row of this model runs at when none is chosen (defaultThinking). Absent, the model's own
+   * default.
    */
   thinking?: ThinkingLevel;
   /**

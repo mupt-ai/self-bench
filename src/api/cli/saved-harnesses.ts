@@ -14,6 +14,7 @@ const FLAGS = {
   "subagent-prompt": { type: "string" },
   "subagent-prompt-file": { type: "string" },
   "subagent-credential": { type: "string" },
+  "subagent-thinking": { type: "string" },
   body: { type: "string" },
   // What these were before saved conditions were harnesses, still taken.
   harness: { type: "string" },
@@ -28,7 +29,7 @@ interface Saved {
   skills: string[];
   instructions?: string;
   harnessOptions?: Record<string, Record<string, unknown>>;
-  subagent?: { catalogId: string; prompt: string; credentialId?: string };
+  subagent?: { catalogId: string; prompt: string; thinking?: string; credentialId?: string };
 }
 
 /** What a saved harness changes, in a few words. */
@@ -39,7 +40,9 @@ function changes(harness: Saved): string {
     harness.skills.length ? `${harness.skills.length} skills` : "",
     harness.instructions ? "instructions" : "",
     options ? `${options} options` : "",
-    harness.subagent ? `subagents on ${harness.subagent.catalogId}` : "",
+    harness.subagent
+      ? `subagents on ${harness.subagent.catalogId}${harness.subagent.thinking ? ` at ${harness.subagent.thinking}` : ""}`
+      : "",
   ]
     .filter(Boolean)
     .join(", ");
@@ -92,8 +95,9 @@ export async function savedHarnessCommand(args: string[], listing: boolean): Pro
 /**
  * A saved harness from `--body JSON|@FILE`, or from `--name` with `--agent`, `--skill`,
  * `--instructions[-file]`, `--option AGENT.OPTION=VALUE`, and `--subagent-model ID` with
- * `--subagent-prompt[-file]` (an empty prompt tells the agent nothing; none, the default) and
- * `--subagent-credential ID` (the first that serves it, without one).
+ * `--subagent-prompt[-file]` (an empty prompt tells the agent nothing; none, the default),
+ * `--subagent-credential ID` (the first that serves it, without one), and `--subagent-thinking
+ * LEVEL` (the model's default level, without one).
  */
 async function harnessFromFlags(values: Values): Promise<unknown> {
   const written = (await jsonOption(values, "body")) ?? (await jsonOption(values, "condition"));
@@ -108,8 +112,11 @@ async function harnessFromFlags(values: Values): Promise<unknown> {
   const catalogId = flag(values, "subagent-model");
   const prompt = await textOption(values, "subagent-prompt");
   const credentialId = flag(values, "subagent-credential");
-  if ((prompt !== undefined || credentialId) && !catalogId)
-    throw new Error("--subagent-prompt and --subagent-credential need --subagent-model");
+  const thinking = flag(values, "subagent-thinking");
+  if ((prompt !== undefined || credentialId || thinking) && !catalogId)
+    throw new Error(
+      "--subagent-prompt, --subagent-credential, and --subagent-thinking need --subagent-model",
+    );
   const agent = flag(values, "agent") ?? flag(values, "harness");
   return {
     name,
@@ -123,6 +130,7 @@ async function harnessFromFlags(values: Values): Promise<unknown> {
             catalogId,
             ...(prompt !== undefined ? { prompt } : {}),
             ...(credentialId ? { credentialId } : {}),
+            ...(thinking ? { thinking } : {}),
           },
         }
       : {}),

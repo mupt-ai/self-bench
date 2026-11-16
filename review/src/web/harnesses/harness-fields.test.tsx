@@ -155,4 +155,10 @@ test("a harness's subagent credential is one that serves its model to its agent,
   );
   expect(html).toContain('aria-label="Subagent Credential"');
   expect(html).toContain("no longer serves this model");
+  // Its thinking level is picked from the levels the model has on the credential that serves it.
+  expect(html).toContain('aria-label="Subagent Thinking Level"');
+  expect(html).toContain("Model Default (high)");
+  for (const level of ["low", "medium", "high"])
+    expect(html).toContain(`<option value="${level}">${level}</option>`);
+  expect(html).not.toContain('<option value="off">');
 });

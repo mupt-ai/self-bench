@@ -19,7 +19,7 @@ A saved harness is a workspace's named change to one agent: its skills, instruct
 
 | Route | Body |
 | --- | --- |
-| `POST`, `PUT` | `{ name (≤60), agent?, skills?: ["org/repo[@ref]"] (≤10), instructions? (≤4,000), harnessOptions?: { agent: { option: value } }, subagent?: { catalogId, prompt? (≤4,000), credentialId? } }` |
+| `POST`, `PUT` | `{ name (≤60), agent?, skills?: ["org/repo[@ref]"] (≤10), instructions? (≤4,000), harnessOptions?: { agent: { option: value } }, subagent?: { catalogId, prompt? (≤4,000), credentialId?, thinking? } }` |
 
 | Field | Does |
 | --- | --- |
@@ -30,6 +30,7 @@ A saved harness is a workspace's named change to one agent: its skills, instruct
 | `subagent.catalogId` | The model the agent's subagents run on; see [Subagent Models](/api/evaluate#subagent-models) |
 | `subagent.prompt` | What the agent is told about delegating. Left out, the default: delegate a meaningful part of each task. `""` tells it nothing. |
 | `subagent.credentialId` | A saved credential that serves the subagent model, or `managed-model`. Left out, the first of the workspace's that can, when the run starts. |
+| `subagent.thinking` | The thinking level every subagent call is served at: one the model offers (`thinking` in the catalog), such as `low` or `high`. Left out, the model's default: `high` where it has one. |
 
 A harness needs at least one of `skills`, `instructions`, `harnessOptions`, or `subagent`. Names are unique in a workspace, whatever their case (`409`). A harness names no environment: a comparison picks those beside it.
 

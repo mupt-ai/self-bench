@@ -34,13 +34,14 @@ test("the CLI saves a harness and runs it, as the app does", async () => {
     ...["harness", "create", "--name", "Quiet Subagents", "--agent", "claude-code"],
     ...["--skill", "vercel/next.js", "--option", "claude-code.max_turns=30"],
     ...["--subagent-model", DEEPSEEK, "--subagent-prompt", "", "--subagent-credential", router],
+    ...["--subagent-thinking", "low"],
   );
   expect(created.harness).toMatchObject({
     name: "Quiet Subagents",
     agent: "claude-code",
     skills: ["https://github.com/vercel/next.js"],
     harnessOptions: { "claude-code": { max_turns: 30 } },
-    subagent: { catalogId: DEEPSEEK, prompt: "", credentialId: router },
+    subagent: { catalogId: DEEPSEEK, prompt: "", credentialId: router, thinking: "low" },
   });
   const id = String((created.harness as { id: number }).id);
   const updated = await cli(

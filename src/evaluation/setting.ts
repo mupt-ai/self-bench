@@ -39,6 +39,10 @@ export function subagentPart(subagent: Pick<SubagentModel, "catalogId">): string
   return `subagent:${subagent.catalogId}`;
 }
 
+/** A thinking level as a label names it: "High", "X-High". */
+const levelName = (level: ThinkingLevel) =>
+  level === "xhigh" ? "X-High" : level.charAt(0).toUpperCase() + level.slice(1);
+
 /** The setting a run's trials on `harness` belong to, or undefined when the run has no credentials. */
 export function settingOf(run: EvaluationRun, harness: Harness): Setting | undefined {
   if (!run.credentials) return undefined;
@@ -65,13 +69,17 @@ export function settingOf(run: EvaluationRun, harness: Harness): Setting | undef
     ...(subagent ? [subagentPart(subagent)] : []),
   ];
   const label = typed ?? catalog?.label ?? findListedModel(run.model)?.label ?? run.modelLabel;
+  // A level the condition picked for its subagents is part of its id, so of the key; the label
+  // says it, since a setting at another level is named for the same two models.
+  const level = condition?.subagent?.thinking;
+  const delegates = subagent && `${subagent.label}${level ? ` (${levelName(level)})` : ""}`;
   return {
     key: JSON.stringify(parts),
     id: parts.join("|"),
     catalogId,
     modelName: typed ?? (catalog?.vendor ? `${catalog.vendor}/${catalog.id}` : run.modelName),
     // Every chart, table and page shows a setting by its label, so the label names both models.
-    label: subagent ? `${label} + ${subagent.label} Subagents` : label,
+    label: delegates ? `${label} + ${delegates} Subagents` : label,
     harness,
     reasoningLevel,
     // This describes the model's vendor, not the credential route of a selected trial.

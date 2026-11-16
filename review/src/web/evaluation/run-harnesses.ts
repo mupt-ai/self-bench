@@ -45,8 +45,9 @@ export function savedHarnessAgent(
 }
 
 /**
- * The credential a saved harness's subagents run on beside a row: its own while it can serve them,
- * else, when it names none, the first that can. None when nothing can.
+ * The credential a saved harness's subagents run on beside a row: its own while it can serve them
+ * (at the thinking level the harness picks, if it picks one), else, when it names none, the first
+ * that can. None when nothing can.
  */
 export function subagentCredential(
   saved: SavedHarness,
@@ -55,7 +56,7 @@ export function subagentCredential(
 ): CredentialInfo | undefined {
   const model = models.find((entry) => entry.id === saved.subagent?.catalogId);
   if (!model) return undefined;
-  const able = subagentCredentials(model, row.harnesses, credentials);
+  const able = subagentCredentials(model, row.harnesses, credentials, saved.subagent?.thinking);
   const named = saved.subagent?.credentialId;
   return named ? able.find((credential) => credential.id === named) : able[0];
 }
@@ -78,10 +79,11 @@ function rowProblem(row: Row, choices: HarnessChoices): string | undefined {
   if (!subagent) return undefined;
   if (subagent.catalogId === row.catalogId)
     return `${name} runs subagents on this row's own model. Pick another harness or model.`;
+  const at = subagent.thinking ? ` at ${subagent.thinking} thinking` : "";
   if (!subagentCredential(saved, row, choices))
     return subagent.credentialId
-      ? `${name}'s subagent credential can't serve its model beside this row's. Change it under Harnesses.`
-      : `${name} needs a credential that serves its subagent model.`;
+      ? `${name}'s subagent credential can't serve its model${at} beside this row's. Change it under Harnesses.`
+      : `${name} needs a credential that serves its subagent model${at}.`;
   return undefined;
 }
 

@@ -5,6 +5,7 @@ import {
   conditionRunsOn,
   type conditionSchema,
   SKILL_HARNESSES,
+  type SubagentThinking,
 } from "../contracts/conditions.js";
 import {
   canonicalOptions,
@@ -38,16 +39,23 @@ export interface RunCondition {
   readonly harnessOptions?: HarnessOptions;
   /**
    * The model its subagents run on, by catalog id, and what the harness is told about delegating
-   * (empty for nothing). A condition with one runs only on the harnesses that take one, and its
-   * runs record the model as served (EvaluationInput.subagent).
+   * (empty for nothing), with the thinking level it picked for them, when it picked one. A
+   * condition with one runs only on the harnesses that take one, and its runs record the model
+   * as served (EvaluationInput.subagent).
    */
-  readonly subagent?: { readonly catalogId: string; readonly prompt: string };
+  readonly subagent?: {
+    readonly catalogId: string;
+    readonly prompt: string;
+    readonly thinking?: SubagentThinking;
+  };
 }
 
 /** A condition as a comparison names it; `environment` is its environment's name, once found. */
 export function runCondition(
   given: Omit<z.infer<typeof conditionSchema>, "subagent"> & {
-    subagent?: { catalogId: string; prompt: string } | undefined;
+    subagent?:
+      | { catalogId: string; prompt: string; thinking?: SubagentThinking | undefined }
+      | undefined;
   },
   environmentName?: string,
 ): RunCondition {
@@ -57,8 +65,13 @@ export function runCondition(
   const harnessOptions = Object.keys(given.harnessOptions ?? {}).length
     ? canonicalOptions(given.harnessOptions ?? {})
     : undefined;
+  // Its level is added only when picked, so a condition without one keeps the id it always had.
   const subagent = given.subagent
-    ? { catalogId: given.subagent.catalogId, prompt: given.subagent.prompt }
+    ? {
+        catalogId: given.subagent.catalogId,
+        prompt: given.subagent.prompt,
+        ...(given.subagent.thinking ? { thinking: given.subagent.thinking } : {}),
+      }
     : undefined;
   // Named only when no options carry it, so a condition's id is the same whichever way it names it.
   const harness = conditionHarness(given);
