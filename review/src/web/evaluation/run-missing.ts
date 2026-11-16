@@ -1,3 +1,4 @@
+import { dariRouterId } from "../../../../src/db/credential-endpoints";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import { evaluationTaskKey, harnessLabels } from "../../../../src/evaluation/models";
 import type { EvaluationRun, Harness } from "./api";
@@ -49,7 +50,7 @@ interface Setting {
 export function missingWork(
   runs: readonly EvaluationRun[],
   tasks: readonly TaskKey[],
-  credentials: readonly Pick<CredentialInfo, "id" | "kind">[],
+  credentials: readonly Pick<CredentialInfo, "id" | "kind" | "endpoint">[],
   /** A fresh comparison id, asked for once per comparison. */
   newId: () => string,
   sandboxCredentialId?: string,
@@ -63,8 +64,19 @@ export function missingWork(
   for (const run of live) {
     const credentialId = run.credentials?.modelCredentialId ?? "";
     const customModel = run.model === "custom" ? run.modelName.replace(/^[^/]+\//, "") : undefined;
-    // A Dari router is a setting of its own, as the server tells configurations apart.
-    const router = run.credentials?.provider === "dari" ? run.router : undefined;
+    // A Dari router is a setting of its own. It is the router the credential names now, as the
+    // server derives it when the comparison saves, so runs before runs recorded routers group with
+    // the newer ones on the same credential; the run's recorded name labels it when it has one.
+    const credentialOf = credentials.find((credential) => credential.id === credentialId);
+    const routerId =
+      credentialOf?.kind === "dari"
+        ? dariRouterId(credentialOf.endpoint)
+        : run.credentials?.provider === "dari"
+          ? run.router?.id
+          : undefined;
+    const router = routerId
+      ? { id: routerId, name: run.router?.id === routerId ? run.router.name : routerId }
+      : undefined;
     for (const harness of run.harnesses) {
       // A setting is its model, reasoning, harness and router, whatever credential reached the
       // model, as the server tells configurations apart (completedConfigurationTasks).
