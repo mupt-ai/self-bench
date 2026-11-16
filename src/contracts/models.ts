@@ -89,7 +89,7 @@ export interface Model {
   readonly thinking?: readonly ThinkingLevel[];
 }
 
-export const catalogVersion = "2026-10-12.1";
+export const catalogVersion = "2026-11-16.1";
 const RATES_AS_OF = "2026-09-23";
 const openAiThinking = ["off", "low", "medium", "high", "xhigh", "max"] as const;
 const vendorThinking = ["low", "medium", "high", "xhigh", "max"] as const;
@@ -135,52 +135,34 @@ export const models: readonly Model[] = [
     longContext: { from: 272_001, rates: [0.2, 0.75, 0.02, 0.25] },
     thinking: openAiThinking,
   },
-  {
-    id: "claude-fable-5-1",
-    label: "Claude Fable 5.1",
-    vendor: "anthropic",
-    openRouter: "anthropic/claude-fable-5.1",
-    source: "https://platform.claude.com/docs/en/models/overview",
-    rates: { native: [10, 50, 0.25, 12.5], gateway: [10, 50, 0.25, 12.5] },
-    thinking: vendorThinking,
-  },
-  {
-    id: "claude-opus-5-5",
-    label: "Claude Opus 5.5",
-    vendor: "anthropic",
-    openRouter: "anthropic/claude-opus-5.5",
-    source: "https://platform.claude.com/docs/en/models/overview",
-    rates: { native: [4, 20, 0.2, 5], gateway: [4, 20, 0.2, 5] },
-    thinking: vendorThinking,
-  },
-  {
-    id: "claude-sonnet-5-5",
-    label: "Claude Sonnet 5.5",
-    vendor: "anthropic",
-    openRouter: "anthropic/claude-sonnet-5.5",
-    source: "https://platform.claude.com/docs/en/models/sonnet-5-5/overview",
-    rates: { native: [2, 10, 0.2, 2.5], gateway: [2, 10, 0.2, 2.5] },
-    thinking: vendorThinking,
-  },
-  {
-    id: "claude-haiku-5-5",
-    label: "Claude Haiku 5.5",
-    vendor: "anthropic",
-    openRouter: "anthropic/claude-haiku-5.5",
-    source: "https://platform.claude.com/docs/en/models/haiku-5-5/overview",
-    rates: { native: [0.1, 0.5, 0.01, 0.125], gateway: [0.1, 0.5, 0.01, 0.125] },
-    longContext: { from: 100_001, rates: [0.5, 2.5, 0.05, 0.625] },
-    thinking: vendorThinking,
-  },
-  {
-    id: "claude-sonnet-5",
-    label: "Claude Sonnet 5",
-    vendor: "anthropic",
-    openRouter: "anthropic/claude-sonnet-5",
-    source: "https://platform.claude.com/docs/en/models/overview",
-    rates: { native: [2, 10, 0.2, 2.5], gateway: [2, 10, 0.2, 2.5] },
-    thinking: vendorThinking,
-  },
+  claude("claude-fable-5-2", "Claude Fable 5.2", "anthropic/claude-fable-5.2", [8, 40, 0.2, 10]),
+  claude(
+    "claude-fable-5-1",
+    "Claude Fable 5.1",
+    "anthropic/claude-fable-5.1",
+    [10, 50, 0.25, 12.5],
+  ),
+  claude("claude-opus-5-5", "Claude Opus 5.5", "anthropic/claude-opus-5.5", [4, 20, 0.2, 5]),
+  claude(
+    "claude-sonnet-5-5",
+    "Claude Sonnet 5.5",
+    "anthropic/claude-sonnet-5.5",
+    [2, 10, 0.2, 2.5],
+    {
+      source: "https://platform.claude.com/docs/en/models/sonnet-5-5/overview",
+    },
+  ),
+  claude(
+    "claude-haiku-5-5",
+    "Claude Haiku 5.5",
+    "anthropic/claude-haiku-5.5",
+    [0.1, 0.5, 0.01, 0.125],
+    {
+      source: "https://platform.claude.com/docs/en/models/haiku-5-5/overview",
+      longContext: { from: 100_001, rates: [0.5, 2.5, 0.05, 0.625] },
+    },
+  ),
+  claude("claude-sonnet-5", "Claude Sonnet 5", "anthropic/claude-sonnet-5", [2, 10, 0.2, 2.5]),
   muse("muse-wonder-1.0", "Muse Wonder", "meta/muse-wonder", [4, 20, 0.2, 4]),
   muse("muse-spark-1.3", "Muse Spark 1.3", "meta/muse-spark-1.3", [1.25, 4.25, 0.15, 1.25]),
   // Meta documents max for Muse Spark 1.3 and Muse Wonder only.
@@ -220,6 +202,20 @@ export const models: readonly Model[] = [
     thinking: ["off", "low", "high", "max"],
   },
 ];
+
+/** A Claude model, at Anthropic's list rates on its key and through a gateway. */
+function claude(
+  id: string,
+  label: string,
+  openRouter: string,
+  rates: Rates,
+  more: Partial<Pick<Model, "source" | "longContext">> = {},
+): Model {
+  const source = "https://platform.claude.com/docs/en/models/overview";
+  const pricing = { native: rates, gateway: rates };
+  const fixed = { vendor: "anthropic", source, rates: pricing, thinking: vendorThinking } as const;
+  return { id, label, openRouter, ...fixed, ...more };
+}
 
 /** A Muse model, at Meta's list rates on its key and through a gateway (Muse refuses "none"). */
 function muse(id: string, label: string, openRouter: string, rates: Rates, top = "max"): Model {
