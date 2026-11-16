@@ -29,6 +29,13 @@ export interface Setting {
   };
   /** The model its subagents ran on (subagents.ts), when not its own. */
   subagent?: { readonly catalogId: string; readonly label: string };
+  /** The Dari router it ran on, when not the default one. */
+  router?: { readonly id: string; readonly name: string };
+}
+
+/** A Dari router's part of a setting's key, marked so it never reads as a condition's id. */
+export function routerPart(router: { readonly id: string }): string {
+  return `router:${router.id}`;
 }
 
 /**
@@ -59,6 +66,7 @@ export function settingOf(run: EvaluationRun, harness: Harness): Setting | undef
   const model = custom ? `custom/${typed}` : catalogId;
   const reasoningLevel = run.thinking ?? "default";
   const { condition, subagent } = run;
+  const router = run.credentials.provider === "dari" ? run.router : undefined;
   // A condition and a subagent model are further parts, so every other setting keeps the key it
   // always had.
   const parts = [
@@ -67,11 +75,14 @@ export function settingOf(run: EvaluationRun, harness: Harness): Setting | undef
     reasoningLevel,
     ...(condition ? [condition.id] : []),
     ...(subagent ? [subagentPart(subagent)] : []),
+    // The default router keeps the key Dari settings always had; each named one is its own.
+    ...(router ? [routerPart(router)] : []),
   ];
-  const label = typed ?? catalog?.label ?? findListedModel(run.model)?.label ?? run.modelLabel;
+  const base = typed ?? catalog?.label ?? findListedModel(run.model)?.label ?? run.modelLabel;
   // A level the condition picked for its subagents is part of its id, so of the key; the label
   // says it, since a setting at another level is named for the same two models.
   const level = condition?.subagent?.thinking;
+  const label = router ? `${base} (${router.name})` : base;
   const delegates = subagent && `${subagent.label}${level ? ` (${levelName(level)})` : ""}`;
   return {
     key: JSON.stringify(parts),
@@ -95,5 +106,6 @@ export function settingOf(run: EvaluationRun, harness: Harness): Setting | undef
         }
       : {}),
     ...(subagent ? { subagent: { catalogId: subagent.catalogId, label: subagent.label } } : {}),
+    ...(router ? { router: { id: router.id, name: router.name } } : {}),
   };
 }

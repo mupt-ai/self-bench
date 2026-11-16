@@ -80,6 +80,8 @@ export interface Configuration extends Tally {
   condition?: { id: string; name: string };
   /** The model its subagents ran on, when not its own; its label names both. */
   subagent?: { catalogId: string; label: string };
+  /** The Dari router it ran on, when not the default one; its label names it. */
+  router?: { id: string; name: string };
   /** How its runs reached the model, in the order they were first used. */
   routes: string[];
   /** Oldest first. */

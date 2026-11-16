@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { ArtifactStore } from "../artifacts/index.js";
 import { conditionRunsOn } from "../contracts/conditions.js";
 import type { ComparisonRecord } from "../db/comparisons.js";
+import { dariRouterId } from "../db/credential-endpoints.js";
 import type { CredentialInfo } from "../db/credentials.js";
 import type { Vault } from "../db/vault.js";
 import { type ManagedOffer, managedHarborEnvironment } from "../generation/billing/managed.js";
@@ -162,11 +163,20 @@ export async function saveComparison(
     if (!levels.includes(thinking))
       throw new Error("Unsupported thinking level for this model and harness");
     const modelIdentity = selected.catalogId === "custom" ? route.model : model.id;
+    // Each Dari router is a setting of its own, named for the credential that names it.
+    const routerId =
+      route.provider === "dari" && !managedModel
+        ? dariRouterId(saved.get(credential.id)?.endpoint)
+        : undefined;
+    const router = routerId
+      ? { id: routerId, name: saved.get(credential.id)?.name ?? routerId }
+      : undefined;
     const conditions = byRow.get(selected.harness) ?? [];
     for (const harness of selected.harnesses) {
       // The same model on a harness as it is and on a saved harness are two rows, not one twice.
       const pair = configurationIdentity(modelIdentity, thinking, harness, {
         subagent,
+        router,
         ...(selected.harness !== undefined ? { condition: `saved:${selected.harness}` } : {}),
       });
       if (seen.has(pair))
@@ -219,6 +229,7 @@ export async function saveComparison(
                     configurationIdentity(modelIdentity, thinking, harness, {
                       condition: condition?.id,
                       subagent: delegated,
+                      router,
                     }),
                     task.runId,
                     task.taskId,
@@ -240,6 +251,7 @@ export async function saveComparison(
           modelName,
           thinking,
           ...(group.subagent ? { subagent: group.subagent } : {}),
+          ...(router ? { router } : {}),
           harnesses: group.harnesses,
           sandbox: selection.sandbox === "managed" ? "modal" : selection.sandbox,
           tasks: group.tasks,

@@ -107,8 +107,14 @@ export function hasModelSelection(
   model: CatalogModel,
   selections: ComparisonDraft["models"],
   candidate: ComparisonDraft["models"][number],
-  credentials: readonly Pick<CredentialInfo, "id" | "kind">[],
+  credentials: readonly Pick<CredentialInfo, "id" | "kind" | "endpoint">[],
 ): boolean {
+  // Each Dari router is a configuration of its own, so two Dari keys naming different routers
+  // are two rows; the default router is one, whichever key serves it.
+  const routerOf = (selection: ComparisonDraft["models"][number]) => {
+    const credential = credentials.find((entry) => entry.id === selection.credentialId);
+    return credential?.kind === "dari" ? (credential.endpoint ?? "") : "";
+  };
   const effectiveThinking = (selection: ComparisonDraft["models"][number]) => {
     const kind = credentials.find((entry) => entry.id === selection.credentialId)?.kind;
     const route = kind ? routeFor(model, kind) : undefined;
@@ -123,6 +129,7 @@ export function hasModelSelection(
       selection.subagent?.catalogId === candidate.subagent?.catalogId &&
       // A saved harness is a configuration of its own beside the same agent as it is.
       selection.harness === candidate.harness &&
+      routerOf(selection) === routerOf(candidate) &&
       effectiveThinking(selection) === effectiveThinking(candidate) &&
       selection.harnesses.some((harness) => candidate.harnesses.includes(harness)),
   );
@@ -131,7 +138,7 @@ export function hasModelSelection(
 export function hasDuplicateModelSelections(
   models: CatalogModel[],
   selections: ComparisonDraft["models"],
-  credentials: readonly Pick<CredentialInfo, "id" | "kind">[],
+  credentials: readonly Pick<CredentialInfo, "id" | "kind" | "endpoint">[],
 ): boolean {
   return selections.some((selection, index) => {
     const model = models.find((entry) => entry.id === selection.catalogId);

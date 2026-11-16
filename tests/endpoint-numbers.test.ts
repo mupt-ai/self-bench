@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { dariRouterId } from "../src/db/credential-endpoints.js";
 import { endpointNumber, publicIds } from "../src/public/endpoint-numbers.js";
 
 test("endpoint numbers go to custom twins only, in key order", () => {
@@ -16,4 +17,10 @@ test("endpoint numbers go to custom twins only, in key order", () => {
 test("an older release's all-digit fingerprint is not an endpoint number", () => {
   expect(endpointNumber("m|pi|custom|api-key|default|#12345678")).toBeUndefined();
   expect(endpointNumber("m|pi|custom|api-key|default|#2")).toBe(2);
+});
+
+test("a Dari credential's router id, none for the default router", () => {
+  expect(dariRouterId(undefined)).toBeUndefined();
+  expect(dariRouterId("https://routing.dari.dev/v1")).toBeUndefined();
+  expect(dariRouterId("https://routing.dari.dev/rtr_abc/chat/completions")).toBe("rtr_abc");
 });
