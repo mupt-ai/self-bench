@@ -1,3 +1,4 @@
+import { dariRouterId } from "../../../../src/db/credential-endpoints";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
@@ -113,7 +114,9 @@ export function hasModelSelection(
   // are two rows; the default router is one, whichever key serves it.
   const routerOf = (selection: ComparisonDraft["models"][number]) => {
     const credential = credentials.find((entry) => entry.id === selection.credentialId);
-    return credential?.kind === "dari" ? (credential.endpoint ?? "") : "";
+    if (credential?.kind !== "dari") return "";
+    // The default router is one whether its credential leaves the endpoint blank or names /v1.
+    return dariRouterId(credential.endpoint) ?? "";
   };
   const effectiveThinking = (selection: ComparisonDraft["models"][number]) => {
     const kind = credentials.find((entry) => entry.id === selection.credentialId)?.kind;

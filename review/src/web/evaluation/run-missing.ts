@@ -32,6 +32,8 @@ interface Setting {
   customModel?: string;
   credentialId: string;
   thinking?: EvaluationRun["thinking"];
+  /** A Dari router the setting runs on, when not the default one. */
+  router?: { id: string; name: string };
   harness: Harness;
   label: string;
   done: Set<string>;
@@ -61,18 +63,21 @@ export function missingWork(
   for (const run of live) {
     const credentialId = run.credentials?.modelCredentialId ?? "";
     const customModel = run.model === "custom" ? run.modelName.replace(/^[^/]+\//, "") : undefined;
+    // A Dari router is a setting of its own, as the server tells configurations apart.
+    const router = run.credentials?.provider === "dari" ? run.router : undefined;
     for (const harness of run.harnesses) {
-      // A setting is its model, reasoning and harness, whatever credential reached the model, as
-      // the server tells configurations apart (completedConfigurationTasks).
-      const key = JSON.stringify([run.model, customModel, run.thinking, harness]);
+      // A setting is its model, reasoning, harness and router, whatever credential reached the
+      // model, as the server tells configurations apart (completedConfigurationTasks).
+      const key = JSON.stringify([run.model, customModel, run.thinking, harness, router?.id]);
       const setting = settings.get(key) ?? {
         catalogId: run.model,
         ...(customModel ? { customModel } : {}),
         credentialId: "",
         ...(run.thinking ? { thinking: run.thinking } : {}),
+        ...(router ? { router: { id: router.id, name: router.name } } : {}),
         harness,
         label: [
-          run.modelLabel,
+          router ? `${run.modelLabel} (${router.name})` : run.modelLabel,
           harnessLabels[harness] ?? harness,
           ...(run.thinking ? [thinkingLabel(run.thinking)] : []),
         ].join(" · "),
@@ -108,6 +113,7 @@ export function missingWork(
       setting.catalogId,
       setting.customModel,
       setting.thinking,
+      setting.router?.id,
       setting.credentialId,
     ]);
     const entry = models.get(key) ?? {
