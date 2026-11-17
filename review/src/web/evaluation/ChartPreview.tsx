@@ -147,7 +147,7 @@ export function ChartPreview({
     ? "Choose configurations to chart."
     : !shared.length
       ? "They share no accepted task with a usable result. Untick one to chart the rest."
-      : `Over the ${plural(shared.length, "accepted task")} all of them have a usable result on.${points.length < chosen.length ? " Settings with no recorded spend are omitted." : ""}`;
+      : `Over the ${plural(shared.length, "accepted task")} all of them have a usable result on.${points.some((point) => point.cost <= 0) ? " Settings with no recorded spend sit at $0.00." : ""}`;
   return (
     <>
       {variant === "button" ? (
@@ -168,7 +168,7 @@ export function ChartPreview({
           title="Open Chart"
           onClick={() => setOpen(true)}
         >
-          <MiniChart points={points} />
+          <MiniChart points={points.filter((point) => point.cost > 0)} />
           {/* Centered against the chart, so the space above and below the text is the same. */}
           <span className="flex shrink-0 flex-col justify-center gap-1 whitespace-nowrap">
             <span className="text-xs leading-4 font-semibold text-foreground">Chart</span>

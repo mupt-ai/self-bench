@@ -61,7 +61,7 @@ export function ResultsChart({
     });
     return at ? [{ setting, at }] : [];
   });
-  const lowest = Math.min(...settings.map((setting) => setting.accuracy));
+  const lowest = Math.min(...plotted.map(({ setting }) => setting.accuracy));
   return (
     <div ref={frame} className="relative [&_svg>text[text-anchor=end]]:hidden">
       {plotted.length === 0 ? (

@@ -1,7 +1,7 @@
 import { findModel, models } from "../contracts/models.js";
 import type { TaskState } from "../db/task-record.js";
 import type { TaskRecord } from "../db/tasks.js";
-import { attemptMinutes } from "../evaluation/attempt-minutes.js";
+import { trialMinutes } from "../evaluation/attempt-minutes.js";
 import { costTotal } from "../evaluation/cost-total.js";
 import type { Setting, SettingResults } from "./release-results.js";
 import type { ReleaseSetting } from "./release-types.js";
@@ -241,7 +241,7 @@ export function scores(chosen: readonly Candidate[], tasks: readonly string[]): 
     });
     const passed = trials.filter((trial) => trial.rewards.reward === 1).length;
     const costs = costTotal(trials);
-    const minutes = trials.flatMap((trial) => attemptMinutes(trial) ?? []);
+    const minutes = trials.flatMap((trial) => trialMinutes(trial) ?? []);
     return {
       ...publicSetting(entry.setting),
       tasks: tasks.length,
