@@ -47,19 +47,23 @@ export function RetryErroredTasks({
   const [modelChoice, setModelChoice] = React.useState<string>();
   // The model catalog, which says which saved credentials can run this model on this harness.
   const [catalog, setCatalog] = React.useState<CatalogModel[]>();
+  const [catalogError, setCatalogError] = React.useState<string>();
   React.useEffect(() => {
-    if (!open || catalog) return;
+    if (!open || catalog || catalogError) return;
     let disposed = false;
     evaluationRequest<{ models: CatalogModel[] }>(`${url}/catalog`).then(
       (result) => {
         if (!disposed) setCatalog(result.models);
       },
-      () => undefined,
+      (cause) => {
+        if (!disposed)
+          setCatalogError(cause instanceof Error ? cause.message : "Could not load models.");
+      },
     );
     return () => {
       disposed = true;
     };
-  }, [open, catalog, url]);
+  }, [open, catalog, catalogError, url]);
   const ownModel = run.credentials?.modelCredentialId;
   // Managed models have no saved credential but stay a choice for a run that used them.
   const modelChoices = [
@@ -96,6 +100,7 @@ export function RetryErroredTasks({
           setId(evaluationRequestId());
           setSandbox(undefined);
           setModelChoice(undefined);
+          setCatalogError(undefined);
           setError(undefined);
           setOpen(true);
         }}
@@ -140,7 +145,13 @@ export function RetryErroredTasks({
             {!ownAvailable && (
               <p className="mt-2 text-sm text-muted-foreground">
                 This run's model credential no longer exists.{" "}
-                {chosenModel ? "Retrying on another." : "Add one under Credentials."}
+                {chosenModel
+                  ? "Retrying on another."
+                  : catalogError
+                    ? `Could not load the credentials that run it: ${catalogError}`
+                    : !catalog
+                      ? "Loading other credentials…"
+                      : "Add one under Credentials."}
               </p>
             )}
             <label className={fieldStyles} htmlFor={`${titleId}-sandbox`}>
