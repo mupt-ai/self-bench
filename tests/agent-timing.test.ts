@@ -93,3 +93,19 @@ test("a run with no sidecar is returned as it was", async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("a sidecar that cannot be read leaves the run as it was", async () => {
+  const root = await mkdtemp(join(tmpdir(), "selfbench-agent-timing-"));
+  try {
+    const store = new LocalArtifactStore(root);
+    await store.put(
+      `${evaluationPrefix(SCOPE, ID)}agent-timing.json`,
+      Buffer.from("{not json"),
+      "application/json",
+    );
+    const run = { id: ID, trials: [trial()] } as unknown as EvaluationRun;
+    expect(await withAgentTimings(store, SCOPE, run)).toBe(run);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

@@ -81,13 +81,17 @@ function sidecarOf(
   return reading;
 }
 
-/** The run, with each trial's agent timing from its record or, for an older one, the sidecar. */
+/**
+ * The run, with each trial's agent timing from its record or, for an older one, the sidecar. A
+ * sidecar that cannot be read is skipped, and read again next time.
+ */
 export async function withAgentTimings(
   store: ArtifactStore,
   scope: EvaluationScope,
   run: EvaluationRun,
 ): Promise<EvaluationRun> {
-  const timings = await sidecarOf(store, scope, run.id);
+  // The timings only add to a run already read: one that cannot be read leaves it as it was.
+  const timings = await sidecarOf(store, scope, run.id).catch(() => undefined);
   if (!timings) return run;
   return {
     ...run,
