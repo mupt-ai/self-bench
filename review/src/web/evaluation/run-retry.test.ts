@@ -37,15 +37,19 @@ function finishedRun(change: (run: EvaluationRun) => void = () => {}): Evaluatio
   return run;
 }
 
-test("a finished run retries only its errored tasks, as it ran them", () => {
+test("a finished run retries only its errored and cancelled tasks, as it ran them", () => {
   const retry = retrySelection(finishedRun(), "pi", ID);
   expect(retry?.errored).toBe(1);
+  expect(retry?.cancelled).toBe(1);
   expect(retry?.selection).toEqual({
     id: ID,
     models: [{ catalogId: "dari/routing", credentialId: MODEL_CREDENTIAL, harnesses: ["pi"] }],
     sandbox: "managed",
     sandboxCredentialId: "managed-sandbox",
-    tasks: [{ runId: "batch", taskId: "b" }],
+    tasks: [
+      { runId: "batch", taskId: "b" },
+      { runId: "batch", taskId: "c" },
+    ],
     skipCompleted: true,
   });
   // The API accepts it as a repository's comparison.

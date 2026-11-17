@@ -11,7 +11,7 @@ import { credentialProvider } from "./credential-presentation";
 import { retryModelCredentials, retrySandboxes, retrySelection } from "./run-retry";
 
 /**
- * Runs a finished run's errored tasks again after confirmation, as a new comparison with the
+ * Runs a finished run's errored and cancelled tasks again after confirmation, as a new comparison with the
  * run's model, reasoning and model credential, on the run's sandbox or another the org saved. The
  * setting's score takes the new results.
  */
@@ -91,7 +91,10 @@ export function RetryErroredTasks({
     chosenModel && chosenModel !== ownModel ? chosenModel : undefined,
   );
   if (!retry) return null;
-  const tasks = `${retry.errored} Errored ${retry.errored === 1 ? "Task" : "Tasks"}`;
+  const count = retry.errored + retry.cancelled;
+  const kind =
+    retry.cancelled === 0 ? "Errored" : retry.errored === 0 ? "Cancelled" : "Errored or Cancelled";
+  const tasks = `${count} ${kind} ${count === 1 ? "Task" : "Tasks"}`;
   const close = () => setOpen(false);
   return (
     <>
@@ -182,7 +185,7 @@ export function RetryErroredTasks({
           </DialogBody>
           <DialogFooter>
             <Button ref={keep} disabled={busy} onClick={close}>
-              Keep Errors
+              Close
             </Button>
             <Button
               variant="primary"

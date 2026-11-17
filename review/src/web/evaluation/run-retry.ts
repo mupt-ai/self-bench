@@ -6,7 +6,7 @@ import type { EvaluationRun, Harness } from "./api";
 import { isSandbox } from "./credential-presentation";
 import { outcomeOf } from "./results-model";
 
-/** A comparison request that runs a finished run's errored tasks again, as it ran them. */
+/** A comparison request that runs a finished run's errored or cancelled tasks again, as it ran them. */
 export interface RetrySelection {
   id: string;
   models: {
@@ -37,10 +37,10 @@ export interface RetrySelection {
 }
 
 /**
- * The tasks a run's harness errored on, and the comparison that runs them again with the run's
+ * The tasks a run's harness errored on or that were cancelled before they finished, and the comparison that runs them again with the run's
  * model, reasoning, credentials and sandbox, in its repository or benchmark alike. None while the
  * run is live, when it is deleted, when it recorded no credentials (runs from before they did), or
- * when nothing errored.
+ * when nothing errored or was cancelled.
  */
 export function retrySelection(
   run: EvaluationRun,
@@ -51,20 +51,23 @@ export function retrySelection(
   saved: readonly Pick<CredentialInfo, "id" | "kind">[] = [],
   /** The model credential to retry on, when not the one the run used. */
   modelCredentialId?: string,
-): { errored: number; selection: RetrySelection } | undefined {
+): { errored: number; cancelled: number; selection: RetrySelection } | undefined {
   const { credentials } = run;
   if (!credentials || run.deletedAt || run.status === "queued" || run.status === "running")
     return undefined;
-  const errored = run.trials.filter(
-    (trial) => trial.harness === harness && outcomeOf(trial) === "error",
-  );
-  if (errored.length === 0) return undefined;
+  const outcomes = run.trials
+    .filter((trial) => trial.harness === harness)
+    .map((trial) => ({ trial, outcome: outcomeOf(trial) }));
+  const retried = outcomes.filter(({ outcome }) => outcome === "error" || outcome === "cancelled");
+  if (retried.length === 0) return undefined;
+  const cancelled = retried.filter(({ outcome }) => outcome === "cancelled").length;
   const custom = run.model === "custom";
   const sandboxId = sandboxCredentialId ?? credentials.sandboxCredentialId;
   const managedSandbox = sandboxId === "managed-sandbox";
   const kind = saved.find((credential) => credential.id === sandboxId)?.kind;
   return {
-    errored: errored.length,
+    errored: retried.length - cancelled,
+    cancelled,
     selection: {
       id,
       models: [
@@ -88,7 +91,7 @@ export function retrySelection(
       ],
       sandbox: managedSandbox ? "managed" : (kind ?? run.sandbox),
       sandboxCredentialId: sandboxId,
-      tasks: errored.map(({ runId, taskId }) => ({ runId, taskId })),
+      tasks: retried.map(({ trial: { runId, taskId } }) => ({ runId, taskId })),
       ...(credentials.judgeCredentialId
         ? { judgeCredentialId: credentials.judgeCredentialId }
         : {}),

@@ -69,7 +69,7 @@ test("only a live run offers cancellation, and every run deletion", () => {
   expect(render()).not.toContain("Cancel Run");
   expect(render()).toContain("Delete Run");
 });
-test("a finished run's row offers to retry its errored tasks", () => {
+test("a finished run's row offers to retry its errored or cancelled tasks", () => {
   const run = initialEvaluation(
     {
       ...evaluationInput(),
@@ -114,4 +114,7 @@ test("a finished run's row offers to retry its errored tasks", () => {
   run.status = "failed";
   Object.assign(trial, { status: "failed", error: "Command failed (exit 1)" });
   expect(render()).toContain("Retry 1 Errored Task");
+  // A cancelled run's unfinished trials can be retried too.
+  Object.assign(trial, { error: "Cancelled before this trial completed" });
+  expect(render()).toContain("Retry 1 Cancelled Task");
 });
