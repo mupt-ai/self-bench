@@ -1,7 +1,9 @@
 import type { HarnessOptions } from "../../../../src/contracts/harness-options";
 import type { CredentialInfo } from "../../../../src/db/credentials";
-import { hostedSandboxes } from "../../../../src/evaluation/catalog";
+import { type CatalogModel, hostedSandboxes } from "../../../../src/evaluation/catalog";
+import { credentialRunsHarness, routeFor } from "../../../../src/evaluation/models";
 import type { EvaluationRun, Harness } from "./api";
+import { isSandbox } from "./credential-presentation";
 import { outcomeOf } from "./results-model";
 
 /** A comparison request that runs a finished run's errored tasks again, as it ran them. */
@@ -47,6 +49,8 @@ export function retrySelection(
   /** The sandbox credential to retry on: a saved one's id, or `managed-sandbox`; else the run's. */
   sandboxCredentialId?: string,
   saved: readonly Pick<CredentialInfo, "id" | "kind">[] = [],
+  /** The model credential to retry on, when not the one the run used. */
+  modelCredentialId?: string,
 ): { errored: number; selection: RetrySelection } | undefined {
   const { credentials } = run;
   if (!credentials || run.deletedAt || run.status === "queued" || run.status === "running")
@@ -68,7 +72,7 @@ export function retrySelection(
           catalogId: run.model,
           // Custom models are recorded as `<provider>/<typed name>` (completedConfigurationTasks).
           ...(custom ? { customModel: run.modelName.replace(/^[^/]+\//, "") } : {}),
-          credentialId: credentials.modelCredentialId,
+          credentialId: modelCredentialId ?? credentials.modelCredentialId,
           ...(run.thinking ? { thinking: run.thinking } : {}),
           harnesses: [harness],
           // A run that named its subagent model on its row, before conditions did, retries so.
@@ -146,4 +150,31 @@ export function retrySandboxes(
   ];
   const isOwn = (choice: { id: string }) => choice.id === own;
   return [...choices.filter(isOwn), ...choices.filter((choice) => !isOwn(choice))];
+}
+
+/**
+ * The model credentials a retry may run on: the run's own first, then the org's other saved ones
+ * that run its model on its harness (another key, gateway or Dari router). A custom model stays on
+ * its own endpoint, and until the catalog loads only the run's own is offered.
+ */
+export function retryModelCredentials<
+  Credential extends Pick<CredentialInfo, "id" | "kind" | "auth">,
+>(
+  run: EvaluationRun,
+  harness: Harness,
+  saved: readonly Credential[],
+  catalog?: readonly CatalogModel[],
+): Credential[] {
+  const own = run.credentials?.modelCredentialId;
+  const model =
+    run.model === "custom" ? undefined : catalog?.find((entry) => entry.id === run.model);
+  const runs = (credential: Credential) => {
+    if (credential.id === own) return true;
+    if (!model || isSandbox(credential.kind) || credential.kind === "custom") return false;
+    const route = routeFor(model, credential.kind);
+    return !!route?.harnesses.includes(harness) && credentialRunsHarness(credential.auth, harness);
+  };
+  const isOwn = (credential: Credential) => credential.id === own;
+  const offered = saved.filter(runs);
+  return [...offered.filter(isOwn), ...offered.filter((credential) => !isOwn(credential))];
 }
