@@ -1,5 +1,5 @@
 /** Wall-clock minutes an attempt took, or undefined when it was not timed both ways. */
-export function attemptMinutes(attempt: { startedAt?: string; finishedAt?: string }) {
+function attemptMinutes(attempt: { startedAt?: string; finishedAt?: string }) {
   if (!attempt.startedAt || !attempt.finishedAt) return undefined;
   return (Date.parse(attempt.finishedAt) - Date.parse(attempt.startedAt)) / 60_000;
 }
