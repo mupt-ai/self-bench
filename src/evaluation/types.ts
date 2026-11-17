@@ -142,6 +142,9 @@ export interface EvaluationTrial {
   steps: SolverStep[];
   artifacts: string[];
   startedAt?: string;
+  /** When Harbor's agent started and finished, from its result: the agent's own time. */
+  agentStartedAt?: string;
+  agentFinishedAt?: string;
   /** The attempt holding a running trial; another attempt may take it over until the solver starts. */
   claim?: string;
   /** When Harbor started; from then on the trial may have spent, so it never runs again. */

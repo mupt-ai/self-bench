@@ -67,6 +67,13 @@ export function percent(value: number): string {
  * their labels clear the edge; a tick up there, such as 102.5% when every setting scored 100%,
  * is left unlabelled.
  */
+/** A wall-clock duration in minutes, as a trial's: "<1 min", "12 min", "2 h 5 min". */
+export function minutesText(minutes: number): string {
+  if (minutes < 1) return "<1 min";
+  if (minutes < 120) return `${Math.round(minutes)} min`;
+  return `${Math.floor(minutes / 60)} h ${Math.round(minutes % 60)} min`;
+}
+
 export function accuracyTick(value: number): string {
   return value > 100 ? "" : percent(value);
 }

@@ -121,6 +121,12 @@ export function createPublicTaskRoutes(options: PublicTaskRoutesOptions) {
           task.passed = Object.fromEntries(
             [...bySetting].map(([settingId, chosen]) => [settingId, chosen.result.pass === true]),
           );
+          const minutes = Object.fromEntries(
+            [...bySetting].flatMap(([settingId, chosen]) =>
+              chosen.result.minutes === undefined ? [] : [[settingId, chosen.result.minutes]],
+            ),
+          );
+          if (Object.keys(minutes).length) task.minutes = minutes;
         }
       }
       return {

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { ArtifactStore } from "../artifacts/index.js";
+import { withAgentTimings } from "./agent-timing.js";
 import { type EvaluationScope, scopeKey, scopeOf } from "./scope.js";
 import {
   evaluationPrefix,
@@ -34,10 +35,19 @@ export interface RunList {
 
 const RUN_ID = /^[a-f0-9-]{36}$/;
 
+/**
+ * A list's tag names its runs' revisions, and the version of the agent timings it carries
+ * (agent-timing.ts), so a list cached before they were served is read again once.
+ */
 function tagOf(revisions: Iterable<readonly [string, number]>): string {
   const lines = [...revisions].map(([id, revision]) => `${id}:${revision}`).sort();
+  lines.push("agent-timing-1");
   return createHash("sha256").update(lines.join("\n")).digest("base64url").slice(0, 27);
 }
+
+/** The runs with their agent timings, read from the sidecars of older ones (agent-timing.ts). */
+const timed = (store: ArtifactStore, scope: EvaluationScope, runs: EvaluationRun[]) =>
+  Promise.all(runs.map((run) => withAgentTimings(store, scope, run)));
 
 const newestFirst = (runs: EvaluationRun[]) =>
   runs.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
@@ -81,7 +91,7 @@ export async function listRuns(
     for await (const run of iterateEvaluations(store, scope)) runs.push(runSummary(run));
     newestFirst(runs);
     const tag = tagOf(runs.map((run) => [run.id, run.revision]));
-    return tag === have ? { tag } : { tag, runs };
+    return tag === have ? { tag } : { tag, runs: await timed(store, scope, runs) };
   }
   const [folders, revisions] = await Promise.all([
     store.folders(evaluationPrefix(scope).slice(0, -1)),
@@ -123,5 +133,8 @@ export async function listRuns(
   const runs: (EvaluationRun | undefined)[] = [];
   for (const entry of current) runs.push(await read(entry));
   const listed = newestFirst(runs.filter((run) => run !== undefined));
-  return { tag: tagOf(listed.map((run) => [run.id, run.revision])), runs: listed };
+  return {
+    tag: tagOf(listed.map((run) => [run.id, run.revision])),
+    runs: await timed(store, scope, listed),
+  };
 }

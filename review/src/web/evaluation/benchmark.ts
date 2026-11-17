@@ -13,6 +13,8 @@ export interface BenchmarkPoint {
   harness: string;
   accuracy: number;
   cost: number;
+  /** Mean wall-clock minutes per task, over the tasks whose trial was timed. */
+  minutes?: number;
   tasks: number;
   datasetKey: string;
 }

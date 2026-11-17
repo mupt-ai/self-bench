@@ -18,6 +18,8 @@ export function setting(overrides: Partial<PublicSetting> & { id: string }): Pub
     passed: 5,
     accuracy: 50,
     costPerTaskUsd: 1,
+    // Time follows cost by default, so a fixture's settings spread out on the time views too.
+    minutesPerTask: 4 + (overrides.costPerTaskUsd ?? 1) * 6,
     totalCostUsd: 10,
     onFrontier: true,
     ...overrides,

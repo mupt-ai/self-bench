@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { harnessLabels } from "../../../../src/evaluation/models";
+import {
+  CHART_VIEWS,
+  type ChartView,
+  viewAxes,
+  viewLabel,
+  viewPoint,
+} from "../../public-site/chart-views";
+import { ChartViewChips } from "../../public-site/components/ChartViewChips";
 import { ResultsPlot } from "../../public-site/components/ResultsPlot";
-import { accuracyTick, dollars as tickDollars, vendorPoint } from "../../public-site/format";
+import { vendorPoint } from "../../public-site/format";
 import { type BenchmarkPoint, dollars } from "./benchmark";
 
 export function ParetoChart({
@@ -15,6 +23,7 @@ export function ParetoChart({
   onSelect(id: string): void;
 }) {
   const container = useRef<HTMLElement>(null);
+  const [view, setView] = useState<ChartView>("accuracy-cost");
   const [width, setWidth] = useState(1040);
   useEffect(() => {
     if (!container.current) return;
@@ -26,9 +35,21 @@ export function ParetoChart({
   }, []);
   const narrow = width < 640;
   const oneHarness = new Set(points.map((point) => point.harness)).size === 1;
-  const lowest = Math.min(...points.map((point) => point.accuracy));
+  const plotted = points.flatMap((point) => {
+    const at = viewPoint(view, {
+      accuracy: point.accuracy,
+      cost: point.cost,
+      minutes: point.minutes,
+    });
+    return at ? [{ point, at }] : [];
+  });
+  const lowest = Math.min(...plotted.map(({ point }) => point.accuracy));
+  const description = CHART_VIEWS.find((entry) => entry.id === view)?.description ?? "";
   return (
-    <section ref={container} className="panel p-4 sm:p-6" aria-label="Accuracy versus Cost">
+    <section ref={container} className="panel p-4 sm:p-6" aria-label={viewLabel(view)}>
+      <div className="mb-3">
+        <ChartViewChips view={view} onChange={setView} />
+      </div>
       {!points.length ? (
         <div className="py-2 text-sm text-muted-foreground [&_span]:mt-2 [&_span]:block [&_span]:max-w-2xl [&_span]:text-xs [&_span]:leading-5">
           <p>Your completed runs appear here.</p>
@@ -37,12 +58,16 @@ export function ParetoChart({
             aren’t plotted as zero.
           </span>
         </div>
+      ) : !plotted.length ? (
+        <p className="py-2 text-sm text-muted-foreground">
+          No runs have a result this view can plot. Time views need timed trials.
+        </p>
       ) : (
         <div className="[&_svg]:block [&_svg]:w-full">
           <ResultsPlot
-            title="Chart"
+            title={viewLabel(view)}
             showTitle={showTitle}
-            description="Higher accuracy and lower model API cost are better. Select a point to inspect the run."
+            description={`${description} Select a point to inspect the run.`}
             width={width}
             // Room for the title and the vendor chips above the plot: a row on a desktop, a few
             // on a phone.
@@ -54,7 +79,7 @@ export function ParetoChart({
             // Near enough counts: the pointer, or a finger, inspects the nearest point within reach.
             hoverRadius={36}
             showSettings
-            points={points.map((point) => {
+            points={plotted.map(({ point, at }) => {
               const source = { provider: point.provider, model: { name: point.model } };
               const customModel = point.provider === "custom" ? point.model : undefined;
               const label = oneHarness
@@ -64,35 +89,15 @@ export function ParetoChart({
                 id: point.id,
                 label,
                 ...(point.thinking === "default" ? {} : { note: point.thinking }),
-                x: point.cost,
-                y: point.accuracy,
+                x: at.x,
+                y: at.y,
                 ...vendorPoint(source, customModel),
-                description: `${point.accuracy.toFixed(1)}% at ${dollars(point.cost)} per task`,
+                description: `${point.accuracy.toFixed(1)}% at ${dollars(point.cost)} per task${point.minutes === undefined ? "" : `, ${Math.round(point.minutes)} min per task`}`,
               };
             })}
-            xAxis={{
-              label: "Cost per Task",
-              objective: "minimize",
-              // Costs span orders of magnitude; on a log axis cheap runs spread out instead of
-              // crowding against zero, and equal distances are equal price ratios.
-              scale: "log",
-              nice: true,
-              ticks: narrow ? 4 : 6,
-              // A short mark under each price, tying the label to its place on the axis.
-              tickMarks: true,
-              format: (value) => (value === 0 ? "$0.00" : tickDollars(value)),
-            }}
-            yAxis={{
-              label: "Accuracy",
-              objective: "maximize",
-              // A little headroom so the top points and their labels clear the edge.
-              domain: [Math.max(0, Math.floor((lowest - 10) / 10) * 10), 104],
-              nice: true,
-              ticks: 6,
-              format: accuracyTick,
-            }}
+            {...viewAxes(view, { lowestAccuracy: lowest, narrow })}
             onSelect={(selected) => {
-              const point = points.find((entry) => entry.id === selected.id);
+              const point = plotted.find((entry) => entry.point.id === selected.id)?.point;
               if (point) onSelect(point.runId);
             }}
           />

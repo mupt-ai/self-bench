@@ -10,6 +10,8 @@ export interface ReleasedResult {
   pass?: boolean;
   evaluationId?: string;
   trialIndex?: number;
+  /** Wall-clock minutes the attempt took, when it was timed (recorded at release). */
+  minutes?: number;
 }
 
 /**

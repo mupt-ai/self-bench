@@ -9,6 +9,7 @@ import type { Vault } from "../db/vault.js";
 import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
 import type { HarborOutputGuard } from "../harnesses/harbor/output-guard.js";
 import { runCommand } from "../lib/process.js";
+import { agentTimingOf } from "./agent-timing.js";
 import { claimTrial, WorkerStoppingError } from "./claim.js";
 import { DARI_BILLING, retainDariBilling } from "./dari/billing.js";
 import { isDariRun } from "./dari/cost.js";
@@ -29,8 +30,9 @@ import {
 } from "./output.js";
 import { scopeOf } from "./scope.js";
 import { solverArguments } from "./solver-arguments.js";
-import { evaluationPrefix, RepeatSpendError } from "./store.js";
+import { RepeatSpendError } from "./store.js";
 import { transcriptSteps } from "./transcript.js";
+import { saveTrialArtifacts } from "./trial-artifacts.js";
 import { setUpTrial } from "./trial-setup.js";
 import type { EvaluationInput, EvaluationRun, EvaluationTrial } from "./types.js";
 
@@ -192,21 +194,14 @@ async function runTrial(context: {
         const bill = records.get(DARI_BILLING);
         if (bill !== undefined) clean.set(DARI_BILLING, bill);
       }
-      for (const [name, text] of clean) {
-        const artifactName = `${index}/${name}`;
-        await store.put(
-          `${evaluationPrefix(run, run.id)}artifacts/${artifactName}`,
-          Buffer.from(text),
-          "text/plain",
-        );
-        trial.artifacts.push(artifactName);
-      }
+      trial.artifacts.push(...(await saveTrialArtifacts(store, run, index, clean)));
       const result = [...files].find(([name]) => /^solver\/[^/]+\/result\.json$/.test(name));
       if (!result) throw new Error("Harbor did not produce a trial result");
       const parsed = record(JSON.parse(result[1]));
       if (!records) throw new Error("Harbor's transcripts were not read");
       Object.assign(
         trial,
+        agentTimingOf(parsed),
         await measureTrial(
           run,
           trial,

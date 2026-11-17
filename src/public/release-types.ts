@@ -72,6 +72,8 @@ export interface ReleaseSetting {
   totalCostUsd: number;
   /** Zero means no cost evidence; an aggregate zero is not a free setting. */
   costedTasks?: number;
+  /** Mean wall-clock minutes per task, over the tasks whose trial was timed; absent when none was. */
+  minutesPerTask?: number;
   onFrontier: boolean;
 }
 
@@ -155,6 +157,11 @@ export interface PublishedTask {
    * Every setting of a release has a result on every one of its tasks.
    */
   passed?: Record<string, boolean>;
+  /**
+   * Minutes each setting's attempt took, by setting id, for the attempts that were timed; only
+   * alongside `passed`.
+   */
+  minutes?: Record<string, number>;
 }
 
 /**

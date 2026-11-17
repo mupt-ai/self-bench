@@ -1,3 +1,4 @@
+import { trialMinutes } from "../../../../src/evaluation/attempt-minutes";
 import { costTotal } from "../../../../src/evaluation/cost-total";
 import { eligibleTrial } from "../../../../src/evaluation/eligible";
 import type { BenchmarkPoint } from "./benchmark";
@@ -85,6 +86,7 @@ export function configurationPoint(
   if (!results.length || !cost) return undefined;
   const mean = (values: number[]) =>
     values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length);
+  const minutes = results.flatMap((result) => trialMinutes(result.trial) ?? []);
   return {
     id: configuration.key,
     // Selecting the point opens the configuration's most recent run.
@@ -97,6 +99,7 @@ export function configurationPoint(
     harness: configuration.harness,
     accuracy: mean(results.map((result) => result.trial.rewards.reward ?? 0)) * 100,
     cost,
+    ...(minutes.length ? { minutes: mean(minutes) } : {}),
     tasks: results.length,
     datasetKey: String(tasks.length),
   };

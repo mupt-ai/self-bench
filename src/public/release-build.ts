@@ -1,3 +1,4 @@
+import { attemptMinutes } from "../evaluation/attempt-minutes.js";
 import type { ModelSummaryReport } from "../evaluation/model-summary.js";
 import type { EvaluationRun } from "../evaluation/types.js";
 import { canonicalJson, sha256 } from "../lib/hash.js";
@@ -245,6 +246,9 @@ export function buildRelease(
               cacheWritesInferred: trial?.cacheWritesInferred,
               startedAt: trial?.startedAt,
               finishedAt: trial?.finishedAt,
+              ...(trial && attemptMinutes(trial) !== undefined
+                ? { minutes: attemptMinutes(trial) }
+                : {}),
               evaluationId: result?.run.id,
               trialIndex: result?.index,
               comparisonId: result?.run.comparisonId,

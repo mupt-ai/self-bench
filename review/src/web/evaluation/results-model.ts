@@ -1,7 +1,9 @@
 import type { ThinkingLevel } from "../../../../src/contracts/models";
 import type { CredentialInfo } from "../../../../src/db/credentials";
+import { trialMinutes } from "../../../../src/evaluation/attempt-minutes";
 import { costTotal } from "../../../../src/evaluation/cost-total";
 import { eligibleTrial } from "../../../../src/evaluation/eligible";
+
 import type { EvaluationRun, EvaluationTrial, Harness } from "./api";
 import { type Identity, identityOf } from "./results-identity";
 import { routeLabel } from "./results-presentation";
@@ -255,8 +257,10 @@ export function configurationsOf(
       groups.set(identity.key, group);
       for (const trial of run.trials) {
         if (trial.harness !== harness) continue;
-        const end = trial.finishedAt ?? (trial.status === "running" ? now : undefined);
-        const minutes = minutesBetween(trial.startedAt, end);
+        // A finished trial's time is its agent's, where it has one (trialMinutes).
+        const minutes = trial.finishedAt
+          ? trialMinutes(trial)
+          : minutesBetween(trial.startedAt, trial.status === "running" ? now : undefined);
         group.results.push({
           run,
           trial,

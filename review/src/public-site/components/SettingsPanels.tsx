@@ -1,8 +1,10 @@
 import { useState } from "react";
+import type { ChartView } from "../chart-views";
 import type { PublicSetting } from "../contract";
 import { pageBody, revealGroup } from "../effects/marks";
 import { PANEL } from "../frame";
 import { ChartFilters, useSettingFilters } from "./ChartFilters";
+import { ChartViewChips } from "./ChartViewChips";
 import { ModelTable } from "./ModelTable";
 import { ResultsChart } from "./ResultsChart";
 
@@ -55,6 +57,7 @@ export function SettingsPanels({
 }) {
   const filters = useSettingFilters(settings, chartKey);
   const shown = settings.filter(filters.shows);
+  const [view, setView] = useState<ChartView>("accuracy-cost");
   return (
     // Side by side, the chart stays in view while the table scrolls past it.
     <div
@@ -81,13 +84,20 @@ export function SettingsPanels({
           {shown.length === 0 ? (
             <p className="p-2 text-sm text-muted-foreground">No settings match these filters.</p>
           ) : (
-            <ResultsChart
-              key={`${chartKey}:${filters.filterKey}`}
-              settings={shown}
-              onActiveChange={marks.onActiveChange}
-              onHighlightChange={marks.onHighlightChange}
-              selectedId={marks.rowId}
-            />
+            <div className="flex flex-col gap-2">
+              {/* Clear of the filters button in the chart's corner. */}
+              <div className="pr-9">
+                <ChartViewChips view={view} onChange={setView} />
+              </div>
+              <ResultsChart
+                key={`${chartKey}:${filters.filterKey}`}
+                view={view}
+                settings={shown}
+                onActiveChange={marks.onActiveChange}
+                onHighlightChange={marks.onHighlightChange}
+                selectedId={marks.rowId}
+              />
+            </div>
           )}
         </div>
       </section>
