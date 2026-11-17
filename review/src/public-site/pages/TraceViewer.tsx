@@ -1,5 +1,6 @@
 import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { trialMinutes } from "../../../../src/evaluation/attempt-minutes";
 import { TrialDetails } from "../../web/evaluation/TrialDetails";
 import { resultMark } from "../components/ResultsGrid";
 import { TrialGrading } from "../components/TrialGrading";
@@ -49,10 +50,8 @@ export default function TraceViewer({
   const current = read?.key === key ? read : undefined;
   const trial = current?.trial;
   const setting = release.settings.find((entry) => entry.id === settingId);
-  const minutes =
-    trial?.startedAt && trial.finishedAt
-      ? (Date.parse(trial.finishedAt) - Date.parse(trial.startedAt)) / 60_000
-      : undefined;
+  // The agent's time, as the grid shows it, where the trial has it; else its wall-clock time.
+  const minutes = trial ? trialMinutes(trial) : undefined;
 
   return (
     <ViewerDialog

@@ -10,6 +10,8 @@ export interface ReleasedResult {
   pass?: boolean;
   evaluationId?: string;
   trialIndex?: number;
+  /** Wall-clock minutes the attempt took, when it was timed (recorded at release). */
+  minutes?: number;
 }
 
 /**
@@ -166,6 +168,8 @@ export function publishedTrial(
     rewards: trial.rewards,
     ...(trial.startedAt ? { startedAt: trial.startedAt } : {}),
     ...(trial.finishedAt ? { finishedAt: trial.finishedAt } : {}),
+    ...(trial.agentStartedAt ? { agentStartedAt: trial.agentStartedAt } : {}),
+    ...(trial.agentFinishedAt ? { agentFinishedAt: trial.agentFinishedAt } : {}),
     ...(trial.agentTimedOut ? { agentTimedOut: true } : {}),
     ...(trial.verifierTimedOut ? { verifierTimedOut: true } : {}),
     ...(run.agentMinutes !== undefined ? { agentMinutes: run.agentMinutes } : {}),

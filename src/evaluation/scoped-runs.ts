@@ -1,4 +1,5 @@
 import type { ArtifactStore } from "../artifacts/index.js";
+import { withAgentTimings } from "./agent-timing.js";
 import type { EvaluationDataset } from "./dataset.js";
 import { listRuns, type RunList } from "./run-list.js";
 import type { EvaluationScope } from "./scope.js";
@@ -44,10 +45,14 @@ export async function scopedRun(
   id: string,
 ): Promise<EvaluationRun | undefined> {
   const own = await getEvaluation(store, scope, id);
-  if (own) return own;
+  if (own) return withAgentTimings(store, scope, own);
   for (const source of dataset.sources ?? []) {
     const run = await getEvaluation(store, source.scope, id);
-    if (run) return { ...run, sourceRepository: source.name };
+    if (run)
+      return {
+        ...(await withAgentTimings(store, source.scope, run)),
+        sourceRepository: source.name,
+      };
   }
   return undefined;
 }

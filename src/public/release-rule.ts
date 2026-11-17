@@ -1,6 +1,7 @@
 import { findModel, models } from "../contracts/models.js";
 import type { TaskState } from "../db/task-record.js";
 import type { TaskRecord } from "../db/tasks.js";
+import { trialMinutes } from "../evaluation/attempt-minutes.js";
 import { costTotal } from "../evaluation/cost-total.js";
 import type { Setting, SettingResults } from "./release-results.js";
 import type { ReleaseSetting } from "./release-types.js";
@@ -191,7 +192,14 @@ function publicSetting(
   setting: Setting,
 ): Omit<
   ReleaseSetting,
-  "tasks" | "passed" | "accuracy" | "costPerTaskUsd" | "totalCostUsd" | "costedTasks" | "onFrontier"
+  | "tasks"
+  | "passed"
+  | "accuracy"
+  | "costPerTaskUsd"
+  | "totalCostUsd"
+  | "costedTasks"
+  | "minutesPerTask"
+  | "onFrontier"
 > {
   const customHarness = harnessNameOf(setting.condition);
   const ablation = setting.condition?.environment?.name;
@@ -233,6 +241,7 @@ export function scores(chosen: readonly Candidate[], tasks: readonly string[]): 
     });
     const passed = trials.filter((trial) => trial.rewards.reward === 1).length;
     const costs = costTotal(trials);
+    const minutes = trials.flatMap((trial) => trialMinutes(trial) ?? []);
     return {
       ...publicSetting(entry.setting),
       tasks: tasks.length,
@@ -241,6 +250,9 @@ export function scores(chosen: readonly Candidate[], tasks: readonly string[]): 
       costPerTaskUsd: costs.perTask ?? 0,
       totalCostUsd: costs.total,
       costedTasks: costs.known,
+      ...(minutes.length
+        ? { minutesPerTask: minutes.reduce((sum, value) => sum + value, 0) / minutes.length }
+        : {}),
       onFrontier: false,
     };
   });

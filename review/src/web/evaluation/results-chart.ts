@@ -1,3 +1,4 @@
+import { trialMinutes } from "../../../../src/evaluation/attempt-minutes";
 import { costTotal } from "../../../../src/evaluation/cost-total";
 import { eligibleTrial } from "../../../../src/evaluation/eligible";
 import type { BenchmarkPoint } from "./benchmark";
@@ -73,7 +74,7 @@ export function chosenOptions(
   return defaultPicks(options);
 }
 
-/** A configuration's point over tasks it has a usable result on every one of, if it has a cost. */
+/** A configuration's point over tasks it has a usable result on every one of. */
 export function configurationPoint(
   configuration: Configuration,
   tasks: readonly string[],
@@ -81,10 +82,10 @@ export function configurationPoint(
   const usable = usableResults(configuration);
   const results = tasks.flatMap((task) => usable.get(task) ?? []);
   const cost = costTotal(results.map((result) => result.trial)).perTask;
-  // A log axis cannot place a configuration that recorded no spend.
-  if (!results.length || !cost) return undefined;
+  if (!results.length) return undefined;
   const mean = (values: number[]) =>
     values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length);
+  const minutes = results.flatMap((result) => trialMinutes(result.trial) ?? []);
   return {
     id: configuration.key,
     // Selecting the point opens the configuration's most recent run.
@@ -96,7 +97,8 @@ export function configurationPoint(
     thinking: configuration.thinking ?? "default",
     harness: configuration.harness,
     accuracy: mean(results.map((result) => result.trial.rewards.reward ?? 0)) * 100,
-    cost,
+    cost: cost ?? 0,
+    ...(minutes.length ? { minutes: mean(minutes) } : {}),
     tasks: results.length,
     datasetKey: String(tasks.length),
   };

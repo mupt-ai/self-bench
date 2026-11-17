@@ -6,7 +6,7 @@ export { resultMark } from "../../web/ResultsMatrix";
 
 import type { PublicResults } from "../contract";
 import { revealGroup } from "../effects/marks";
-import { harnessLabel, reasoningLabel, settingLabel, vendorColor } from "../format";
+import { harnessLabel, minutesText, reasoningLabel, settingLabel, vendorColor } from "../format";
 import { resultsGrid } from "../results-grid";
 import { useSource } from "../source-context";
 import { type OpenedTask, useNear, useReleaseTasks } from "./TaskList";
@@ -38,6 +38,7 @@ export function ResultsGrid({
   const grid = tasks && resultsGrid(release.settings, tasks);
   if (tasks && !grid) return null;
 
+  const tasksById = new Map(grid?.tasks.map((task) => [task.id, task]));
   const rows: ResultsMatrixRow[] = (grid?.settings ?? release.settings).map((setting) => ({
     id: setting.id,
     label: settingLabel(setting, release.settings),
@@ -77,22 +78,29 @@ export function ResultsGrid({
           }}
           // A transcript is large and kept for the visit, so only a press reads one ahead; pointing
           // at or focusing a box only fetches the viewer itself.
-          renderBox={({ rowId: settingId, task, className, label }) => (
-            <Link
-              to={{ search: traceSearch(task.id, settingId) }}
-              state={{ fromList: true } satisfies OpenedTask}
-              preventScrollReset
-              aria-label={label}
-              title={label}
-              onPointerEnter={() => void loadTraceViewer()}
-              onPointerDown={() => {
-                void loadTraceViewer();
-                void source.getTrial(release.releaseId, task.id, settingId).catch(() => undefined);
-              }}
-              onFocus={() => void loadTraceViewer()}
-              className={className}
-            />
-          )}
+          renderBox={({ rowId: settingId, task, className, label }) => {
+            // The attempt's time rides in the box's name, which is also its hover text.
+            const minutes = tasksById.get(task.id)?.minutes?.[settingId];
+            const named = minutes === undefined ? label : `${label}, ${minutesText(minutes)}`;
+            return (
+              <Link
+                to={{ search: traceSearch(task.id, settingId) }}
+                state={{ fromList: true } satisfies OpenedTask}
+                preventScrollReset
+                aria-label={named}
+                title={named}
+                onPointerEnter={() => void loadTraceViewer()}
+                onPointerDown={() => {
+                  void loadTraceViewer();
+                  void source
+                    .getTrial(release.releaseId, task.id, settingId)
+                    .catch(() => undefined);
+                }}
+                onFocus={() => void loadTraceViewer()}
+                className={className}
+              />
+            );
+          }}
         />
       )}
     </section>

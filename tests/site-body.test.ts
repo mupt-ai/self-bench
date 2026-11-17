@@ -77,6 +77,7 @@ test("a repository page's text names it and lists every setting", () => {
   expect(count(html.split("<tbody>")[1]?.split("</tbody>")[0] ?? "", "tr")).toBe(3);
   expect(html.indexOf("GPT-6 Sol")).toBeLessThan(html.indexOf("GPT-6 Luna"));
   expect(html).toContain('<th scope="col">Cost / Task</th>');
+  expect(html).toContain('<th scope="col">Time / Task</th>');
   // The GitHub description without emoji shortcodes, and the other publisher's line.
   expect(html).toContain("<p>The React Framework</p>");
   expect(html).toContain('<a href="/vercel/next.js/marco">marco</a>');

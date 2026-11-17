@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { findModel } from "../../../../src/contracts/models";
+import { trialMinutes } from "../../../../src/evaluation/attempt-minutes";
 import { harnessLabels } from "../../../../src/evaluation/models";
+
 import { Dialog, DialogHeader } from "../Dialog";
 import { ListSkeleton } from "../LoadingSkeleton";
 import { useSession } from "../session";
@@ -119,10 +121,7 @@ function TrialDialogContent({
     ),
   });
   const task = taskParts(trial.taskId);
-  const minutes =
-    trial.startedAt && trial.finishedAt
-      ? (Date.parse(trial.finishedAt) - Date.parse(trial.startedAt)) / 60_000
-      : undefined;
+  const minutes = trial.finishedAt ? trialMinutes(trial) : undefined;
   return (
     <Dialog
       initialFocus={close}
