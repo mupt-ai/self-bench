@@ -104,6 +104,8 @@ async function serve() {
       task("next-pr-2", withoutGate),
       // An agent may name a task anything its characters allow, a download's suffix included.
       task("odd.tar.gz", withGate),
+      // A public benchmark's task is named by its registry org as well.
+      task("datacurve/httpx-streaming", withGate),
     ],
     "private-release": [task("next-pr-1", withGate)],
   };
@@ -162,6 +164,7 @@ test("only a current release that published its tasks serves them, never to sear
   expect(list.headers.get("x-robots-tag")).toBe("noindex");
   const body = await list.text();
   expect(JSON.parse(body).tasks.map((entry: { id: string }) => entry.id)).toEqual([
+    "datacurve/httpx-streaming",
     "next-pr-1",
     "next-pr-2",
     "odd.tar.gz",
@@ -238,4 +241,20 @@ test("a task's files and its download never share an address, whatever the task 
   expect(
     (await get("/api/public/releases/published-release/tasks/next-pr-1/next-pr-2.tar.gz")).status,
   ).toBe(404);
+});
+
+test("a public benchmark's task, named org/name, is served from its encoded address", async () => {
+  const get = await serve();
+  const id = encodeURIComponent("datacurve/httpx-streaming");
+  const files = await get(`/api/public/releases/published-release/tasks/${id}`);
+  expect(files.status).toBe(200);
+  expect((await files.json()).taskId).toBe("datacurve/httpx-streaming");
+  const download = await get(`/api/public/releases/published-release/tasks/${id}/${id}.tar.gz`);
+  expect(download.status).toBe(200);
+  expect(download.headers.get("content-disposition")).toBe(
+    'attachment; filename="datacurve-httpx-streaming.tar.gz"',
+  );
+  // A path out of the task is never a task.
+  const outside = encodeURIComponent("../next-pr-1");
+  expect((await get(`/api/public/releases/published-release/tasks/${outside}`)).status).toBe(404);
 });
