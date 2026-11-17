@@ -1,10 +1,11 @@
 import { expect, test } from "bun:test";
 import type { CredentialInfo } from "../../../../src/db/credentials";
+import { dariRouter } from "../../../../src/evaluation/catalog";
 import { comparisonSchema } from "../../../../src/evaluation/comparisons";
 import { initialEvaluation } from "../../../../src/evaluation/store";
 import type { EvaluationRun } from "../../../../src/evaluation/types";
 import { evaluationInput } from "../../../../tests/support/evaluation-fixture";
-import { retrySandboxes, retrySelection } from "./run-retry";
+import { retryModelCredentials, retrySandboxes, retrySelection } from "./run-retry";
 
 const ID = "6f1c2a7e-3b4d-4e5f-8a9b-0c1d2e3f4a5b";
 const MODEL_CREDENTIAL = "0b8e4f7a-1c2d-4e3f-9a8b-7c6d5e4f3a2b";
@@ -148,4 +149,38 @@ test("a loaded saved list without the run's sandbox means it was deleted", () =>
   });
   const others = SAVED.filter((credential) => credential.id !== MODAL_KEY);
   expect(retrySandboxes(onModal, others).map((choice) => choice.id)).not.toContain(MODAL_KEY);
+});
+
+test("a retry may run on another model credential, keeping everything else as it ran", () => {
+  const other = "3c2b1a09-8f7e-4d6c-9b5a-4f3e2d1c0b9a";
+  const retry = retrySelection(finishedRun(), "pi", ID, undefined, [], other);
+  expect(retry?.selection.models).toEqual([
+    { catalogId: "dari/routing", credentialId: other, harnesses: ["pi"] },
+  ]);
+  expect(comparisonSchema.safeParse(retry?.selection).success).toBe(true);
+  expect(retrySelection(finishedRun(), "pi", ID)?.selection.models[0]?.credentialId).toBe(
+    MODEL_CREDENTIAL,
+  );
+});
+
+test("a retry offers the run's own model credential first, then others that run its model", () => {
+  const key = (
+    id: string,
+    kind: CredentialInfo["kind"],
+    auth: CredentialInfo["auth"] = "api-key",
+  ) => ({ id, name: id, kind, auth, createdAt: "2026-11-01T00:00:00Z" }) as CredentialInfo;
+  const saved = [
+    key("other-router", "dari"),
+    key("openai", "openai"),
+    key("modal", "modal"),
+    key(MODEL_CREDENTIAL, "dari"),
+  ];
+  const catalog = [dariRouter];
+  const ids = (offered: readonly CredentialInfo[]) => offered.map((credential) => credential.id);
+  expect(ids(retryModelCredentials(finishedRun(), "pi", saved, catalog))).toEqual([
+    MODEL_CREDENTIAL,
+    "other-router",
+  ]);
+  // Before the catalog loads, only the run's own.
+  expect(ids(retryModelCredentials(finishedRun(), "pi", saved))).toEqual([MODEL_CREDENTIAL]);
 });
