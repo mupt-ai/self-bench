@@ -61,8 +61,18 @@ export function RetryErroredTasks({
     };
   }, [open, catalog, url]);
   const ownModel = run.credentials?.modelCredentialId;
-  const modelCredentials = retryModelCredentials(run, harness, credentials, catalog);
-  const chosenModel = modelChoice ?? ownModel ?? "";
+  // Managed models have no saved credential but stay a choice for a run that used them.
+  const modelChoices = [
+    ...(ownModel === "managed-model" ? [{ id: "managed-model", label: "Managed" }] : []),
+    ...retryModelCredentials(run, harness, credentials, catalog).map((credential) => ({
+      id: credential.id,
+      label: `${credential.name} · ${credentialProvider(credential)}`,
+    })),
+  ];
+  // The run's own credential while it still exists; otherwise the first that can run it. A list
+  // that has not loaded keeps the run's own, and the server has the final say on it.
+  const ownAvailable = credentials.length === 0 || modelChoices.some(({ id }) => id === ownModel);
+  const chosenModel = modelChoice ?? (ownAvailable ? ownModel : modelChoices[0]?.id) ?? "";
   // The run's own sandbox while it still exists; otherwise one has to be chosen.
   const chosen =
     sandbox ??
@@ -102,7 +112,7 @@ export function RetryErroredTasks({
         >
           <DialogHeader title={`Retry ${tasks}?`} titleId={titleId} onClose={close} busy={busy} />
           <DialogBody>
-            {modelCredentials.length > 1 && (
+            {(modelChoices.length > 1 || !ownAvailable) && (
               <label className={fieldStyles} htmlFor={`${titleId}-model`}>
                 <span className="flex items-center gap-1.5">
                   Model Credential
@@ -114,13 +124,24 @@ export function RetryErroredTasks({
                   disabled={busy}
                   onChange={(event) => setModelChoice(event.target.value)}
                 >
-                  {modelCredentials.map((credential) => (
-                    <option key={credential.id} value={credential.id}>
-                      {`${credential.name} · ${credentialProvider(credential)}`}
+                  {!chosenModel && (
+                    <option value="" disabled>
+                      No Model Credentials
+                    </option>
+                  )}
+                  {modelChoices.map((choice) => (
+                    <option key={choice.id} value={choice.id}>
+                      {choice.label}
                     </option>
                   ))}
                 </Select>
               </label>
+            )}
+            {!ownAvailable && (
+              <p className="mt-2 text-sm text-muted-foreground">
+                This run's model credential no longer exists.{" "}
+                {chosenModel ? "Retrying on another." : "Add one under Credentials."}
+              </p>
             )}
             <label className={fieldStyles} htmlFor={`${titleId}-sandbox`}>
               Sandbox
@@ -154,7 +175,7 @@ export function RetryErroredTasks({
             </Button>
             <Button
               variant="primary"
-              disabled={busy || !chosen}
+              disabled={busy || !chosen || !chosenModel}
               onClick={async () => {
                 if (submitting.current) return;
                 submitting.current = true;
