@@ -175,6 +175,8 @@ export interface PublishedTrial
     EvaluationTrial,
     | "startedAt"
     | "finishedAt"
+    | "agentStartedAt"
+    | "agentFinishedAt"
     | "agentTimedOut"
     | "verifierTimedOut"
     | "failureSummary"

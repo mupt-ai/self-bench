@@ -168,6 +168,8 @@ export function publishedTrial(
     rewards: trial.rewards,
     ...(trial.startedAt ? { startedAt: trial.startedAt } : {}),
     ...(trial.finishedAt ? { finishedAt: trial.finishedAt } : {}),
+    ...(trial.agentStartedAt ? { agentStartedAt: trial.agentStartedAt } : {}),
+    ...(trial.agentFinishedAt ? { agentFinishedAt: trial.agentFinishedAt } : {}),
     ...(trial.agentTimedOut ? { agentTimedOut: true } : {}),
     ...(trial.verifierTimedOut ? { verifierTimedOut: true } : {}),
     ...(run.agentMinutes !== undefined ? { agentMinutes: run.agentMinutes } : {}),

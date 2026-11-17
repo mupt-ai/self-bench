@@ -6,6 +6,7 @@ import { currentOf, headOf, type ReleaseRow } from "../db/releases.js";
 import { credentials, repos } from "../db/schema.js";
 import { runnable, taskState } from "../db/task-record.js";
 import { createTaskStore } from "../db/tasks.js";
+import { withAgentTimings } from "../evaluation/agent-timing.js";
 import { evaluationTaskKey } from "../evaluation/models.js";
 import { listRuns } from "../evaluation/run-list.js";
 import type { EvaluationScope } from "../evaluation/scope.js";
@@ -184,7 +185,8 @@ export function releasedTrials(db: Database, artifacts: ArtifactStore): TrialSou
         if (kept.size <= KEPT_SCOPES) break;
         kept.delete(oldest);
       }
-      return { scope, run };
+      // Older trials take the agent's timing from the evaluation's sidecar, as the grid's did.
+      return { scope, run: await withAgentTimings(artifacts, scope, run) };
     }
     return undefined;
   };
