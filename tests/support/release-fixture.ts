@@ -33,7 +33,7 @@ interface RunSpec {
   harness?: Harness;
   thinking?: EvaluationRun["thinking"];
   credential?: string;
-  provider?: "openai" | "anthropic" | "openrouter" | "custom";
+  provider?: "openai" | "anthropic" | "openrouter" | "dari" | "custom";
   createdAt?: string;
   /** Task name to reward; a number is the reward, an object overrides trial fields. */
   results: Record<string, number | Partial<EvaluationTrial>>;

@@ -208,3 +208,73 @@ test("a request names its tasks by key alone, as the server takes them", () => {
     { runId: "gen", taskId: "t3" },
   ]);
 });
+
+test("a Dari router's finished tasks do not count as done for another router", () => {
+  const dari = [
+    { id: "jev-key", kind: "dari" as const, endpoint: "https://routing.dari.dev/rtr_jev" },
+    { id: "cheap-key", kind: "dari" as const, endpoint: "https://routing.dari.dev/rtr_cheap" },
+  ];
+  const onRouter = (key: string, id: string, name: string, status: "completed" | "failed") =>
+    run(
+      "dari/routing",
+      "pi",
+      { t1: status, t2: "completed", t3: "completed" },
+      {
+        model: "dari/routing",
+        credentials: {
+          modelCredentialId: key,
+          sandboxCredentialId: "sandbox",
+          provider: "dari",
+        },
+        router: { id, name },
+      },
+    );
+  // Jev finished everything; Cheap finished only t2 and t3, so t1 is missing for Cheap alone.
+  const work = missingWork(
+    [
+      onRouter("jev-key", "rtr_jev", "Jev", "completed"),
+      onRouter("cheap-key", "rtr_cheap", "Cheap", "failed"),
+    ],
+    tasks,
+    [...credentials, ...dari],
+    newId,
+  );
+  expect(work?.settings.map((setting) => [setting.label, setting.missing])).toEqual([
+    ["DARI/ROUTING (Cheap) · Pi · high", 1],
+  ]);
+  expect(work?.selections[0]?.models[0]?.credentialId).toBe("cheap-key");
+});
+
+test("a run from before routers were recorded groups with newer runs on the same router", () => {
+  const jev = {
+    id: "jev-key",
+    kind: "dari" as const,
+    endpoint: "https://routing.dari.dev/rtr_jev",
+  };
+  const dariRun = (id: string, status: "completed" | "failed", recorded: boolean) =>
+    run(
+      "dari/routing",
+      "pi",
+      { t1: status, t2: "completed", t3: "completed" },
+      {
+        id,
+        model: "dari/routing",
+        credentials: {
+          modelCredentialId: "jev-key",
+          sandboxCredentialId: "sandbox",
+          provider: "dari",
+        },
+        ...(recorded ? { router: { id: "rtr_jev", name: "Jev" } } : {}),
+      },
+    );
+  // Both runs leave t1 missing on the same router: one row, not one per run.
+  const work = missingWork(
+    [dariRun("old", "failed", false), dariRun("new", "failed", true)],
+    tasks,
+    [...credentials, jev],
+    newId,
+  );
+  expect(work?.selections.flatMap((selection) => selection.models)).toEqual([
+    { catalogId: "dari/routing", credentialId: "jev-key", thinking: "high", harnesses: ["pi"] },
+  ]);
+});

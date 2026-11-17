@@ -1,3 +1,4 @@
+import { dariRouterId } from "../../../../src/db/credential-endpoints";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import { evaluationTaskKey, harnessLabels } from "../../../../src/evaluation/models";
 import type { EvaluationRun, Harness } from "./api";
@@ -32,6 +33,8 @@ interface Setting {
   customModel?: string;
   credentialId: string;
   thinking?: EvaluationRun["thinking"];
+  /** A Dari router the setting runs on, when not the default one. */
+  router?: { id: string; name: string };
   harness: Harness;
   label: string;
   done: Set<string>;
@@ -47,7 +50,8 @@ interface Setting {
 export function missingWork(
   runs: readonly EvaluationRun[],
   tasks: readonly TaskKey[],
-  credentials: readonly Pick<CredentialInfo, "id" | "kind">[],
+  credentials: readonly (Pick<CredentialInfo, "id" | "kind" | "endpoint"> &
+    Partial<Pick<CredentialInfo, "name">>)[],
   /** A fresh comparison id, asked for once per comparison. */
   newId: () => string,
   sandboxCredentialId?: string,
@@ -61,18 +65,38 @@ export function missingWork(
   for (const run of live) {
     const credentialId = run.credentials?.modelCredentialId ?? "";
     const customModel = run.model === "custom" ? run.modelName.replace(/^[^/]+\//, "") : undefined;
+    // A Dari router is a setting of its own. It is the router the credential names now, as the
+    // server derives it when the comparison saves, so runs before runs recorded routers group with
+    // the newer ones on the same credential; the run's recorded name labels it when it has one.
+    const credentialOf = credentials.find((credential) => credential.id === credentialId);
+    const routerId =
+      credentialOf?.kind === "dari"
+        ? dariRouterId(credentialOf.endpoint)
+        : run.credentials?.provider === "dari"
+          ? run.router?.id
+          : undefined;
+    // The credential's name is current; a run's recorded one is only a fallback, for a deleted key.
+    const router = routerId
+      ? {
+          id: routerId,
+          name:
+            (credentialOf?.kind === "dari" ? credentialOf.name : undefined) ??
+            (run.router?.id === routerId ? run.router.name : routerId),
+        }
+      : undefined;
     for (const harness of run.harnesses) {
-      // A setting is its model, reasoning and harness, whatever credential reached the model, as
-      // the server tells configurations apart (completedConfigurationTasks).
-      const key = JSON.stringify([run.model, customModel, run.thinking, harness]);
+      // A setting is its model, reasoning, harness and router, whatever credential reached the
+      // model, as the server tells configurations apart (completedConfigurationTasks).
+      const key = JSON.stringify([run.model, customModel, run.thinking, harness, router?.id]);
       const setting = settings.get(key) ?? {
         catalogId: run.model,
         ...(customModel ? { customModel } : {}),
         credentialId: "",
         ...(run.thinking ? { thinking: run.thinking } : {}),
+        ...(router ? { router: { id: router.id, name: router.name } } : {}),
         harness,
         label: [
-          run.modelLabel,
+          router ? `${run.modelLabel} (${router.name})` : run.modelLabel,
           harnessLabels[harness] ?? harness,
           ...(run.thinking ? [thinkingLabel(run.thinking)] : []),
         ].join(" · "),
@@ -108,6 +132,7 @@ export function missingWork(
       setting.catalogId,
       setting.customModel,
       setting.thinking,
+      setting.router?.id,
       setting.credentialId,
     ]);
     const entry = models.get(key) ?? {

@@ -88,6 +88,44 @@ test("duplicates match model, effective thinking level, and harness, not credent
   ).toBe(true);
 });
 
+test("Dari keys naming different routers are different rows; the default router is one", () => {
+  const router: CatalogModel = {
+    ...model,
+    id: "dari/routing",
+    provider: "dari",
+    harnesses: ["pi"],
+  };
+  const selection: ComparisonDraft["models"][number] = {
+    catalogId: router.id,
+    credentialId: "jev",
+    harnesses: ["pi"],
+  };
+  const keys = [
+    { id: "jev", kind: "dari", endpoint: "https://routing.dari.dev/rtr_jev" },
+    { id: "jev-too", kind: "dari", endpoint: "https://routing.dari.dev/rtr_jev" },
+    { id: "cheap", kind: "dari", endpoint: "https://routing.dari.dev/rtr_cheap" },
+    { id: "default", kind: "dari" },
+  ] as const;
+  // A blank endpoint and the default router's /v1 address are the same router.
+  const defaultKeys = [
+    { id: "blank", kind: "dari", endpoint: undefined },
+    { id: "v1", kind: "dari", endpoint: "https://routing.dari.dev/v1" },
+  ] as const;
+  expect(
+    hasModelSelection(
+      router,
+      [{ ...selection, credentialId: "blank" }],
+      { ...selection, credentialId: "v1" },
+      defaultKeys,
+    ),
+  ).toBe(true);
+  const again = (credentialId: string) =>
+    hasModelSelection(router, [selection], { ...selection, credentialId }, keys);
+  expect(again("jev-too")).toBe(true);
+  expect(again("cheap")).toBe(false);
+  expect(again("default")).toBe(false);
+});
+
 test("a row without a chosen level runs at its gateway route's default", () => {
   const listed: CatalogModel = {
     ...model,

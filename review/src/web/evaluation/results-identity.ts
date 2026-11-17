@@ -19,6 +19,7 @@ export function identityOf(run: EvaluationRun, harness: Harness) {
     ...(run.thinking ? { thinking: run.thinking } : {}),
     ...(setting.condition ? { condition: setting.condition } : {}),
     ...(setting.subagent ? { subagent: setting.subagent } : {}),
+    ...(setting.router ? { router: setting.router } : {}),
   };
 }
 export type Identity = NonNullable<ReturnType<typeof identityOf>>;

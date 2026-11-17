@@ -3,7 +3,7 @@ import type { CredentialInfo } from "../db/credentials.js";
 import type { CatalogModel } from "./catalog.js";
 import type { ComparisonSelection } from "./comparisons.js";
 import { defaultThinking, type Harness, routeFor, signInRefusal } from "./models.js";
-import { subagentPart } from "./setting.js";
+import { routerPart, subagentPart } from "./setting.js";
 import { subagentCredentials, subagentRefusal, subagentThinkingLevels } from "./subagents.js";
 import type { EvaluationRun, SubagentModel } from "./types.js";
 
@@ -18,6 +18,7 @@ export function configurationIdentity(
   under: {
     condition?: string | undefined;
     subagent?: Pick<SubagentModel, "catalogId"> | undefined;
+    router?: { readonly id: string } | undefined;
   },
 ) {
   return JSON.stringify([
@@ -26,6 +27,7 @@ export function configurationIdentity(
     harness,
     ...(under.condition ? [under.condition] : []),
     ...(under.subagent ? [subagentPart(under.subagent)] : []),
+    ...(under.router ? [routerPart(under.router)] : []),
   ]);
 }
 
@@ -44,7 +46,11 @@ export function completedConfigurationTasks(runs: EvaluationRun[]) {
               run.model === "custom" ? run.modelName.replace(/^[^/]+\//, "") : run.model,
               run.thinking,
               trial.harness,
-              { condition: run.condition?.id, subagent: run.subagent },
+              {
+                condition: run.condition?.id,
+                subagent: run.subagent,
+                router: run.credentials?.provider === "dari" ? run.router : undefined,
+              },
             ),
             trial.runId,
             trial.taskId,

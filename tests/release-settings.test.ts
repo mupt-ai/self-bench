@@ -67,3 +67,26 @@ test("the frontier matches the Pareto package the charts draw with", () => {
     expect([...ours].sort()).toEqual([...theirs].sort());
   }
 });
+
+test("each named Dari router is a setting of its own, apart from the default router", () => {
+  const dari = (router?: { id: string; name: string }) => ({
+    ...run({ model: "dari/routing", provider: "dari", harness: "pi", results: { t1: 1 } }),
+    modelLabel: "Dari Router",
+    ...(router ? { router } : {}),
+  });
+  const runs = [
+    dari(),
+    dari({ id: "rtr_jev", name: "Jev" }),
+    dari({ id: "rtr_cheap", name: "Cheap" }),
+    dari({ id: "rtr_jev", name: "Jev" }),
+  ];
+  const settings = previewRelease(inputs({ runs, tasks: approvedTasks(["t1"]) })).settings;
+  expect(settings.map((setting) => setting.label).sort()).toEqual([
+    "Dari Router",
+    "Dari Router (Cheap)",
+    "Dari Router (Jev)",
+  ]);
+  expect(settings.find((setting) => setting.label === "Dari Router")?.id).toBe(
+    "dari/routing|pi|default",
+  );
+});

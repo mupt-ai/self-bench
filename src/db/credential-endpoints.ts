@@ -30,6 +30,12 @@ export function dariEndpoint(endpoint?: string): string {
   return `${DARI_HOST}/${router}`;
 }
 
+/** The router a Dari credential names (`rtr_…`), or undefined for the default router. */
+export function dariRouterId(endpoint?: string | null): string | undefined {
+  const path = new URL(dariEndpoint(endpoint ?? undefined)).pathname.slice(1);
+  return path === "v1" ? undefined : path;
+}
+
 export function validateEndpoint(endpoint: string, env: NodeJS.ProcessEnv): string {
   const url = new URL(endpoint);
   const allowed = (env.SELFBENCH_CUSTOM_MODEL_HOSTS ?? "").split(",").filter(Boolean);

@@ -66,6 +66,11 @@ export interface EvaluationInput extends EvaluationScope {
   condition?: RunCondition;
   /** The model the harness's subagents run on instead of the run's own (subagents.ts). */
   subagent?: SubagentModel;
+  /**
+   * The Dari router a Dari run's credential names (`rtr_…`), and that credential's name when the
+   * run started: a setting of its own, apart from the default router and every other router.
+   */
+  router?: DariRouter;
   harnesses: Harness[];
   sandbox: EvaluationSandbox;
   tasks: EvaluationTask[];
@@ -104,6 +109,10 @@ export interface EvaluationInput extends EvaluationScope {
     /** A benchmark's LLM judge: the credential its tasks' judge variables come from. */
     judgeCredentialId?: string;
   };
+}
+interface DariRouter {
+  readonly id: string;
+  readonly name: string;
 }
 export interface SolverStep {
   id: string;
