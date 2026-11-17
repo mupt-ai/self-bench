@@ -8,7 +8,6 @@ import { ResultsPlot } from "./ResultsPlot";
 const ACROSS: Record<ChartView, string> = {
   "accuracy-cost": "Cost / Task",
   "accuracy-time": "Time / Task",
-  "cost-time": "Time / Task",
 };
 
 /**

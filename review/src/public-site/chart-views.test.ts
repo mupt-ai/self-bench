@@ -11,19 +11,16 @@ describe("viewPoint", () => {
 
   test("time views place time across and need timed attempts", () => {
     expect(viewPoint("accuracy-time", measure)).toEqual({ x: 12, y: 70 });
-    expect(viewPoint("cost-time", measure)).toEqual({ x: 12, y: 0.5 });
     expect(viewPoint("accuracy-time", { ...measure, minutes: undefined })).toBeUndefined();
-    expect(viewPoint("cost-time", { ...measure, minutes: undefined })).toBeUndefined();
   });
 
-  test("cost on a log axis leaves out a measure that recorded no spend", () => {
-    expect(viewPoint("cost-time", { ...measure, cost: 0 })).toBeUndefined();
+  test("the time view keeps a measure that recorded no spend", () => {
     expect(viewPoint("accuracy-time", { ...measure, cost: 0 })).toEqual({ x: 12, y: 70 });
   });
 });
 
 describe("viewAxes", () => {
-  test("each view's axes match its name: Y versus X", () => {
+  test("each view's axes match its name", () => {
     expect(viewAxes("accuracy-cost", { lowestAccuracy: 40, narrow: false }).xAxis).toMatchObject({
       scale: "log",
     });
@@ -31,9 +28,6 @@ describe("viewAxes", () => {
     expect(time.xAxis).toMatchObject({ label: "Time per Task", objective: "minimize" });
     expect(time.xAxis).not.toHaveProperty("scale");
     expect(time.yAxis).toMatchObject({ label: "Accuracy", objective: "maximize" });
-    const costTime = viewAxes("cost-time", { lowestAccuracy: 40, narrow: false });
-    expect(costTime.xAxis).toMatchObject({ label: "Time per Task" });
-    expect(costTime.yAxis).toMatchObject({ label: "Cost per Task", scale: "log" });
   });
 
   test("the accuracy domain starts below the lowest point, in tens", () => {

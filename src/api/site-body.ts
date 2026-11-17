@@ -122,6 +122,11 @@ const COLUMNS: readonly [string, (setting: ReleaseSetting) => string][] = [
     "Cost / Task",
     (setting) => knownCostLabel(setting.costPerTaskUsd, dollars, setting.costedTasks),
   ],
+  [
+    "Time / Task",
+    (setting) =>
+      setting.minutesPerTask === undefined ? "" : `${Math.round(setting.minutesPerTask)} min`,
+  ],
   ["Frontier", (setting) => (setting.onFrontier ? "Yes" : "No")],
 ];
 

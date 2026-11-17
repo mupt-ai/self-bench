@@ -38,7 +38,7 @@ test("single-harness charts name points by model, with a recorded reasoning leve
       onSelect={() => {}}
     />,
   );
-  expect(html).toContain(">Accuracy versus Cost</text>");
+  expect(html).toContain(">Accuracy by Cost</text>");
   expect(html).toContain('aria-label="Model (high). Cost per Task');
   expect(html).toContain('aria-label="Cheaper. Cost per Task');
   // Names show only for the point under the pointer.

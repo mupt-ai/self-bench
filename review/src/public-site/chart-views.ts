@@ -2,27 +2,22 @@ import type { ParetoPlotProps } from "@mupt-ai/dari-pareto";
 import { accuracyTick, dollars } from "./format";
 
 /**
- * The results chart's views. Each names its axes "Y versus X", as the chart's title does, and time
- * is always across: a setting's time is its tasks' wall-clock minutes, so a view reads the same
- * on a repository page and in the app.
+ * The results chart's views: accuracy up, and across it either cost or time per task (the agent's
+ * minutes, else the trial's wall-clock time), so a view reads the same on a repository page and
+ * in the app.
  */
-export type ChartView = "accuracy-cost" | "accuracy-time" | "cost-time";
+export type ChartView = "accuracy-cost" | "accuracy-time";
 
 export const CHART_VIEWS: readonly { id: ChartView; label: string; description: string }[] = [
   {
     id: "accuracy-cost",
-    label: "Accuracy versus Cost",
+    label: "Accuracy by Cost",
     description: "Higher accuracy and lower model API cost are better.",
   },
   {
     id: "accuracy-time",
-    label: "Accuracy versus Time",
+    label: "Accuracy by Time",
     description: "Higher accuracy and less time per task are better.",
-  },
-  {
-    id: "cost-time",
-    label: "Cost versus Time",
-    description: "Lower model API cost and less time per task are better. Cost is on a log scale.",
   },
 ];
 
@@ -48,9 +43,7 @@ export function viewPoint(
 ): { x: number; y: number } | undefined {
   if (view === "accuracy-cost") return { x: measure.cost, y: measure.accuracy };
   if (measure.minutes === undefined) return undefined;
-  if (view === "accuracy-time") return { x: measure.minutes, y: measure.accuracy };
-  // A log axis cannot place a measure that recorded no spend.
-  return measure.cost > 0 ? { x: measure.minutes, y: measure.cost } : undefined;
+  return { x: measure.minutes, y: measure.accuracy };
 }
 
 /** The axes a view draws, with the accuracy domain starting a little below the lowest point. */
@@ -90,8 +83,7 @@ export function viewAxes(
     format: (value) => (value === 0 ? "$0.00" : dollars(value)),
   };
   if (view === "accuracy-cost") return { xAxis: cost, yAxis: accuracy };
-  if (view === "accuracy-time") return { xAxis: time, yAxis: accuracy };
-  return { xAxis: time, yAxis: cost };
+  return { xAxis: time, yAxis: accuracy };
 }
 
 /** The view's name, for the chart's title and its accessible name. */

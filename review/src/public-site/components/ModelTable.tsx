@@ -1,6 +1,7 @@
 import { thinkingLevels } from "../../../../src/contracts/models";
 import { knownCostLabel } from "../../../../src/evaluation/cost-total";
 import { type SortDirection, sortRows, useTableSort } from "../../lib/table-sort";
+import { minutesTick } from "../chart-views";
 import type { PublicSetting } from "../contract";
 import {
   dollars,
@@ -12,7 +13,7 @@ import {
 } from "../format";
 import { AdaptiveTable, type Column } from "../mobile/AdaptiveTable";
 
-type SortKey = "reasoning" | "accuracy" | "cost";
+type SortKey = "reasoning" | "accuracy" | "cost" | "time";
 
 /** What each sortable column sorts by, and the way it sorts first. */
 const SORTS: Record<SortKey, { value: (row: PublicSetting) => number; first: SortDirection }> = {
@@ -20,6 +21,8 @@ const SORTS: Record<SortKey, { value: (row: PublicSetting) => number; first: Sor
   reasoning: { value: (row) => thinkingLevels.indexOf(row.reasoningLevel), first: "desc" },
   accuracy: { value: (row) => row.accuracy, first: "desc" },
   cost: { value: (row) => row.costPerTaskUsd, first: "asc" },
+  // An untimed setting sorts as the slowest.
+  time: { value: (row) => row.minutesPerTask ?? Number.POSITIVE_INFINITY, first: "asc" },
 };
 const FIRST = Object.fromEntries(
   Object.entries(SORTS).map(([key, sort]) => [key, sort.first]),
@@ -27,7 +30,7 @@ const FIRST = Object.fromEntries(
 
 /**
  * Every setting, most accurate first, with bars so the table reads as a chart too. Reasoning,
- * accuracy and cost sort from their headers. `activeId` and `highlighted` come from the chart:
+ * accuracy, cost and time sort from their headers. `activeId` and `highlighted` come from the chart:
  * the setting its pointer is on, and the settings of the vendor chip it highlights. A row the
  * pointer is on goes the other way, through `onRowHover`, to light up its point.
  */
@@ -49,6 +52,7 @@ export function ModelTable({
   );
   const rows = sortRows(ranked, SORTS[sort.key].value, sort.direction);
   const maxCost = Math.max(...rows.map((row) => row.costPerTaskUsd), 0.01);
+  const maxMinutes = Math.max(...rows.map((row) => row.minutesPerTask ?? 0), 1);
   const columns: Column<PublicSetting, SortKey>[] = [
     {
       header: "Model",
@@ -97,6 +101,22 @@ export function ModelTable({
         />
       ),
       sort: { key: "cost", first: SORTS.cost.first },
+    },
+    {
+      header: "Time / Task",
+      role: "metric",
+      className: "w-48",
+      cell: (row) =>
+        row.minutesPerTask === undefined ? (
+          <span className="text-muted-foreground">—</span>
+        ) : (
+          <Bar
+            value={row.minutesPerTask / maxMinutes}
+            label={minutesTick(row.minutesPerTask)}
+            color="var(--muted-fg)"
+          />
+        ),
+      sort: { key: "time", first: SORTS.time.first },
     },
   ];
   return (
