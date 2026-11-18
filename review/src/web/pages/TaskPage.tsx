@@ -3,6 +3,7 @@ import React from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { isEvalName } from "../../../../src/contracts/evals";
 import { fetchTask, type TaskItem } from "../api";
+import { GitHubMark } from "../GitHubMark";
 import { pageGutter } from "../layout";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
@@ -24,6 +25,15 @@ import { TaskView } from "../task/TaskView";
 import { taskTitle } from "../task/task-title";
 import { taskTechnicalDetails } from "../task/technical-details";
 import { Breadcrumbs, Button, Notice, PageFrame } from "../ui";
+
+/** Whether a link goes to GitHub, so it can carry GitHub's mark. */
+function isGitHub(url: string): boolean {
+  try {
+    return new URL(url).hostname === "github.com";
+  } catch {
+    return false;
+  }
+}
 
 /** Keyed by the route, so a new task never inherits the previous task's state or controls. */
 export function TaskPage() {
@@ -149,12 +159,15 @@ function TaskPageContent() {
           >
             {task.sourceUrl ? (
               <a
-                className="hover:underline hover:underline-offset-4"
+                className="group hover:underline hover:underline-offset-4"
                 href={task.sourceUrl}
                 target="_blank"
                 rel="noreferrer"
               >
                 {title}
+                {isGitHub(task.sourceUrl) && (
+                  <GitHubMark className="ml-2 inline size-4 align-[-0.125em] text-faint group-hover:text-foreground" />
+                )}
               </a>
             ) : (
               title

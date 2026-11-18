@@ -1,6 +1,6 @@
-import { Building2 } from "lucide-react";
 import React from "react";
 import { Avatar } from "../Dropdown";
+import { GitHubMark } from "../GitHubMark";
 import { InfoTooltip } from "../primitives/tooltip";
 import type { SiteOrg } from "../session";
 import { Button, Input, SectionHeader, Select } from "../ui";
@@ -184,7 +184,7 @@ export function MemberTable({
                   <td className="px-4 py-2.5 text-muted-foreground">
                     {member.source === "github" ? (
                       <span className="inline-flex items-center gap-1.5">
-                        <Building2 className="size-3.5 text-faint" aria-hidden="true" />
+                        <GitHubMark className="size-3.5 text-faint" />
                         GitHub
                       </span>
                     ) : (

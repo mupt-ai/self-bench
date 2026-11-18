@@ -34,9 +34,13 @@ test("GitHub sign-in shows progress, blocks repeat clicks, and resets on return"
       throw new Error("Missing GitHub sign-in link");
     expect(container.querySelector("h1")?.textContent).toBe("Sign In");
     const lockup = container.querySelector('a[href="https://selfbench.dev"]');
-    expect(lockup?.getAttribute("aria-label")).toBe("SelfBench by dari.dev Home");
-    expect(lockup?.textContent).toContain("dari.dev");
-    expect(lockup?.textContent).toContain("SelfBench");
+    expect(lockup?.getAttribute("aria-label")).toBe("selfbench.dev Home");
+    expect(lockup?.textContent).toBe("selfbench.dev");
+    expect(
+      container
+        .querySelector('a[href="https://github.com/mupt-ai/self-bench"]')
+        ?.getAttribute("aria-label"),
+    ).toBe("GitHub");
     expect(link.textContent).toBe("Continue with GitHub");
     expect(link.getAttribute("aria-busy")).toBe("false");
     expect(container.querySelector('[role="alert"]')?.textContent).toBe(

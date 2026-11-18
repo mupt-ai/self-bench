@@ -80,44 +80,47 @@ export function Lockup({
 
 /**
  * The app's lockup, as dari.dev's app shows its own: the round mark, the dari.dev wordmark, and the
- * product's name beside it. Links home, or to `href` when given.
+ * product's name beside it, or `name` alone as the wordmark. Links home, or to `href` when given.
  */
 export function AppLockup({
   showName = true,
   className,
   href,
+  name,
   onClick,
 }: {
   showName?: boolean;
   className?: string;
   href?: string;
+  /** A wordmark that replaces "dari.dev SelfBench", such as "selfbench.dev". */
+  name?: string;
   onClick?: React.MouseEventHandler<HTMLAnchorElement>;
 }) {
   const classNames = clsx("inline-flex min-w-0 items-center gap-2.5 text-foreground", className);
+  const wordmark = "font-wordmark text-base font-medium tracking-[-0.01em]";
+  const label = name ? `${name} Home` : "SelfBench by dari.dev Home";
   const content = (
     <>
       <img className="size-6 shrink-0" src="/dari-logo.svg" alt="" width={24} height={24} />
-      {showName && (
-        <>
-          <span className="font-wordmark text-base font-medium tracking-[-0.01em]">dari.dev</span>
-          <span className="truncate text-[13px] text-muted-foreground">SelfBench</span>
-        </>
-      )}
+      {showName &&
+        (name ? (
+          <span className={wordmark}>{name}</span>
+        ) : (
+          <>
+            <span className={wordmark}>dari.dev</span>
+            <span className="truncate text-[13px] text-muted-foreground">SelfBench</span>
+          </>
+        ))}
     </>
   );
   if (href)
     return (
-      <a
-        className={classNames}
-        href={href}
-        aria-label="SelfBench by dari.dev Home"
-        onClick={onClick}
-      >
+      <a className={classNames} href={href} aria-label={label} onClick={onClick}>
         {content}
       </a>
     );
   return (
-    <Link className={classNames} to="/" aria-label="SelfBench by dari.dev Home" onClick={onClick}>
+    <Link className={classNames} to="/" aria-label={label} onClick={onClick}>
       {content}
     </Link>
   );
