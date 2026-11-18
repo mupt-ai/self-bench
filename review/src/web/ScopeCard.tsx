@@ -48,7 +48,7 @@ export function ScopeCard({
   const trigger = useRef<HTMLButtonElement>(null);
   const pendingRemove = useRef(false);
   return (
-    <article className="panel group relative flex h-full min-h-40 flex-col transition-[border-color,box-shadow] hover:border-foreground/30 hover:shadow-[0_2px_4px_rgb(0_0_0/0.06),0_10px_24px_-8px_rgb(0_0_0/0.14)] has-[a:focus-visible]:border-foreground/40">
+    <article className="panel group relative flex h-full min-h-40 flex-col transition-colors hover:border-foreground/25 has-[a:focus-visible]:border-ring">
       {to && (
         <Link
           aria-label={`Open ${name}`}
@@ -58,7 +58,9 @@ export function ScopeCard({
       )}
       <header className="pointer-events-none relative z-10 flex items-center gap-2.5 px-4 pt-4">
         {icon}
-        <h2 className="min-w-0 flex-1 truncate font-mono text-sm font-medium">{name}</h2>
+        <h2 className="min-w-0 flex-1 truncate font-mono text-sm font-medium transition-colors group-hover:text-brand">
+          {name}
+        </h2>
         <DropdownMenu
           onOpenChange={(open) => {
             if (open) pendingRemove.current = false;
@@ -142,7 +144,7 @@ export function AddScopeButton({ label, onClick }: { label: string; onClick(): v
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="group flex h-full min-h-40 w-full flex-col items-center justify-center gap-2 border-[1.5px] border-dashed border-foreground/15 text-sm font-medium text-muted-foreground transition-colors hover:border-foreground/35 hover:bg-foreground/[0.03] hover:text-foreground"
+      className="group flex h-full min-h-40 w-full flex-col items-center justify-center gap-2 border border-dashed border-foreground/15 text-sm font-medium text-muted-foreground transition-colors hover:border-foreground/25 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
     >
       <Plus className="size-5" aria-hidden="true" />
       {label}

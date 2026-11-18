@@ -58,7 +58,7 @@ function Rows({
 }
 
 const ring = (size = "size-3") => (
-  <span className={cn("shrink-0 rounded-full border-[1.5px] border-(--faint)", size)} />
+  <span className={cn("shrink-0 rounded-full border border-(--faint)", size)} />
 );
 
 /** Tasks, each from a pull request, with its difficulty. */

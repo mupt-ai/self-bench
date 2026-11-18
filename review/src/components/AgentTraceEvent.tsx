@@ -3,7 +3,7 @@ import type { AgentFeedEvent } from "../../../src/harnesses/pi/agent-feed";
 const eventText = "max-w-[96ch] whitespace-pre-wrap wrap-anywhere text-foreground";
 const codeText = `${eventText} font-mono text-xs leading-5`;
 const summaryClass =
-  "grid min-h-10 cursor-pointer list-none grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2 px-3 py-2 text-left leading-4 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-foreground/40 [&::-webkit-details-marker]:hidden sm:px-4";
+  "grid min-h-10 cursor-pointer list-none grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2 px-3 py-2 text-left leading-4 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden sm:px-4";
 
 export function AgentTraceEvent({ event }: { event: AgentFeedEvent }) {
   const time = event.timestamp ? formatEventTime(event.timestamp) : "";
@@ -74,9 +74,7 @@ export function AgentTraceEvent({ event }: { event: AgentFeedEvent }) {
         )}
       </summary>
       <div className="border-t border-border/70 bg-muted/30 px-3 py-2 sm:px-4 sm:pl-9">
-        <p className="m-0 text-[11px] font-medium text-muted-foreground">
-          {event.kind === "tool" ? "Arguments" : "Output"}
-        </p>
+        <p className="m-0 text-xs text-faint">{event.kind === "tool" ? "Arguments" : "Output"}</p>
         <pre className={`${codeText} mt-1`}>{formatTraceText(text) || emptyPreview}</pre>
       </div>
     </details>

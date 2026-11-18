@@ -96,7 +96,7 @@ export function ConfigurationRows({
         <td>
           <ResultsStatus results={[...configuration.latest, ...configuration.underway]} />
         </td>
-        <td className="truncate font-mono text-xs text-muted-foreground">
+        <td className="truncate text-xs text-muted-foreground">
           {startersOf(configuration.latest)}
         </td>
         {/* Out of every accepted task, so a configuration that ran only some shows it. */}
@@ -159,7 +159,7 @@ export function ConfigurationRows({
             <Elbow />
             <button
               type="button"
-              className="border border-border bg-card px-2.5 py-1 text-xs font-medium hover:bg-foreground/[0.06]"
+              className="rounded-md border border-input bg-card px-2.5 py-1 text-xs font-medium transition-colors hover:border-foreground/40 hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               onClick={() =>
                 setView((current) => ({
                   ...current,

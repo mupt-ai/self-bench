@@ -3,6 +3,7 @@ import { useParams } from "react-router";
 import type { TaskSource } from "../../sources/types";
 import type { CandidateArtifacts } from "../../types";
 import { pageGutter } from "../layout";
+import { InfoTooltip } from "../primitives/tooltip";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { TaskView } from "../task/TaskView";
@@ -32,8 +33,12 @@ export function BenchmarkTaskPage() {
             { label: "Task" },
           ]}
         />
-        <h1 className="font-mono text-xl leading-7 font-medium wrap-anywhere">{taskId}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">From Harbor's registry</p>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <h1 className="min-w-0 font-mono text-xl leading-7 font-medium wrap-anywhere">
+            {taskId}
+          </h1>
+          <InfoTooltip label="From Harbor's registry" />
+        </div>
       </header>
       <TaskView key={taskId} source={source} row={{ id: taskId, name: taskId }} />
     </div>

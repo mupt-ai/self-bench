@@ -107,8 +107,8 @@ export function ResultGroupRows({
           />
           <Elbow />
           <span className="block min-w-0">
-            <span className="flex items-center gap-2 font-mono text-xs">{heading}</span>
-            <span className="block truncate font-mono text-xs text-muted-foreground">
+            <span className="flex items-center gap-2 text-xs tabular-nums">{heading}</span>
+            <span className="block truncate text-xs text-muted-foreground">
               {outcomeSummary(results)}
             </span>
           </span>
@@ -116,7 +116,7 @@ export function ResultGroupRows({
         <td>
           <ResultsStatus results={statusOf ?? results} />
         </td>
-        <td className="truncate font-mono text-xs text-muted-foreground">{startersOf(results)}</td>
+        <td className="truncate text-xs text-muted-foreground">{startersOf(results)}</td>
         <DoneCell finished={totals.finished} total={results.length} counts={totals.counts} />
         <td className="text-right tabular-nums">
           {totals.passRate === undefined ? <NoValue width={3} /> : `${totals.passRate.toFixed(0)}%`}

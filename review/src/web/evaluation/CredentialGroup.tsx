@@ -34,7 +34,7 @@ export function CredentialGroup({
           <>
             {title}
             {!loading && (
-              <span className="ml-2 font-mono text-xs font-normal text-muted-foreground">
+              <span className="ml-2 text-xs font-normal tabular-nums text-faint">
                 {credentials.length}
               </span>
             )}

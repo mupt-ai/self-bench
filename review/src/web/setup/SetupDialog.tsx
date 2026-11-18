@@ -8,7 +8,7 @@ import { ClaudeSignIn } from "../evaluation/ClaudeSignIn";
 import { isSandbox } from "../evaluation/credential-presentation";
 import { DeviceSignIn } from "../evaluation/DeviceSignIn";
 import { cn } from "../primitives/cn";
-import { Button } from "../ui";
+import { Button, iconButtonStyles } from "../ui";
 import { covered, setupCoverage } from "./readiness";
 import { SandboxForm } from "./SandboxForm";
 import { type Choice, Choices, Status } from "./SetupRows";
@@ -106,29 +106,28 @@ export function SetupDialog({
               <li
                 key={index}
                 className={cn(
-                  "h-1 flex-1",
+                  "h-1 flex-1 rounded-full",
                   index < step ? "bg-foreground" : index === step ? "bg-brand" : "bg-border",
                 )}
               />
             ))}
           </ol>
         )}
-        <Button
-          size="icon"
-          variant="ghost"
+        <button
+          type="button"
           aria-label="Close"
-          className="-mr-2 ml-auto"
+          className={cn("-my-1 -mr-2 ml-auto", iconButtonStyles)}
           onClick={onClose}
         >
-          <X aria-hidden="true" />
-        </Button>
+          <X className="size-4" aria-hidden="true" />
+        </button>
       </div>
       <div className="px-5 pt-4 pb-6 sm:px-7">
         <h2
           id="setup-title"
           ref={title}
           tabIndex={-1}
-          className="text-2xl leading-8 font-medium outline-none!"
+          className="text-xl leading-7 font-medium outline-none!"
         >
           {heading.title}
         </h2>
@@ -188,7 +187,7 @@ export function SetupDialog({
               <Link
                 to="/settings/credentials"
                 onClick={onClose}
-                className="font-medium text-foreground underline underline-offset-4"
+                className="rounded-sm font-medium text-foreground underline decoration-foreground/35 underline-offset-4 transition-colors hover:decoration-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
                 Add It in Credentials
               </Link>

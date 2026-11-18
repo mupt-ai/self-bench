@@ -70,12 +70,13 @@ export function EnvironmentsPage() {
       >
         <Button
           variant="primary"
+          size="small"
           onClick={() => {
             setUnstarted(null);
             setCreating(true);
           }}
         >
-          <Plus aria-hidden="true" />
+          <Plus className="size-4" aria-hidden="true" />
           New Repo Ablation
         </Button>
       </PageHeader>
@@ -155,18 +156,18 @@ function EnvironmentRow({
         <td>
           <ChevronRight
             aria-hidden="true"
-            className={cn("size-4 text-muted-foreground transition-transform", open && "rotate-90")}
+            className={cn("size-4 text-faint transition-transform", open && "rotate-90")}
           />
         </td>
         <td>
           <span className="block font-medium">{environment.name}</span>
-          <span className="mt-1 block text-sm">
+          <span className="mt-1 block text-xs">
             <ScriptSummary
               {...(environment.script !== undefined ? { script: environment.script } : {})}
             />
           </span>
         </td>
-        <td className="whitespace-nowrap">{coverage(environment)}</td>
+        <td className="whitespace-nowrap tabular-nums">{coverage(environment)}</td>
         <td className="text-right whitespace-nowrap text-muted-foreground">
           {[environment.createdBy, formatAgo(environment.createdAt)].filter(Boolean).join(" · ")}
         </td>

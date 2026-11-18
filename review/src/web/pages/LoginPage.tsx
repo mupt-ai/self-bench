@@ -32,7 +32,7 @@ export function LoginPage() {
       <main className="flex flex-1 items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm">
           <div className="mb-8 flex justify-center">
-            <AppLockup />
+            <AppLockup href={PUBLIC_SITE_URL} />
           </div>
           <div className="border border-border bg-card p-8">
             <h1 className="text-xl font-medium">Sign In</h1>
@@ -81,7 +81,6 @@ export function LoginPage() {
             aria-label="Elsewhere"
             className="mt-6 flex justify-center gap-5 text-[13px] text-muted-foreground"
           >
-            <OutLink href={PUBLIC_SITE_URL}>selfbench.dev</OutLink>
             <OutLink href="https://dari.dev">dari.dev</OutLink>
             <OutLink href="https://github.com/mupt-ai/self-bench">GitHub</OutLink>
           </nav>

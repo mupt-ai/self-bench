@@ -31,11 +31,11 @@ export function BatchState({ phase }: { phase?: BatchStatus["phase"] }) {
         ? "border-success/40 bg-success/10 text-success"
         : phase === "cancelled" || !phase
           ? "border-border bg-muted text-muted-foreground"
-          : "border-brand/40 bg-brand/10 text-warning";
+          : "border-check/40 bg-check/10 text-check";
   return (
     <span
       className={cn(
-        "inline-flex items-center border px-2 py-1 text-xs leading-none font-medium tracking-normal",
+        "inline-flex items-center rounded-sm border px-1.5 py-0.5 text-[11px] font-medium",
         tone,
       )}
     >

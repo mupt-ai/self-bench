@@ -133,8 +133,8 @@ function Option({
   return (
     <label
       htmlFor={id}
-      className={`flex cursor-pointer items-start gap-2.5 border p-3 text-sm transition-colors ${
-        checked ? "border-check/50 bg-check/[0.07]" : "border-border"
+      className={`flex cursor-pointer items-start gap-2.5 rounded-md border p-3 text-sm transition-colors ${
+        checked ? "border-foreground/40 bg-foreground/5" : "border-border hover:bg-foreground/5"
       }`}
     >
       <span className="mt-0.5 flex">

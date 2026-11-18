@@ -60,19 +60,25 @@ function FacetMenu({
           type="button"
           aria-label={picked.length ? `${facet.label}: ${picked.join(", ")}` : facet.all}
           className={cn(
-            "group flex h-8 items-center gap-2 border bg-card px-3 text-xs font-medium whitespace-nowrap hover:border-foreground/35 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-            first ? "border-foreground/50 text-foreground" : "border-border text-muted-foreground",
+            "group flex h-8 items-center gap-2 rounded-md border bg-transparent px-3 text-xs font-medium whitespace-nowrap transition-colors hover:border-foreground/40 hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+            first
+              ? "border-foreground/40 bg-foreground/5 text-foreground"
+              : "border-input text-muted-foreground",
           )}
         >
           {first ? (
             <>
               <span className="font-medium text-muted-foreground">{facet.label}</span>
               {color(first) && (
-                <span className="size-2" style={{ background: color(first) }} aria-hidden="true" />
+                <span
+                  className="size-2 rounded-full"
+                  style={{ background: color(first) }}
+                  aria-hidden="true"
+                />
               )}
               {first}
               {picked.length > 1 && (
-                <span className="font-mono font-medium text-muted-foreground">
+                <span className="font-medium tabular-nums text-muted-foreground">
                   +{picked.length - 1}
                 </span>
               )}

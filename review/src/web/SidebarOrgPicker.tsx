@@ -59,10 +59,7 @@ export function SidebarOrgPicker({
               </span>
             )}
             {!collapsed && (
-              <ChevronsUpDown
-                className="size-4 shrink-0 text-faint"
-                aria-hidden="true"
-              />
+              <ChevronsUpDown className="size-4 shrink-0 text-faint" aria-hidden="true" />
             )}
           </button>
         </DropdownMenuTrigger>
@@ -86,9 +83,7 @@ export function SidebarOrgPicker({
             {organizations.length > 0 && (
               <>
                 {personal.length > 0 && <DropdownMenuSeparator />}
-                <DropdownMenuLabel className="px-2 pt-2 pb-1">
-                  Shared Workspaces
-                </DropdownMenuLabel>
+                <DropdownMenuLabel className="px-2 pt-2 pb-1">Shared Workspaces</DropdownMenuLabel>
                 {organizations.map((item) => (
                   <OrgItem key={item.login} org={item} />
                 ))}
@@ -109,10 +104,7 @@ export function SidebarOrgPicker({
 
 function OrgItem({ org }: { org: SiteOrg }) {
   return (
-    <DropdownMenuRadioItem
-      value={org.login}
-      className="min-h-9 gap-2.5 py-1.5"
-    >
+    <DropdownMenuRadioItem value={org.login} className="min-h-9 gap-2.5 py-1.5">
       <Avatar login={org.login} url={org.avatarUrl} size={24} />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm leading-5">{org.login}</span>

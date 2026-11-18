@@ -204,7 +204,7 @@ export function HarnessDialog({
           )}
           {error && <Notice>{error}</Notice>}
         </DialogBody>
-        <DialogFooter className="sticky bottom-0 justify-between">
+        <DialogFooter className="sticky bottom-0 justify-between bg-card">
           <span className="text-sm text-muted-foreground" role="status">
             {problem ?? ""}
           </span>

@@ -49,7 +49,7 @@ function BenchmarkCard({
     <ScopeCard
       name={benchmark.name}
       {...(ready ? { to: `/benchmarks/${benchmark.name}` } : {})}
-      icon={<Package className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />}
+      icon={<Package className="size-5 shrink-0 text-faint" aria-hidden="true" />}
       details={[
         "Harbor Registry",
         benchmark.status === "adding"

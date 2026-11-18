@@ -46,8 +46,8 @@ test("sidebar exposes labeled navigation and credentials", () => {
   expect(html).toMatch(
     /<a[^>]*href="https:\/\/docs\.selfbench\.dev"[^>]*target="_blank"[^>]*aria-label="Docs"/,
   );
-  expect(html).toContain('aria-label="self-bench by dari.dev Home"');
-  expect(html).toContain("by dari.dev</span>");
+  expect(html).toContain('aria-label="SelfBench by dari.dev Home"');
+  expect(html).toContain(">SelfBench</span>");
 });
 
 test("sidebar sorts its pages into named sections, in order", () => {

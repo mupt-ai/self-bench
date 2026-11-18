@@ -147,7 +147,7 @@ export function ReleaseDialog({
           aria-label="Close"
           disabled={busy}
           onClick={onClose}
-          className="-mt-0.5 -mr-1.5 inline-flex size-7 shrink-0 items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
+          className="-mt-0.5 -mr-1.5 inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-40"
         >
           <X aria-hidden="true" className="size-4" />
         </button>

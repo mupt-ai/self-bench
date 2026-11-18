@@ -179,7 +179,7 @@ export function RunMissing({
   );
   if (compact) {
     return (
-      <tr className="bg-muted/30">
+      <tr className="bg-foreground/[0.03]">
         <td colSpan={6} className={`relative ${BATCH_INDENT}`}>
           <Elbow />
           <div className="flex flex-wrap items-center justify-between gap-3">

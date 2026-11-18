@@ -174,7 +174,7 @@ function TaskPageContent() {
             <div className="mt-3 text-sm leading-6 text-muted-foreground">
               {task.reasonSummary && <p>{task.reasonSummary}</p>}
               {technicalDetails && (
-                <details className="mt-2 [&_summary]:cursor-pointer [&_pre]:mt-2 [&_pre]:max-h-64 [&_pre]:overflow-auto [&_pre]:font-mono [&_pre]:text-xs [&_pre]:whitespace-pre-wrap [&_pre]:wrap-anywhere">
+                <details className="mt-2 [&_summary]:cursor-pointer [&_pre]:mt-2 [&_pre]:max-h-64 [&_pre]:overflow-auto [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-border [&_pre]:bg-foreground/[0.03] [&_pre]:px-3.5 [&_pre]:py-3 [&_pre]:font-mono [&_pre]:text-xs [&_pre]:leading-5 [&_pre]:text-foreground [&_pre]:whitespace-pre-wrap [&_pre]:wrap-anywhere">
                   <summary>Technical Details</summary>
                   <pre>{technicalDetails}</pre>
                 </details>

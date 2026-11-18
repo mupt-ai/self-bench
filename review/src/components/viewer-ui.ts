@@ -1,11 +1,11 @@
-import { cn } from "../web/primitives/cn";
-import { buttonStyles } from "../web/ui";
-
 export const sheetBody = "flex min-w-0 flex-col gap-5 overflow-auto px-4 pt-3 pb-12 sm:pb-6";
 export const notice = "px-4 py-3 text-sm leading-6 text-muted-foreground";
 export const prose =
   "max-w-[96ch] px-4 py-3 text-sm leading-6 whitespace-pre-wrap wrap-anywhere text-foreground [&:is(pre)]:max-w-none";
-export const viewerIconButton = cn(buttonStyles.secondary, "size-9 p-0");
+/** Its own classes, not the app's button: selfbench.dev shows it too, and keeps its look there
+ * (its theme makes `rounded-md` square) while the app restyles its buttons. */
+export const viewerIconButton =
+  "inline-flex size-9 shrink-0 items-center justify-center whitespace-nowrap rounded-md border border-foreground/20 bg-card p-0 text-foreground transition-colors hover:border-foreground/35 hover:bg-accent disabled:pointer-events-none disabled:opacity-50 [&>svg]:size-4 [&>svg]:shrink-0";
 export const viewerLink =
   "cursor-pointer text-left text-sm font-medium text-foreground underline decoration-foreground/25 underline-offset-4 hover:decoration-foreground";
 export const sheetTable =

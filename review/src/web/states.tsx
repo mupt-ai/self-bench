@@ -60,9 +60,7 @@ export function Notice({
         "flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-sm leading-6",
         tone === "error"
           ? "border-destructive/50 bg-destructive/10 text-foreground"
-          : tone === "success"
-            ? "border-brand/40 bg-brand/10 text-foreground"
-            : "border-border bg-muted text-muted-foreground",
+          : "border-brand/40 bg-brand/10 text-foreground",
         className,
       )}
     >

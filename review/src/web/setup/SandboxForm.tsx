@@ -46,13 +46,13 @@ export function SandboxForm({
       }}
     >
       <a
-        className="inline-flex items-center gap-1 text-sm font-medium underline underline-offset-4"
+        className="inline-flex items-center gap-1 rounded-sm text-sm font-medium text-foreground underline decoration-foreground/35 underline-offset-4 transition-colors hover:decoration-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         href={provider.tokens}
         target="_blank"
         rel="noreferrer"
       >
         Create a Token on {provider.name}
-        <ArrowUpRight className="size-3.5" aria-hidden="true" />
+        <ArrowUpRight className="size-3.5 text-faint" aria-hidden="true" />
       </a>
       <fieldset disabled={busy} className="grid gap-4">
         {kind === "modal" && (

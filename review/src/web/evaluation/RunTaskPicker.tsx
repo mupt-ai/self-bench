@@ -89,7 +89,7 @@ export function RunTaskPicker({
             </div>
             {!readOnly && (
               <Link
-                className="text-sm font-medium text-muted-foreground hover:text-foreground"
+                className="rounded-sm text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 to={scope.pages}
               >
                 Review Dataset →
@@ -99,7 +99,7 @@ export function RunTaskPicker({
           {availableTasks.length ? (
             <div className="max-h-72 overflow-auto">
               <table className="w-full border-collapse text-left text-sm">
-                <thead className="sticky top-0 bg-muted text-xs text-muted-foreground">
+                <thead className="sticky top-0 bg-card text-xs text-faint">
                   <tr>
                     <th scope="col" className="w-12 px-4 py-2.5 font-medium">
                       Include
@@ -122,7 +122,7 @@ export function RunTaskPicker({
                     const key = evaluationTaskKey(task.runId, task.taskId);
                     const checked = selected.has(key);
                     return (
-                      <tr key={key} className="border-t border-border hover:bg-muted/60">
+                      <tr key={key} className="border-t border-border hover:bg-accent">
                         <td className="px-4 py-3">
                           <input
                             type="checkbox"

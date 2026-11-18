@@ -18,8 +18,8 @@ export function InviteSection({
   const { busy, run, message } = useAction();
   return (
     <section aria-labelledby="invites-title">
-      <span className="mb-4 flex items-center gap-1.5">
-        <h2 id="invites-title" className="text-sm leading-6 font-medium">
+      <span className="mb-3 flex items-center gap-1.5">
+        <h2 id="invites-title" className="text-base leading-6 font-medium">
           Invites
         </h2>
         <InfoTooltip label="Invite anyone by GitHub username. They join the next time they sign in." />

@@ -109,7 +109,6 @@ export function StateDetails({
     <InfoTooltip
       label={label}
       side="right"
-      
       content={
         <span className="block tabular-nums">
           <span className="mb-1 block font-medium">
@@ -129,9 +128,8 @@ export function StateDetails({
       <button
         type="button"
         aria-label={label}
-        // A badge in the theme's accent, gold in light and blue in dark, so it shows on either; the
-        // mark takes the accent's own shade in light, which the deeper one overpowered.
-        className="grid size-4 shrink-0 cursor-help place-items-center self-center rounded-[3px] border border-brand/60 bg-brand/10 text-brand hover:border-brand hover:bg-brand/20 [:root[data-theme=dark]_&]:text-warning"
+        // A small badge in the mint accent.
+        className="grid size-4 shrink-0 cursor-help place-items-center self-center rounded-sm border border-brand/40 bg-brand/10 text-brand transition-colors hover:border-brand hover:bg-brand/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       >
         <Asterisk className="size-2.5" strokeWidth={3} aria-hidden="true" />
       </button>

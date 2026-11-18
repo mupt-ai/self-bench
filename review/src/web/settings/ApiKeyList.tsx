@@ -2,7 +2,8 @@ import { Clock3, KeyRound, ShieldCheck } from "lucide-react";
 import { formatAgo } from "../api";
 import { GhostKeys } from "../ghosts";
 import { Skeleton } from "../LoadingSkeleton";
-import { Button, EmptyState, SectionHeader } from "../ui";
+import { InfoTooltip } from "../primitives/tooltip";
+import { Button, badgeStyles, chipStyles, EmptyState } from "../ui";
 import { type ApiKey, scopeLabels } from "./api-keys";
 
 export function ApiKeyList({
@@ -16,19 +17,13 @@ export function ApiKeyList({
 }) {
   return (
     <section aria-labelledby="active-api-keys-title">
-      <SectionHeader
-        title={
-          <span className="flex items-center gap-2">
-            <span id="active-api-keys-title">Active Keys</span>
-            {keys && (
-              <span className="border border-border px-1.5 py-0.5 font-mono text-[11px] leading-4 text-muted-foreground">
-                {keys.length}
-              </span>
-            )}
-          </span>
-        }
-        description="Keys act as you and stop working as soon as you revoke them."
-      />
+      <header className="mb-3 flex items-center gap-2">
+        <h2 id="active-api-keys-title" className="text-base leading-6 font-medium text-foreground">
+          Active Keys
+        </h2>
+        {keys && <span className={`${chipStyles} tabular-nums`}>{keys.length}</span>}
+        <InfoTooltip label="Keys act as you and stop working as soon as you revoke them." />
+      </header>
       {loading ? (
         <ApiKeyListSkeleton />
       ) : !keys?.length ? (
@@ -40,11 +35,11 @@ export function ApiKeyList({
           <table className="w-full min-w-[640px] border-collapse text-left text-sm">
             <thead className="text-xs text-faint">
               <tr>
-                <th className="px-4 py-3 font-medium">Key</th>
-                <th className="px-4 py-3 font-medium">Scope</th>
-                <th className="px-4 py-3 font-medium">Last Used</th>
-                <th className="px-4 py-3 font-medium">Created</th>
-                <th className="px-4 py-3">
+                <th className="px-4 py-2.5 font-medium">Key</th>
+                <th className="px-4 py-2.5 font-medium">Scope</th>
+                <th className="px-4 py-2.5 font-medium">Last Used</th>
+                <th className="px-4 py-2.5 font-medium">Created</th>
+                <th className="px-4 py-2.5">
                   <span className="sr-only">Actions</span>
                 </th>
               </tr>
@@ -63,16 +58,16 @@ export function ApiKeyList({
 
 function ApiKeyRow({ apiKey, onRevoke }: { apiKey: ApiKey; onRevoke(): void }) {
   return (
-    <tr className="transition-colors hover:bg-muted/20" data-testid="api-key-card">
-      <td className="px-4 py-3">
+    <tr className="transition-colors hover:bg-accent" data-testid="api-key-card">
+      <td className="px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-3">
-          <KeyRound className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <KeyRound className="size-4 shrink-0 text-faint" aria-hidden="true" />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="max-w-64 truncate font-medium text-foreground" title={apiKey.name}>
                 {apiKey.name}
               </span>
-              <span className="rounded-sm border border-brand/40 bg-brand/10 px-1.5 py-0.5 text-[11px] leading-3 font-medium text-brand">
+              <span className={`${badgeStyles} border-brand/40 bg-brand/10 text-brand`}>
                 Active
               </span>
             </div>
@@ -82,28 +77,28 @@ function ApiKeyRow({ apiKey, onRevoke }: { apiKey: ApiKey; onRevoke(): void }) {
           </div>
         </div>
       </td>
-      <td className="px-4 py-3">
+      <td className="px-4 py-2.5">
         <span className="inline-flex items-center gap-1.5 text-xs text-foreground">
-          <ShieldCheck className="size-3.5 text-muted-foreground" aria-hidden="true" />
+          <ShieldCheck className="size-3.5 text-faint" aria-hidden="true" />
           {scopeLabels[apiKey.scope]}
         </span>
       </td>
-      <td className="px-4 py-3 text-xs text-muted-foreground">
+      <td className="px-4 py-2.5 text-xs text-muted-foreground">
         <span className="inline-flex items-center gap-1.5">
-          <Clock3 className="size-3.5" aria-hidden="true" />
+          <Clock3 className="size-3.5 text-faint" aria-hidden="true" />
           {apiKey.lastUsedAt ? formatAgo(apiKey.lastUsedAt) : "Never Used"}
         </span>
       </td>
-      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+      <td className="px-4 py-2.5 text-xs tabular-nums text-muted-foreground">
         {apiKey.createdAt.slice(0, 10)}
       </td>
-      <td className="px-4 py-3 text-right">
+      <td className="px-4 py-2.5 text-right">
         <Button
           size="small"
           variant="ghost"
           onClick={onRevoke}
           aria-label={`Revoke ${apiKey.name}`}
-          className="text-destructive hover:bg-destructive/[0.06] hover:text-destructive"
+          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
         >
           Revoke
         </Button>

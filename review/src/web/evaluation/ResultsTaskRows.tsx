@@ -136,7 +136,7 @@ export function TaskRow({ entry, onOpen }: { entry: TaskEntry; onOpen(result: Ta
   return (
     <tr
       className={cn(
-        "cursor-pointer text-xs hover:bg-foreground/[0.04]",
+        "cursor-pointer text-xs hover:bg-accent",
         counted && "text-muted-foreground [&_[data-circle]]:opacity-50",
       )}
       // Anywhere on the row opens the task's dialog.

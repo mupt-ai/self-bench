@@ -68,8 +68,8 @@ export function HarnessesPage() {
         title="Harnesses"
         description="Save a change to an agent once, then run any tasks with and without it."
       >
-        <Button variant="primary" onClick={() => setEditing("new")}>
-          <Plus aria-hidden="true" />
+        <Button variant="primary" size="small" onClick={() => setEditing("new")}>
+          <Plus className="size-4" aria-hidden="true" />
           New Harness
         </Button>
       </PageHeader>

@@ -48,7 +48,7 @@ export function BatchesPage() {
       {!!runs?.length && (
         <section className="panel" aria-label="Batch History">
           <div
-            className={`${columns} border-b border-border bg-muted px-4 py-2.5 text-xs font-medium text-muted-foreground max-md:hidden`}
+            className={`${columns} border-b border-border bg-muted px-4 py-2.5 text-xs font-medium text-faint max-md:hidden`}
             aria-hidden="true"
           >
             <span>Batch</span>
@@ -63,7 +63,7 @@ export function BatchesPage() {
                 <li key={run.runId}>
                   <Link
                     to={batchPath(repoId.fullName, run.runId)}
-                    className={`${columns} items-center px-4 py-3 hover:bg-muted/60`}
+                    className={`${columns} items-center px-4 py-3 hover:bg-accent`}
                   >
                     <span className="min-w-0">
                       <span className="block font-mono text-sm font-medium">

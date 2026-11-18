@@ -38,7 +38,7 @@ export function ablationPick<Draft extends { environments?: number[]; baseline?:
 }
 
 const badge =
-  "flex items-center gap-1 rounded-md border border-border bg-muted px-2 py-0.5 text-xs";
+  "flex h-5 items-center gap-1 rounded-sm bg-foreground/[0.07] px-1.5 text-xs text-muted-foreground";
 
 /**
  * One line in the Tasks box: the picked repo ablations as badges, a "+" that adds one from a
@@ -88,7 +88,7 @@ export function RepoAblations({
             <button
               type="button"
               aria-label={`Remove ${name}`}
-              className="flex text-muted-foreground hover:text-foreground"
+              className="flex rounded-sm text-faint hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               onClick={() => remove(id)}
             >
               <X aria-hidden="true" className="size-3" />

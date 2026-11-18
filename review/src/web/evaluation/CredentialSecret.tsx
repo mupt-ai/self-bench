@@ -89,7 +89,7 @@ export function CredentialSecret({
             <button
               type="button"
               aria-label={visible ? "Hide Secret" : "Show Secret"}
-              className="absolute inset-y-0 right-0 px-3 text-muted-foreground hover:text-foreground"
+              className="absolute inset-y-0 right-0 rounded-md px-3 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               onClick={() => setVisible((value) => !value)}
             >
               {visible ? (

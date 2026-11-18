@@ -83,7 +83,7 @@ export function DemoRunPage() {
         title="Run · Demo Repository"
         description="Compare models and harnesses against accepted tasks."
       />
-      <Notice className="mb-5">
+      <Notice tone="info" className="mb-5">
         Demo mode · Sample data only. You can explore the controls, but no evaluations are
         submitted.
       </Notice>

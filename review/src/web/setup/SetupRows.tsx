@@ -87,10 +87,8 @@ export function Status({ coverage }: { coverage: ReturnType<typeof setupCoverage
         <li key={row.label} className="flex items-center gap-3 px-4 py-3.5">
           <span
             className={cn(
-              "flex size-5 shrink-0 items-center justify-center border",
-              row.ready
-                ? "border-success/40 bg-success/[0.08] text-success"
-                : "border-foreground/20",
+              "flex size-5 shrink-0 items-center justify-center rounded-sm border",
+              row.ready ? "border-success/40 bg-success/10 text-success" : "border-foreground/20",
             )}
           >
             {row.ready && <Check className="size-3.5" aria-hidden="true" />}
@@ -129,8 +127,15 @@ export function SetupUnavailable({
             </Button>
           )}
         </div>
-        <Button ref={close} size="icon" variant="ghost" aria-label="Close" onClick={onClose}>
-          <X aria-hidden="true" />
+        <Button
+          ref={close}
+          size="icon"
+          variant="ghost"
+          aria-label="Close"
+          className="-my-1 -mr-2 size-8 text-muted-foreground hover:text-foreground"
+          onClick={onClose}
+        >
+          <X className="size-4" aria-hidden="true" />
         </Button>
       </div>
     </Dialog>

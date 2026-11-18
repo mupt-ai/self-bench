@@ -115,9 +115,9 @@ function AgentLimit({ path }: { path: string }) {
                   // A notice about the last save no longer describes what the field holds.
                   if (result?.tone === "success") setResult(undefined);
                 }}
-                className="min-w-0 flex-1 text-right tabular-nums"
+                className="min-w-0 flex-1 rounded-r-none text-right tabular-nums"
               />
-              <span className="flex shrink-0 items-center border border-l-0 border-input bg-muted px-3 text-sm text-muted-foreground">
+              <span className="flex shrink-0 items-center rounded-r-md border border-l-0 border-input bg-muted px-3 text-sm text-faint">
                 Minutes
               </span>
             </label>

@@ -27,7 +27,10 @@ export function NewApiKeySecret({
     if (!ok) selectContents(secret.current);
   };
   return (
-    <section aria-labelledby="new-api-key-title" className="mb-8 border border-brand/40 bg-brand/5">
+    <section
+      aria-labelledby="new-api-key-title"
+      className="mb-8 overflow-hidden rounded-md border border-brand/40 bg-brand/[0.06]"
+    >
       <div className="border-b border-brand/20 px-4 py-3">
         <div className="flex items-start gap-3">
           <KeyRound className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
@@ -48,26 +51,23 @@ export function NewApiKeySecret({
         </div>
       </div>
       <div className="p-4">
-        <p className="mb-2 text-xs text-faint">
-          API Key Secret
-        </p>
+        <p className="mb-2 text-xs text-faint">API Key Secret</p>
         <div className="flex flex-col gap-2 sm:flex-row">
           <code
             ref={secret}
             data-testid="api-key-secret"
-            className="min-w-0 flex-1 break-all border border-border bg-background px-3 py-2.5 font-mono text-xs leading-5 select-all"
+            className="min-w-0 flex-1 break-all rounded-lg border border-border bg-background px-3.5 py-3 font-mono text-xs leading-5 text-foreground select-all"
           >
             {created.secret}
           </code>
           <Button
             size="small"
-            variant={copied === "copied" ? "primary" : "secondary"}
             onClick={() => void copy()}
             aria-label="Copy API Key"
             className="sm:self-start"
           >
             {copied === "copied" ? (
-              <Check className="h-4 w-4" aria-hidden="true" />
+              <Check className="h-4 w-4 text-brand" aria-hidden="true" />
             ) : (
               <Copy className="h-4 w-4" aria-hidden="true" />
             )}

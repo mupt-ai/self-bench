@@ -80,24 +80,22 @@ export function Lockup({
 
 /**
  * The app's lockup, as dari.dev's app shows its own: the round mark, the dari.dev wordmark, and the
- * product's name beside it. Links home.
+ * product's name beside it. Links home, or to `href` when given.
  */
 export function AppLockup({
   showName = true,
   className,
+  href,
   onClick,
 }: {
   showName?: boolean;
   className?: string;
+  href?: string;
   onClick?: React.MouseEventHandler<HTMLAnchorElement>;
 }) {
-  return (
-    <Link
-      className={clsx("inline-flex min-w-0 items-center gap-2.5 text-foreground", className)}
-      to="/"
-      aria-label="SelfBench by dari.dev Home"
-      onClick={onClick}
-    >
+  const classNames = clsx("inline-flex min-w-0 items-center gap-2.5 text-foreground", className);
+  const content = (
+    <>
       <img className="size-6 shrink-0" src="/dari-logo.svg" alt="" width={24} height={24} />
       {showName && (
         <>
@@ -105,6 +103,22 @@ export function AppLockup({
           <span className="truncate text-[13px] text-muted-foreground">SelfBench</span>
         </>
       )}
+    </>
+  );
+  if (href)
+    return (
+      <a
+        className={classNames}
+        href={href}
+        aria-label="SelfBench by dari.dev Home"
+        onClick={onClick}
+      >
+        {content}
+      </a>
+    );
+  return (
+    <Link className={classNames} to="/" aria-label="SelfBench by dari.dev Home" onClick={onClick}>
+      {content}
     </Link>
   );
 }

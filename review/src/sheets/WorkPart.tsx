@@ -14,14 +14,12 @@ export function WorkPart({
 }) {
   return (
     <details className="group/part panel">
-      <summary className="flex min-h-10 cursor-pointer list-none items-center gap-x-2 px-3 py-2 text-left focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-foreground/40 [&::-webkit-details-marker]:hidden sm:px-4">
+      <summary className="flex min-h-10 cursor-pointer list-none items-center gap-x-2 px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden sm:px-4">
         <span
           aria-hidden="true"
           className="shrink-0 text-[11px] text-muted-foreground before:content-['▸'] group-open/part:before:content-['▾']"
         />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-          {title}
-        </span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{title}</span>
         <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">{status}</span>
       </summary>
       <div className="border-t border-border">

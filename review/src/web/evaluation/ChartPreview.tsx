@@ -163,7 +163,7 @@ export function ChartPreview({
       ) : (
         <button
           type="button"
-          className="group flex items-center gap-3 border border-border bg-card px-2.5 py-2 text-left text-muted-foreground hover:border-foreground/35 hover:text-foreground"
+          className="group flex items-center gap-3 border border-border bg-card px-2.5 py-2 text-left text-muted-foreground transition-colors hover:border-foreground/25 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           aria-label="Open Chart"
           title="Open Chart"
           onClick={() => setOpen(true)}

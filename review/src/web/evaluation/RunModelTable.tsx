@@ -62,7 +62,7 @@ export function RunModelTable<D extends ComparisonSelection>({
             />
             <button
               type="button"
-              className="absolute right-0 top-10 flex h-9 w-10 items-center justify-center border-0 bg-transparent p-0 text-muted-foreground hover:text-foreground focus-visible:text-foreground xl:top-3"
+              className="absolute right-0 top-10 flex h-9 w-10 items-center justify-center rounded-md border-0 bg-transparent p-0 text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring xl:top-3"
               aria-label={`Remove ${model.label}`}
               onClick={() => {
                 onChange({

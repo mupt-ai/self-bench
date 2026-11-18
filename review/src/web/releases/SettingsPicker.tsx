@@ -3,7 +3,7 @@ import React from "react";
 import type { ThinkingLevel } from "../../../../src/contracts/models";
 import { type Harness, harnessLabels } from "../../../../src/evaluation/models";
 import { thinkingLabel } from "../evaluation/run-presentation";
-import { SearchInput } from "../ui";
+import { checkboxStyles, SearchInput } from "../ui";
 import { matchesQuery } from "../word-search";
 
 /** What a row shows: a release preview's setting, or a configuration the Results chart can plot. */
@@ -44,7 +44,7 @@ export function Tick({
         checked={checked}
         disabled={disabled}
         onChange={(event) => onChange(event.target.checked)}
-        className="peer size-4 cursor-pointer appearance-none rounded-sm border border-foreground/30 bg-transparent transition-colors checked:border-foreground checked:bg-foreground aria-[checked=mixed]:border-foreground aria-[checked=mixed]:bg-foreground hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+        className={`${checkboxStyles} aria-[checked=mixed]:border-foreground aria-[checked=mixed]:bg-foreground`}
       />
       <Mark
         aria-hidden="true"
@@ -123,7 +123,7 @@ export function SettingsPicker({
       <label
         key={setting.key}
         htmlFor={id}
-        className={`${grid} relative cursor-pointer py-2.5 pr-4 text-sm text-muted-foreground hover:bg-muted/60 pl-4`}
+        className={`${grid} relative cursor-pointer py-2.5 pr-4 text-sm text-muted-foreground hover:bg-accent pl-4`}
       >
         {child && <Elbow last={child.last} />}
         <span className={`flex min-w-0 items-center gap-3 ${child ? "pl-7" : ""}`}>
@@ -186,7 +186,7 @@ export function SettingsPicker({
                 <div key={model}>
                   <label
                     htmlFor={id}
-                    className="relative flex cursor-pointer items-center gap-3 px-4 py-2.5 text-sm hover:bg-muted/60"
+                    className="relative flex cursor-pointer items-center gap-3 px-4 py-2.5 text-sm hover:bg-accent"
                   >
                     <span
                       aria-hidden="true"

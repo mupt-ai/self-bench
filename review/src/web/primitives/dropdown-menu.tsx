@@ -27,12 +27,7 @@ export function DropdownMenuContent({
   );
 }
 export function DropdownMenuLabel({ className, ...props }: ComponentProps<typeof Primitive.Label>) {
-  return (
-    <Primitive.Label
-      className={cn("px-2 py-1.5 text-xs text-faint", className)}
-      {...props}
-    />
-  );
+  return <Primitive.Label className={cn("px-2 py-1.5 text-xs text-faint", className)} {...props} />;
 }
 export function DropdownMenuSeparator(props: ComponentProps<typeof Primitive.Separator>) {
   return <Primitive.Separator className="my-1 h-px bg-border" {...props} />;

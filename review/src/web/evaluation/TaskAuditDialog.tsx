@@ -139,7 +139,7 @@ export function TaskAuditDialog({
               <li key={`${configuration.key}/${result.run.id}`}>
                 <button
                   type="button"
-                  className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-1 px-3 py-2.5 text-left text-sm hover:bg-foreground/[0.04] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-foreground"
+                  className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-1 px-3 py-2.5 text-left text-sm transition-colors hover:bg-foreground/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
                   onClick={() => onOpenTrial(result)}
                 >
                   <OutcomeCircle outcome={result.outcome} bare />

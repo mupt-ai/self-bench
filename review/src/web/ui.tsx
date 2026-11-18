@@ -61,7 +61,8 @@ export const chipStyles =
   "inline-flex h-5 items-center rounded-sm bg-foreground/[0.07] px-1.5 text-xs text-muted-foreground";
 
 /** A bordered state: Active, Running, Published. Add a tone's border, fill, and text. */
-export const badgeStyles = "inline-flex items-center rounded-sm border px-1.5 py-0.5 text-[11px] font-medium";
+export const badgeStyles =
+  "inline-flex items-center rounded-sm border px-1.5 py-0.5 text-[11px] font-medium";
 
 /** A row of mutually exclusive choices: the group is rounded, its segments are divided. */
 export const segmentedGroupStyles =
@@ -86,13 +87,6 @@ export const iconButtonStyles =
  * gives them the same ink. */
 export const checkboxStyles =
   "peer size-4 shrink-0 cursor-pointer appearance-none rounded-sm border border-foreground/30 bg-transparent transition-colors checked:border-foreground checked:bg-foreground hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
-
-/** An inline notice: rounded, since it is not on the page's grid. */
-export const noticeStyles = {
-  info: "rounded-md border border-brand/40 bg-brand/10 p-3 text-sm",
-  warning: "rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning",
-  error: "rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm",
-};
 
 export const fieldStyles = "grid min-w-0 gap-2 text-[13px] font-medium text-foreground";
 export const controlStyles =

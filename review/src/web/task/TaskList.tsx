@@ -37,7 +37,7 @@ export function TaskList({
             data-selected={selected.has(taskKey(task))}
             className={cn(
               taskRowLayout,
-              "group border-border transition-colors hover:bg-muted/60 data-[selected=true]:bg-foreground/[0.04]",
+              "group border-border transition-colors hover:bg-accent data-[selected=true]:bg-accent",
             )}
           >
             <input
@@ -127,7 +127,7 @@ export function TaskListHeader() {
     <div
       className={cn(
         taskRowLayout,
-        "hidden border-b border-border bg-muted py-2.5 text-xs font-medium text-muted-foreground md:grid",
+        "hidden border-b border-border bg-muted py-2.5 text-xs font-medium text-faint md:grid",
       )}
       aria-hidden="true"
     >

@@ -66,10 +66,12 @@ test("the shared cookie wins over this origin's older local choice", () => {
   expect(preferences?.getItem("selfbench-system")).toBeNull();
 });
 
-test("both sites apply the saved choice with the same script before first paint", () => {
-  const script = (file: string) =>
-    /<script>[\s\S]*?<\/script>/.exec(readFileSync(join(import.meta.dir, file), "utf8"))?.[0];
-  const app = script("../../index.html");
-  expect(app).toContain("Domain=selfbench.dev");
-  expect(script("../../public-site/index.html")).toBe(app);
+test("selfbench.dev applies the saved choice before first paint, and the app is always dark", () => {
+  const read = (file: string) => readFileSync(join(import.meta.dir, file), "utf8");
+  const site = /<script>[\s\S]*?<\/script>/.exec(read("../../public-site/index.html"))?.[0];
+  expect(site).toContain("Domain=selfbench.dev");
+  // The app wears dari.dev's single dark theme, and never rewrites selfbench.dev's choice.
+  const app = read("../../index.html");
+  expect(app).toContain('data-theme="dark"');
+  expect(app).not.toContain("selfbench-theme");
 });

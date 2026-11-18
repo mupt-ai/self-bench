@@ -70,7 +70,7 @@ export function BatchTasks({ status, fullName }: { status: BatchStatus; fullName
                 onClick={() => setFilter(key)}
                 className={
                   filter === key
-                    ? "border-foreground bg-foreground text-background hover:border-foreground hover:bg-foreground/85"
+                    ? "border-foreground/40 bg-foreground/15 text-foreground hover:bg-foreground/15"
                     : undefined
                 }
               >
@@ -100,7 +100,7 @@ export function BatchTasks({ status, fullName }: { status: BatchStatus; fullName
                   <Link
                     to={taskPath(fullName, { runId: status.runId, taskId: task.taskId })}
                     state={linkState}
-                    className="grid items-center gap-3 px-4 py-3.5 hover:bg-muted/60 lg:grid-cols-[minmax(0,1fr)_5rem_10rem_10rem]"
+                    className="grid items-center gap-3 px-4 py-3.5 hover:bg-accent lg:grid-cols-[minmax(0,1fr)_5rem_10rem_10rem]"
                   >
                     <span className="min-w-0">
                       <span className="block break-words font-mono text-sm font-medium">

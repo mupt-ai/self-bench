@@ -90,7 +90,10 @@ export function DialogHeader({
         </button>
       </div>
       {description && (
-        <p id={descriptionId} className="mt-1.5 break-words text-[13px] leading-5 text-muted-foreground">
+        <p
+          id={descriptionId}
+          className="mt-1.5 break-words text-[13px] leading-5 text-muted-foreground"
+        >
           {description}
         </p>
       )}
