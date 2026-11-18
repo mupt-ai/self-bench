@@ -5,7 +5,7 @@ export const credentials = [
   { id: "key", kind: "openai" as const },
   { id: "sandbox", kind: "modal" as const },
 ];
-export let ids = 0;
+let ids = 0;
 export const newId = () => `id-${++ids}`;
 
 export function run(
