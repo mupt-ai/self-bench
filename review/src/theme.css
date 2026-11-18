@@ -113,30 +113,34 @@
   --chart-red: #e66767;
 }
 
-* {
-  border-color: var(--border);
-  scrollbar-color: color-mix(in srgb, var(--foreground) 24%, transparent) transparent;
-  scrollbar-width: thin;
-}
+/* Base rules sit in the base layer, under every utility, so a class such as `border-transparent`
+   or a heading's own tracking still wins. */
+@layer base {
+  * {
+    border-color: var(--border);
+    scrollbar-color: color-mix(in srgb, var(--foreground) 24%, transparent) transparent;
+    scrollbar-width: thin;
+  }
 
-html {
-  background: var(--background);
-}
+  html {
+    background: var(--background);
+  }
 
-body {
-  font-weight: 450;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-}
+  body {
+    font-weight: 450;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
 
-h1,
-h2 {
-  letter-spacing: -0.02em;
-}
+  h1,
+  h2 {
+    letter-spacing: -0.02em;
+  }
 
-::selection {
-  background: var(--brand);
-  color: var(--background);
+  ::selection {
+    background: var(--brand);
+    color: var(--background);
+  }
 }
 
 /* Cards, tables and panels: square, a hairline rule, no shadow. Overrides palette.css's raised
@@ -149,17 +153,16 @@ h2 {
   }
 }
 
-/* Native checkboxes and radios: ink when on, as dari.dev's checkboxes are. */
+/* Native checkboxes and radios: ink when on, as dari.dev's checkboxes are. GitHub avatars are
+   dimmed a little so white marks do not glare on the charcoal. */
 @layer base {
+  img.avatar {
+    filter: brightness(0.9);
+  }
   input[type="checkbox"],
   input[type="radio"] {
     accent-color: var(--foreground);
   }
-}
-
-/* GitHub avatars are dimmed a little so white marks do not glare on the charcoal. */
-img.avatar {
-  filter: brightness(0.9);
 }
 
 /* Selects stay native <select>s, so the keyboard, screen readers, phone pickers, and anything
