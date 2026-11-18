@@ -278,3 +278,21 @@ test("a run from before routers were recorded groups with newer runs on the same
     { catalogId: "dari/routing", credentialId: "jev-key", thinking: "high", harnesses: ["pi"] },
   ]);
 });
+
+test("a configuration's Run Missing fills only its own runs' gaps, on its harness", () => {
+  const sol = run("sol", "codex", { t1: "completed" });
+  const luna = run("luna", "codex", { t1: "completed" });
+  const solPi = run("sol", "pi", {});
+  const work = missingWork([sol, luna, solPi], tasks, credentials, newId, undefined, {
+    harness: "codex",
+    runIds: new Set([sol.id]),
+  });
+  expect(work?.settings).toEqual([{ label: "SOL · Codex · high", harness: "codex", missing: 2 }]);
+  expect(work?.trials).toBe(2);
+  expect(
+    missingWork([luna], tasks, credentials, newId, undefined, {
+      harness: "codex",
+      runIds: new Set([sol.id]),
+    }),
+  ).toBeUndefined();
+});
