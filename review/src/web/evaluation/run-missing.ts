@@ -3,7 +3,7 @@ import type { CredentialInfo } from "../../../../src/db/credentials";
 import { evaluationTaskKey, harnessLabels } from "../../../../src/evaluation/models";
 import type { EvaluationRun, Harness } from "./api";
 import { thinkingLabel } from "./run-presentation";
-import type { RetrySelection } from "./run-retry";
+import { conditionFields, type RetrySelection } from "./run-retry";
 
 type TaskKey = { runId: string; taskId: string };
 
@@ -55,6 +55,8 @@ export function missingWork(
   /** A fresh comparison id, asked for once per comparison. */
   newId: () => string,
   sandboxCredentialId?: string,
+  /** Only the settings these runs ran on one harness, as one configuration's Run Missing does. */
+  scope?: { harness: Harness; runIds: ReadonlySet<string> },
 ): MissingWork | undefined {
   const usable = new Set(credentials.map((credential) => credential.id));
   const settings = new Map<string, Setting>();
@@ -63,6 +65,7 @@ export function missingWork(
     // Oldest first, so a setting run with several credentials keeps its newest usable one.
     .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
   for (const run of live) {
+    if (scope && !scope.runIds.has(run.id)) continue;
     const credentialId = run.credentials?.modelCredentialId ?? "";
     const customModel = run.model === "custom" ? run.modelName.replace(/^[^/]+\//, "") : undefined;
     // A Dari router is a setting of its own. It is the router the credential names now, as the
@@ -85,6 +88,7 @@ export function missingWork(
         }
       : undefined;
     for (const harness of run.harnesses) {
+      if (scope && harness !== scope.harness) continue;
       // A setting is its model, reasoning, harness and router, whatever credential reached the
       // model, as the server tells configurations apart (completedConfigurationTasks).
       const key = JSON.stringify([run.model, customModel, run.thinking, harness, router?.id]);
@@ -119,6 +123,8 @@ export function missingWork(
     .filter((gap) => gap.missing.length > 0);
   if (gaps.length === 0) return undefined;
   const newest = live.at(-1);
+  // A configuration's runs share one condition and subagent, so its Run Missing runs them under it.
+  const template = scope ? live.filter((run) => scope.runIds.has(run.id)).at(-1) : undefined;
   const sandboxId = sandboxCredentialId ?? newest?.credentials?.sandboxCredentialId ?? "";
   const kind = credentials.find((credential) => credential.id === sandboxId)?.kind;
   const judgeCredentialId = newest?.credentials?.judgeCredentialId;
@@ -140,6 +146,15 @@ export function missingWork(
       ...(setting.customModel ? { customModel: setting.customModel } : {}),
       credentialId: setting.credentialId,
       ...(setting.thinking ? { thinking: setting.thinking } : {}),
+      // A run that named its subagent model on its row, before conditions did, runs it so.
+      ...(template?.subagent && !template.condition?.subagent
+        ? {
+            subagent: {
+              catalogId: template.subagent.catalogId,
+              credentialId: template.subagent.credentialId,
+            },
+          }
+        : {}),
       harnesses: [],
     };
     entry.harnesses.push(setting.harness);
@@ -162,6 +177,7 @@ export function missingWork(
           .map(({ runId, taskId }) => ({ runId, taskId })),
         ...(judgeCredentialId ? { judgeCredentialId } : {}),
         skipCompleted: true,
+        ...(template ? conditionFields(template) : {}),
       }),
     );
   });

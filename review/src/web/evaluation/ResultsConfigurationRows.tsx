@@ -8,6 +8,7 @@ import { resultStates } from "./ResultsFilters";
 import { ConfigurationName, NoValue, ResultsStatus } from "./ResultsMarks";
 import { DoneCell } from "./ResultsTaskRows";
 import { BATCH_INDENT, CONFIGURATION_CHEVRON, Elbow, Toggle } from "./ResultsTree";
+import { RunMissing } from "./RunMissing";
 import { missingTasks, withMissing } from "./results-coverage";
 import type { Configuration, TaskResult } from "./results-model";
 import { blockedNote, configurationName, momentLabel } from "./results-presentation";
@@ -120,6 +121,20 @@ export function ConfigurationRows({
           )}
         </td>
       </tr>
+      {open && accepted && baseUrl && pages && (
+        <RunMissing
+          url={baseUrl}
+          pages={pages}
+          tasks={accepted}
+          compact
+          setting={{
+            harness: configuration.harness,
+            runs: configuration.batches.flatMap((batch) =>
+              batch.results.map((result) => result.run),
+            ),
+          }}
+        />
+      )}
       {open &&
         runs
           .slice(0, limit)
