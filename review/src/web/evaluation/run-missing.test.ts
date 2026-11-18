@@ -1,49 +1,6 @@
 import { expect, test } from "bun:test";
-import type { EvaluationRun } from "./api";
 import { missingWork } from "./run-missing";
-
-const tasks = ["t1", "t2", "t3"].map((taskId) => ({ runId: "gen", taskId }));
-const credentials = [
-  { id: "key", kind: "openai" as const },
-  { id: "sandbox", kind: "modal" as const },
-];
-let ids = 0;
-const newId = () => `id-${++ids}`;
-
-function run(
-  model: string,
-  harness: "codex" | "pi",
-  trials: Record<string, EvaluationRun["trials"][number]["status"]>,
-  more: Partial<EvaluationRun> = {},
-): EvaluationRun {
-  return {
-    id: `${model}-${harness}-${Object.keys(trials).join("")}`,
-    repoId: 1,
-    tenant: "acme",
-    startedBy: "priya",
-    createdAt: "2026-11-01T00:00:00Z",
-    model,
-    modelName: `openai/${model}`,
-    thinking: "high",
-    harnesses: [harness],
-    sandbox: "modal",
-    credentials: { modelCredentialId: "key", sandboxCredentialId: "sandbox", provider: "openai" },
-    revision: 1,
-    modelLabel: model.toUpperCase(),
-    status: "completed",
-    trials: Object.entries(trials).map(([taskId, status]) => ({
-      runId: "gen",
-      taskId,
-      harness,
-      status,
-      rewards: { reward: 1 },
-      log: "",
-      steps: [],
-      artifacts: [],
-    })),
-    ...more,
-  } as EvaluationRun;
-}
+import { credentials, newId, run, tasks } from "./run-missing-fixture";
 
 test("each setting run before gets its new and errored tasks, as it ran", () => {
   const work = missingWork(
@@ -277,37 +234,4 @@ test("a run from before routers were recorded groups with newer runs on the same
   expect(work?.selections.flatMap((selection) => selection.models)).toEqual([
     { catalogId: "dari/routing", credentialId: "jev-key", thinking: "high", harnesses: ["pi"] },
   ]);
-});
-
-test("a configuration's Run Missing fills only its own runs' gaps, on its harness", () => {
-  const sol = run("sol", "codex", { t1: "completed" });
-  const luna = run("luna", "codex", { t1: "completed" });
-  const solPi = run("sol", "pi", {});
-  const work = missingWork([sol, luna, solPi], tasks, credentials, newId, undefined, {
-    harness: "codex",
-    runIds: new Set([sol.id]),
-  });
-  expect(work?.settings).toEqual([{ label: "SOL · Codex · high", harness: "codex", missing: 2 }]);
-  expect(work?.trials).toBe(2);
-  expect(
-    missingWork([luna], tasks, credentials, newId, undefined, {
-      harness: "codex",
-      runIds: new Set([sol.id]),
-    }),
-  ).toBeUndefined();
-});
-
-test("a condition's Run Missing retries under that condition, not as the plain setting", () => {
-  const condition = { id: "c1", name: "Subagents", skills: [] };
-  const conditioned = run("sol", "codex", { t1: "completed" }, {
-    condition,
-  } as Partial<EvaluationRun>);
-  const work = missingWork([conditioned], tasks, credentials, newId, undefined, {
-    harness: "codex",
-    runIds: new Set([conditioned.id]),
-  });
-  expect(work?.selections[0]).toMatchObject({
-    conditions: [{ name: "Subagents", skills: [] }],
-    baseline: false,
-  });
 });
