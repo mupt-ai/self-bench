@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Navigate, useSearchParams } from "react-router";
-import { OutLink } from "../../public-site/components/OutLink";
 import { GitHubMark } from "../GitHubMark";
 import { GitHubRepoLink } from "../GitHubStars";
 import { AppLockup } from "../Lockup";
@@ -31,7 +30,18 @@ export function LoginPage() {
   // As dari.dev's own sign-in: the wordmark over one square card, centred on the page.
   return (
     <div className="flex min-h-dvh flex-col bg-background text-foreground">
-      <main className="flex flex-1 items-center justify-center px-6 py-12">
+      <header className="flex h-14 shrink-0 items-center justify-end gap-1 px-4 sm:px-6">
+        <a
+          href="https://dari.dev"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex h-8 items-center rounded-md px-2.5 text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          dari.dev
+        </a>
+        <GitHubRepoLink repo="mupt-ai/self-bench" />
+      </header>
+      <main className="flex flex-1 items-center justify-center px-6 pt-12 pb-26">
         <div className="w-full max-w-sm">
           <div className="mb-8 flex justify-center">
             <AppLockup href={PUBLIC_SITE_URL} name="selfbench.dev" />
@@ -79,13 +89,6 @@ export function LoginPage() {
               <Notice className="mt-5 w-full text-left">{ERRORS[error] ?? ERRORS.github}</Notice>
             )}
           </div>
-          <nav
-            aria-label="Elsewhere"
-            className="mt-6 flex items-center justify-center gap-5 text-[13px] text-muted-foreground"
-          >
-            <OutLink href="https://dari.dev">dari.dev</OutLink>
-            <GitHubRepoLink repo="mupt-ai/self-bench" />
-          </nav>
         </div>
       </main>
     </div>

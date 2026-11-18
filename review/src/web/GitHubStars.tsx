@@ -1,4 +1,3 @@
-import { Star } from "lucide-react";
 import { useEffect, useState } from "react";
 import { GitHubMark } from "./GitHubMark";
 
@@ -46,7 +45,8 @@ function useStars(repo: string): number | undefined {
   return stars;
 }
 
-/** A link to a repository on GitHub: GitHub's mark, and its star count once known. */
+/** A link to a repository on GitHub, as developer sites put one in their header: a small outlined
+ * button with GitHub's mark and the star count once known. */
 export function GitHubRepoLink({ repo }: { repo: string }) {
   const stars = useStars(repo);
   const label = stars === undefined ? "GitHub" : `GitHub, ${stars.toLocaleString("en-US")} stars`;
@@ -57,14 +57,11 @@ export function GitHubRepoLink({ repo }: { repo: string }) {
       rel="noreferrer"
       aria-label={label}
       title={label}
-      className="hit relative inline-flex items-center gap-1.5 rounded-sm transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      className="inline-flex h-8 items-center gap-2 rounded-md border border-input px-2.5 text-[13px] font-medium text-foreground transition-colors hover:border-foreground/40 hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
     >
       <GitHubMark />
       {stars !== undefined && (
-        <span className="inline-flex items-center gap-1 tabular-nums">
-          <Star className="size-3.5" aria-hidden="true" />
-          {formatStars(stars)}
-        </span>
+        <span className="text-muted-foreground tabular-nums">{formatStars(stars)}</span>
       )}
     </a>
   );
