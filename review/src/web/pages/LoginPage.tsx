@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Navigate, useSearchParams } from "react-router";
 import { OutLink } from "../../public-site/components/OutLink";
 import { GitHubMark } from "../GitHubMark";
+import { GitHubRepoLink } from "../GitHubStars";
 import { AppLockup } from "../Lockup";
 import { useDocumentTitle, useSession } from "../session";
 import { buttonStyles, Notice } from "../ui";
@@ -83,16 +84,7 @@ export function LoginPage() {
             className="mt-6 flex items-center justify-center gap-5 text-[13px] text-muted-foreground"
           >
             <OutLink href="https://dari.dev">dari.dev</OutLink>
-            <a
-              href="https://github.com/mupt-ai/self-bench"
-              target="_blank"
-              rel="noreferrer"
-              aria-label="GitHub"
-              title="GitHub"
-              className="hit relative inline-flex rounded-sm transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              <GitHubMark />
-            </a>
+            <GitHubRepoLink repo="mupt-ai/self-bench" />
           </nav>
         </div>
       </main>
