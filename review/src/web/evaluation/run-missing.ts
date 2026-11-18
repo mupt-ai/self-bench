@@ -3,7 +3,7 @@ import type { CredentialInfo } from "../../../../src/db/credentials";
 import { evaluationTaskKey, harnessLabels } from "../../../../src/evaluation/models";
 import type { EvaluationRun, Harness } from "./api";
 import { thinkingLabel } from "./run-presentation";
-import type { RetrySelection } from "./run-retry";
+import { conditionFields, type RetrySelection } from "./run-retry";
 
 type TaskKey = { runId: string; taskId: string };
 
@@ -123,6 +123,8 @@ export function missingWork(
     .filter((gap) => gap.missing.length > 0);
   if (gaps.length === 0) return undefined;
   const newest = live.at(-1);
+  // A configuration's runs share one condition and subagent, so its Run Missing runs them under it.
+  const template = scope ? live.filter((run) => scope.runIds.has(run.id)).at(-1) : undefined;
   const sandboxId = sandboxCredentialId ?? newest?.credentials?.sandboxCredentialId ?? "";
   const kind = credentials.find((credential) => credential.id === sandboxId)?.kind;
   const judgeCredentialId = newest?.credentials?.judgeCredentialId;
@@ -144,6 +146,15 @@ export function missingWork(
       ...(setting.customModel ? { customModel: setting.customModel } : {}),
       credentialId: setting.credentialId,
       ...(setting.thinking ? { thinking: setting.thinking } : {}),
+      // A run that named its subagent model on its row, before conditions did, runs it so.
+      ...(template?.subagent && !template.condition?.subagent
+        ? {
+            subagent: {
+              catalogId: template.subagent.catalogId,
+              credentialId: template.subagent.credentialId,
+            },
+          }
+        : {}),
       harnesses: [],
     };
     entry.harnesses.push(setting.harness);
@@ -166,6 +177,7 @@ export function missingWork(
           .map(({ runId, taskId }) => ({ runId, taskId })),
         ...(judgeCredentialId ? { judgeCredentialId } : {}),
         skipCompleted: true,
+        ...(template ? conditionFields(template) : {}),
       }),
     );
   });

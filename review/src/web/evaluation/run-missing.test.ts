@@ -296,3 +296,18 @@ test("a configuration's Run Missing fills only its own runs' gaps, on its harnes
     }),
   ).toBeUndefined();
 });
+
+test("a condition's Run Missing retries under that condition, not as the plain setting", () => {
+  const condition = { id: "c1", name: "Subagents", skills: [] };
+  const conditioned = run("sol", "codex", { t1: "completed" }, {
+    condition,
+  } as Partial<EvaluationRun>);
+  const work = missingWork([conditioned], tasks, credentials, newId, undefined, {
+    harness: "codex",
+    runIds: new Set([conditioned.id]),
+  });
+  expect(work?.selections[0]).toMatchObject({
+    conditions: [{ name: "Subagents", skills: [] }],
+    baseline: false,
+  });
+});

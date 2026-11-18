@@ -12,6 +12,7 @@ import {
 } from "./api";
 import { submitComparison } from "./comparison-submission";
 import { useRepoRuns } from "./RepoRuns";
+import { BATCH_INDENT, Elbow } from "./ResultsTree";
 import { missingWork } from "./run-missing";
 import { retrySandboxes } from "./run-retry";
 
@@ -178,14 +179,19 @@ export function RunMissing({
   );
   if (compact) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          {plural(work?.trials ?? 0, "missing result")} for this setting: new tasks, and tasks that
-          errored.
-        </p>
-        {button}
-        {dialog}
-      </div>
+      <tr className="bg-muted/30">
+        <td colSpan={6} className={`relative ${BATCH_INDENT}`}>
+          <Elbow />
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              {plural(work.trials, "missing result")} for this setting: new tasks, and tasks that
+              errored.
+            </p>
+            {button}
+            {dialog}
+          </div>
+        </td>
+      </tr>
     );
   }
   return (

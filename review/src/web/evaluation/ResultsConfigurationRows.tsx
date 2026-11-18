@@ -122,23 +122,18 @@ export function ConfigurationRows({
         </td>
       </tr>
       {open && accepted && baseUrl && pages && (
-        <tr className="bg-muted/30">
-          <td colSpan={6} className={`relative ${BATCH_INDENT}`}>
-            <Elbow />
-            <RunMissing
-              url={baseUrl}
-              pages={pages}
-              tasks={accepted}
-              compact
-              setting={{
-                harness: configuration.harness,
-                runs: configuration.batches.flatMap((batch) =>
-                  batch.results.map((result) => result.run),
-                ),
-              }}
-            />
-          </td>
-        </tr>
+        <RunMissing
+          url={baseUrl}
+          pages={pages}
+          tasks={accepted}
+          compact
+          setting={{
+            harness: configuration.harness,
+            runs: configuration.batches.flatMap((batch) =>
+              batch.results.map((result) => result.run),
+            ),
+          }}
+        />
       )}
       {open &&
         runs

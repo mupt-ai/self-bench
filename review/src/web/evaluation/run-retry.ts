@@ -96,33 +96,40 @@ export function retrySelection(
         ? { judgeCredentialId: credentials.judgeCredentialId }
         : {}),
       skipCompleted: true,
-      ...(run.condition
-        ? {
-            conditions: [
-              {
-                name: run.condition.name,
-                ...(run.condition.harness ? { harness: run.condition.harness } : {}),
-                skills: [...run.condition.skills],
-                ...(run.condition.instructions ? { instructions: run.condition.instructions } : {}),
-                ...(run.condition.environment ? { environment: run.condition.environment.id } : {}),
-                ...(run.condition.harnessOptions
-                  ? { harnessOptions: run.condition.harnessOptions }
-                  : {}),
-                ...(run.condition.subagent
-                  ? {
-                      subagent: {
-                        ...run.condition.subagent,
-                        ...(run.subagent ? { credentialId: run.subagent.credentialId } : {}),
-                      },
-                    }
-                  : {}),
-              },
-            ],
-            baseline: false as const,
-          }
-        : {}),
+      ...conditionFields(run),
     },
   };
+}
+
+/** The condition a run ran under, as a retry or a configuration's Run Missing runs it again. */
+export function conditionFields(
+  run: EvaluationRun,
+): Pick<RetrySelection, "conditions" | "baseline"> {
+  return run.condition
+    ? {
+        conditions: [
+          {
+            name: run.condition.name,
+            ...(run.condition.harness ? { harness: run.condition.harness } : {}),
+            skills: [...run.condition.skills],
+            ...(run.condition.instructions ? { instructions: run.condition.instructions } : {}),
+            ...(run.condition.environment ? { environment: run.condition.environment.id } : {}),
+            ...(run.condition.harnessOptions
+              ? { harnessOptions: run.condition.harnessOptions }
+              : {}),
+            ...(run.condition.subagent
+              ? {
+                  subagent: {
+                    ...run.condition.subagent,
+                    ...(run.subagent ? { credentialId: run.subagent.credentialId } : {}),
+                  },
+                }
+              : {}),
+          },
+        ],
+        baseline: false as const,
+      }
+    : {};
 }
 
 /**
