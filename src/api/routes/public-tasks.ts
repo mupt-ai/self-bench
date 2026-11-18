@@ -18,8 +18,11 @@ import { type ChosenTrial, createTrialBodies, type TrialBodiesOptions } from "./
  */
 const TASK_DATA = "public, max-age=60, s-maxage=60";
 const JSON_TYPE = "application/json; charset=utf-8";
-/** A task id in an address: the agent's names are letters, digits, `.`, `_` and `-`. */
-const TASK_ID = /^[A-Za-z0-9._~-]{1,160}$/;
+/**
+ * A task id, once decoded from its address segment: letters, digits, `.`, `_`, `~` and `-`, with
+ * `/` between names, as a public benchmark's `datacurve/httpx-…` has (sent encoded, as `%2F`).
+ */
+const TASK_ID = /^[A-Za-z0-9_~-][A-Za-z0-9._~-]*(\/[A-Za-z0-9_~-][A-Za-z0-9._~-]*)*$/;
 const ARCHIVE = ".tar.gz";
 /** Releases whose task lists are kept, most recently used last. */
 const KEPT_RELEASES = 64;
@@ -173,7 +176,13 @@ export function createPublicTaskRoutes(options: PublicTaskRoutesOptions) {
       // `<task>` is its files; `<task>/<task>.tar.gz` its download, named so `curl -O` keeps the
       // name. A task's own id may end in `.tar.gz`, so the two never share a shape. A setting's
       // trial on it is `<task>/trials/<setting id>`, the one shape of three.
-      const [id = "", file] = rest;
+      const [encodedId = "", file] = rest;
+      let id: string;
+      try {
+        id = decodeURIComponent(encodedId);
+      } catch {
+        return missing(response, "No such task in this release");
+      }
       if (rest.length === 3 && file === "trials") {
         let settingId: string;
         try {
@@ -190,11 +199,15 @@ export function createPublicTaskRoutes(options: PublicTaskRoutesOptions) {
         });
         return;
       }
-      const download = rest.length === 2 && file === `${id}${ARCHIVE}`;
+      const download = rest.length === 2 && file === `${encodedId}${ARCHIVE}`;
       const bundleKey =
-        (rest.length === 1 || download) && TASK_ID.test(id) ? index.bundles.get(id) : undefined;
+        (rest.length === 1 || download) && id.length <= 160 && TASK_ID.test(id)
+          ? index.bundles.get(id)
+          : undefined;
       if (!bundleKey) return missing(response, "No such task in this release");
-      if (download) return sendArchive(request, response, options, bundleKey, id);
+      // A benchmark's `org/name` id is named `org-name`, one folder and a plain file name.
+      if (download)
+        return sendArchive(request, response, options, bundleKey, id.replaceAll("/", "-"));
       const key = `${releaseId}/${id}`;
       let body = files.get(key);
       if (!body) {
