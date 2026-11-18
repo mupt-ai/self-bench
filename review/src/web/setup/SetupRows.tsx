@@ -31,11 +31,11 @@ export function Choices({
           <li key={item.id}>
             <div className="flex items-center gap-4 px-4 py-3.5">
               <div className="min-w-0 flex-1">
-                <h3 className="text-[15px] leading-6 font-semibold">{item.title}</h3>
+                <h3 className="text-[15px] leading-6 font-medium">{item.title}</h3>
                 <p className="text-sm text-muted-foreground">{item.detail}</p>
               </div>
               {credential ? (
-                <span className="flex shrink-0 items-center gap-1.5 text-sm font-semibold text-success">
+                <span className="flex shrink-0 items-center gap-1.5 text-sm font-medium text-success">
                   <Check className="size-4" aria-hidden="true" />
                   Connected
                 </span>
@@ -96,7 +96,7 @@ export function Status({ coverage }: { coverage: ReturnType<typeof setupCoverage
             {row.ready && <Check className="size-3.5" aria-hidden="true" />}
           </span>
           <div className="min-w-0">
-            <h3 className="text-[15px] leading-6 font-semibold">{row.label}</h3>
+            <h3 className="text-[15px] leading-6 font-medium">{row.label}</h3>
             <p className="text-sm text-muted-foreground">{row.ready ? "Ready." : row.missing}</p>
           </div>
         </li>

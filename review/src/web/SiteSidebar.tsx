@@ -15,7 +15,7 @@ import {
 import React from "react";
 import { Link, useLocation } from "react-router";
 import { EVAL_OWNER } from "../../../src/contracts/evals";
-import { Lockup } from "./Lockup";
+import { AppLockup } from "./Lockup";
 import {
   SidebarContent,
   SidebarGroup,
@@ -147,11 +147,11 @@ export function SiteSidebar({
   const { pathname } = useLocation();
   return (
     <aside data-slot="sidebar" className="flex h-full min-h-0 flex-col bg-background">
-      <SidebarHeader className="flex h-16 shrink-0 flex-row items-center border-b border-border px-5 group-data-[collapsible=icon]/sidebar:justify-center group-data-[collapsible=icon]/sidebar:px-0">
-        <Lockup compact showName={!collapsed} />
+      <SidebarHeader className="flex h-14 shrink-0 flex-row items-center border-b border-border px-4 group-data-[collapsible=icon]/sidebar:justify-center group-data-[collapsible=icon]/sidebar:px-0">
+        <AppLockup showName={!collapsed} />
       </SidebarHeader>
       <SidebarContent>
-        <nav aria-label="Workspace Navigation" className="flex flex-col gap-3 pt-4">
+        <nav aria-label="Workspace Navigation" className="flex flex-col gap-2 pt-2">
           {onSetup && (
             <SidebarGroup className="py-0">
               <SidebarMenu>
@@ -169,7 +169,7 @@ export function SiteSidebar({
                       {!collapsed && <span className="flex-1">Finish Setup</span>}
                       <span
                         aria-hidden="true"
-                        className="size-2 shrink-0 bg-brand group-data-[collapsible=icon]/sidebar:absolute group-data-[collapsible=icon]/sidebar:top-1.5 group-data-[collapsible=icon]/sidebar:right-1.5"
+                        className="size-1.5 shrink-0 rounded-full bg-brand group-data-[collapsible=icon]/sidebar:absolute group-data-[collapsible=icon]/sidebar:top-1.5 group-data-[collapsible=icon]/sidebar:right-1.5"
                       />
                     </SidebarMenuButton>
                   </NavTooltip>
@@ -193,7 +193,10 @@ export function SiteSidebar({
                     <span aria-hidden="true" className="mx-1 mb-2 block border-t border-border" />
                   )
                 ) : (
-                  <h2 id={heading} className="px-2.5 pb-1 text-sm font-normal text-(--faint)">
+                  <h2
+                    id={heading}
+                    className="flex h-8 items-center px-2 text-xs font-medium tracking-normal text-sage"
+                  >
                     {section.label}
                   </h2>
                 )}
@@ -263,7 +266,7 @@ export function MobileSidebar(props: SidebarProps & { onClose: () => void }) {
         event.preventDefault();
         props.onClose();
       }}
-      className="fixed inset-y-0 left-0 m-0 h-dvh max-h-none w-72 max-w-[calc(100%_-_2rem)] border-0 border-r border-border bg-background p-0 text-foreground backdrop:bg-foreground/30 backdrop:backdrop-blur-[2px]"
+      className="fixed inset-y-0 left-0 m-0 h-dvh max-h-none w-72 max-w-[calc(100%_-_2rem)] border-0 border-r border-border bg-background p-0 text-foreground backdrop:bg-black/60 backdrop:backdrop-blur-[2px]"
     >
       <Button
         size="icon"
@@ -272,7 +275,7 @@ export function MobileSidebar(props: SidebarProps & { onClose: () => void }) {
         type="button"
         aria-label="Close Navigation"
         onClick={props.onClose}
-        className="absolute top-2 right-2"
+        className="absolute top-2.5 right-2"
       >
         <X aria-hidden="true" />
       </Button>

@@ -1,10 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate, useSearchParams } from "react-router";
 import { OutLink } from "../../public-site/components/OutLink";
-import { WaterBackground } from "../../public-site/effects/WaterBackground";
-import { EDGE_FRAME, PANEL, RULER_WIDTH } from "../../public-site/frame";
-import { ThemeToggle } from "../../public-site/ThemeToggle";
-import { Lockup } from "../Lockup";
+import { AppLockup } from "../Lockup";
 import { useDocumentTitle, useSession } from "../session";
 import { buttonStyles, Notice } from "../ui";
 
@@ -29,80 +26,67 @@ export function LoginPage() {
   }, []);
   const error = params.get("error");
   if (session.status === "signed-in") return <Navigate to="/" replace />;
-  // selfbench.dev's own frame, water, header controls, and footer links (review/src/public-site),
-  // so signing in feels like the same site and follows it when it changes.
+  // As dari.dev's own sign-in: the wordmark over one square card, centred on the page.
   return (
-    <div className="relative isolate flex h-dvh flex-col bg-transparent text-foreground">
-      <WaterBackground />
-      <div
-        aria-hidden="true"
-        className={`pointer-events-none fixed inset-y-0 left-1/2 z-10 ${RULER_WIDTH} -translate-x-1/2 border-x border-(--ruler) rulerless:hidden`}
-      />
-      <header className="shrink-0 border-b border-border">
-        <div className={`${EDGE_FRAME} flex h-16 items-center justify-between gap-4`}>
-          <Lockup href={PUBLIC_SITE_URL} />
-          {/* As on selfbench.dev: the 32px theme button, its glyph on the frame edge. */}
-          <ThemeToggle className="-mr-2" />
-        </div>
-      </header>
-      <main className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 py-12">
-        <div className={`w-full max-w-sm p-8 ${PANEL}`}>
-          <h1 className="text-2xl font-semibold tracking-tight">Sign In</h1>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Build private evals from your repository&apos;s history and find which model is best for
-            it.
-          </p>
-          <a
-            className={`${buttonStyles.primary} mt-7 h-10 w-full [&_svg]:fill-current`}
-            href="/auth/github"
-            aria-busy={connecting}
-            aria-disabled={connecting}
-            onClick={(event) => {
-              if (
-                event.button !== 0 ||
-                event.metaKey ||
-                event.ctrlKey ||
-                event.shiftKey ||
-                event.altKey
-              )
-                return;
-              if (connecting) {
-                event.preventDefault();
-                return;
-              }
-              setConnecting(true);
-            }}
-          >
-            {connecting ? (
-              <span
-                aria-hidden="true"
-                className="size-4 shrink-0 animate-spin rounded-full border-2 border-current border-r-transparent motion-reduce:animate-none"
-              />
-            ) : (
-              <GitHubMark />
+    <div className="flex min-h-dvh flex-col bg-background text-foreground">
+      <main className="flex flex-1 items-center justify-center px-6 py-12">
+        <div className="w-full max-w-sm">
+          <div className="mb-8 flex justify-center">
+            <AppLockup />
+          </div>
+          <div className="border border-border bg-card p-8">
+            <h1 className="text-xl font-medium">Sign In</h1>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              Build private evals from your repository&apos;s history and find which model is best
+              for it.
+            </p>
+            <a
+              className={`${buttonStyles.primary} mt-6 w-full [&_svg]:fill-current`}
+              href="/auth/github"
+              aria-busy={connecting}
+              aria-disabled={connecting}
+              onClick={(event) => {
+                if (
+                  event.button !== 0 ||
+                  event.metaKey ||
+                  event.ctrlKey ||
+                  event.shiftKey ||
+                  event.altKey
+                )
+                  return;
+                if (connecting) {
+                  event.preventDefault();
+                  return;
+                }
+                setConnecting(true);
+              }}
+            >
+              {connecting ? (
+                <span
+                  aria-hidden="true"
+                  className="size-4 shrink-0 animate-spin rounded-full border-2 border-current border-r-transparent motion-reduce:animate-none"
+                />
+              ) : (
+                <GitHubMark />
+              )}
+              <span aria-live="polite">
+                {connecting ? "Connecting to GitHub…" : "Continue with GitHub"}
+              </span>
+            </a>
+            {error && (
+              <Notice className="mt-5 w-full text-left">{ERRORS[error] ?? ERRORS.github}</Notice>
             )}
-            <span aria-live="polite">
-              {connecting ? "Connecting to GitHub…" : "Continue with GitHub"}
-            </span>
-          </a>
-          {error && (
-            <Notice className="mt-5 w-full text-left">{ERRORS[error] ?? ERRORS.github}</Notice>
-          )}
-        </div>
-      </main>
-      <footer className="shrink-0 border-t border-border">
-        <div
-          className={`${EDGE_FRAME} flex items-center justify-between gap-3 py-4 font-mono text-xs font-semibold text-foreground/90`}
-        >
-          <a href={PUBLIC_SITE_URL} className="hover:text-foreground">
-            selfbench.dev
-          </a>
-          <span className="flex gap-4">
+          </div>
+          <nav
+            aria-label="Elsewhere"
+            className="mt-6 flex justify-center gap-5 text-[13px] text-muted-foreground"
+          >
+            <OutLink href={PUBLIC_SITE_URL}>selfbench.dev</OutLink>
             <OutLink href="https://dari.dev">dari.dev</OutLink>
             <OutLink href="https://github.com/mupt-ai/self-bench">GitHub</OutLink>
-          </span>
+          </nav>
         </div>
-      </footer>
+      </main>
     </div>
   );
 }

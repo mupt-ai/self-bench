@@ -41,7 +41,7 @@ export function GroupLogoField({
   };
   return (
     <div className="grid gap-2">
-      <span className="flex items-center gap-1.5 text-sm font-semibold">
+      <span className="flex items-center gap-1.5 text-sm font-medium">
         Logo
         <InfoTooltip label="Shown on the group's card and page on selfbench.dev. Use a square PNG, JPEG, WebP, or SVG under 48 KB." />
       </span>

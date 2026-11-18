@@ -110,7 +110,7 @@ export function TaskAuditDialog({
         <section aria-label="Audit" className="space-y-3">
           {last && (
             <div className="space-y-1.5">
-              <h3 className="text-sm font-semibold">Verdict: {VERDICTS[last.verdict]}</h3>
+              <h3 className="text-sm font-medium">Verdict: {VERDICTS[last.verdict]}</h3>
               <p className="text-sm leading-6">{last.text}</p>
               <p className="text-xs text-muted-foreground">
                 {last.model} read {last.failures} failed of {last.attempts} scored{" "}
@@ -131,7 +131,7 @@ export function TaskAuditDialog({
           {error && <Notice>{error}</Notice>}
         </section>
         <section aria-labelledby="task-attempts" className="space-y-2">
-          <h3 id="task-attempts" className="text-sm font-semibold">
+          <h3 id="task-attempts" className="text-sm font-medium">
             Attempts
           </h3>
           <ul className="divide-y divide-border panel">

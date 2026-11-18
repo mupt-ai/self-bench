@@ -74,7 +74,7 @@ export function RepoAblations({
       disabled={disabled}
       className="flex min-w-0 flex-wrap items-center gap-2 border-0 border-t border-border px-4 py-2.5"
     >
-      <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+      <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
         Repo Ablations
         <InfoTooltip
           label={`Each picked repo ablation runs every row again on the tasks it built, with their files changed. Tasks it has no ready build for are left out. Pick up to ${MAX_PICKED}.`}

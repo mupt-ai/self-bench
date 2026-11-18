@@ -31,7 +31,7 @@ export function BillingUsage({ usage }: { usage: BillingUsageSummary }) {
             All managed usage recorded for this organization.
           </p>
         </div>
-        <span className="text-[10px] tracking-wider text-muted-foreground uppercase">All Time</span>
+        <span className="text-xs text-faint">All Time</span>
       </div>
       {!hasUsage ? (
         <EmptyState title="No Managed Usage Yet" visual={<GhostUsage />}>
@@ -64,7 +64,7 @@ export function BillingUsage({ usage }: { usage: BillingUsageSummary }) {
             <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
               {tokenSegments.map(({ label, value, className }) => (
                 <div key={label}>
-                  <dt className="flex items-center gap-2 text-[10px] tracking-wider text-muted-foreground uppercase">
+                  <dt className="flex items-center gap-2 text-xs text-faint">
                     <span className={`size-1.5 ${className}`} aria-hidden="true" />
                     {label}
                   </dt>
@@ -112,7 +112,7 @@ export function BillingUsage({ usage }: { usage: BillingUsageSummary }) {
 function UsagePanel({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="border border-border bg-card p-4" aria-label={title}>
-      <h3 className="mb-4 text-xs font-medium tracking-wider text-muted-foreground uppercase">
+      <h3 className="mb-4 text-sm font-medium">
         {title}
       </h3>
       {children}
@@ -133,7 +133,7 @@ function Metric({
 }) {
   return (
     <div className={align === "right" ? "text-right" : undefined}>
-      <dt className="text-[10px] tracking-wider text-muted-foreground uppercase">{label}</dt>
+      <dt className="text-xs text-faint">{label}</dt>
       <dd
         className={`mt-1 tabular-nums text-foreground ${prominent ? "text-xl font-medium" : "text-sm"}`}
       >

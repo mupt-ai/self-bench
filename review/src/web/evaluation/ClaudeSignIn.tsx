@@ -95,7 +95,7 @@ export function ClaudeSignIn({
         role="status"
       >
         <Check className="text-success" size={18} aria-hidden="true" />
-        <h3 className="flex-1 text-sm font-semibold">Claude Connected</h3>
+        <h3 className="flex-1 text-sm font-medium">Claude Connected</h3>
         <Button type="button" variant="primary" onClick={() => void onDone()}>
           Done
         </Button>

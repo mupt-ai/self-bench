@@ -267,7 +267,7 @@ function QueueNav({
       >
         <ChevronLeft aria-hidden="true" />
       </Button>
-      <span className="font-mono text-xs tabular-nums text-muted-foreground" role="status">
+      <span className="text-xs tabular-nums text-muted-foreground" role="status">
         {position.index + 1} of {queue.tasks.length}
       </span>
       <Button

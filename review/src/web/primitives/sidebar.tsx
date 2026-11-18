@@ -1,4 +1,4 @@
-// Adapted from shadcn/ui's MIT-licensed Sidebar primitives for SelfBench's square theme.
+// Adapted from shadcn/ui's MIT-licensed Sidebar primitives for SelfBench.
 import { Slot } from "@radix-ui/react-slot";
 import { cva } from "class-variance-authority";
 import { PanelLeft } from "lucide-react";
@@ -71,7 +71,7 @@ export function SidebarMenu({ className, ...props }: ComponentProps<"ul">) {
   return (
     <ul
       data-slot="sidebar-menu"
-      className={cn("flex w-full min-w-0 flex-col gap-1", className)}
+      className={cn("flex w-full min-w-0 flex-col gap-0.5", className)}
       {...props}
     />
   );
@@ -86,13 +86,13 @@ export function SidebarMenuItem({ className, ...props }: ComponentProps<"li">) {
   );
 }
 const menuButton = cva(
-  // The page you are on is marked by a thin brand bar at the rail's edge and full-strength text,
-  // never a filled block; others are muted until pointed at.
-  "peer/menu-button relative flex w-full items-center gap-2.5 overflow-visible px-2.5 py-2 text-left text-sm font-medium outline-none ring-sidebar-ring transition-colors hover:text-foreground focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 group-data-[collapsible=icon]/sidebar:!size-8 group-data-[collapsible=icon]/sidebar:!p-2 data-[active=true]:font-semibold data-[active=true]:text-foreground data-[active=true]:before:absolute data-[active=true]:before:inset-y-2 data-[active=true]:before:-left-2 data-[active=true]:before:w-0.5 data-[active=true]:before:bg-brand [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0",
+  // As on dari.dev: the page you are on is a quiet filled row with a mint icon; others are muted
+  // with a faint icon until pointed at.
+  "peer/menu-button relative flex w-full items-center gap-2 overflow-visible rounded-md p-2 text-left text-sm text-muted-foreground outline-none ring-sidebar-ring transition-colors hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-1 disabled:pointer-events-none disabled:opacity-50 group-data-[collapsible=icon]/sidebar:!size-8 group-data-[collapsible=icon]/sidebar:!p-2 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-faint [&>svg]:data-[active=true]:text-brand",
   {
     variants: {
       active: { true: "text-foreground", false: "text-muted-foreground" },
-      size: { default: "h-9 text-sm", lg: "h-12 text-sm" },
+      size: { default: "h-8 text-sm", lg: "h-12 text-sm" },
     },
     defaultVariants: { active: false, size: "default" },
   },

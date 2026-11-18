@@ -2,24 +2,33 @@
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/preflight.css" layer(base);
 @import "tailwindcss/utilities.css" layer(utilities);
+@import "./fonts/fonts.css";
+/* The palette's extra variables (rulers, water, chart colours) for the components the app shares
+   with selfbench.dev. The app replaces every colour it draws with below. */
 @import "./public-site/palette.css";
-/* The frame's measurements, for the sign-in page, which is built on selfbench.dev's frame. */
+/* The frame's measurements, for the components shared with selfbench.dev. */
 @import "./public-site/frame.css";
 @import "./public-site/mobile/variants.css";
 
-/* Token names are shared with the public site's theme.css, so both render the same palette. */
+/* The app wears dari.dev's look: a dark charcoal page, Geist, hairline rules, and mint as the one
+   accent. What sits on the page's grid (cards, panels, tables) is square; what is pressed or
+   floats (buttons, inputs, chips, menus, tooltips, dialogs) is rounded. */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
-  --color-popover: var(--card);
+  --color-card-foreground: var(--foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-fg);
+  --color-faint: var(--faint);
   --color-border: var(--border);
   --color-input: var(--input);
+  --color-ring: var(--brand);
   --color-accent: var(--accent);
   --color-brand: var(--brand);
-  --color-brand-foreground: var(--brand-fg);
+  --color-sage: var(--sage);
   --color-check: var(--check);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-fg);
@@ -28,57 +37,135 @@
   --color-destructive-foreground: hsl(0 0% 98%);
   --color-success: var(--ok);
   --color-warning: var(--warn-fg);
-  --color-sidebar: var(--sidebar-background);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar: var(--background);
+  --color-sidebar-foreground: var(--foreground);
+  --color-sidebar-accent: var(--accent);
+  --color-sidebar-accent-foreground: var(--foreground);
+  --color-sidebar-border: var(--border);
+  --color-sidebar-ring: var(--brand);
   --font-sans: var(--sans);
   --font-mono: var(--mono);
-  --radius-sm: 0px;
-  --radius-md: 0px;
-  --radius-lg: 0px;
-  --radius-xl: 0px;
+  --font-wordmark: "JetBrains Mono", ui-monospace, monospace;
+  /* Geist at 400 reads thin in grey on the dark page at 12-14px, so both weights sit half a step
+     heavier. These are the only two the app uses. */
+  --font-weight-normal: 450;
+  --font-weight-medium: 550;
+  /* Components shared with selfbench.dev still ask for semibold; in the app it is medium. */
+  --font-weight-semibold: 550;
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
 }
 
 @custom-variant site (&:where(.sb, .sb *));
 
-/* The palettes come from public-site/palette.css, shared with selfbench.dev. Only what the
-   app changes or adds is set here. Text that must read as amber uses the palette's --brand-fg,
-   which is dark enough for paper; inputs get a firmer edge than cards. */
-:root {
-  --input: hsl(35 16% 80%);
-  /* Ticks in checkboxes: blue in both themes. */
-  --check: hsl(212 78% 46%);
+/* dari.dev's colours, the same in either theme: the app has one. Each is the landing page's hex. */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: hsl(240 2.4% 8%); /* #141415 page */
+  --foreground: hsl(0 0% 92.9%); /* #ededed ink */
+  --card: hsl(240 2% 10%); /* #19191a cards, dialogs */
+  --popover: hsl(240 3% 12.9%); /* #202022 menus, tooltips */
+  --muted: hsl(240 3.3% 11.8%); /* #1d1d1f */
+  --muted-fg: hsl(240 2.9% 73.3%); /* #b9b9bd secondary text, kept bright */
+  --faint: hsl(240 2.8% 51.6%); /* #808087 labels, table headers, placeholders, units */
+  --border: hsl(240 1% 19%); /* #303031 rules */
+  --input: hsl(240 1% 25%); /* a brighter edge for controls */
+  --accent: hsl(240 1.4% 13.5%); /* hover and selected rows */
+  --brand: hsl(152 63.8% 72.9%); /* #8ee6bd mint: accent and good */
+  --brand-fg: var(--brand);
+  --sage: hsl(120 5.3% 52.4%); /* #7f8c7f sidebar group headings */
+  --primary: hsl(0 0% 92.9%);
+  --primary-fg: hsl(240 2.4% 8%);
+  --ok: var(--brand);
+  --bad: hsl(358 66% 54%);
+  --bad-fg: hsl(358 75% 66%);
+  --warn-fg: hsl(37.8 57.5% 62.2%); /* #d6ad67 ochre */
+  /* Work in flight: a blue from the chart palette, apart from mint's "good". */
+  --check: #6aa6ec;
 
-  --sidebar-background: var(--background);
-  --sidebar-foreground: var(--foreground);
-  --sidebar-accent: var(--accent);
-  --sidebar-accent-foreground: var(--foreground);
-  --sidebar-border: var(--border);
-  --sidebar-ring: var(--brand);
+  --panel-border: var(--border);
+  --panel-edge: var(--border);
+  --panel-shadow: none;
+  --viewer-panel: var(--card);
+  --ruler: var(--border);
+  --row-mark: hsl(0 0% 100% / 0.06);
+  --aura: hsl(0 0% 100% / 0.25);
+  --scorch: var(--faint);
+  --chart-frontier: hsl(152 63.8% 72.9% / 0.5);
+  --chart-sans: var(--sans);
+  --chart-mono: var(--mono);
+  --sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Chart series, in the order they are handed out; red marks errors and is never a series. */
+  --chart-1: #199e70;
+  --chart-2: #3987e5;
+  --chart-3: #d95926;
+  --chart-4: #9085e9;
+  --chart-5: #c98500;
+  --chart-6: #d55181;
+  --chart-7: #008300;
+  --chart-8: #1c9cbf;
+  --chart-9: #6468de;
+  --chart-red: #e66767;
 }
 
-:root[data-theme="dark"] {
-  --input: hsl(215 16% 20%);
-  --check: hsl(210 90% 65%);
+* {
+  border-color: var(--border);
+  scrollbar-color: color-mix(in srgb, var(--foreground) 24%, transparent) transparent;
+  scrollbar-width: thin;
 }
 
 html {
   background: var(--background);
 }
 
-/* Dark mode dims GitHub avatars and casts them toward the ink blue, as on the public site, so
-   white marks stop glaring. The filter lives in index.html. */
-:root[data-theme="dark"] img.avatar {
-  filter: url(#ink-cast);
+body {
+  font-weight: 450;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2 {
+  letter-spacing: -0.02em;
+}
+
+::selection {
+  background: var(--brand);
+  color: var(--background);
+}
+
+/* Cards, tables and panels: square, a hairline rule, no shadow. Overrides palette.css's raised
+   surface; it stays in the components layer so any utility can override it. */
+@layer components {
+  .panel {
+    border: 1px solid var(--border);
+    background-color: var(--card);
+    box-shadow: none;
+  }
+}
+
+/* Native checkboxes and radios: ink when on, as dari.dev's checkboxes are. */
+@layer base {
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: var(--foreground);
+  }
+}
+
+/* GitHub avatars are dimmed a little so white marks do not glare on the charcoal. */
+img.avatar {
+  filter: brightness(0.9);
 }
 
 /* Selects stay native <select>s, so the keyboard, screen readers, phone pickers, and anything
    that automates the page behave as before. Where the browser lets a select's open list be
-   styled, it matches the app: a square card in the theme's colours, a muted hover, and a blue
-   check on the chosen option. Other browsers keep their own menu. */
+   styled, it matches the app's menus: a rounded popover, a quiet hover, and a mint check on the
+   chosen option. Other browsers keep their own menu. */
 @layer components {
   /* No native arrow: the Select component draws its own chevron. */
   select[data-slot="select"] {
@@ -97,26 +184,25 @@ html {
       display: none;
     }
     select[data-slot="select"]:open {
-      border-color: color-mix(in srgb, var(--foreground) 50%, transparent);
+      border-color: var(--brand);
     }
     select[data-slot="select"]::picker(select) {
       margin-block: 4px;
       padding: 4px;
       max-height: min(20rem, 50dvh);
       overflow-y: auto;
-      border: 1.5px solid var(--panel-edge);
-      border-radius: 0;
-      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--popover);
       color: var(--foreground);
-      box-shadow:
-        0 1px 2px rgb(0 0 0 / 0.06),
-        0 12px 28px -12px rgb(0 0 0 / 0.3);
+      box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.4);
     }
     select[data-slot="select"] option {
       display: flex;
       align-items: center;
       gap: 0.75rem;
-      padding: 0.375rem 0.625rem;
+      padding: 0.375rem 0.5rem;
+      border-radius: 4px;
       font-size: 0.875rem;
       line-height: 1.25rem;
       color: var(--foreground);
@@ -124,19 +210,19 @@ html {
     }
     select[data-slot="select"] option:hover,
     select[data-slot="select"] option:focus-visible {
-      background: var(--muted);
+      background: color-mix(in srgb, var(--foreground) 10%, transparent);
       outline: none;
     }
     select[data-slot="select"] option:checked {
-      font-weight: 500;
+      font-weight: 550;
     }
     select[data-slot="select"] option:disabled {
-      color: var(--muted-fg);
+      color: var(--faint);
     }
     select[data-slot="select"] option::checkmark {
       order: 1;
       margin-inline-start: auto;
-      color: var(--check);
+      color: var(--brand);
     }
     /* A placeholder ("Select Model") is a disabled option; it is never a choice to tick. */
     select[data-slot="select"] option:disabled::checkmark {
@@ -145,8 +231,8 @@ html {
   }
 }
 
-/* Native number-input spinners clash with the square controls; the keyboard
-   arrows still step the value. */
+/* Native number-input spinners clash with the controls; the keyboard arrows still step the
+   value. */
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {
   -webkit-appearance: none;

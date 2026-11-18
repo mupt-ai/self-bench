@@ -11,7 +11,7 @@ export function BatchProgress({ status }: { status: BatchStatus }) {
     ...(terminal
       ? [["Stopped", status.tasks ? counts.stopped : undefined, ""]]
       : [
-          ["Running", status.tasks ? counts.running : undefined, "text-brand-foreground"],
+          ["Running", status.tasks ? counts.running : undefined, "text-warning"],
           ["Queued", status.tasks ? counts.queued : undefined, ""],
         ]),
     ["Rejected", status.rejected, ""],
@@ -20,7 +20,7 @@ export function BatchProgress({ status }: { status: BatchStatus }) {
   return (
     <section className="panel" aria-label="Batch Progress">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
-        <h2 className="text-sm font-semibold">Batch Progress</h2>
+        <h2 className="text-sm font-medium">Batch Progress</h2>
         <span className="text-xs text-muted-foreground">
           {status.discovered ?? "—"} Candidates Discovered
         </span>
@@ -34,7 +34,7 @@ export function BatchProgress({ status }: { status: BatchStatus }) {
             <dt className="text-xs text-muted-foreground">{label}</dt>
             <dd
               className={cn(
-                "mt-2 font-mono text-2xl leading-none font-medium tabular-nums",
+                "mt-2 text-2xl leading-none font-medium tabular-nums",
                 count ? color : "text-muted-foreground",
               )}
             >

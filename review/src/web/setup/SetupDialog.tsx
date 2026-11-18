@@ -128,7 +128,7 @@ export function SetupDialog({
           id="setup-title"
           ref={title}
           tabIndex={-1}
-          className="text-2xl leading-8 font-semibold tracking-tight outline-none!"
+          className="text-2xl leading-8 font-medium outline-none!"
         >
           {heading.title}
         </h2>
@@ -188,7 +188,7 @@ export function SetupDialog({
               <Link
                 to="/settings/credentials"
                 onClick={onClose}
-                className="font-semibold text-foreground underline underline-offset-4"
+                className="font-medium text-foreground underline underline-offset-4"
               >
                 Add It in Credentials
               </Link>

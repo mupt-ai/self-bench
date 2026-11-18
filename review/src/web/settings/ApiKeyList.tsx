@@ -21,7 +21,7 @@ export function ApiKeyList({
           <span className="flex items-center gap-2">
             <span id="active-api-keys-title">Active Keys</span>
             {keys && (
-              <span className="border border-border px-1.5 py-0.5 font-mono text-[10px] leading-4 text-muted-foreground">
+              <span className="border border-border px-1.5 py-0.5 font-mono text-[11px] leading-4 text-muted-foreground">
                 {keys.length}
               </span>
             )}
@@ -38,7 +38,7 @@ export function ApiKeyList({
       ) : (
         <div className="overflow-x-auto border border-border bg-card">
           <table className="w-full min-w-[640px] border-collapse text-left text-sm">
-            <thead className="bg-muted/50 text-[10px] tracking-wider text-muted-foreground uppercase">
+            <thead className="text-xs text-faint">
               <tr>
                 <th className="px-4 py-3 font-medium">Key</th>
                 <th className="px-4 py-3 font-medium">Scope</th>
@@ -72,7 +72,7 @@ function ApiKeyRow({ apiKey, onRevoke }: { apiKey: ApiKey; onRevoke(): void }) {
               <span className="max-w-64 truncate font-medium text-foreground" title={apiKey.name}>
                 {apiKey.name}
               </span>
-              <span className="border border-success/30 px-1.5 py-0.5 text-[9px] leading-3 text-success uppercase">
+              <span className="rounded-sm border border-brand/40 bg-brand/10 px-1.5 py-0.5 text-[11px] leading-3 font-medium text-brand">
                 Active
               </span>
             </div>

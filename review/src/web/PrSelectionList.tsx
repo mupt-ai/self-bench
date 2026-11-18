@@ -84,7 +84,7 @@ export function PrSelectionList({
                 <span className="font-mono">#{pr.number}</span>
                 <span className="min-w-0 break-all">{pr.author}</span>
                 {started.has(pr.number) && (
-                  <span className="font-semibold text-brand-foreground">Started</span>
+                  <span className="font-medium text-warning">Started</span>
                 )}
                 <span className="ml-auto whitespace-nowrap">{formatAgo(pr.mergedAt)}</span>
               </span>

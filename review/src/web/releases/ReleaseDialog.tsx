@@ -132,7 +132,7 @@ export function ReleaseDialog({
     >
       <header className="flex items-start justify-between gap-4 px-4 pt-4 sm:px-6 sm:pt-5">
         <div className="min-w-0">
-          <h2 id="release-title" className="text-base font-semibold tracking-tight">
+          <h2 id="release-title" className="text-base font-medium">
             Release Results
           </h2>
           <p id="release-description" className="mt-0.5 text-sm text-muted-foreground">

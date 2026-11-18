@@ -77,3 +77,34 @@ export function Lockup({
     </Link>
   );
 }
+
+/**
+ * The app's lockup, as dari.dev's app shows its own: the round mark, the dari.dev wordmark, and the
+ * product's name beside it. Links home.
+ */
+export function AppLockup({
+  showName = true,
+  className,
+  onClick,
+}: {
+  showName?: boolean;
+  className?: string;
+  onClick?: React.MouseEventHandler<HTMLAnchorElement>;
+}) {
+  return (
+    <Link
+      className={clsx("inline-flex min-w-0 items-center gap-2.5 text-foreground", className)}
+      to="/"
+      aria-label="SelfBench by dari.dev Home"
+      onClick={onClick}
+    >
+      <img className="size-6 shrink-0" src="/dari-logo.svg" alt="" width={24} height={24} />
+      {showName && (
+        <>
+          <span className="font-wordmark text-base font-medium tracking-[-0.01em]">dari.dev</span>
+          <span className="truncate text-[13px] text-muted-foreground">SelfBench</span>
+        </>
+      )}
+    </Link>
+  );
+}

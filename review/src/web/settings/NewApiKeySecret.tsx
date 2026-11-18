@@ -48,7 +48,7 @@ export function NewApiKeySecret({
         </div>
       </div>
       <div className="p-4">
-        <p className="mb-2 text-[10px] tracking-wider text-muted-foreground uppercase">
+        <p className="mb-2 text-xs text-faint">
           API Key Secret
         </p>
         <div className="flex flex-col gap-2 sm:flex-row">

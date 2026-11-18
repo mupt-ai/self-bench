@@ -132,11 +132,11 @@ export function BillingSummary({ data }: { data: BillingStatus }) {
         <div className="border-b border-border p-5 lg:border-r lg:border-b-0">
           <p
             id="billing-summary-title"
-            className="text-xs tracking-wider text-muted-foreground uppercase"
+            className="text-xs text-faint"
           >
             {data.configured ? "Billed Cost" : "Total Recorded Cost"}
           </p>
-          <p className="mt-2 text-3xl font-medium tracking-tight tabular-nums">
+          <p className="mt-2 text-3xl font-medium tabular-nums">
             {formatBillingDollars(data.configured ? Math.max(0, billed - refunded) : totalCost)}
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
@@ -228,7 +228,7 @@ function StatusMetric({
 }) {
   return (
     <div className="border-b border-border p-4 sm:[&:nth-child(odd)]:border-r lg:border-b-0 lg:[&:nth-child(odd)]:border-r-0">
-      <dt className="text-[10px] tracking-wider text-muted-foreground uppercase">{label}</dt>
+      <dt className="text-xs text-faint">{label}</dt>
       <dd className="mt-2 flex items-center gap-2 text-sm text-foreground">
         {active && <span className="size-1.5 bg-success" aria-hidden="true" />}
         {value}
@@ -248,7 +248,7 @@ function CostLegend({
 }) {
   return (
     <div>
-      <dt className="flex items-center gap-2 text-[10px] tracking-wider text-muted-foreground uppercase">
+      <dt className="flex items-center gap-2 text-xs text-faint">
         <span className={`size-1.5 ${className}`} aria-hidden="true" />
         {label}
       </dt>

@@ -124,11 +124,11 @@ function Stat({ label, value, attention }: ScopeStat) {
   return (
     <div className="flex min-w-0 flex-col gap-1 border-r border-border px-4 py-3 last:border-r-0">
       <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="truncate font-mono text-sm font-medium tabular-nums">
+      <dd className="truncate text-sm font-medium tabular-nums">
         {value === undefined ? (
           <Skeleton className="inline-block h-3.5 w-8 align-middle" />
         ) : (
-          <span className={attention ? "text-brand-foreground" : "text-foreground"}>{value}</span>
+          <span className={attention ? "text-warning" : "text-foreground"}>{value}</span>
         )}
       </dd>
     </div>
@@ -142,7 +142,7 @@ export function AddScopeButton({ label, onClick }: { label: string; onClick(): v
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="group flex h-full min-h-40 w-full flex-col items-center justify-center gap-2 border-[1.5px] border-dashed border-foreground/15 text-sm font-semibold text-muted-foreground transition-colors hover:border-foreground/35 hover:bg-foreground/[0.03] hover:text-foreground"
+      className="group flex h-full min-h-40 w-full flex-col items-center justify-center gap-2 border-[1.5px] border-dashed border-foreground/15 text-sm font-medium text-muted-foreground transition-colors hover:border-foreground/35 hover:bg-foreground/[0.03] hover:text-foreground"
     >
       <Plus className="size-5" aria-hidden="true" />
       {label}

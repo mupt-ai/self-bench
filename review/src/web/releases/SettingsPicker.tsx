@@ -44,12 +44,12 @@ export function Tick({
         checked={checked}
         disabled={disabled}
         onChange={(event) => onChange(event.target.checked)}
-        className="peer size-4 cursor-pointer appearance-none border border-input bg-card transition-colors hover:border-foreground/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-check/40 disabled:cursor-not-allowed disabled:opacity-40"
+        className="peer size-4 cursor-pointer appearance-none rounded-sm border border-foreground/30 bg-transparent transition-colors checked:border-foreground checked:bg-foreground aria-[checked=mixed]:border-foreground aria-[checked=mixed]:bg-foreground hover:border-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
       />
       <Mark
         aria-hidden="true"
         strokeWidth={3}
-        className={`pointer-events-none absolute inset-0 m-auto size-3 text-check ${checked || mixed ? "" : "hidden"}`}
+        className={`pointer-events-none absolute inset-0 m-auto size-3 text-background ${checked || mixed ? "" : "hidden"}`}
       />
     </span>
   );
@@ -156,12 +156,12 @@ export function SettingsPicker({
         value={query}
         onChange={(event) => onQuery(event.target.value)}
       />
-      <fieldset className="panel max-h-[50dvh] min-w-0 overflow-auto font-mono">
+      <fieldset className="panel max-h-[50dvh] min-w-0 overflow-auto">
         <legend className="sr-only">{legend}</legend>
         {/* Shrinks with the dialog down to this width, then scrolls sideways; rows span it all. */}
         <div className="min-w-[32rem]">
           <div
-            className={`${grid} sticky top-0 z-10 border-b border-border bg-card py-2 pr-4 pl-4 text-xs text-muted-foreground`}
+            className={`${grid} sticky top-0 z-10 border-b border-border bg-card py-2 pr-4 pl-4 text-xs font-medium text-faint`}
             aria-hidden="true"
           >
             <span className="pl-7">Model</span>

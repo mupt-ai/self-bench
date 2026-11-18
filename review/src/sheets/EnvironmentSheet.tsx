@@ -117,7 +117,7 @@ export function EnvironmentSheet({
                   <td className={tableCode}>
                     {service.healthcheck?.test?.join(" ")}
                     {service.healthcheck && (
-                      <span className="text-(--muted-fg) site:text-muted-foreground">
+                      <span className="text-muted-foreground site:text-muted-foreground">
                         {` · every ${service.healthcheck.intervalSeconds}s · ${service.healthcheck.retries} retries`}
                       </span>
                     )}
@@ -148,7 +148,7 @@ export function EnvironmentSheet({
             <tbody>
               {image.instructions.map((entry) => (
                 <tr key={`${entry.line}`}>
-                  <th className="font-mono !font-semibold !text-brand-foreground">
+                  <th className="font-mono !font-medium !text-warning">
                     {entry.instruction}
                   </th>
                   <td className={tableCode}>{entry.args}</td>

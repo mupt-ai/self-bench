@@ -92,7 +92,7 @@ export function RunExecution({
   return (
     <aside className="panel min-w-0 xl:sticky xl:top-6">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <h2 className="text-sm font-semibold">Execution</h2>
+        <h2 className="text-sm font-medium">Execution</h2>
         {!readOnly && (
           <Link
             className={cn(buttonStyles.secondary, "h-8 px-2.5 text-xs [&>svg]:size-3.5")}
@@ -170,15 +170,15 @@ export function RunExecution({
         <dl className="space-y-2 text-sm">
           <div className="flex justify-between gap-3">
             <dt className="text-muted-foreground">Tasks</dt>
-            <dd className="font-mono tabular-nums">{draft.tasks.length}</dd>
+            <dd className="tabular-nums">{draft.tasks.length}</dd>
           </div>
           <div className="flex justify-between gap-3">
             <dt className="text-muted-foreground">Model / Harness Pairs</dt>
-            <dd className="font-mono tabular-nums">{pairs}</dd>
+            <dd className="tabular-nums">{pairs}</dd>
           </div>
           <div className="mt-3 flex justify-between gap-3 border-t border-border pt-3">
             <dt className="text-muted-foreground">Total Trials</dt>
-            <dd className="font-mono tabular-nums">
+            <dd className="tabular-nums">
               {/* Each picked repo ablation runs every pair again, beside the original tasks. */}
               {pairs *
                 draft.tasks.length *
@@ -188,7 +188,7 @@ export function RunExecution({
         </dl>
       </div>
       <div className="grid gap-2 border-t border-border p-4">
-        <h3 className="mb-1 flex items-center gap-1.5 text-sm font-semibold">
+        <h3 className="mb-1 flex items-center gap-1.5 text-sm font-medium">
           Run
           <InfoTooltip
             label={

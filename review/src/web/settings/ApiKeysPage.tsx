@@ -51,7 +51,7 @@ export function ApiKeysPage() {
           <div className="flex items-start gap-3">
             <KeyRound className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
             <div className="min-w-0">
-              <h2 className="text-sm font-semibold">Use a Key</h2>
+              <h2 className="text-sm font-medium">Use a Key</h2>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
                 Send it as a bearer token or with the X-API-Key header.
               </p>
@@ -68,7 +68,7 @@ export function ApiKeysPage() {
               aria-hidden="true"
             />
             <div>
-              <h2 className="text-sm font-semibold">Choose a Scope</h2>
+              <h2 className="text-sm font-medium">Choose a Scope</h2>
               <div className="mt-2 grid gap-1.5 text-xs">
                 <p>
                   <span className="font-medium text-foreground">Read Only</span>

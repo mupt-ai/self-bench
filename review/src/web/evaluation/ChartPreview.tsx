@@ -171,8 +171,8 @@ export function ChartPreview({
           <MiniChart points={points.filter((point) => point.cost > 0)} />
           {/* Centered against the chart, so the space above and below the text is the same. */}
           <span className="flex shrink-0 flex-col justify-center gap-1 whitespace-nowrap">
-            <span className="text-xs leading-4 font-semibold text-foreground">Chart</span>
-            <span className="flex items-center gap-1.5 font-mono text-[11px] leading-4">
+            <span className="text-xs leading-4 font-medium text-foreground">Chart</span>
+            <span className="flex items-center gap-1.5 text-[11px] leading-4">
               <Maximize2
                 className="size-3 shrink-0 opacity-60 group-hover:opacity-100"
                 aria-hidden="true"

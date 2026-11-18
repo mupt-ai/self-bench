@@ -12,7 +12,7 @@ export interface DropdownProps {
   above?: boolean;
 }
 
-/** A square-cornered menu anchored under its trigger. Closes on outside click and Escape. */
+/** A menu anchored under its trigger. Closes on outside click and Escape. */
 export function Dropdown({
   trigger,
   children,
@@ -49,7 +49,7 @@ export function Dropdown({
     <div className={`relative ${className ?? ""}`} ref={root}>
       <button
         type="button"
-        className="group/trigger flex h-9 items-center gap-2 rounded-full border border-transparent bg-transparent pr-2.5 pl-1 text-sm font-semibold text-foreground hover:bg-foreground/[0.06] aria-expanded:bg-foreground/[0.06]"
+        className="group/trigger flex h-9 items-center gap-2 rounded-md border border-transparent bg-transparent pr-2.5 pl-1.5 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring aria-expanded:bg-accent"
         ref={button}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -58,13 +58,13 @@ export function Dropdown({
       >
         {trigger}
         <ChevronDown
-          className="size-3.5 text-muted-foreground transition-transform group-aria-expanded/trigger:rotate-180"
+          className="size-3.5 text-faint transition-transform group-aria-expanded/trigger:rotate-180"
           aria-hidden="true"
         />
       </button>
       {open && (
         <div
-          className={`absolute ${above ? "bottom-[calc(100%+6px)]" : "top-[calc(100%+6px)]"} z-30 min-w-[220px] panel bg-background ${align === "right" ? "right-0" : "right-0 sm:right-auto sm:left-0"}`}
+          className={`absolute ${above ? "bottom-[calc(100%+6px)]" : "top-[calc(100%+6px)]"} z-30 min-w-[220px] overflow-hidden rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg shadow-black/40 ${align === "right" ? "right-0" : "right-0 sm:right-auto sm:left-0"}`}
           role="menu"
           aria-label={label}
         >
@@ -91,7 +91,7 @@ export function Avatar({ login, url, size = 24 }: { login: string; url?: string;
   }
   return (
     <span
-      className="grid shrink-0 place-items-center rounded-full bg-muted font-mono text-xs font-semibold text-muted-foreground"
+      className="grid shrink-0 place-items-center rounded-full bg-muted text-xs font-medium text-muted-foreground"
       style={{ width: size, height: size }}
       aria-hidden="true"
     >

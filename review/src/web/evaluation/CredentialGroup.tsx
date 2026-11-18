@@ -64,7 +64,7 @@ export function CredentialGroup({
           {credentials.map((credential) => (
             <li key={credential.id} className="flex items-center gap-4 px-4 py-3.5">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold" title={credential.name}>
+                <p className="truncate text-sm font-medium" title={credential.name}>
                   {credential.name}
                 </p>
                 <p

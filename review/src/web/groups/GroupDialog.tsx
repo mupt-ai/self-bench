@@ -167,7 +167,7 @@ export function GroupDialog({
           onError={setError}
         />
         <fieldset className="grid min-w-0 gap-2">
-          <legend className="mb-2 text-sm font-semibold">Repositories</legend>
+          <legend className="mb-2 text-sm font-medium">Repositories</legend>
           {listed.length < 2 ? (
             <Notice>
               A group needs at least two connected repositories. Connect another first.
@@ -213,7 +213,7 @@ export function GroupDialog({
         </fieldset>
         {chosen.length > 0 && (
           <section aria-label="Order" className="grid gap-2">
-            <h3 className="text-sm font-semibold">Order</h3>
+            <h3 className="text-sm font-medium">Order</h3>
             <ol className="panel divide-y divide-border">
               {chosen.map((id, index) => (
                 <li key={id} className="flex items-center gap-2 px-4 py-1.5 text-sm">

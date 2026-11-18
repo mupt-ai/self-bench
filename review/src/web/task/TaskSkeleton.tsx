@@ -32,7 +32,7 @@ export function TaskSkeleton({ fullName, taskId }: { fullName: string; taskId: s
         aria-hidden="true"
       >
         <aside className="overflow-hidden border-r border-b border-border md:border-b-0">
-          <div className="flex h-11 items-center border-b border-border px-4 text-xs font-semibold text-muted-foreground">
+          <div className="flex h-11 items-center border-b border-border px-4 text-xs font-medium text-muted-foreground">
             Files
           </div>
           <div className="space-y-3 p-4">

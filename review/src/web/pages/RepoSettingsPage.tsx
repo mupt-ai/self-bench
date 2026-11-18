@@ -94,7 +94,7 @@ function AgentLimit({ path }: { path: string }) {
         <div className="grid gap-5 p-6 sm:grid-cols-[minmax(0,1fr)_13rem] sm:items-start sm:gap-8">
           <div>
             <div className="flex items-center gap-1.5">
-              <h2 className="text-base leading-7 font-semibold">Agent Time Limit</h2>
+              <h2 className="text-base leading-7 font-medium">Agent Time Limit</h2>
               <InfoTooltip
                 label={`How long a model may work on each task before it is stopped and graded, from ${AGENT_MINUTES.min} to ${AGENT_MINUTES.max} minutes. Leave room for the repository's test suite. Past runs keep the limit they ran with.`}
               />
@@ -115,7 +115,7 @@ function AgentLimit({ path }: { path: string }) {
                   // A notice about the last save no longer describes what the field holds.
                   if (result?.tone === "success") setResult(undefined);
                 }}
-                className="min-w-0 flex-1 text-right font-mono tabular-nums"
+                className="min-w-0 flex-1 text-right tabular-nums"
               />
               <span className="flex shrink-0 items-center border border-l-0 border-input bg-muted px-3 text-sm text-muted-foreground">
                 Minutes

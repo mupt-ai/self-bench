@@ -127,7 +127,7 @@ export function TaskListHeader() {
     <div
       className={cn(
         taskRowLayout,
-        "hidden border-b border-border bg-muted py-2.5 text-xs font-semibold text-muted-foreground md:grid",
+        "hidden border-b border-border bg-muted py-2.5 text-xs font-medium text-muted-foreground md:grid",
       )}
       aria-hidden="true"
     >

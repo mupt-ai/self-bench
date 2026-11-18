@@ -99,7 +99,7 @@ export function ReviewBar({
       <div className="panel flex min-w-0 max-w-full flex-wrap items-center gap-3 px-3 py-2">
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
           <span
-            className={`inline-flex items-center gap-1.5 text-xs font-semibold ${
+            className={`inline-flex items-center gap-1.5 text-xs font-medium ${
               task.review.decision === "approve" ? "text-success" : "text-destructive"
             }`}
           >

@@ -18,7 +18,7 @@ export function RunSubmitted({
       <p className="text-sm">These settings belong to a submitted request.</p>
       <div className="flex flex-wrap items-center gap-3">
         <Link
-          className="text-sm font-semibold text-foreground underline underline-offset-4"
+          className="text-sm font-medium text-foreground underline underline-offset-4"
           to={`${pages}/results`}
         >
           View Results

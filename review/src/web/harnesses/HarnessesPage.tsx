@@ -98,7 +98,7 @@ export function HarnessesPage() {
           <tbody>
             {harnesses.map((harness) => (
               <tr key={harness.id}>
-                <td className="font-semibold">{harness.name}</td>
+                <td className="font-medium">{harness.name}</td>
                 <td className="text-muted-foreground">
                   {harnessSummary(harness, models).join(" · ")}
                 </td>

@@ -54,7 +54,7 @@ export function ResourceLimitFields({
   const [detected, setDetected] = React.useState("");
   return (
     <fieldset className="space-y-5" aria-label="Sandbox Resource Limits">
-      <legend className="flex w-full items-center justify-between gap-2 text-sm font-semibold">
+      <legend className="flex w-full items-center justify-between gap-2 text-sm font-medium">
         <span className="flex items-center gap-1.5">
           Sandbox Resource Limits
           <InfoTooltip label="Evaluations refuse a task that asks for more than these before any trial starts, and warn when a task comes within 10% of one. Leave blank for no limit. A new credential gets its provider's limits when the provider shares them (Daytona, Vercel)." />

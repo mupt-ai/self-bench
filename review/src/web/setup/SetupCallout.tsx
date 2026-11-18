@@ -35,7 +35,7 @@ export function SetupCallout({
       )}
     >
       <div className="min-w-0 flex-1 basis-64">
-        <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
+        <p className="flex items-center gap-2 text-sm font-medium text-foreground">
           <span aria-hidden="true" className="size-2 shrink-0 bg-brand" />
           Connect {missing} to {action}.
         </p>

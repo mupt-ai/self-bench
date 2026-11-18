@@ -50,7 +50,7 @@ function StateFilter<Key extends string>({
             onClick={() => onToggle(key)}
           >
             {circle}
-            <span className="font-mono text-xs text-muted-foreground tabular-nums">{count}</span>
+            <span className="text-xs text-muted-foreground tabular-nums">{count}</span>
           </button>
         );
       })}

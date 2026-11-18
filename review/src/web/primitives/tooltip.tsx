@@ -1,4 +1,4 @@
-// Adapted from shadcn/ui's MIT-licensed Radix Tooltip primitives for SelfBench's square theme.
+// Adapted from shadcn/ui's MIT-licensed Radix Tooltip primitives for SelfBench.
 import * as Primitive from "@radix-ui/react-tooltip";
 import { Info } from "lucide-react";
 import type { ComponentProps, MouseEventHandler, ReactNode } from "react";
@@ -22,7 +22,7 @@ export function InfoTooltip({
   side?: "top" | "right" | "bottom" | "left";
   children?: ReactNode;
   className?: string;
-  /** Classes for the hint's card, for example theme colours instead of the inverted default. */
+  /** Classes for the hint's card. */
   contentClassName?: string;
   onTriggerClick?: MouseEventHandler<HTMLButtonElement>;
 }) {
@@ -38,7 +38,7 @@ export function InfoTooltip({
               aria-label={label}
               onClick={onTriggerClick}
               className={cn(
-                "inline-flex cursor-help items-center text-muted-foreground hover:text-foreground",
+                "inline-flex cursor-help items-center rounded-sm text-faint transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                 className,
               )}
             >
@@ -65,7 +65,7 @@ function TooltipContent({
     <Primitive.Content
       sideOffset={sideOffset}
       className={cn(
-        "z-50 w-max max-w-72 whitespace-normal bg-foreground px-2.5 py-1.5 text-xs leading-5 font-medium text-background shadow-md",
+        "z-50 w-max max-w-72 whitespace-normal rounded-md border border-border bg-popover px-2.5 py-1.5 text-[13px] leading-5 font-normal text-popover-foreground shadow-md shadow-black/40",
         className,
       )}
       {...props}

@@ -46,7 +46,7 @@ export function SandboxForm({
       }}
     >
       <a
-        className="inline-flex items-center gap-1 text-sm font-semibold underline underline-offset-4"
+        className="inline-flex items-center gap-1 text-sm font-medium underline underline-offset-4"
         href={provider.tokens}
         target="_blank"
         rel="noreferrer"

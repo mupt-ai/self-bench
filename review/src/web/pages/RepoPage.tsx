@@ -255,7 +255,7 @@ function RepoTasksPage() {
         />
         {tasks !== null && (
           <p
-            className="border-t border-border px-4 py-3 font-mono text-xs tabular-nums text-muted-foreground"
+            className="border-t border-border px-4 py-3 text-xs tabular-nums text-muted-foreground"
             role="status"
           >
             {visible.length === tasks.length

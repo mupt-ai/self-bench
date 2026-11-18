@@ -115,7 +115,7 @@ export function AddBenchmarkCard({
       }}
     >
       <div className="relative">
-        <label className="grid gap-2 text-sm font-semibold" htmlFor="benchmark-reference">
+        <label className="grid gap-2 text-sm font-medium" htmlFor="benchmark-reference">
           <span className="flex items-center gap-1.5">
             Harbor Registry Dataset
             <InfoTooltip label="Search Harbor's registry by name or description, or enter org/name@ref. Without @ref, each run uses the latest version." />

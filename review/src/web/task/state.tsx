@@ -12,12 +12,12 @@ export const STATE_LABEL: Record<TaskState, string> = {
 /** Readable status text with a small dot after it, shared by task lists and review. */
 export function StateStamp({ state }: { state: TaskState }) {
   const colors: Record<TaskState, string> = {
-    needs_review: "text-brand-foreground",
+    needs_review: "text-warning",
     accepted: "text-success",
     rejected: "text-muted-foreground",
     failed: "text-destructive",
     cancelled: "text-muted-foreground",
-    in_progress: "text-brand-foreground",
+    in_progress: "text-warning",
   };
   return (
     <span

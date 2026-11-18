@@ -105,7 +105,7 @@ export function ConfigurationRows({
           total={configuration.latest.length + missing.length}
           counts={withMissing(configuration.counts, missing)}
         />
-        <td className="text-right font-mono tabular-nums">
+        <td className="text-right tabular-nums">
           {configuration.passRate === undefined ? (
             <NoValue width={3} />
           ) : (
@@ -113,7 +113,7 @@ export function ConfigurationRows({
           )}
           {blocked && <span className="block text-xs text-muted-foreground">{blocked}</span>}
         </td>
-        <td className="text-right font-mono tabular-nums">
+        <td className="text-right tabular-nums">
           {configuration.costPerTask === undefined ? (
             <NoValue width={6} />
           ) : (
@@ -159,7 +159,7 @@ export function ConfigurationRows({
             <Elbow />
             <button
               type="button"
-              className="border border-border bg-card px-2.5 py-1 text-xs font-semibold hover:bg-foreground/[0.06]"
+              className="border border-border bg-card px-2.5 py-1 text-xs font-medium hover:bg-foreground/[0.06]"
               onClick={() =>
                 setView((current) => ({
                   ...current,

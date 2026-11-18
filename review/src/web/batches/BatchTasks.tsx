@@ -83,7 +83,7 @@ export function BatchTasks({ status, fullName }: { status: BatchStatus; fullName
       {tasks.length ? (
         <>
           <div
-            className="mb-2 hidden grid-cols-[minmax(0,1fr)_5rem_10rem_10rem] gap-3 px-4 text-xs font-semibold text-muted-foreground lg:grid"
+            className="mb-2 hidden grid-cols-[minmax(0,1fr)_5rem_10rem_10rem] gap-3 px-4 text-xs font-medium text-muted-foreground lg:grid"
             aria-hidden="true"
           >
             <span>Task</span>
@@ -127,7 +127,7 @@ export function BatchTasks({ status, fullName }: { status: BatchStatus; fullName
                         className={cn(
                           "text-xs",
                           activity === "running"
-                            ? "text-brand-foreground"
+                            ? "text-warning"
                             : activity === "accepted"
                               ? "text-success"
                               : activity === "infrastructure_failed"

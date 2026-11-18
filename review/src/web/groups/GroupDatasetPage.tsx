@@ -73,7 +73,7 @@ export function GroupDatasetPage() {
                     )}
                     {!member.connected && <small className="font-sans">Disconnected</small>}
                   </td>
-                  <td className="font-mono">{member.tasks}</td>
+                  <td className="tabular-nums">{member.tasks}</td>
                 </tr>
               ))}
             </tbody>

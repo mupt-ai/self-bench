@@ -12,7 +12,7 @@ export function UserMenu({ user, onSignOut }: { user: SiteUser; onSignOut: () =>
       trigger={
         <>
           <Avatar login={user.login} url={user.avatarUrl} />
-          <span className="hidden max-w-32 truncate font-mono text-sm font-medium sm:block">
+          <span className="hidden max-w-32 truncate text-sm font-medium sm:block">
             {user.login}
           </span>
         </>
@@ -20,19 +20,19 @@ export function UserMenu({ user, onSignOut }: { user: SiteUser; onSignOut: () =>
     >
       {() => (
         <>
-          <div className="border-b border-border px-3.5 py-3">
-            <div className="text-xs font-semibold text-muted-foreground">Account</div>
+          <div className="-mx-1 -mt-1 mb-1 border-b border-border px-3 py-2.5">
+            <div className="text-xs text-faint">Account</div>
             {user.name && (
-              <div className="mt-1.5 text-sm leading-snug font-semibold text-foreground">
+              <div className="mt-1 text-sm leading-snug font-medium text-foreground">
                 {user.name}
               </div>
             )}
-            <div className="font-mono text-sm text-muted-foreground">@{user.login}</div>
+            <div className="text-[13px] text-muted-foreground">@{user.login}</div>
           </div>
           <button
             type="button"
             role="menuitem"
-            className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm font-medium text-foreground hover:bg-foreground/[0.05] disabled:cursor-default disabled:opacity-50"
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-foreground transition-colors hover:bg-foreground/10 focus-visible:bg-foreground/10 focus-visible:outline-none disabled:cursor-default disabled:opacity-50"
             disabled={busy}
             onClick={() => {
               setBusy(true);

@@ -159,7 +159,7 @@ function EnvironmentRow({
           />
         </td>
         <td>
-          <span className="block font-semibold">{environment.name}</span>
+          <span className="block font-medium">{environment.name}</span>
           <span className="mt-1 block text-sm">
             <ScriptSummary
               {...(environment.script !== undefined ? { script: environment.script } : {})}

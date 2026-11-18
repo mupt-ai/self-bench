@@ -1,7 +1,6 @@
 import { X } from "lucide-react";
 import type { ComponentProps, ReactNode, RefObject } from "react";
 import { cn } from "./primitives/cn";
-import { Button } from "./ui";
 import { useModalDialog } from "./useModalDialog";
 
 const widths = { small: "max-w-md", medium: "max-w-lg", large: "max-w-xl", wide: "max-w-5xl" };
@@ -45,9 +44,9 @@ export function Dialog({
           onDismiss();
       }}
       className={cn(
-        "fixed inset-0 w-[calc(100%_-_2rem)] overflow-y-auto border-[1.5px] border-foreground/15 bg-background p-0 text-foreground shadow-[0_24px_64px_-16px_rgb(0_0_0/0.35)] backdrop:bg-[hsl(30_8%_12%/0.35)] backdrop:backdrop-blur-[2px]",
+        "fixed inset-0 w-[calc(100%_-_2rem)] overflow-y-auto border border-border bg-card p-0 text-foreground shadow-2xl shadow-black/50 backdrop:bg-black/60 backdrop:backdrop-blur-[2px] focus:outline-none",
         placement === "center"
-          ? "m-auto max-h-[calc(100dvh_-_2rem)]"
+          ? "m-auto max-h-[calc(100dvh_-_2rem)] rounded-lg"
           : "my-0 mr-0 ml-auto h-dvh max-h-none w-full border-y-0 border-r-0",
         widths[size],
         className,
@@ -74,30 +73,27 @@ export function DialogHeader({
   busy?: boolean;
 }) {
   return (
-    <header className="flex items-start justify-between gap-4 border-b border-border p-4 sm:px-6 sm:py-5">
-      <div className="min-w-0">
-        <h2 id={titleId} className="text-lg leading-7 font-semibold tracking-tight">
+    <header className="border-b border-border px-4 py-4 sm:px-6">
+      <div className="flex items-center justify-between gap-4">
+        <h2 id={titleId} className="min-w-0 text-base leading-6 font-medium">
           {title}
         </h2>
-        {description && (
-          <p
-            id={descriptionId}
-            className="mt-1 break-words text-sm leading-6 text-muted-foreground"
-          >
-            {description}
-          </p>
-        )}
+        <button
+          ref={closeRef}
+          type="button"
+          aria-label="Close"
+          disabled={busy}
+          onClick={onClose}
+          className="-my-1 -mr-2 inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+        >
+          <X className="size-4" aria-hidden="true" />
+        </button>
       </div>
-      <Button
-        ref={closeRef}
-        size="icon"
-        variant="ghost"
-        aria-label="Close"
-        disabled={busy}
-        onClick={onClose}
-      >
-        <X aria-hidden="true" />
-      </Button>
+      {description && (
+        <p id={descriptionId} className="mt-1.5 break-words text-[13px] leading-5 text-muted-foreground">
+          {description}
+        </p>
+      )}
     </header>
   );
 }
@@ -119,7 +115,7 @@ export function DialogFooter({ className, ...props }: ComponentProps<"footer">) 
     <footer
       {...props}
       className={cn(
-        "flex flex-wrap items-center justify-end gap-2 border-t border-border bg-card p-4 sm:px-6",
+        "flex flex-wrap items-center justify-end gap-2 border-t border-border p-4 sm:px-6",
         className,
       )}
     />

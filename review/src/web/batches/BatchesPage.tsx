@@ -48,7 +48,7 @@ export function BatchesPage() {
       {!!runs?.length && (
         <section className="panel" aria-label="Batch History">
           <div
-            className={`${columns} border-b border-border bg-muted px-4 py-2.5 text-xs font-semibold text-muted-foreground max-md:hidden`}
+            className={`${columns} border-b border-border bg-muted px-4 py-2.5 text-xs font-medium text-muted-foreground max-md:hidden`}
             aria-hidden="true"
           >
             <span>Batch</span>

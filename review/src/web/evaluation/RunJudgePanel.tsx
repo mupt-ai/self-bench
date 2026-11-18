@@ -39,7 +39,7 @@ export function RunJudgePanel({
         <Scale className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <h2 id="judge-heading" className="text-sm font-semibold">
+            <h2 id="judge-heading" className="text-sm font-medium">
               LLM Judge
             </h2>
             <InfoTooltip
@@ -71,7 +71,7 @@ export function RunJudgePanel({
         <p className="mt-3 text-sm">
           None of your credentials can call this judge.{" "}
           <Link
-            className="font-semibold underline underline-offset-4"
+            className="font-medium underline underline-offset-4"
             to={`/settings/credentials?return=${encodeURIComponent(`${pages}/run`)}`}
           >
             Add an API Key
