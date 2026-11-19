@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import type { SteeringNote as Note } from "../../generation/pipeline/steering.js";
 import { WORKSPACE_DIRECTORY } from "../../generation/task/scenario-workspace.js";
 import { SUBMISSION_FILES } from "../../generation/task/submission.js";
@@ -9,16 +9,17 @@ import { runCommand } from "../../lib/process.js";
 import { requestBytes, requestJson } from "./api-client.js";
 import {
   flag,
-  list,
   parse,
-  positional,
   repositoryPath,
+  taskArguments,
   taskPath,
   textOption,
   type Values,
 } from "./args.js";
+import { taskPageUrl } from "./feedback.js";
 import { GENERATION, generation } from "./generation.js";
 import { print, table } from "./output.js";
+import { createTask, startedLine } from "./task-create.js";
 import { taskEvaluationCommand } from "./task-evaluation.js";
 
 const TASK_FLAGS = {
@@ -27,49 +28,8 @@ const TASK_FLAGS = {
   feedback: { type: "string" },
   "feedback-file": { type: "string" },
   draft: { type: "string" },
-  pr: { type: "string" },
   state: { type: "string" },
 } as const;
-
-/**
- * `scenario create`: one described scenario becomes one task. With --commit, the agent starts from
- * the repository at that commit or branch; without it, the author writes the workspace.
- */
-export async function scenarioCommand(args: string[]): Promise<void> {
-  const [action, ...rest] = args;
-  if (action !== "create") throw new Error("usage: self-bench scenario create --repo OWNER/NAME …");
-  const { values } = parse(rest, {
-    ...GENERATION,
-    title: { type: "string" },
-    scenario: { type: "string" },
-    "scenario-file": { type: "string" },
-    difficulty: { type: "string" },
-    attach: { type: "string", multiple: true },
-    commit: { type: "string" },
-  });
-  const scenario = await textOption(values, "scenario");
-  const title = flag(values, "title");
-  if (!title || !scenario)
-    throw new Error("scenario create needs --title and --scenario or --scenario-file");
-  const attachments = await Promise.all(
-    list(values, "attach").map(async (path) => ({
-      name: basename(path),
-      content: (await readFile(path)).toString("base64"),
-    })),
-  );
-  const repository = repositoryPath(values);
-  const difficulty = flag(values, "difficulty");
-  const commit = flag(values, "commit");
-  const reply = await requestJson(`${repository}/tasks/from-scenario`, "POST", {
-    title,
-    scenario,
-    ...(difficulty ? { difficulty } : {}),
-    ...(commit ? { commit } : {}),
-    attachments,
-    ...(await generation(values, repository)),
-  });
-  print(values, reply, () => taskLine(reply.task as Task));
-}
 
 interface Task {
   runId: string;
@@ -82,33 +42,28 @@ interface Task {
   review?: { decision: string; note?: string };
 }
 
-const taskLine = (task: Task) => `Started ${task.runId}/${task.taskId} (${task.state}).`;
+const ACTIONS =
+  "list|create|show|pull|revise|steer|steering|approve|reject|unreview|cancel|delete|results|explain|audit";
 
-/** `tasks`: a repository's tasks; `task <action> RUN_ID TASK_ID`. */
-export async function taskCommand(args: string[], listing: boolean): Promise<void> {
-  const [action, ...rest] = listing ? ["list", ...args] : args;
+/** `task <action>`: a benchmark's tasks, each named `RUN_ID/TASK_ID` as `task list` prints it. */
+export async function taskCommand(args: string[]): Promise<void> {
+  const [action, ...rest] = args;
   if (action === "results" || action === "explain" || action === "audit")
     return await taskEvaluationCommand(action, rest);
+  if (action === "create") return await createTask(rest);
+  if (action === "add-pr") return await createTask(rest, true);
+  if (!action || !ACTIONS.split("|").includes(action))
+    throw new Error(`usage: self-bench task ${ACTIONS} (see self-bench help task)`);
   const { values, positionals } = parse(rest, TASK_FLAGS);
   const repository = repositoryPath(values);
   if (action === "list") return await listTasks(values, repository);
-  if (action === "add-pr") {
-    const pr = flag(values, "pr") ?? positionals[0];
-    if (!pr) throw new Error("task add-pr needs --pr NUMBER or a pull request URL");
-    const reply = await requestJson(`${repository}/tasks/from-pr`, "POST", {
-      pr,
-      ...(await generation(values, repository)),
-    });
-    return print(values, reply, () => taskLine(reply.task as Task));
-  }
-  const runId = positional(positionals, 0, "RUN_ID");
-  const taskId = positional(positionals, 1, "TASK_ID");
+  const { runId, taskId, rest: more } = taskArguments(positionals);
   const task = taskPath(repository, runId, taskId);
   switch (action) {
     case "show":
       return print(values, await requestJson(task));
     case "pull":
-      return await pullDraft(values, `${task}/draft`, positionals[2] ?? taskId);
+      return await pullDraft(values, `${task}/draft`, more[0] ?? taskId);
     case "revise": {
       const feedback = await textOption(values, "feedback");
       if (!feedback) throw new Error("task revise needs --feedback or --feedback-file");
@@ -118,7 +73,13 @@ export async function taskCommand(args: string[], listing: boolean): Promise<voi
         ...(await generation(values, repository)),
         ...(draft ? { draft: await packDraft(draft) } : {}),
       });
-      return print(values, reply, () => taskLine(reply.task as Task));
+      const revision = reply.task as Task;
+      return print(
+        values,
+        reply,
+        () =>
+          `${startedLine(revision)}\n${taskPageUrl(repository, revision.runId, revision.taskId)}`,
+      );
     }
     case "steer": {
       const feedback = await textOption(values, "feedback");
@@ -163,7 +124,7 @@ export async function taskCommand(args: string[], listing: boolean): Promise<voi
     case "delete":
       return print(values, await requestJson(task, "DELETE"));
     default:
-      throw new Error(`unknown task command: ${action ?? ""}`);
+      throw new Error(`usage: self-bench task ${ACTIONS}`);
   }
 }
 

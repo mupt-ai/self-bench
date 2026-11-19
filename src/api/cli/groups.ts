@@ -1,5 +1,5 @@
 import { requestJson } from "./api-client.js";
-import { flag, list, org, parse, positional } from "./args.js";
+import { flag, list, org, parse } from "./args.js";
 import { print, table } from "./output.js";
 
 interface GroupList {
@@ -8,11 +8,11 @@ interface GroupList {
 }
 
 /**
- * `groups`; `group create|show|update|delete SLUG`: repositories evaluated and released together.
+ * `group list|create|show|update|delete SLUG`: repositories evaluated and released together.
  * Members are named `OWNER/NAME`; the API takes their ids, which the group list gives.
  */
-export async function groupCommand(args: string[], listing: boolean): Promise<void> {
-  const [action, ...rest] = listing ? ["list", ...args] : args;
+export async function groupCommand(args: string[]): Promise<void> {
+  const [action, ...rest] = args;
   const { values, positionals } = parse(rest, {
     name: { type: "string" },
     description: { type: "string" },
@@ -29,12 +29,13 @@ export async function groupCommand(args: string[], listing: boolean): Promise<vo
       ]),
     );
   }
-  const slug = flag(values, "group") ?? positional(positionals, 0, "SLUG");
+  const slug = positionals[0] ?? flag(values, "group");
+  if (!slug) throw new Error("usage: self-bench group list | group create|show|update|delete SLUG");
   const path = `${base}/${encodeURIComponent(slug)}`;
   if (action === "show") return print(values, await requestJson(path));
   if (action === "delete") return print(values, await requestJson(path, "DELETE"));
   if (action !== "create" && action !== "update")
-    throw new Error("usage: self-bench group create|show|update|delete SLUG");
+    throw new Error("usage: self-bench group list | group create|show|update|delete SLUG");
   const name = flag(values, "name");
   const members = list(values, "member");
   if (!name || members.length === 0)

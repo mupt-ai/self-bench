@@ -2,6 +2,7 @@ import { afterEach, expect, spyOn, test } from "bun:test";
 import { scopePath } from "../src/api/cli/args.js";
 import { selectionFromFlags } from "../src/api/cli/evaluations.js";
 import { runCli } from "../src/api/cli/main.js";
+import { cannedCli as cli } from "./support/cli-replies.js";
 
 // A developer's own `self-bench login` must not leak into these tests.
 process.env.XDG_CONFIG_HOME = "/nonexistent/selfbench-test-config";
@@ -10,50 +11,24 @@ afterEach(() => {
   process.env = { ...environment };
 });
 
-interface Sent {
-  method: string;
-  path: string;
-  body?: unknown;
-}
-
-/** Runs the CLI against canned replies by `METHOD path`, returning what it sent and printed. */
-async function cli(args: string[], replies: Record<string, unknown>) {
-  process.env.SELFBENCH_API_URL = "http://selfbench.test";
-  process.env.SELFBENCH_API_KEY = "sbk_test";
-  const sent: Sent[] = [];
-  const fetchSpy = spyOn(globalThis, "fetch").mockImplementation((async (
-    input: string | URL | Request,
-    init?: RequestInit,
-  ) => {
-    const url = new URL(String(input));
-    const method = init?.method ?? "GET";
-    const path = `${url.pathname}${url.search}`;
-    sent.push({ method, path, ...(init?.body ? { body: JSON.parse(String(init.body)) } : {}) });
-    const reply = replies[`${method} ${path}`];
-    return reply === undefined
-      ? Response.json({ error: `unexpected ${method} ${path}` }, { status: 404 })
-      : Response.json(reply);
-  }) as typeof fetch);
-  const log = spyOn(console, "log").mockImplementation(() => undefined);
-  try {
-    await runCli(args);
-    return { sent, printed: JSON.parse(String(log.mock.calls.at(-1)?.[0])) };
-  } finally {
-    log.mockRestore();
-    fetchSpy.mockRestore();
-  }
-}
-
 const repo = "/api/orgs/acme/repos/acme/app";
 
-test("commands act on a repository, a benchmark, or a group, in the named workspace", () => {
+test("commands act on a repo, custom, or public benchmark, or a group, in the named workspace", () => {
   expect(scopePath({ repo: "acme/app" })).toBe(repo);
-  expect(scopePath({ repo: "evals/bugs", org: "acme" })).toBe("/api/orgs/acme/repos/evals/bugs");
+  // A custom benchmark is the repository evals/<slug>, named by its name or its slug.
+  const custom = "/api/orgs/acme/repos/evals/data-import-bugs";
+  expect(scopePath({ custom: "Data Import Bugs", org: "acme" })).toBe(custom);
+  expect(scopePath({ custom: "data-import-bugs", org: "acme" })).toBe(custom);
+  expect(scopePath({ repo: "evals/data-import-bugs", org: "acme" })).toBe(custom);
+  expect(scopePath({ public: "harbor/swe", org: "acme" })).toBe(
+    "/api/orgs/acme/benchmarks/harbor/swe",
+  );
   expect(scopePath({ benchmark: "harbor/swe", org: "acme" })).toBe(
     "/api/orgs/acme/benchmarks/harbor/swe",
   );
   expect(scopePath({ group: "web", org: "acme" })).toBe("/api/orgs/acme/groups/web");
   expect(() => scopePath({ repo: "acme/app", group: "web" })).toThrow("name one of");
+  expect(() => scopePath({ custom: "bugs", public: "harbor/swe" })).toThrow("name one of");
   expect(() => scopePath({})).toThrow("--repo");
 });
 

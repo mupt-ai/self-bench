@@ -1,26 +1,86 @@
 ---
 title: "CLI: Build Tasks"
 sidebarTitle: "Build Tasks"
-description: "Connect repositories and evals, and generate tasks from merged PRs or described custom tasks."
+description: "Connect repositories, create custom benchmarks, and build tasks from merged PRs or descriptions."
 icon: "hammer"
 ---
 
-`R` is `--repo OWNER/NAME`, or another [scope](/cli/overview#conventions).
+A task is built into a [benchmark](/cli/overview#benchmarks): a **repo benchmark** (`--repo OWNER/NAME`) or a **custom benchmark** (`--custom NAME`). Public benchmarks come with their tasks; see [Public Benchmarks and Groups](/cli/benchmarks-and-groups). `R` is `--repo OWNER/NAME`; `B` is `--repo OWNER/NAME` or `--custom NAME`.
 
 | Command | Does |
 | --- | --- |
-| `repos` | Connected repositories and evals |
-| `repo connect\|show\|disconnect R` | Connect, read, or disconnect a repository |
-| `repo set R --agent-minutes N` | How long an agent may work on each task |
-| `eval create NAME` | A workspace eval; then use `--repo evals/NAME` |
-| `prs R [--page N]` | Merged pull requests |
-| `generate R --easy N --medium N --hard N [--focus TEXT]` | Start a batch that picks PRs and authors tasks |
-| `task add-pr R --pr NUMBER\|URL` | A task from one merged PR |
-| `scenario create R --title T (--scenario TEXT \| --scenario-file F) [--commit REF] [--attach F ...] [--difficulty D]` | A task from a described custom task |
-| `batches R` · `batch show\|cancel RUN_ID R` | Follow or stop batches |
+| `repo list` | Connected repositories |
+| `repo connect\|show\|disconnect OWNER/NAME` | Connect a GitHub repository, read its settings, or disconnect it |
+| `repo update OWNER/NAME --agent-minutes N` | How long an agent may work on each task |
+| `custom list` | The workspace's custom benchmarks |
+| `custom create NAME` | A new custom benchmark |
+| `custom show\|delete NAME` · `custom update NAME --agent-minutes N` | Read, delete, or set its agent time |
+| `pr list R [--page N]` | Merged pull requests a batch can draw on |
+| `batch create R --easy N --medium N --hard N [--focus TEXT]` | Pick merged PRs and write a task from each |
+| `batch list R` · `batch show\|cancel BATCH R` | Follow or stop batches |
+| `task create R --pr NUMBER\|URL` | A task from one merged PR |
+| `task create B --title TEXT --description TEXT` | A custom task, written from your description |
+
+## Repo Benchmarks
+
+`repo connect` adds a GitHub repository the SelfBench app can read; its tasks then live under `--repo OWNER/NAME`.
+
+```bash
+self-bench repo connect acme/app
+self-bench repo update acme/app --agent-minutes 45
+```
+
+## Custom Benchmarks
+
+A custom benchmark is a collection of custom tasks with no repository behind it. Its author writes each task's starting files, and its tests read only what the agent leaves in `/app`. Custom benchmarks are never released.
+
+```bash
+self-bench custom create "Data Import Bugs"
+# Created data-import-bugs; pass it as --custom data-import-bugs.
+```
+
+## `batch create`
+
+Starts a batch that picks merged PRs and writes one task from each, in three difficulty tiers. The counts are how many candidates each tier tries (1 to 300 in all). A candidate that fails review three times is rejected and not backfilled, so a batch can end with fewer tasks. `--focus` steers which PRs it picks.
+
+```bash
+self-bench batch create --repo acme/app --easy 2 --medium 4 --hard 2 --focus "billing and invoices"
+# Started batch 6f1c2e9a.
+self-bench batch show 6f1c2e9a --repo acme/app
+```
+
+Its tasks appear in `task list` as they finish, in `needs_review`. See [How It Works](/concepts/how-it-works) for what makes a task valid.
+
+## `task create`
+
+Creates one task and starts writing it. Pass `--pr` for a task from one merged PR (repo benchmarks only), or `--title` and `--description` for a custom task.
+
+| Flag | Does |
+| --- | --- |
+| `--pr NUMBER\|URL` | The merged PR to build from |
+| `--title TEXT` | The custom task's name, at most 120 characters |
+| `--description TEXT` · `--description-file FILE` | What happened: the mistake the agent made and what a careful person would do, at most 20,000 characters |
+| `--commit SHA\|BRANCH` | Repo benchmarks only: the commit the agent starts from, pinned when the task is created. Default: the default branch's latest commit |
+| `--difficulty easy\|medium\|hard` | The tier it is written for. Default: `medium` |
+| `--attach FILE` (repeatable) | Real files from the situation, such as a log or the emails: up to 20 files and 20 MB. Details the task doesn't depend on are replaced with fictional ones |
+
+```bash
+self-bench task create --custom data-import-bugs --title "Rows Lost on Re-Import" \
+  --description-file rows-lost.md --attach import.log --difficulty medium
+# Started scn-evals-data-import-bugs-3f9a1c2b7d4e/scenario-rows-lost-on-re-import (in_progress).
+```
+
+Follow it with `task list`, or send it notes while it is written with [`feedback`](/cli/review#feedback).
 
 ## Generation Options
 
-`generate`, `task add-pr`, `scenario create`, and `task revise` take `--model`, `--verifier-model`, `--reasoning`, `--model-credential`, `--sandbox`, `--sandbox-credential`, `--harbor`, and `--harbor-credential`, or `--generation JSON|@FILE`. Without them, they use managed models and sandbox.
+`batch create`, `task create`, `task revise`, `feedback`, and `environment create|build` choose the models and sandbox that write tasks. Without these flags, they use the managed models and sandbox.
 
-See [How It Works](/concepts/how-it-works) for what makes a task valid.
+| Flag | Does |
+| --- | --- |
+| `--model ID` · `--verifier-model ID` | The model that writes tasks, and the one that checks them. Default: `gpt-6.1-sol` for both |
+| `--reasoning LEVEL` | Their reasoning level. Default: `high` |
+| `--model-credential ID` | A saved model credential, in place of the managed model |
+| `--sandbox KIND` · `--sandbox-credential ID` | Where tasks are built and checked. Default: `managed` |
+| `--harbor ENV` · `--harbor-credential ID` | The Harbor environment that checks tasks, and its credential |
+| `--generation JSON\|@FILE` | The whole [`generation`](/api/overview#conventions) object, in place of the flags |

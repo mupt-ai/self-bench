@@ -80,10 +80,11 @@ interface HarnessOption {
 }
 
 /**
- * `compare`: runs models on the scope's tasks (every approved task unless `--task` names some),
- * as Run Evaluation does in the app. `--selection` sends a full comparison body instead.
+ * `comparison create` (once `compare`): runs models on the scope's tasks (every approved task
+ * unless `--task` names some), as Run Evaluation does in the app. `--selection` sends a full
+ * comparison body instead.
  */
-export async function compareCommand(args: string[]): Promise<void> {
+async function createComparison(args: string[]): Promise<void> {
   const { values } = parse(args, SELECTION);
   const scope = scopePath(values);
   const body = (await jsonOption(values, "selection")) ?? {
@@ -96,7 +97,8 @@ export async function compareCommand(args: string[]): Promise<void> {
 
 export function selectionFromFlags(values: Values): Record<string, unknown> {
   const models = list(values, "model");
-  if (models.length === 0) throw new Error("compare needs --model (repeat it to compare several)");
+  if (models.length === 0)
+    throw new Error("comparison create needs --model (repeat it to compare several)");
   const harnesses = list(values, "harness");
   const thinking = flag(values, "thinking");
   const judge = flag(values, "judge-credential");
@@ -148,9 +150,10 @@ function comparisonView(comparison: Comparison): string {
   return `Comparison ${comparison.id}\n${runs}${error}`;
 }
 
-/** `comparisons`; `comparison show|resume|cancel ID`. */
-export async function comparisonCommand(args: string[], listing: boolean): Promise<void> {
-  const [action, ...rest] = listing ? ["list", ...args] : args;
+/** `comparison create|list|show|resume|cancel`. */
+export async function comparisonCommand(args: string[]): Promise<void> {
+  const [action, ...rest] = args;
+  if (action === "create") return await createComparison(rest);
   const { values, positionals } = parse(rest);
   const base = `${scopePath(values)}/evaluations/comparisons`;
   if (action === "list") {
@@ -158,9 +161,11 @@ export async function comparisonCommand(args: string[], listing: boolean): Promi
     const comparisons = reply.comparisons as Comparison[];
     return print(values, reply, () => comparisons.map(comparisonView).join("\n\n") || "(none)");
   }
-  const path = `${base}/${encodeURIComponent(positional(positionals, 0, "comparison ID"))}`;
   if (action !== "show" && action !== "resume" && action !== "cancel")
-    throw new Error("usage: self-bench comparison show|resume|cancel ID");
+    throw new Error(
+      "usage: self-bench comparison create|list S | comparison show|resume|cancel ID S",
+    );
+  const path = `${base}/${encodeURIComponent(positional(positionals, 0, "comparison ID"))}`;
   const reply = await requestJson(
     action === "show" ? path : `${path}/${action}`,
     action === "show" ? "GET" : "POST",
@@ -168,9 +173,9 @@ export async function comparisonCommand(args: string[], listing: boolean): Promi
   print(values, reply, () => comparisonView(reply as unknown as Comparison));
 }
 
-/** `runs`; `run show|cancel|delete EVALUATION_ID`. */
-export async function evaluationRunCommand(args: string[], listing: boolean): Promise<void> {
-  const [action, ...rest] = listing ? ["list", ...args] : args;
+/** `evaluation list|show|cancel|delete ID` (once `runs` and `run`): one model's runs of the tasks. */
+export async function evaluationCommand(args: string[]): Promise<void> {
+  const [action, ...rest] = args;
   const { values, positionals } = parse(rest);
   const base = `${scopePath(values)}/evaluations`;
   if (action === "list") {
@@ -198,7 +203,7 @@ export async function evaluationRunCommand(args: string[], listing: boolean): Pr
   if (action === "show") return print(values, await requestJson(path));
   if (action === "cancel" || action === "delete")
     return print(values, await requestJson(`${path}/${action}`, "POST"));
-  throw new Error("usage: self-bench run show|cancel|delete EVALUATION_ID");
+  throw new Error("usage: self-bench evaluation list S | evaluation show|cancel|delete ID S");
 }
 
 /** `results`: each configuration's score on the tasks results count on. */
@@ -235,9 +240,14 @@ function resultsView(report: ResultsReport): string {
   return `${report.tasks} tasks\n\n${configurations}\n\nTasks, hardest first\n${tasks}`;
 }
 
-/** `summaries`: the latest Model Summaries report; `summaries create` writes a new one. */
-export async function summariesCommand(args: string[]): Promise<void> {
-  const [action, ...rest] = args[0] === "create" ? args : ["show", ...args];
+/**
+ * `summary show|create`: the latest Model Summaries report, or a new one. `summaries`, the older
+ * name, shows it, and `summaries create` writes one.
+ */
+export async function summaryCommand(args: string[]): Promise<void> {
+  const [action, ...rest] = args;
+  if (action !== "show" && action !== "create")
+    throw new Error("usage: self-bench summary show|create S");
   const { values } = parse(rest, {
     config: { type: "string", multiple: true },
     model: { type: "string" },
@@ -253,7 +263,7 @@ export async function summariesCommand(args: string[]): Promise<void> {
   if (action === "show") return await show();
   const model = flag(values, "model");
   const credentialId = flag(values, "credential");
-  if (!model || !credentialId) throw new Error("summaries create needs --model and --credential");
+  if (!model || !credentialId) throw new Error("summary create needs --model and --credential");
   let configurations = list(values, "config");
   if (configurations.length === 0) {
     const { configurations: scored } = await results(values);
@@ -264,7 +274,7 @@ export async function summariesCommand(args: string[]): Promise<void> {
     summary: { credentialId, model },
   });
   if (values.wait !== true)
-    return print(values, started, () => "Summarizing. Run `self-bench summaries` to read it.");
+    return print(values, started, () => "Summarizing. Run `self-bench summary show` to read it.");
   await waitFor("model summaries", async () => {
     const state = await requestJson(path);
     return (state.running as unknown[]).length ? undefined : true;

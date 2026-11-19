@@ -1,95 +1,110 @@
-import { fail } from "../../lib/util.js";
-import { download, passthrough } from "./api-client.js";
+import { customCommand, evalCommand, publicCommand } from "./benchmarks.js";
 import { readConfig } from "./config.js";
 import { credentialCommand } from "./credentials.js";
 import { environmentCommand } from "./environments.js";
 import {
   catalogCommand,
-  compareCommand,
   comparisonCommand,
-  evaluationRunCommand,
+  evaluationCommand,
   resultsCommand,
-  summariesCommand,
+  summaryCommand,
 } from "./evaluations.js";
+import { feedbackCommand } from "./feedback.js";
 import { groupCommand } from "./groups.js";
-import { printHelp } from "./help.js";
+import { ACTION_NOUNS, printHelp } from "./help.js";
 import { loginCommand, logoutCommand, orgCommand } from "./login.js";
-import { memberCommand, membersCommand, workspaceCommand } from "./members.js";
-import { grantCommand } from "./operator.js";
-import { benchmarkCommand, releaseCommand } from "./releases.js";
+import { memberCommand, workspaceCommand } from "./members.js";
+import { grantCommand, operatorCommand, runCommand } from "./operator.js";
+import { releaseCommand } from "./releases.js";
 import { savedHarnessCommand } from "./saved-harnesses.js";
-import { scenarioCommand, taskCommand } from "./tasks.js";
+import { scenarioCommand } from "./task-create.js";
+import { taskCommand } from "./tasks.js";
 import { interactive } from "./tui.js";
-import { requiredArgument } from "./values.js";
-import {
-  batchCommand,
-  evalCommand,
-  generateCommand,
-  prsCommand,
-  repoCommand,
-  whoamiCommand,
-} from "./workspace.js";
+import { batchCommand, prCommand, repoCommand, whoamiCommand } from "./workspace.js";
 
 type Command = (args: string[]) => Promise<void>;
 
-/** Each command, by name; plurals list, singulars act on one. */
+/** Each command, by noun; the verb is its first argument (`task list`, `repo connect`). */
 const COMMANDS: Record<string, Command> = {
   login: loginCommand,
   logout: logoutCommand,
   org: orgCommand,
   whoami: whoamiCommand,
   workspace: workspaceCommand,
-  members: membersCommand,
   member: memberCommand,
-  credentials: (args) => credentialCommand(args, true),
-  credential: (args) => credentialCommand(args, false),
-  repos: (args) => repoCommand(args, true),
-  repo: (args) => repoCommand(args, false),
-  eval: evalCommand,
-  prs: prsCommand,
-  generate: generateCommand,
-  batches: (args) => batchCommand(args, true),
-  batch: (args) => batchCommand(args, false),
-  scenario: scenarioCommand,
-  tasks: (args) => taskCommand(args, true),
-  task: (args) => taskCommand(args, false),
-  environments: (args) => environmentCommand(args, true),
-  environment: (args) => environmentCommand(args, false),
-  harnesses: (args) => savedHarnessCommand(args, true),
-  harness: (args) => savedHarnessCommand(args, false),
-  // Their older names.
-  conditions: (args) => savedHarnessCommand(args, true),
-  condition: (args) => savedHarnessCommand(args, false),
+  credential: credentialCommand,
+  repo: repoCommand,
+  pr: prCommand,
+  batch: batchCommand,
+  group: groupCommand,
+  custom: customCommand,
+  public: publicCommand,
+  feedback: feedbackCommand,
+  task: taskCommand,
+  environment: environmentCommand,
+  harness: savedHarnessCommand,
   catalog: catalogCommand,
-  compare: compareCommand,
-  comparisons: (args) => comparisonCommand(args, true),
-  comparison: (args) => comparisonCommand(args, false),
-  runs: (args) => evaluationRunCommand(args, true),
-  run: (args) => evaluationRunCommand(args, false),
+  comparison: comparisonCommand,
+  evaluation: evaluationCommand,
   results: resultsCommand,
-  summaries: summariesCommand,
-  releases: (args) => releaseCommand(args, true),
-  release: (args) => releaseCommand(args, false),
-  benchmarks: (args) => benchmarkCommand(args, true),
-  benchmark: (args) => benchmarkCommand(args, false),
-  groups: (args) => groupCommand(args, true),
-  group: (args) => groupCommand(args, false),
-  // Operator commands, on the deployment's own token.
-  status: (args) => passthrough("GET", `/v1/runs/${requiredArgument(args, "run ID")}`),
-  cancel: (args) => passthrough("POST", `/v1/runs/${requiredArgument(args, "run ID")}/cancel`),
-  list: () => passthrough("GET", "/v1/runs"),
-  download: (args) =>
-    download(requiredArgument(args, "run ID"), args[1] ?? fail("output path is required")),
+  summary: summaryCommand,
+  release: releaseCommand,
+  operator: operatorCommand,
+};
+
+/** `NOUN …` as `NOUN VERB …`. */
+const verb =
+  (command: Command, name: string): Command =>
+  (args) =>
+    command([name, ...args]);
+
+/**
+ * Shorter and older names, which help leaves out but scripts may use: plurals list (`repos` is
+ * `repo list`), and each name a command had before it was renamed.
+ */
+const ALIASES: Record<string, Command> = {
+  members: verb(memberCommand, "list"),
+  credentials: verb(credentialCommand, "list"),
+  repos: verb(repoCommand, "list"),
+  prs: verb(prCommand, "list"),
+  batches: verb(batchCommand, "list"),
+  groups: verb(groupCommand, "list"),
+  tasks: verb(taskCommand, "list"),
+  environments: verb(environmentCommand, "list"),
+  harnesses: verb(savedHarnessCommand, "list"),
+  comparisons: verb(comparisonCommand, "list"),
+  evaluations: verb(evaluationCommand, "list"),
+  releases: verb(releaseCommand, "list"),
+  // Renamed with Repo, Custom, and Public Benchmarks.
+  eval: evalCommand,
+  scenario: scenarioCommand,
+  generate: verb(batchCommand, "create"),
+  benchmarks: verb(publicCommand, "list"),
+  benchmark: publicCommand,
+  compare: verb(comparisonCommand, "create"),
+  runs: verb(evaluationCommand, "list"),
+  run: evaluationCommand,
+  summaries: (args) => summaryCommand(args[0] === "create" ? args : ["show", ...args]),
+  conditions: verb(savedHarnessCommand, "list"),
+  condition: savedHarnessCommand,
+  // Operator commands, once top-level.
+  status: verb(runCommand, "show"),
+  cancel: verb(runCommand, "cancel"),
+  list: verb(runCommand, "list"),
+  download: verb(runCommand, "download"),
   grant: grantCommand,
 };
 
 export async function runCli(args: string[]): Promise<void> {
   const [command, ...rest] = args;
-  if (command === "help" || command === "--help" || command === "-h") return printHelp();
+  if (command === "help" || command === "--help" || command === "-h") return printHelp(rest[0]);
   // Bare `self-bench` signs in first, as `dari` does, then shows what it can do.
   if (command === undefined) return await welcome();
-  const run = COMMANDS[command];
+  const run = COMMANDS[command] ?? ALIASES[command];
   if (!run) throw new Error(`unknown command: ${command} (see self-bench help)`);
+  // `self-bench task` alone, or `self-bench task create --help`, shows that noun's help.
+  const asked = rest.includes("--help") || rest.includes("-h");
+  if (asked || (rest.length === 0 && ACTION_NOUNS.has(command))) return printHelp(command);
   await run(rest);
 }
 

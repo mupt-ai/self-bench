@@ -1,15 +1,15 @@
 ---
-title: "API: Benchmarks and Groups"
-sidebarTitle: "Benchmarks and Groups"
-description: "Evaluate Harbor registry datasets, and pool repositories into groups."
+title: "API: Public Benchmarks and Groups"
+sidebarTitle: "Public Benchmarks and Groups"
+description: "Add Harbor registry datasets as public benchmarks, and pool repositories into groups."
 icon: "layer-group"
 ---
 
-A benchmark or group is a [scope](/api/overview#conventions) for evaluation and results routes. Benchmarks are never released.
+A public benchmark or group is a [scope](/api/overview#conventions) for evaluation, results, and release routes. CLI: [Public Benchmarks and Groups](/cli/benchmarks-and-groups).
 
 | Method | Route | Does |
 | --- | --- | --- |
-| `GET`, `POST` | `/api/orgs/{org}/benchmarks` | List or add Harbor datasets |
+| `GET`, `POST` | `/api/orgs/{org}/benchmarks` | List public benchmarks, or add a Harbor dataset |
 | `GET`, `DELETE` | `/api/orgs/{org}/benchmarks/{dataset-org}/{dataset}` | Read or remove one |
 | `GET` | `…/{dataset-org}/{dataset}/tasks` · `/registry` | Its tasks; registry datasets to choose from |
 | `GET`, `POST` | `/api/orgs/{org}/groups` | List or create groups |
@@ -19,5 +19,5 @@ A benchmark or group is a [scope](/api/overview#conventions) for evaluation and 
 
 | Route | Body |
 | --- | --- |
-| `POST /api/orgs/{org}/benchmarks` | `{ reference: "org/name" or "org/name@ref" }` |
+| `POST /api/orgs/{org}/benchmarks` | `{ reference: "org/name" or "org/name@ref" }`; without `@ref`, `latest` |
 | `POST /api/orgs/{org}/groups` | `{ name, slug, description?, repositoryIds }` |

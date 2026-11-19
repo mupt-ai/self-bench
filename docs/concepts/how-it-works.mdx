@@ -39,7 +39,7 @@ The agent gets the base snapshot, the instruction, and its environment. It never
 A custom task starts from a description instead of a PR.
 
 - A **repository custom task** starts from the repository at a commit you choose (a SHA, a branch, or `HEAD`). It is pinned to that commit and can be released with its repository.
-- A **workspace custom task** lives in an **eval**, a collection of your own tasks with no repository behind it. The author writes the starting files, and the tests read only what the agent leaves in `/app`. Evals are never released.
+- A **workspace custom task** lives in a **custom benchmark**, a collection of your own tasks with no repository behind it. The author writes the starting files, and the tests read only what the agent leaves in `/app`. Custom benchmarks are never released.
 
 Name the mistake the agent made and what a careful person would do. Attach real files where you can. One custom task is one data point, so write several.
 

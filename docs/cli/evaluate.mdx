@@ -1,36 +1,56 @@
 ---
 title: "CLI: Evaluate"
 sidebarTitle: "Evaluate"
-description: "Run models and harnesses on approved tasks, and follow comparisons."
+description: "Run models and harnesses on a benchmark's tasks, and follow comparisons."
 icon: "play"
 ---
 
-`R` is `--repo OWNER/NAME`, or another [scope](/cli/overview#conventions).
+`S` is any [benchmark](/cli/overview#benchmarks): `--repo OWNER/NAME`, `--custom NAME`, `--public ORG/NAME`, or `--group SLUG`.
 
 | Command | Does |
 | --- | --- |
-| `catalog R` | Models available for evaluations |
-| `catalog R --harness H` | Options a [saved harness](/cli/harnesses) can set on agent `H` |
-| `compare R --model ID [--model ID ...]` | Run each model on every approved task |
-| `comparisons R` · `comparison show\|resume\|cancel ID R` | Follow, resume, or stop comparisons |
-| `runs R` · `run show\|cancel\|delete EVALUATION_ID R` | One model's evaluation, with every trial |
+| `catalog S` | Models an evaluation can use |
+| `catalog S --harness AGENT` | Options a [saved harness](/cli/harnesses) can set on `AGENT` |
+| `comparison create S --model ID [--model ID ...]` | Run each model on every approved task |
+| `comparison list S` · `comparison show\|resume\|cancel ID S` | Follow, resume, or stop comparisons |
+| `evaluation list S` · `evaluation show\|cancel\|delete ID S` | One model's run in a comparison, with every trial |
 
-## Compare Flags
+A **comparison** starts one **evaluation** per model, and each evaluation runs every task on each harness as a **trial**. For scores, read [`results`](/cli/inspect) rather than adding up trials.
+
+## `comparison create`
+
+```bash
+self-bench comparison create --repo acme/app \
+  --model claude-opus-5-5 --model gpt-6.1-sol --harness claude-code --harness codex --thinking high
+# Comparison COMPARISON_ID
+# EVALUATION  MODEL            SETUP     HARNESSES           STATUS   TRIALS
+# …           claude-opus-5-5  Baseline  claude-code, codex  running  0/48
+```
 
 | Flag | Default |
 | --- | --- |
-| `--harness H` (repeatable): `pi`, `codex`, `claude-code`, `mini-swe-agent`, `terminus-2`, `muse-code` | `pi` |
+| `--model ID` (repeatable): a model `catalog` lists | required |
+| `--harness AGENT` (repeatable): `pi`, `codex`, `claude-code`, `mini-swe-agent`, `terminus-2`, `muse-code` | `pi` |
 | `--thinking LEVEL`: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max` | the model's default |
-| `--credential ID` | managed model |
-| `--sandbox managed\|e2b\|modal\|daytona` and `--sandbox-credential ID` | managed sandbox |
-| `--task RUN_ID/TASK_ID` (repeatable) | every approved task |
-| `--skip-completed` | rerun everything |
+| `--credential ID`: a [saved credential](/cli/account#credentials) | the managed model |
+| `--sandbox managed\|e2b\|modal\|daytona` and `--sandbox-credential ID` | the managed sandbox |
+| `--task TASK` (repeatable) | every approved task |
+| `--skip-completed`: leave out tasks a configuration already finished | run everything again |
 | `--judge-credential ID` | required for tasks graded by an LLM judge |
 | `--saved-harness ID` (repeatable): a [saved harness](/cli/harnesses) | none |
-| `--environment ID` (repeatable): a repository [environment](/cli/environments) | none |
-| `--no-baseline` | the tasks as they are run too |
+| `--environment ID` (repeatable): a repo [environment](/cli/environments) | none |
+| `--no-baseline`: leave out the tasks and agents as they are | the baseline runs too |
 | `--selection JSON\|@FILE` | a full [comparison body](/api/evaluate#request-body) in place of the flags |
 
-Every task runs again with each saved harness, in each environment, and with each harness in each environment (at most 12), beside the tasks as they are; see [Harnesses and Environments](/api/evaluate#harnesses-and-environments). The older `--saved-condition`, `--condition`, and `--harness-option` flags still work.
+Every task runs again with each saved harness, in each environment, and with each harness in each environment (at most 12), beside the baseline; see [Harnesses and Environments](/api/evaluate#harnesses-and-environments). The older `--saved-condition`, `--condition`, and `--harness-option` flags still work.
 
 A harness with a subagent model runs each model as the orchestrator and the subagent model for delegated work, on the credential the harness names; see [Subagent Models](/api/evaluate#subagent-models).
+
+## Following a Comparison
+
+`comparison show ID` prints each evaluation's progress. If the reply names a submission error, `comparison resume ID` starts what didn't start, with the same evaluation IDs. `comparison cancel ID` stops every evaluation in it; `evaluation cancel ID` stops one.
+
+```bash
+self-bench comparison list --repo acme/app
+self-bench evaluation show EVALUATION_ID --repo acme/app --json
+```

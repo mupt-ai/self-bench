@@ -45,12 +45,12 @@ test("the CLI creates, shows, and deletes an environment of every approved task"
   });
   const repo = ["--repo", "evals/data-import-bugs", "--org", "mupt-ai"];
   const created = await cli([
-    "scenario",
+    "task",
     "create",
     ...repo,
     "--title",
     "Import",
-    "--scenario",
+    "--description",
     "Rows are lost.",
   ]);
   const task = created.task as { runId: string; taskId: string };
