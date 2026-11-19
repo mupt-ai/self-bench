@@ -144,7 +144,7 @@ export function SiteSidebar({
   return (
     <aside data-slot="sidebar" className="flex h-full min-h-0 flex-col bg-background">
       <SidebarHeader className="flex h-14 shrink-0 flex-row items-center border-b border-border px-4 group-data-[collapsible=icon]/sidebar:justify-center group-data-[collapsible=icon]/sidebar:px-0">
-        <AppLockup showName={!collapsed} />
+        <AppLockup showName={!collapsed} name="selfbench.dev" />
       </SidebarHeader>
       <SidebarContent>
         <nav aria-label="Workspace Navigation" className="flex flex-col gap-2 pt-2">
