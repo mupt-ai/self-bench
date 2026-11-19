@@ -162,7 +162,7 @@ function NewEvalDialog({
           <label htmlFor="eval-name" className={fieldStyles}>
             <span className="flex items-center gap-1.5">
               Name
-              <InfoTooltip label="A collection of workspace vibe evals with no repository behind it, such as the tasks one capability or product area should handle. It gets its own dataset, Run, and Results." />
+              <InfoTooltip label="A collection of workspace custom tasks with no repository behind it, such as the tasks one capability or product area should handle. It gets its own dataset, Run, and Results." />
             </span>
             <Input
               id="eval-name"

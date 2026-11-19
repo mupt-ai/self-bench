@@ -200,7 +200,7 @@ export function AddScenarioSheet({
                   <span className="flex items-center gap-1.5">
                     Attachments
                     <InfoTooltip
-                      label={`Optional real files from the situation, such as a log, a design, or the emails: up to ${MAX_ATTACHMENTS} files and ${MAX_ATTACHMENT_BYTES / 1024 / 1024} MB. Details the vibe eval doesn't depend on are replaced with fictional ones.`}
+                      label={`Optional real files from the situation, such as a log, a design, or the emails: up to ${MAX_ATTACHMENTS} files and ${MAX_ATTACHMENT_BYTES / 1024 / 1024} MB. Details the task doesn't depend on are replaced with fictional ones.`}
                     />
                   </span>
                   <Input
