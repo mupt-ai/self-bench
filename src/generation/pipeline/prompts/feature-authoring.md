@@ -38,7 +38,7 @@ Make both patches with `git diff` against the base commit; test.patch must apply
 # Build the Reference from the Pull Requests
 
 - Start a branch at the base commit and bring in each PR's landed change in merge order: `git cherry-pick <commit>` for a squash or rebase commit, `git cherry-pick -m 1 <commit>` for a merge commit (or `git diff <commit>^1 <commit> | git apply -3`).
-- Other commits landed on the default branch between the PRs. When a PR's change conflicts with code only those commits introduced, resolve the conflict so the feature works on the base: keep the feature's intent and the base's surrounding code. Don't bring unrelated commits in.
+- Other commits landed on the default branch between the PRs. When a PR's change conflicts with code only those commits introduced, resolve the conflict so the feature works on the base: keep the feature's intent and the base's surrounding code. Don't bring unrelated commits in. A conflict in a file the reference leaves out anyway (a test, a snapshot image, a changelog) resolves by dropping it.
 - Keep only the feature. Drop tests (they go to test.patch), changelog and docs-only edits, and unrelated drive-by changes a PR happened to carry, when the feature works without them. Keep dependency and lockfile changes the feature needs, and install them in the Dockerfile.
 - The result must build and behave as the feature did at the completed commit. gold.patch is `git diff <base> -- <implementation paths>` of that branch.
 - If the PRs turn out not to form one coherent feature (they only share a word, or one of them is a revert of another), build the task from the largest coherent subset whose instruction still describes a whole feature, or explain why there is none and stop.
