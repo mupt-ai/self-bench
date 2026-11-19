@@ -8,6 +8,7 @@ import { GenerationFields } from "../GenerationFields";
 import { cn } from "../primitives/cn";
 import { Button, controlStyles, fieldStyles, Notice } from "../ui";
 import { useGenerationSettings } from "../useGenerationSettings";
+import { useFeedbackRequest } from "./feedback-link";
 import { taskPath } from "./review-queue";
 import { SteeringForm } from "./SteeringForm";
 import { StateStamp } from "./state";
@@ -38,7 +39,14 @@ export function FeedbackSheet({
     valid,
     reload,
   } = useGenerationSettings(org, fullName, finished);
-  const [feedback, setFeedback] = React.useState("");
+  const request = useFeedbackRequest();
+  const [feedback, setFeedback] = React.useState(request.text);
+  const box = React.useRef<HTMLTextAreaElement>(null);
+  // Arriving to give feedback puts the cursor in the box, after anything handed in.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: each visit asks again.
+  React.useEffect(() => {
+    if (request.asked) box.current?.focus();
+  }, [request.asked, request.visit]);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [sent, setSent] = React.useState<TaskItem | null>(null);
@@ -82,6 +90,7 @@ export function FeedbackSheet({
             <label htmlFor="task-feedback" className={fieldStyles}>
               Feedback
               <textarea
+                ref={box}
                 id="task-feedback"
                 rows={6}
                 maxLength={MAX_FEEDBACK_LENGTH}

@@ -7,6 +7,7 @@ import { AgentWorkSheet } from "../../sheets/AgentWorkSheet";
 import { EnvironmentSheet } from "../../sheets/EnvironmentSheet";
 import type { TaskSource } from "../../sources/types";
 import type { TaskFiles, TaskRow } from "../../types";
+import { useFeedbackRequest } from "./feedback-link";
 
 type Tab = "file" | "environment" | "pipeline" | "feedback";
 
@@ -25,7 +26,14 @@ export function TaskView({
 }) {
   const [files, setFiles] = React.useState<TaskFiles | null>(null);
   const [error, setError] = React.useState<string | null>(null);
-  const [tab, setTab] = React.useState<Tab>("file");
+  const { asked, visit } = useFeedbackRequest();
+  const canFeedback = !!feedback;
+  const [tab, setTab] = React.useState<Tab>(asked && canFeedback ? "feedback" : "file");
+  // Give Feedback (or a link from Results) asks for the tab while the page is open, too.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: each visit asks again.
+  React.useEffect(() => {
+    if (asked && canFeedback) setTab("feedback");
+  }, [asked, canFeedback, visit]);
   const [openFile, setOpenFile] = React.useState<OpenFile | null>(null);
   // The page hands in a new source on every status poll; the bundle is re-read only when it changes.
   const loadedKey = React.useRef<string | null>(null);

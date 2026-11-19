@@ -1,13 +1,14 @@
 import { useRef } from "react";
 import { Dialog, DialogHeader } from "../Dialog";
 import { useSession } from "../session";
-import { Notice } from "../ui";
+import { feedbackLink } from "../task/feedback-link";
+import { buttonStyles, Notice } from "../ui";
 import { FailureExplanationForm } from "./FailureExplanationForm";
 import { OutcomeCircle } from "./ResultsMarks";
 import type { Configuration, TaskResult } from "./results-model";
 import { configurationDetail, momentLabel, taskParts } from "./results-presentation";
 import type { OutcomeGridTask } from "./TaskOutcomeGrid";
-import { taskPage } from "./TrialDialog";
+import { isPublicPages, taskPage } from "./TrialDialog";
 import { useTaskAudit } from "./useTaskAudit";
 
 const AUDIT = { action: "Audit Task", busy: "Auditing…", model: "Audit Model" };
@@ -58,6 +59,8 @@ export function TaskAuditDialog({
       result.trial.rewards.reward === 0,
   ).length;
   const parts = taskParts(task.id);
+  const page = taskPage(pages, { runId: task.runId, taskId: task.id });
+  const revisable = !isPublicPages(pages);
   const last = state?.audit;
   // Offered from the failures the server can audit, without waiting for state to load.
   const offered = auditing || (enabled && auditableFailures > 0 && state?.available !== false);
@@ -99,12 +102,22 @@ export function TaskAuditDialog({
         <span className="font-mono text-xs text-muted-foreground">{task.id}</span>
         <a
           className="ml-auto text-sm font-medium underline decoration-foreground/25 underline-offset-4 hover:decoration-foreground"
-          href={taskPage(pages, { runId: task.runId, taskId: task.id })}
+          href={page}
           target="_blank"
           rel="noopener"
         >
           View Task
         </a>
+        {revisable && (
+          <a
+            className="text-sm font-medium underline decoration-foreground/25 underline-offset-4 hover:decoration-foreground"
+            href={feedbackLink(page)}
+            target="_blank"
+            rel="noopener"
+          >
+            Give Feedback
+          </a>
+        )}
       </div>
       <div className="min-w-0 space-y-6 p-4 sm:p-6">
         <section aria-label="Audit" className="space-y-3">
@@ -116,6 +129,16 @@ export function TaskAuditDialog({
                 {last.model} read {last.failures} failed of {last.attempts} scored{" "}
                 {last.attempts === 1 ? "attempt" : "attempts"} · {momentLabel(last.auditedAt)}
               </p>
+              {revisable && last.verdict !== "fair" && (
+                <a
+                  className={`${buttonStyles.primary} mt-2`}
+                  href={feedbackLink(page, last.text)}
+                  target="_blank"
+                  rel="noopener"
+                >
+                  Revise Task with This Audit
+                </a>
+              )}
             </div>
           )}
           {offered ? (

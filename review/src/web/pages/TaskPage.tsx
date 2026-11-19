@@ -10,7 +10,6 @@ import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { FeedbackSheet } from "../task/FeedbackSheet";
 import { LiveTaskState } from "../task/LiveTaskState";
-import { ReviewBar } from "../task/ReviewBar";
 import {
   isTyping,
   queuePosition,
@@ -20,6 +19,7 @@ import {
   taskPath,
 } from "../task/review-queue";
 import { prefetchTaskFiles, rowFor, siteTaskSource } from "../task/site-source";
+import { TaskActions } from "../task/TaskActions";
 import { TaskCost, TaskGenerationControls } from "../task/TaskGenerationControls";
 import { TaskSkeleton } from "../task/TaskSkeleton";
 import { TaskView } from "../task/TaskView";
@@ -211,19 +211,13 @@ function TaskPageContent() {
             fullName={fullName}
             onRequested={() => void refresh()}
           />
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {task.state !== "in_progress" &&
-              task.state !== "failed" &&
-              task.state !== "cancelled" && (
-                <ReviewBar
-                  org={org.login}
-                  fullName={fullName}
-                  task={task}
-                  onReview={onReview}
-                  onDecided={onDecided}
-                />
-              )}
-          </div>
+          <TaskActions
+            org={org.login}
+            fullName={fullName}
+            task={task}
+            onReview={onReview}
+            onDecided={onDecided}
+          />
         </div>
       </header>
       <TaskView

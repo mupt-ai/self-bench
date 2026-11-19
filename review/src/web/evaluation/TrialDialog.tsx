@@ -2,10 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { findModel } from "../../../../src/contracts/models";
 import { trialMinutes } from "../../../../src/evaluation/attempt-minutes";
 import { harnessLabels } from "../../../../src/evaluation/models";
-
 import { Dialog, DialogHeader } from "../Dialog";
 import { ListSkeleton } from "../LoadingSkeleton";
 import { useSession } from "../session";
+import { feedbackLink } from "../task/feedback-link";
 import { Notice } from "../ui";
 import { type EvaluationRun, type EvaluationTrial, evaluationRequest } from "./api";
 import { dollars } from "./benchmark";
@@ -29,9 +29,12 @@ export const taskPage = (
   pages: string,
   { runId, taskId }: Pick<EvaluationTrial, "runId" | "taskId">,
 ) =>
-  pages.startsWith("/benchmarks/")
+  isPublicPages(pages)
     ? `${pages}/tasks/${taskId}`
     : `${pages}/tasks/${encodeURIComponent(runId)}/${encodeURIComponent(taskId)}`;
+
+/** A public benchmark's pages: its tasks come from a registry, so feedback cannot revise them. */
+export const isPublicPages = (pages: string) => pages.startsWith("/public/");
 
 /** The model's catalog name, or a custom endpoint's typed name, as the table names it. */
 function modelName(run: EvaluationRun): string {
@@ -176,6 +179,16 @@ function TrialDialogContent({
         >
           View Task
         </a>
+        {!isPublicPages(pages) && (
+          <a
+            className="text-sm font-medium underline decoration-foreground/25 underline-offset-4 hover:decoration-foreground"
+            href={feedbackLink(taskPage(pages, trial))}
+            target="_blank"
+            rel="noopener"
+          >
+            Give Feedback
+          </a>
+        )}
       </div>
       <div className="min-w-0 p-4 sm:p-6">
         {explanation.offered && (
