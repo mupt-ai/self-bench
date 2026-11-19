@@ -94,6 +94,19 @@ describe("Harbor child environment", () => {
         ),
       ).toEqual([]);
   });
+
+  test("Daytona Harbor prefers the dedicated Harbor key over the generation sandbox's", () => {
+    const source = {
+      DAYTONA_API_KEY: "generation-key",
+      SELFBENCH_HARBOR_DAYTONA_API_KEY: "harbor-key",
+      PATH: "/usr/bin",
+    };
+    expect(providerEnvironment(source, "daytona")).toEqual({
+      DAYTONA_API_KEY: "harbor-key",
+      PATH: "/usr/bin",
+    });
+    expect(providerEnvironment(source, "modal").DAYTONA_API_KEY).toBeUndefined();
+  });
 });
 
 test("gate projection excludes unrelated secrets and refuses partial role credentials", () => {

@@ -214,5 +214,5 @@ export function withReferencePricing(model: CatalogModel): CatalogModel {
   return pricing ? { ...model, pricing } : model;
 }
 
-export const hostedSandboxes = ["e2b", "modal", "daytona"] as const;
+export const hostedSandboxes = ["e2b", "modal", "daytona", "vercel"] as const;
 export type HostedSandbox = (typeof hostedSandboxes)[number];

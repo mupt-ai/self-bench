@@ -7,7 +7,8 @@ import { normalizeE2BTemplateReference } from "./providers/e2b/template.js";
 /**
  * Why a user-chosen runtime image is unusable for a provider, if it is. Browser-safe: the
  * settings form shares it. Vercel needs a digest-pinned published image; E2B needs no image
- * (the managed template) but accepts a custom template; Modal always builds Dockerfile.sandbox.
+ * (the managed template) but accepts a custom template; Modal and Daytona always build
+ * Dockerfile.sandbox.
  */
 export function sandboxImageIssue(
   backend: HostedExecutionBackend,
@@ -26,5 +27,7 @@ export function sandboxImageIssue(
       return "E2B requires a prebuilt SelfBench template, not base.";
     case "modal":
       return image === undefined ? undefined : "Modal does not use a runtime image.";
+    case "daytona":
+      return image === undefined ? undefined : "Daytona does not use a runtime image.";
   }
 }

@@ -124,7 +124,7 @@ export interface StartedSandbox {
   readonly rates?: { readonly model?: string; readonly sandboxProvider?: SandboxProvider };
 }
 
-export type SandboxProvider = "docker" | "e2b" | "modal" | "vercel";
+export type SandboxProvider = "docker" | "e2b" | "modal" | "vercel" | "daytona";
 
 /**
  * `run` executes one command in a fresh sandbox and deletes the sandbox afterwards. Declared

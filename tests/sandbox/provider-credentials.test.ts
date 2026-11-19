@@ -23,6 +23,9 @@ test("Harbor credentials use the dedicated verification variables", () => {
   expect(providerCredentialEnvironment("e2b", { value: "k" }, "harbor")).toEqual({
     SELFBENCH_HARBOR_E2B_API_KEY: "k",
   });
+  expect(providerCredentialEnvironment("daytona", { value: "d" }, "harbor")).toEqual({
+    SELFBENCH_HARBOR_DAYTONA_API_KEY: "d",
+  });
   expect(
     providerCredentialEnvironment(
       "vercel",

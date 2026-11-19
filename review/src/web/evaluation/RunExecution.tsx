@@ -1,6 +1,7 @@
 import { CircleAlert, KeyRound, Play, SkipForward } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
+import { harborEnvironmentLabels } from "../../../../src/contracts/config/providers";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { HostedSandbox } from "../../../../src/evaluation/catalog";
 import type { ComparisonSelection } from "../../../../src/evaluation/comparisons";
@@ -57,7 +58,7 @@ export function RunSetupCallout({ coverage }: { coverage: Coverage }) {
       className="mb-5"
       coverage={coverage}
       action="run evaluations"
-      hint="A ChatGPT or Claude sign-in, or any model API key, can run evaluations. Modal, E2B, or Daytona runs the tasks."
+      hint="A ChatGPT or Claude sign-in, or any model API key, can run evaluations. Modal, E2B, Daytona, or Vercel runs the tasks."
     />
   );
 }
@@ -132,13 +133,7 @@ export function RunExecution({
           >
             {sandboxes.map((sandbox) => (
               <option key={sandbox} value={sandbox}>
-                {sandbox === "managed"
-                  ? "Managed"
-                  : sandbox === "e2b"
-                    ? "E2B"
-                    : sandbox === "modal"
-                      ? "Modal"
-                      : "Daytona"}
+                {sandbox === "managed" ? "Managed" : harborEnvironmentLabels[sandbox]}
               </option>
             ))}
           </Select>

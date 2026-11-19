@@ -1,3 +1,4 @@
+import { harborEnvironmentLabels } from "../../../../src/contracts/config/providers";
 import type { HarnessOptions } from "../../../../src/contracts/harness-options";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import { type CatalogModel, hostedSandboxes } from "../../../../src/evaluation/catalog";
@@ -142,7 +143,7 @@ export function retrySandboxes(
   run: EvaluationRun,
   saved: readonly CredentialInfo[],
 ): { id: string; label: string }[] {
-  const names: Record<string, string> = { e2b: "E2B", modal: "Modal", daytona: "Daytona" };
+  const names: Record<string, string> = harborEnvironmentLabels;
   const own = run.credentials?.sandboxCredentialId;
   const listed = saved
     .filter((credential) => (hostedSandboxes as readonly string[]).includes(credential.kind))

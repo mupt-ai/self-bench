@@ -139,7 +139,7 @@ const SECTIONS: Section[] = [
   catalog S                                  models an evaluation can use
   catalog S --harness AGENT                  options a saved harness can set on AGENT
   comparison create S --model ID [--model ID ...] [--harness AGENT ...] [--thinking LEVEL]
-      [--credential ID] [--sandbox managed|e2b|modal|daytona] [--sandbox-credential ID]
+      [--credential ID] [--sandbox managed|e2b|modal|daytona|vercel] [--sandbox-credential ID]
       [--task TASK ...] [--skip-completed] [--judge-credential ID] [--saved-harness ID ...]
       [--environment ID ...] [--no-baseline] | --selection JSON|@FILE
                                              run each model on every approved task

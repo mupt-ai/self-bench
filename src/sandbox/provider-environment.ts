@@ -44,6 +44,7 @@ const VERIFICATION_CREDENTIALS = {
   VERCEL_TOKEN: "SELFBENCH_HARBOR_VERCEL_TOKEN",
   VERCEL_TEAM_ID: "SELFBENCH_HARBOR_VERCEL_TEAM_ID",
   VERCEL_PROJECT_ID: "SELFBENCH_HARBOR_VERCEL_PROJECT_ID",
+  DAYTONA_API_KEY: "SELFBENCH_HARBOR_DAYTONA_API_KEY",
 } as const;
 
 /**
@@ -118,7 +119,9 @@ export function providerCredentialEnvironment(
         ...(secret.domain ? { E2B_DOMAIN: secret.domain } : {}),
       };
     case "daytona":
-      return { DAYTONA_API_KEY: secret.value };
+      return {
+        [verification ? VERIFICATION_CREDENTIALS.DAYTONA_API_KEY : "DAYTONA_API_KEY"]: secret.value,
+      };
     case "vercel":
       if (!secret.teamId || !secret.projectId) throw new Error("Vercel credential is unavailable.");
       return verification

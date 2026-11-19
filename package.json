@@ -65,6 +65,7 @@
     "check:unused": "knip"
   },
   "dependencies": {
+    "@daytonaio/sdk": "0.227.3",
     "@earendil-works/pi-ai": "0.84.0",
     "@earendil-works/pi-coding-agent": "0.84.0",
     "@google-cloud/storage": "^7.22.0",

@@ -15,8 +15,8 @@ type Credential = Pick<CredentialInfo, "kind" | "auth">;
 /**
  * What an organization's credentials let it run, by the same rules the generation and
  * evaluation forms apply. Generation authors and verifies in Pi, so a Claude sign-in (Claude
- * Code only) cannot generate, and its sandboxes are Modal, Vercel, or E2B; evaluation runs any
- * model credential on E2B, Modal, or Daytona. Managed access, where offered, covers either half.
+ * Code only) cannot generate; evaluation runs any model credential. Both run on any hosted
+ * sandbox. Managed access, where offered, covers either half.
  */
 export function setupCoverage(
   credentials: readonly Credential[],

@@ -10,7 +10,7 @@ import type { EvaluationScope } from "./scope.js";
 
 export type { Harness } from "./models.js";
 
-type EvaluationSandbox = "docker" | "modal" | "e2b" | "daytona";
+type EvaluationSandbox = "docker" | "modal" | "e2b" | "daytona" | "vercel";
 interface EvaluationTask {
   runId: string;
   taskId: string;

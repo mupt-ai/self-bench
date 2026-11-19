@@ -71,14 +71,14 @@ export function Status({ coverage }: { coverage: ReturnType<typeof setupCoverage
       ready: covered(coverage.generate),
       missing: !coverage.generate.model
         ? "Needs a ChatGPT sign-in or a model API key."
-        : "Needs a Modal, E2B, or Vercel sandbox.",
+        : "Needs a Modal, E2B, Daytona, or Vercel sandbox.",
     },
     {
       label: "Run Evaluations",
       ready: covered(coverage.evaluate),
       missing: !coverage.evaluate.model
         ? "Needs a ChatGPT or Claude sign-in, or a model API key."
-        : "Needs a Modal, E2B, or Daytona sandbox.",
+        : "Needs a Modal, E2B, Daytona, or Vercel sandbox.",
     },
   ];
   return (

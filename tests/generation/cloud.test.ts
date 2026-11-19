@@ -20,7 +20,7 @@ afterEach(async () => {
   server = undefined;
 });
 
-for (const sandbox of ["e2b", "vercel"] as const) {
+for (const sandbox of ["e2b", "vercel", "daytona"] as const) {
   for (const harborEnvironment of ["modal", "vercel", "e2b", "daytona"] as const) {
     test(`${sandbox} generation persists provider runtime and uses scoped credentials with ${harborEnvironment} verification`, async () => {
       const vault = memoryVault();
@@ -62,7 +62,10 @@ for (const sandbox of ["e2b", "vercel"] as const) {
         sandbox,
         modelCredentialId: model.id,
         sandboxCredentialId: cloud.id,
-        sandboxImage: sandbox === "e2b" ? "selfbench-runtime:stable" : image,
+        // Daytona, like Modal, builds Dockerfile.sandbox itself and takes no image.
+        ...(sandbox === "daytona"
+          ? {}
+          : { sandboxImage: sandbox === "e2b" ? "selfbench-runtime:stable" : image }),
         harborEnvironment,
         harborCredentialId: modal.id,
       };
@@ -102,9 +105,11 @@ for (const sandbox of ["e2b", "vercel"] as const) {
       expect(run.version).toMatchObject({
         executionBackend: sandbox,
         harborEnvironment,
-        sandboxImage: generation.sandboxImage,
-        sandboxTimeoutCapMs: sandbox === "e2b" ? 3_600_000 : 7_200_000,
+        sandboxImage: generation.sandboxImage ?? expect.stringMatching(/^Dockerfile\.sandbox@/),
       });
+      expect(run.version.sandboxTimeoutCapMs).toBe(
+        { e2b: 3_600_000, vercel: 7_200_000, daytona: undefined }[sandbox],
+      );
       for (const secret of [
         "model-secret",
         "cloud-secret",
@@ -137,7 +142,8 @@ for (const sandbox of ["e2b", "vercel"] as const) {
               expect(env.MODAL_TOKEN_SECRET).toBe(
                 harborEnvironment === "modal" ? "modal-secret" : undefined,
               );
-              expect(env.DAYTONA_API_KEY).toBe(
+              expect(env.DAYTONA_API_KEY).toBe(sandbox === "daytona" ? "cloud-secret" : undefined);
+              expect(env.SELFBENCH_HARBOR_DAYTONA_API_KEY).toBe(
                 harborEnvironment === "daytona" ? "modal-secret" : undefined,
               );
               expect(env.SELFBENCH_HARBOR_E2B_API_KEY).toBe(
@@ -152,7 +158,14 @@ for (const sandbox of ["e2b", "vercel"] as const) {
             },
           );
         }
-        const tampered = { ...run, version: { ...run.version, sandboxImage: "other-runtime" } };
+        // Daytona takes no image, so its run is tampered with by provider instead.
+        const tampered = {
+          ...run,
+          version:
+            sandbox === "daytona"
+              ? { ...run.version, executionBackend: "modal" as const }
+              : { ...run.version, sandboxImage: "other-runtime" },
+        };
         await expect(
           withGenerationRuntime(config, vault, tampered, "author", legacy, async () => {
             throw new Error("must not run");

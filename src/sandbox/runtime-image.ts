@@ -7,8 +7,8 @@ import {
 } from "./providers/e2b/managed-template.js";
 
 /**
- * Worker configuration that selects a provider's sandbox runtime. Modal always builds from
- * Dockerfile.sandbox, E2B defaults to the managed template built from it, and Vercel runs an
+ * Worker configuration that selects a provider's sandbox runtime. Modal and Daytona always build
+ * from Dockerfile.sandbox, E2B defaults to the managed template built from it, and Vercel runs an
  * image published from it.
  */
 export function sandboxImageEnvironment(
@@ -17,6 +17,7 @@ export function sandboxImageEnvironment(
 ): Record<string, string> {
   switch (backend) {
     case "modal":
+    case "daytona":
       return {};
     case "vercel":
       return image ? { SELFBENCH_VERCEL_IMAGE: image } : {};

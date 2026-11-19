@@ -5,6 +5,8 @@ import { e2bTimeoutCap } from "../../sandbox/providers/e2b/timeout-cap.js";
 import { vercelTimeoutCap } from "../../sandbox/providers/vercel/timeout-cap.js";
 import { sandboxDockerfileReference } from "../../sandbox/runtime-dockerfile.js";
 import {
+  type DaytonaCredentials,
+  daytonaCredentials,
   type E2BCredentials,
   e2bCredentials,
   type VercelCredentials,
@@ -92,10 +94,11 @@ type ExecutionConfig =
       readonly image: string;
     }
   | { readonly kind: "vercel"; readonly image: string; readonly timeoutCapMs: number }
-  | { readonly kind: "e2b"; readonly image: string; readonly timeoutCapMs: number };
+  | { readonly kind: "e2b"; readonly image: string; readonly timeoutCapMs: number }
+  | { readonly kind: "daytona"; readonly image: string };
 
 type WorkerExecutionConfig =
-  | Exclude<ExecutionConfig, { readonly kind: "vercel" | "e2b" }>
+  | Exclude<ExecutionConfig, { readonly kind: "vercel" | "e2b" | "daytona" }>
   | {
       readonly kind: "vercel";
       readonly image: string;
@@ -107,7 +110,8 @@ type WorkerExecutionConfig =
       readonly image: string;
       readonly timeoutCapMs: number;
       readonly credentials: E2BCredentials;
-    };
+    }
+  | { readonly kind: "daytona"; readonly image: string; readonly credentials: DaytonaCredentials };
 
 export interface SelfBenchConfig {
   readonly apiHost: string;
@@ -216,6 +220,10 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): SelfBe
       };
       break;
     }
+    case "daytona":
+      // Like Modal, Daytona builds the packaged Dockerfile.sandbox itself.
+      execution = { kind: "daytona", image: sandboxDockerfileReference() };
+      break;
   }
 
   return {
@@ -276,6 +284,11 @@ export function loadWorkerConfig(
           ...config.execution,
           credentials: e2bCredentials(environment),
         },
+      };
+    case "daytona":
+      return {
+        ...config,
+        execution: { ...config.execution, credentials: daytonaCredentials(environment) },
       };
     default:
       return { ...config, execution: config.execution };

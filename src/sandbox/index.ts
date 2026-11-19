@@ -1,6 +1,7 @@
 import { ModalClient } from "modal";
 import type { SelfBenchWorkerConfig } from "../contracts/config/index.js";
 import { runCommand } from "../lib/process.js";
+import { DaytonaSandboxExecutor } from "./providers/daytona/executor.js";
 import { DockerSandboxExecutor } from "./providers/docker/executor.js";
 import { E2BSandboxExecutor } from "./providers/e2b/executor.js";
 import { validateE2BWorkerStartup } from "./providers/e2b/startup.js";
@@ -38,6 +39,8 @@ export function createSandboxExecutor(
       );
     case "e2b":
       return new TimeoutCappedSandboxExecutor(new E2BSandboxExecutor(config), config.timeoutCapMs);
+    case "daytona":
+      return new DaytonaSandboxExecutor(config);
   }
 }
 
