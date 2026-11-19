@@ -37,7 +37,7 @@ export function TaskList({
             data-selected={selected.has(taskKey(task))}
             className={cn(
               taskRowLayout,
-              "group border-border transition-colors hover:bg-muted/60 data-[selected=true]:bg-foreground/[0.04]",
+              "group border-border transition-colors hover:bg-accent data-[selected=true]:bg-accent",
             )}
           >
             <input
@@ -99,7 +99,7 @@ export function TaskList({
                 ) : task.title ? (
                   <span className="flex min-w-0 items-center gap-1.5" title={task.title}>
                     <NotebookPen className="size-3.5 shrink-0" aria-hidden="true" />
-                    <span className="truncate font-sans">Vibe Eval</span>
+                    <span className="truncate font-sans">Custom Task</span>
                   </span>
                 ) : (
                   "—"
@@ -127,7 +127,7 @@ export function TaskListHeader() {
     <div
       className={cn(
         taskRowLayout,
-        "hidden border-b border-border bg-muted py-2.5 text-xs font-semibold text-muted-foreground md:grid",
+        "hidden border-b border-border bg-muted py-2.5 text-xs font-medium text-faint md:grid",
       )}
       aria-hidden="true"
     >

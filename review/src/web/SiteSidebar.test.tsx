@@ -32,8 +32,8 @@ test("sidebar exposes labeled navigation and credentials", () => {
   expect(links).toHaveLength(9);
   expect(html).toContain('aria-label="Members"');
   expect(html).toContain('aria-label="Workspace Navigation"');
-  expect(html).toContain('aria-label="Mined Repos"');
-  expect(html).toContain('aria-label="Vibe Evals"');
+  expect(html).toContain('aria-label="Repo Benchmarks"');
+  expect(html).toContain('aria-label="Custom Benchmarks"');
   expect(html).toContain('aria-label="Public Benchmarks"');
   expect(html).toContain(">Public Benchmarks</span>");
   expect(html).toContain('aria-label="Credentials"');
@@ -46,13 +46,13 @@ test("sidebar exposes labeled navigation and credentials", () => {
   expect(html).toMatch(
     /<a[^>]*href="https:\/\/docs\.selfbench\.dev"[^>]*target="_blank"[^>]*aria-label="Docs"/,
   );
-  expect(html).toContain('aria-label="self-bench by dari.dev Home"');
-  expect(html).toContain("by dari.dev</span>");
+  expect(html).toContain('aria-label="selfbench.dev Home"');
+  expect(html).toContain("selfbench.dev</span>");
 });
 
 test("sidebar sorts its pages into named sections, in order", () => {
   const html = renderSidebar("/");
-  const order = ["Benchmarks", "Mined Repos", "Vibe Evals", "Public Benchmarks"]
+  const order = ["Benchmarks", "Repo Benchmarks", "Public Benchmarks", "Custom Benchmarks"]
     .concat(["Workspace", "Members", "Credentials", "Harnesses", "API Keys", "Billing"])
     .map((label) => html.indexOf(`>${label}</`));
   expect(order.every((at) => at >= 0)).toBe(true);
@@ -98,17 +98,17 @@ test("sidebar supports the compact icon mode", () => {
 
 test("sidebar preserves active navigation across repository and settings routes", () => {
   for (const [path, href] of [
-    ["/", "/"],
-    ["/repos/example-account/example-repo", "/"],
-    ["/evals", "/evals"],
-    // An eval's pages sit under /repos/evals/, but belong to Evals, not Repositories.
-    ["/repos/evals/data-import-bugs/run", "/evals"],
+    ["/repos", "/repos"],
+    ["/repos/example-account/example-repo", "/repos"],
+    ["/public/terminal-bench/terminal-bench-2", "/public"],
+    ["/custom", "/custom"],
+    ["/custom/data-import-bugs/run", "/custom"],
     ["/settings/credentials", "/settings/credentials"],
     ["/settings/api-keys", "/settings/api-keys"],
     ["/settings/members", "/settings/members"],
     ["/settings/billing", "/settings/billing"],
-    // Groups are part of Mined Repos.
-    ["/groups/python-web/results", "/"],
+    // Groups are part of Repo Benchmarks.
+    ["/groups/python-web/results", "/repos"],
   ]) {
     const html = renderSidebar(path);
     const active = html.match(/<a[^>]*data-active="true"[^>]*>/g) ?? [];

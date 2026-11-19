@@ -40,7 +40,7 @@ async function cli(args: string[]): Promise<Record<string, unknown>> {
   }
 }
 
-test("the CLI creates a scenario, pulls its draft, and revises it from an edited copy", async () => {
+test("the CLI creates a custom task, pulls its draft, and revises it from an edited copy", async () => {
   const fixture = await prFixture({});
   server = fixture.site;
   const { secret } = await mint(fixture.site, fixture.headers, { name: "CLI" });
@@ -50,21 +50,21 @@ test("the CLI creates a scenario, pulls its draft, and revises it from an edited
   const files = await directory();
   await writeFile(join(files, "scenario.md"), "An email traded me to team 3.");
   await writeFile(join(files, "schedule.csv"), "team,date\n6,Mon\n");
-  // A workspace scenario belongs to an eval, which the CLI names like a repository.
+  // A custom task without a repository belongs to a custom benchmark, named by --custom.
   await fixture.site.request("/api/orgs/mupt-ai/evals", {
     method: "POST",
     headers: fixture.headers,
     body: JSON.stringify({ name: "Data Import Bugs" }),
   });
-  const repo = ["--repo", "evals/data-import-bugs", "--org", "mupt-ai"];
+  const repo = ["--custom", "Data Import Bugs", "--org", "mupt-ai"];
 
   const created = await cli([
-    "scenario",
+    "task",
     "create",
     ...repo,
     "--title",
     "Traded",
-    "--scenario-file",
+    "--description-file",
     join(files, "scenario.md"),
     "--attach",
     join(files, "schedule.csv"),
@@ -103,7 +103,7 @@ test("the CLI creates a scenario, pulls its draft, and revises it from an edited
   const listed = await cli(["tasks", ...repo]);
   expect(listed.tasks).toEqual([expect.objectContaining({ taskId: task.taskId })]);
   const pulled = join(await directory(), "draft");
-  await cli(["task", "pull", task.runId, task.taskId, pulled, ...repo]);
+  await cli(["task", "pull", `${task.runId}/${task.taskId}`, pulled, ...repo]);
   expect(await readFile(join(pulled, "workspace/a.txt"), "utf8")).toBe("6");
   await writeFile(join(pulled, "instruction.md"), "When and where is my next game?");
 

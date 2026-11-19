@@ -1,7 +1,7 @@
 import React from "react";
-import { useParams } from "react-router";
 import { isEvalName } from "../../../../src/contracts/evals";
 import { groupsUrl } from "../groups/api";
+import { publicPagePath, repoPagePath, useRepoParams } from "../paths";
 import { useOrg } from "../SiteLayout";
 import { benchmarkUrl, evaluationUrl } from "./api";
 
@@ -39,7 +39,7 @@ export function GroupScope({ children }: { children: React.ReactNode }) {
 
 export function useEvaluationScope(): EvaluationScope {
   const { org } = useOrg();
-  const { owner = "", name = "", slug = "" } = useParams();
+  const { owner = "", name = "", slug = "" } = useRepoParams();
   const benchmark = React.useContext(BenchmarkContext);
   const group = React.useContext(GroupContext);
   const full = `${owner}/${name}`;
@@ -49,25 +49,25 @@ export function useEvaluationScope(): EvaluationScope {
       url: groupsUrl(org.login, slug, "/evaluations"),
       pages: `/groups/${slug}`,
       label: slug,
-      parent: { label: "Mined Repos", to: "/" },
+      parent: { label: "Repo Benchmarks", to: "/repos" },
     };
   return benchmark
     ? {
         kind: "benchmark",
         url: benchmarkUrl(org.login, full),
-        pages: `/benchmarks/${full}`,
+        pages: publicPagePath(full),
         label: full,
-        parent: { label: "Public Benchmarks", to: "/benchmarks" },
+        parent: { label: "Public Benchmarks", to: "/public" },
       }
     : {
         kind: "repository",
         repo: full,
         url: evaluationUrl(org.login, full),
-        pages: `/repos/${full}`,
+        pages: repoPagePath(full),
         label: full,
-        // An eval's pages are a repository's, but it is listed under Vibe Evals.
+        // An eval's pages are a repository's, but it is listed under Custom Benchmarks.
         parent: isEvalName(full)
-          ? { label: "Vibe Evals", to: "/evals" }
-          : { label: "Mined Repos", to: "/" },
+          ? { label: "Custom Benchmarks", to: "/custom" }
+          : { label: "Repo Benchmarks", to: "/repos" },
       };
 }

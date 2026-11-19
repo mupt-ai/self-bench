@@ -5,18 +5,23 @@ description: "Change every approved task's files once, then run the tasks as bui
 icon: "box"
 ---
 
-An environment runs one script in every approved task's image and builds each task with the change. Run it with `compare --environment ID`, alone or with each [saved harness](/cli/harnesses) picked by `--saved-harness ID` ([Evaluate](/cli/evaluate)). `R` is `--repo OWNER/NAME`.
+An environment runs one script in every approved task's image and builds each task with the change. Run it with `comparison create --environment ID`, alone or with each [saved harness](/cli/harnesses) picked by `--saved-harness ID` ([Evaluate](/cli/evaluate)). `R` is `--repo OWNER/NAME`.
 
 | Command | Does |
 | --- | --- |
-| `environments R` | Each environment and how many of its tasks are ready |
+| `environment list R` | Each environment and how many of its tasks are ready |
 | `environment create R --name N (--script TEXT \| --script-file F)` | Run the script in every approved task's image and build each |
-| `environment show\|build\|delete ID R` | Each task's check; build tasks approved since or that failed; delete it |
+| `environment show ID R` | Each task's build and check |
+| `environment build ID R` | Build the tasks approved since, or that failed |
+| `environment delete ID R` | Delete it |
 
 The script is Bash, run in `/app` as the image is built, before the agent starts. It stops at the first command that fails, and that task's build fails with it.
+
+It takes the [generation options](/cli/build#generation-options) for the checks.
 
 ```bash
 self-bench environment create --repo acme/app --name "No AGENTS.md, Next.js 15.5" \
   --script 'rm -f AGENTS.md CLAUDE.md
 pnpm add next@15.5.0'
+self-bench comparison create --repo acme/app --model gpt-6.1-sol --environment 4
 ```

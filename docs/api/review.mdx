@@ -1,11 +1,11 @@
 ---
 title: "API: Review Tasks"
 sidebarTitle: "Review Tasks"
-description: "Read, revise, steer, and approve or reject generated tasks."
+description: "Give a task feedback, read it, and approve or reject it."
 icon: "list-check"
 ---
 
-`…` is `{repo}/tasks/{runId}`. Only approved tasks are evaluated.
+`…` is `{repo}/tasks/{runId}`. Only approved tasks are evaluated. CLI: [Review Tasks](/cli/review); its `feedback` command reads the task and picks `…/steering` while `pipelineStatus` is `in_progress`, else `…/feedback`.
 
 | Method | Route | Does |
 | --- | --- | --- |

@@ -1,6 +1,7 @@
 import { CreditCard, RefreshCw } from "lucide-react";
 import React from "react";
 import { Skeleton } from "../LoadingSkeleton";
+import { InfoTooltip } from "../primitives/tooltip";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { Button, Notice, PageFrame, PageHeader } from "../ui";
@@ -129,29 +130,26 @@ export function BillingSummary({ data }: { data: BillingStatus }) {
   return (
     <section aria-labelledby="billing-summary-title" className="border border-border bg-card">
       <div className="grid lg:grid-cols-[1.2fr_1fr]">
-        <div className="border-b border-border p-5 lg:border-r lg:border-b-0">
-          <p
-            id="billing-summary-title"
-            className="text-xs tracking-wider text-muted-foreground uppercase"
-          >
+        <div className="border-b border-border px-4 py-3 lg:border-r lg:border-b-0">
+          <p id="billing-summary-title" className="text-xs text-muted-foreground">
             {data.configured ? "Billed Cost" : "Total Recorded Cost"}
           </p>
-          <p className="mt-2 text-3xl font-medium tracking-tight tabular-nums">
+          <p className="mt-1.5 text-2xl font-medium tracking-[-0.03em] tabular-nums">
             {formatBillingDollars(data.configured ? Math.max(0, billed - refunded) : totalCost)}
           </p>
-          <p className="mt-2 text-xs text-muted-foreground">
+          <p className="mt-1 text-xs text-muted-foreground">
             {data.configured
               ? `Managed usage billed through Stripe${refunded > 0 ? `, less ${formatBillingDollars(refunded)} refunded` : ""}. Final invoices and payments are managed in Stripe.`
               : "All-time billable managed usage. Final invoices and payments are managed in Stripe."}
           </p>
         </div>
-        <div className="p-5">
+        <div className="px-4 py-3">
           <div className="flex items-center justify-between gap-3 text-xs">
             <span className="text-muted-foreground">Recorded Cost Breakdown</span>
             <span className="tabular-nums text-foreground">{formatBillingDollars(totalCost)}</span>
           </div>
           <div
-            className="mt-3 flex h-2 overflow-hidden bg-muted"
+            className="mt-3 flex h-1.5 overflow-hidden rounded-full bg-muted"
             role="img"
             aria-label={`Model cost: ${formatBillingDollars(modelCost)}; sandbox cost: ${formatBillingDollars(sandboxCost)}`}
           >
@@ -182,15 +180,13 @@ export function BillingStatusCard({ data }: { data: BillingStatus }) {
   const status = statusLabels[data.status] ?? data.status.replaceAll("_", " ");
   return (
     <section aria-labelledby="subscription-title">
-      <div className="mb-3">
-        <h2 id="subscription-title" className="text-sm font-medium">
+      <div className="mb-3 flex items-center gap-1.5">
+        <h2 id="subscription-title" className="text-base font-medium">
           Subscription and Limits
         </h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Current Stripe state and access to managed resources.
-        </p>
+        <InfoTooltip label="Current Stripe state and access to managed resources." />
       </div>
-      <dl className="grid border border-border bg-card sm:grid-cols-2 lg:grid-cols-4 lg:divide-x lg:divide-border">
+      <dl className="grid gap-px border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
         <StatusMetric label="Subscription Status" value={status} active={data.eligible} />
         <StatusMetric
           label="Managed Access"
@@ -199,7 +195,7 @@ export function BillingStatusCard({ data }: { data: BillingStatus }) {
         <StatusMetric label="Current Period Ends" value={periodEnd} />
         <StatusMetric label="Usage Limits" value="Not Available in SelfBench" />
       </dl>
-      <div className="border-x border-b border-border bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
+      <div className="border-x border-b border-border bg-card px-4 py-3 text-xs text-muted-foreground">
         {data.cancelAtPeriodEnd ? (
           <p>
             This subscription is scheduled to cancel at the end of the current period on {periodEnd}
@@ -227,10 +223,10 @@ function StatusMetric({
   active?: boolean;
 }) {
   return (
-    <div className="border-b border-border p-4 sm:[&:nth-child(odd)]:border-r lg:border-b-0 lg:[&:nth-child(odd)]:border-r-0">
-      <dt className="text-[10px] tracking-wider text-muted-foreground uppercase">{label}</dt>
-      <dd className="mt-2 flex items-center gap-2 text-sm text-foreground">
-        {active && <span className="size-1.5 bg-success" aria-hidden="true" />}
+    <div className="min-w-0 bg-card px-4 py-3">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="mt-1.5 flex items-center gap-2 text-sm text-foreground">
+        {active && <span className="size-1.5 rounded-full bg-success" aria-hidden="true" />}
         {value}
       </dd>
     </div>
@@ -248,8 +244,8 @@ function CostLegend({
 }) {
   return (
     <div>
-      <dt className="flex items-center gap-2 text-[10px] tracking-wider text-muted-foreground uppercase">
-        <span className={`size-1.5 ${className}`} aria-hidden="true" />
+      <dt className="flex items-center gap-2 text-xs text-faint">
+        <span className={`size-1.5 rounded-full ${className}`} aria-hidden="true" />
         {label}
       </dt>
       <dd className="mt-1 text-sm tabular-nums text-foreground">{formatBillingDollars(value)}</dd>
@@ -262,22 +258,22 @@ function BillingSkeleton() {
     <div role="status" aria-label="Loading Billing" className="grid gap-8">
       <span className="sr-only">Loading billing…</span>
       <div className="grid border border-border bg-card lg:grid-cols-2">
-        <div className="border-b border-border p-5 lg:border-r lg:border-b-0">
+        <div className="border-b border-border px-4 py-3 lg:border-r lg:border-b-0">
           <Skeleton className="h-3 w-32" />
-          <Skeleton className="mt-3 h-9 w-40" />
+          <Skeleton className="mt-3 h-8 w-40" />
           <Skeleton className="mt-3 h-3 w-72 max-w-full" />
         </div>
-        <div className="p-5">
+        <div className="px-4 py-3">
           <Skeleton className="h-3 w-full" />
-          <Skeleton className="mt-4 h-2 w-full" />
+          <Skeleton className="mt-4 h-1.5 w-full rounded-full" />
           <Skeleton className="mt-4 h-8 w-48 max-w-full" />
         </div>
       </div>
       <div>
         <Skeleton className="mb-3 h-4 w-44" />
-        <div className="grid border border-border bg-card sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-px border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
           {["status", "access", "period", "limits"].map((key) => (
-            <div key={key} className="border-b border-border p-4">
+            <div key={key} className="bg-card px-4 py-3">
               <Skeleton className="h-3 w-24" />
               <Skeleton className="mt-3 h-4 w-32 max-w-full" />
             </div>
@@ -286,9 +282,9 @@ function BillingSkeleton() {
       </div>
       <div>
         <Skeleton className="mb-3 h-4 w-32" />
-        <div className="grid gap-3 lg:grid-cols-2">
-          <Skeleton className="h-44 w-full border border-border" />
-          <Skeleton className="h-44 w-full border border-border" />
+        <div className="grid gap-px border border-border bg-border lg:grid-cols-2">
+          <Skeleton className="h-44 w-full" />
+          <Skeleton className="h-44 w-full" />
         </div>
       </div>
     </div>

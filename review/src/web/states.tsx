@@ -22,16 +22,16 @@ export function EmptyState({
   return (
     <div className={cn("panel @container text-left", className)}>
       <div className={cn("grid", visual && "@2xl:grid-cols-[minmax(0,1fr)_minmax(0,26rem)]")}>
-        <div className="flex flex-col justify-center p-6 sm:p-8">
-          <h3 className="text-lg leading-7 font-semibold tracking-tight text-foreground">
+        <div className="flex flex-col justify-center p-6">
+          <h3 className="text-[15px] leading-6 font-medium tracking-[-0.01em] text-foreground">
             {title}
           </h3>
           {children && (
-            <div className="mt-2 max-w-[52ch] text-sm leading-6 text-muted-foreground">
+            <div className="mt-1.5 max-w-[52ch] text-sm leading-6 text-muted-foreground">
               {children}
             </div>
           )}
-          {action && <div className="mt-6 flex flex-wrap gap-2.5">{action}</div>}
+          {action && <div className="mt-5 flex flex-wrap gap-2">{action}</div>}
         </div>
         {visual && (
           <div
@@ -57,12 +57,10 @@ export function Notice({
       role={tone === "error" ? "alert" : "status"}
       {...props}
       className={cn(
-        "flex min-w-0 flex-wrap items-center justify-between gap-3 border px-4 py-3 text-sm leading-6",
+        "flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-sm leading-6",
         tone === "error"
-          ? "border-destructive/30 bg-destructive/[0.06] text-destructive"
-          : tone === "success"
-            ? "border-success/30 bg-success/[0.06] text-success"
-            : "border-border bg-muted/60 text-muted-foreground",
+          ? "border-destructive/50 bg-destructive/10 text-foreground"
+          : "border-brand/40 bg-brand/10 text-foreground",
         className,
       )}
     >

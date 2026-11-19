@@ -1,9 +1,10 @@
 import { GitBranch, LockKeyhole, NotebookPen, Plus } from "lucide-react";
 import React from "react";
-import { Link, useLocation, useParams, useSearchParams } from "react-router";
+import { Link, useLocation, useSearchParams } from "react-router";
 import { isEvalName } from "../../../../src/contracts/evals";
 import { type ConnectedRepo, fetchConnectedRepos, fetchTasks, type TaskItem } from "../api";
 import { useBatches } from "../batches/BatchProvider";
+import { repoPagePath, useRepoParams } from "../paths";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { ReviewTaskList } from "../task/ReviewTaskList";
@@ -14,14 +15,14 @@ import { Button, buttonStyles, EmptyState, Notice, PageContent, PageHeader } fro
 
 export function RepoPage() {
   const { org } = useOrg();
-  const { owner = "", name = "" } = useParams();
+  const { owner = "", name = "" } = useRepoParams();
   return <RepoTasksPage key={`${org.login}/${owner}/${name}`} />;
 }
 
 function RepoTasksPage() {
   const batches = useBatches();
   const { org } = useOrg();
-  const { owner = "", name = "" } = useParams();
+  const { owner = "", name = "" } = useRepoParams();
   const fullName = `${owner}/${name}`;
   // An eval has no GitHub repository: its tasks are workspace scenarios.
   const evalScope = isEvalName(fullName);
@@ -134,7 +135,7 @@ function RepoTasksPage() {
         <p className="mb-4 text-base text-destructive">
           {evalScope ? (
             <>
-              {fullName} is not an eval in {org.login}. <Link to="/evals">Back to Evals</Link>
+              {fullName} is not an eval in {org.login}. <Link to="/custom">Back to Evals</Link>
             </>
           ) : (
             <>
@@ -173,20 +174,20 @@ function RepoTasksPage() {
           {evalScope ? (
             <Link
               className={buttonStyles.primary}
-              to={`/repos/${fullName}/add-workspace-scenario`}
+              to={`${repoPagePath(fullName)}/add-task`}
               onClick={(event) => {
                 if (deleting) event.preventDefault();
               }}
               aria-disabled={deleting}
             >
               <Plus aria-hidden="true" />
-              Add Workspace Vibe Eval
+              Add Custom Task
             </Link>
           ) : (
             <>
               <Link
                 className={buttonStyles.primary}
-                to={`/repos/${fullName}/add-prs`}
+                to={`${repoPagePath(fullName)}/add-prs`}
                 onClick={(event) => {
                   if (deleting) event.preventDefault();
                 }}
@@ -197,14 +198,14 @@ function RepoTasksPage() {
               </Link>
               <Link
                 className={buttonStyles.secondary}
-                to={`/repos/${fullName}/add-scenario`}
+                to={`${repoPagePath(fullName)}/add-task`}
                 onClick={(event) => {
                   if (deleting) event.preventDefault();
                 }}
                 aria-disabled={deleting}
               >
                 <NotebookPen aria-hidden="true" />
-                Add Vibe Eval
+                Add Custom Task
               </Link>
             </>
           )}
@@ -255,7 +256,7 @@ function RepoTasksPage() {
         />
         {tasks !== null && (
           <p
-            className="border-t border-border px-4 py-3 font-mono text-xs tabular-nums text-muted-foreground"
+            className="border-t border-border px-4 py-3 text-xs tabular-nums text-muted-foreground"
             role="status"
           >
             {visible.length === tasks.length

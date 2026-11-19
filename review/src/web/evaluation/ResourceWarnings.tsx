@@ -11,7 +11,7 @@ export function ResourceWarnings({
   if (!warnings.length) return null;
   return (
     <Notice className="mb-5">
-      <p className="font-semibold">Started, with resource warnings:</p>
+      <p className="font-medium">Started, with resource warnings:</p>
       <ul className="mt-2 list-disc space-y-1 pl-5">
         {warnings.map((warning) => (
           <li key={warning}>{warning}</li>

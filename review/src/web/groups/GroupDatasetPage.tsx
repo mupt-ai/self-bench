@@ -2,6 +2,7 @@ import React from "react";
 import { Link, useParams } from "react-router";
 import type { EvaluationOptions } from "../evaluation/api";
 import { ListSkeleton } from "../LoadingSkeleton";
+import { repoPagePath } from "../paths";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { taskPath } from "../task/review-queue";
@@ -65,7 +66,7 @@ export function GroupDatasetPage() {
                 <tr key={member.id}>
                   <td className="font-mono">
                     {member.connected ? (
-                      <Link className="hover:underline" to={`/repos/${member.fullName}`}>
+                      <Link className="hover:underline" to={repoPagePath(member.fullName)}>
                         {member.fullName}
                       </Link>
                     ) : (
@@ -73,7 +74,7 @@ export function GroupDatasetPage() {
                     )}
                     {!member.connected && <small className="font-sans">Disconnected</small>}
                   </td>
-                  <td className="font-mono">{member.tasks}</td>
+                  <td className="tabular-nums">{member.tasks}</td>
                 </tr>
               ))}
             </tbody>

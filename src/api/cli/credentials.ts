@@ -17,9 +17,9 @@ const FLAGS = {
 
 const basePath = (values: Values) => `/api/orgs/${encodeURIComponent(org(values))}/credentials`;
 
-/** `credentials`; `credential add|rename|remove|complete`: the workspace's saved keys and sign-ins. */
-export async function credentialCommand(args: string[], listing: boolean): Promise<void> {
-  const [action, ...rest] = listing ? ["list", ...args] : args;
+/** `credential list|add|rename|remove|complete`: the workspace's saved keys and sign-ins. */
+export async function credentialCommand(args: string[]): Promise<void> {
+  const [action, ...rest] = args;
   const { values, positionals } = parse(rest, FLAGS);
   const base = basePath(values);
   switch (action) {
@@ -66,6 +66,6 @@ export async function credentialCommand(args: string[], listing: boolean): Promi
       );
     }
     default:
-      throw new Error("usage: self-bench credential add|rename|remove|complete");
+      throw new Error("usage: self-bench credential list|add | credential rename|remove ID");
   }
 }

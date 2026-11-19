@@ -27,7 +27,7 @@ export function GroupSettingsPage() {
     if (!group) return;
     setBusy(true);
     try {
-      if (await deleteGroup(org.login, group)) navigate("/");
+      if (await deleteGroup(org.login, group)) navigate("/repos");
       else setBusy(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not delete the group");
@@ -43,7 +43,7 @@ export function GroupSettingsPage() {
         <div className="flex flex-col gap-6">
           <section className="panel flex flex-wrap items-start justify-between gap-4 p-5">
             <div className="min-w-0">
-              <h2 className="font-semibold">{group.name}</h2>
+              <h2 className="font-medium">{group.name}</h2>
               <p className="mt-1 font-mono text-sm text-muted-foreground">/groups/{group.slug}</p>
               {group.description && (
                 <p className="mt-2 text-sm text-muted-foreground">{group.description}</p>
@@ -56,7 +56,7 @@ export function GroupSettingsPage() {
           </section>
           <section className="panel flex flex-wrap items-center justify-between gap-4 p-5">
             <div className="min-w-0">
-              <h2 className="font-semibold">Delete Group</h2>
+              <h2 className="font-medium">Delete Group</h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 Its runs stop showing here, and its public page is withdrawn.
               </p>

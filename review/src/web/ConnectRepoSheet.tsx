@@ -216,7 +216,7 @@ function RepoRow({
         </p>
       </div>
       {connected ? (
-        <span className="shrink-0 text-xs font-semibold text-muted-foreground">Connected</span>
+        <span className="shrink-0 text-xs font-medium text-muted-foreground">Connected</span>
       ) : (
         <Button size="small" className="shrink-0" disabled={busy} onClick={() => onConnect(repo)}>
           {connecting ? "Connecting…" : "Connect"}

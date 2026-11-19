@@ -23,7 +23,7 @@ export function DoneCell({
   counts: Readonly<Partial<Record<Outcome, number>>>;
 }) {
   return (
-    <td className="text-right font-mono tabular-nums">
+    <td className="text-right tabular-nums">
       <span className="inline-flex items-center justify-end gap-1.5">
         {finished}/{total}
         <StateDetails counts={counts} finished={finished} total={total} />
@@ -85,7 +85,7 @@ function SortHeading({
     <button
       type="button"
       className={cn(
-        "inline-flex items-center gap-1 uppercase hover:text-foreground",
+        "inline-flex items-center gap-1 hover:text-foreground",
         active && "text-foreground",
       )}
       aria-label={`Sort by ${label}`}
@@ -106,7 +106,7 @@ export function TaskHeadings({
   onSort(by: Sort["by"]): void;
 }) {
   return (
-    <tr className="font-mono text-[10px] font-medium tracking-wider text-muted-foreground uppercase [&_td]:pt-1.5! [&_td]:pb-1!">
+    <tr className="text-xs font-medium text-faint [&_td]:pt-1.5! [&_td]:pb-1!">
       <td colSpan={2} className={cn("relative", TASK_INDENT)}>
         Task
       </td>
@@ -136,7 +136,7 @@ export function TaskRow({ entry, onOpen }: { entry: TaskEntry; onOpen(result: Ta
   return (
     <tr
       className={cn(
-        "cursor-pointer text-xs hover:bg-foreground/[0.04]",
+        "cursor-pointer text-xs hover:bg-accent",
         counted && "text-muted-foreground [&_[data-circle]]:opacity-50",
       )}
       // Anywhere on the row opens the task's dialog.
@@ -179,13 +179,13 @@ export function TaskRow({ entry, onOpen }: { entry: TaskEntry; onOpen(result: Ta
           {task.title && <span className="ml-2 text-muted-foreground">{task.title}</span>}
         </button>
         {counted && (
-          <span className="ml-2 border border-current px-1 py-px text-[10px] leading-none">
+          <span className="ml-2 border border-current px-1 py-px text-[11px] leading-none">
             {after ? "Not Counted" : "Replaced"}
           </span>
         )}
         {result.trial.agentTimedOut && (
           <span
-            className="ml-2 border border-current px-1 py-px text-[10px] leading-none"
+            className="ml-2 border border-current px-1 py-px text-[11px] leading-none"
             title="The agent reached its time limit and was scored on the work it had done"
           >
             Timed Out
@@ -193,7 +193,7 @@ export function TaskRow({ entry, onOpen }: { entry: TaskEntry; onOpen(result: Ta
         )}
         {result.trial.verifierTimedOut && (
           <span
-            className="ml-2 border border-current px-1 py-px text-[10px] leading-none"
+            className="ml-2 border border-current px-1 py-px text-[11px] leading-none"
             title="The tests ran past the task's time limit, so the trial failed"
           >
             Tests Timed Out
@@ -201,11 +201,11 @@ export function TaskRow({ entry, onOpen }: { entry: TaskEntry; onOpen(result: Ta
         )}
       </td>
       <td />
-      <td className="text-right font-mono tabular-nums">
+      <td className="text-right tabular-nums">
         {result.minutes === undefined ? <NoValue width={6} /> : minutesLabel(result.minutes)}
       </td>
       <td />
-      <td className="text-right font-mono tabular-nums">
+      <td className="text-right tabular-nums">
         {result.trial.apiCostUsd === undefined ? (
           <NoValue width={6} />
         ) : (

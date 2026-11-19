@@ -133,7 +133,7 @@ export function ModelSummaries() {
             {report ? (
               <section aria-labelledby="model-summaries-report" className="space-y-3">
                 <div className="space-y-1.5">
-                  <h3 id="model-summaries-report" className="text-sm font-semibold">
+                  <h3 id="model-summaries-report" className="text-sm font-medium">
                     Overall
                   </h3>
                   {report.overview && <p className="text-sm leading-6">{report.overview}</p>}

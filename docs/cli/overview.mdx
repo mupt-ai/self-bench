@@ -1,11 +1,11 @@
 ---
 title: "CLI"
 sidebarTitle: "Overview"
-description: "Sign in, the conventions every command shares, and where each stage's commands live."
+description: "Sign in, the conventions every command shares, and where each command is documented."
 icon: "terminal"
 ---
 
-Install and first steps are in the [Quickstart](/quickstart). `self-bench help` lists every command in your terminal.
+Install and first steps are in the [Quickstart](/quickstart). `self-bench help` lists every command; `self-bench help NOUN` (or `self-bench NOUN` alone) shows one section, as in `self-bench help task`.
 
 ## Sign In and CI
 
@@ -13,26 +13,61 @@ Install and first steps are in the [Quickstart](/quickstart). `self-bench help` 
 
 In CI, skip `login` and set `SELFBENCH_API_KEY` (from **Settings → API Keys**) and `SELFBENCH_ORG`. `SELFBENCH_API_URL` or `login --api-url` points at a self-hosted deployment.
 
+## Command Shape
+
+Every command is `self-bench NOUN VERB [ARGS] [FLAGS]`: `repo connect`, `task create`, `comparison list`. The verbs mean the same thing everywhere: `list`, `show`, `create`, `update`, and `delete` (or `remove`, `disconnect`, or `cancel` where those say more). A plural is short for `list`: `self-bench tasks` is `self-bench task list`.
+
+## Benchmarks
+
+SelfBench has three kinds of benchmark, plus repo groups. A command that reads or runs tasks names one with a flag. The command tables write it as `S` (any of them), `B` (a repo or custom benchmark, the two that hold tasks you build), or `R` (a repo benchmark only).
+
+| Kind | Flag | Holds |
+| --- | --- | --- |
+| Repo Benchmark | `--repo OWNER/NAME` | Tasks mined from a connected GitHub repository's merged pull requests, and custom tasks pinned to one of its commits |
+| Custom Benchmark | `--custom NAME` | Custom tasks you describe, with no repository behind them. `NAME` is its name or slug: `--custom "Data Import Bugs"` is `--custom data-import-bugs` |
+| Public Benchmark | `--public ORG/NAME` | A Harbor registry dataset such as `terminal-bench/terminal-bench`, added to the workspace |
+| Repo Group | `--group SLUG` | Repo benchmarks evaluated and released together |
+
 ## Conventions
 
-- **Workspace.** Commands act in the workspace `login` chose. `org use` changes it; `--org` overrides it once.
-- **Scope.** `R` in the command tables is `--repo OWNER/NAME`. An eval is `evals/NAME`. `--benchmark ORG/NAME` and `--group SLUG` take its place.
-- **Tasks** are named by batch and ID: `RUN_ID TASK_ID`.
-- **Configurations** are named by the `KEY` that `results` prints.
+- **Workspace.** Commands act in the workspace `login` chose. `org use` changes it; `--org NAME` overrides it once.
+- **Tasks** are named `RUN_ID/TASK_ID`, the `TASK` column `task list` prints. `RUN_ID TASK_ID`, as two arguments, works too. [`feedback`](/cli/review#feedback) also takes a task's page URL from the app.
+- **Configurations** (a model, harness, and thinking level, with any saved harness or environment) are named by the `KEY` that `results` prints.
 - **Output.** Tables on a terminal, JSON when piped or with `--json`, so `self-bench results --repo acme/app | jq` works.
 - **Background work.** Explanations, audits, and summaries return at once. Add `--wait` to wait and print the answer.
+- **Text flags.** A flag that takes text, such as `--description` or `--feedback`, has a `-file` twin that reads it from a file: `--description-file bug.md`.
 
 ## Commands
 
 | Page | Commands |
 | --- | --- |
-| [Account and Credentials](/cli/account) | `login`, `org`, `whoami`, `credential` |
-| [Build Tasks](/cli/build) | `repo`, `eval create`, `prs`, `generate`, `task add-pr`, `scenario create`, `batch` |
-| [Review Tasks](/cli/review) | `tasks`, `task show\|pull\|revise\|steer\|approve\|reject` |
-| [Repo Ablations](/cli/environments) | `environments`, `environment create\|show\|build\|delete` |
-| [Harnesses](/cli/harnesses) | `harnesses`, `harness create\|show\|update\|delete` |
-| [Evaluate](/cli/evaluate) | `catalog`, `compare`, `comparison`, `run` |
-| [Inspect Results](/cli/inspect) | `results`, `task results\|explain\|audit`, `summaries` |
-| [Publish](/cli/publish) | `release preview\|publish\|withdraw` |
-| [Benchmarks and Groups](/cli/benchmarks-and-groups) | `benchmark`, `group` |
-| [Operator](/cli/operator) | `status`, `download`, `grant` |
+| [Account and Credentials](/cli/account) | `login`, `logout`, `whoami`, `org`, `workspace`, `member`, `credential` |
+| [Build Tasks](/cli/build) | `repo`, `custom`, `pr list`, `batch`, `task create` |
+| [Review Tasks](/cli/review) | **`feedback`**, `task list\|show\|pull\|revise\|steer\|approve\|reject` |
+| [Repo Ablations](/cli/environments) | `environment` |
+| [Harnesses](/cli/harnesses) | `harness` |
+| [Evaluate](/cli/evaluate) | `catalog`, `comparison`, `evaluation` |
+| [Inspect Results](/cli/inspect) | `results`, `task results\|explain\|audit`, `summary` |
+| [Publish](/cli/publish) | `release` |
+| [Public Benchmarks and Groups](/cli/benchmarks-and-groups) | `public`, `group` |
+| [Operator](/cli/operator) | `operator run`, `operator grant` |
+
+## Older Names
+
+Commands renamed when benchmarks got their three kinds still work, so existing scripts keep running. Help lists only the new names.
+
+| Older | Now |
+| --- | --- |
+| `repos` (repositories and evals together) | `repo list` (repositories) and `custom list` (custom benchmarks) |
+| `repo set` | `repo update` |
+| `eval create NAME` · `--repo evals/NAME` | `custom create NAME` · `--custom NAME` |
+| `benchmarks` · `benchmark add\|show\|tasks\|remove` · `--benchmark` | `public list` · `public add\|show\|tasks\|remove` · `--public` |
+| `prs` | `pr list` |
+| `generate` | `batch create` |
+| `task add-pr --pr N` | `task create --pr N` |
+| `scenario create --scenario TEXT` | `task create --title TEXT --description TEXT` |
+| `compare` | `comparison create` |
+| `runs` · `run show\|cancel\|delete` | `evaluation list` · `evaluation show\|cancel\|delete` |
+| `summaries` · `summaries create` | `summary show` · `summary create` |
+| `conditions` · `condition` | `harness list` · `harness` |
+| `status`, `cancel`, `list`, `download` · `grant` | `operator run show\|cancel\|list\|download` · `operator grant` |

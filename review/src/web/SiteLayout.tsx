@@ -1,7 +1,6 @@
 import React from "react";
 import { Outlet, useLocation, useNavigate, useOutletContext } from "react-router";
-import { ThemeToggle } from "../public-site/ThemeToggle";
-import { Lockup } from "./Lockup";
+import { AppLockup } from "./Lockup";
 import { pageGutter } from "./layout";
 import { cn } from "./primitives/cn";
 import { SidebarInset, SidebarTrigger } from "./primitives/sidebar";
@@ -103,7 +102,7 @@ export function SiteLayout({
         </div>
         <SidebarInset>
           <header
-            className={cn("z-10 h-16 shrink-0 border-b border-border bg-background", pageGutter)}
+            className={cn("z-10 h-14 shrink-0 border-b border-border bg-background", pageGutter)}
           >
             <div className="flex h-full w-full min-w-0 items-center justify-between">
               <SidebarTrigger
@@ -135,12 +134,11 @@ export function SiteLayout({
                   </svg>
                 </Button>
                 <div className="md:hidden">
-                  <Lockup compact />
+                  <AppLockup />
                 </div>
               </div>
               <div className="ml-auto flex items-center gap-2">
                 <UserMenu user={user} onSignOut={signOut} />
-                <ThemeToggle />
               </div>
             </div>
           </header>

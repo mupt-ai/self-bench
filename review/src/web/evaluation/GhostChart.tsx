@@ -20,7 +20,6 @@ export function GhostChart() {
     <svg viewBox="0 0 380 250" className="block h-auto w-full" fill="none" role="presentation">
       <g stroke="var(--ruler)">
         <path d="M44 20h326M44 70h326M44 120h326M44 170h326" />
-        <path d="M115 20v200M187 20v200M259 20v200M331 20v200" />
       </g>
       <path d="M44 20v200h326" stroke="var(--border)" strokeWidth="1.5" />
       <path
@@ -37,7 +36,7 @@ export function GhostChart() {
           <circle key={x} cx={x} cy={y} r="5" opacity="0.5" />
         ))}
       </g>
-      <g fill="var(--faint)" fontSize="12" fontFamily="var(--sans)">
+      <g fill="var(--faint)" fontSize="11" fontFamily="var(--sans)">
         <text x="40" y="24" textAnchor="end">
           100%
         </text>

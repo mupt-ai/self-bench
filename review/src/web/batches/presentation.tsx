@@ -1,8 +1,9 @@
 import type { BatchStatus } from "../batch-api";
+import { repoPagePath } from "../paths";
 import { cn } from "../primitives/cn";
 
 export const batchPath = (fullName: string, runId?: string) =>
-  `/repos/${fullName}/batches${runId ? `/${encodeURIComponent(runId)}` : ""}`;
+  `${repoPagePath(fullName)}/batches${runId ? `/${encodeURIComponent(runId)}` : ""}`;
 export const batchName = (runId: string) => `Batch ${runId.replace(/^batch-/, "").slice(0, 8)}`;
 export const batchDate = (date: string) =>
   new Date(date).toLocaleString(undefined, {
@@ -31,11 +32,11 @@ export function BatchState({ phase }: { phase?: BatchStatus["phase"] }) {
         ? "border-success/40 bg-success/10 text-success"
         : phase === "cancelled" || !phase
           ? "border-border bg-muted text-muted-foreground"
-          : "border-brand/40 bg-brand/10 text-brand-foreground";
+          : "border-check/40 bg-check/10 text-check";
   return (
     <span
       className={cn(
-        "inline-flex items-center border px-2 py-1 text-xs leading-none font-semibold tracking-normal",
+        "inline-flex items-center rounded-sm border px-1.5 py-0.5 text-[11px] font-medium",
         tone,
       )}
     >

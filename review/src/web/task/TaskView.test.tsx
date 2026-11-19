@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router";
 import type { TaskSource } from "../../sources/types";
 import { TaskView } from "./TaskView";
 
@@ -13,12 +14,34 @@ const source: TaskSource = {
 test("the feedback tab is available on task pages without changing other task viewers", () => {
   const row = { id: "task", name: "task" };
   const withFeedback = renderToStaticMarkup(
-    <TaskView source={source} row={row} feedback={<p>Feedback Form</p>} />,
+    <MemoryRouter>
+      <TaskView source={source} row={row} feedback={<p>Feedback Form</p>} />
+    </MemoryRouter>,
   );
   expect(withFeedback).toContain('aria-selected="false">Feedback</button>');
 
-  const withoutFeedback = renderToStaticMarkup(<TaskView source={source} row={row} />);
+  const withoutFeedback = renderToStaticMarkup(
+    <MemoryRouter>
+      <TaskView source={source} row={row} />
+    </MemoryRouter>,
+  );
   expect(withoutFeedback).not.toContain('role="tab">Feedback</button>');
+});
+
+test("a link asking for feedback opens the Feedback tab", () => {
+  const html = renderToStaticMarkup(
+    <MemoryRouter
+      initialEntries={["/repos/o/n/tasks/run/task?feedback=The%20tests%20pin%20a%20message"]}
+    >
+      <TaskView
+        source={source}
+        row={{ id: "task", name: "task" }}
+        feedback={<p>Feedback Form</p>}
+      />
+    </MemoryRouter>,
+  );
+  expect(html).toContain('aria-selected="true">Feedback</button>');
+  expect(html).toContain("Feedback Form");
 });
 
 test("a status poll on a task without files keeps the tab the person opened", async () => {
@@ -70,7 +93,11 @@ test("a status poll on a task without files keeps the tab the person opened", as
     const root = createRoot(container);
     const render = async (current: TaskSource) => {
       await act(async () =>
-        root.render(<TaskView source={current} row={row} feedback={feedback} />),
+        root.render(
+          <MemoryRouter>
+            <TaskView source={current} row={row} feedback={feedback} />
+          </MemoryRouter>,
+        ),
       );
       await act(async () => {
         await Promise.resolve();

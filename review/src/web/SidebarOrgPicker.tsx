@@ -45,7 +45,7 @@ export function SidebarOrgPicker({
             type="button"
             aria-label="Workspace"
             className={cn(
-              "flex h-12 w-full min-w-0 cursor-pointer items-center gap-2.5 border border-foreground/15 bg-card px-2.5 text-sm hover:border-foreground/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/15",
+              "flex h-11 w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-md px-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring data-[state=open]:bg-accent",
               collapsed && "h-8 justify-center border-0 bg-transparent px-0",
             )}
           >
@@ -53,16 +53,13 @@ export function SidebarOrgPicker({
             {!collapsed && (
               <span className="min-w-0 flex-1 text-left leading-tight">
                 <span className="block truncate font-medium text-foreground">{org.login}</span>
-                <span className="block truncate text-xs text-muted-foreground">
+                <span className="block truncate text-xs text-faint">
                   {org.kind === "user" ? "Personal Workspace" : (org.name ?? "Shared Workspace")}
                 </span>
               </span>
             )}
             {!collapsed && (
-              <ChevronsUpDown
-                className="size-4 shrink-0 text-muted-foreground"
-                aria-hidden="true"
-              />
+              <ChevronsUpDown className="size-4 shrink-0 text-faint" aria-hidden="true" />
             )}
           </button>
         </DropdownMenuTrigger>
@@ -86,9 +83,7 @@ export function SidebarOrgPicker({
             {organizations.length > 0 && (
               <>
                 {personal.length > 0 && <DropdownMenuSeparator />}
-                <DropdownMenuLabel className="px-2 pt-2 pb-1 text-xs font-semibold text-muted-foreground">
-                  Shared Workspaces
-                </DropdownMenuLabel>
+                <DropdownMenuLabel className="px-2 pt-2 pb-1">Shared Workspaces</DropdownMenuLabel>
                 {organizations.map((item) => (
                   <OrgItem key={item.login} org={item} />
                 ))}
@@ -97,7 +92,7 @@ export function SidebarOrgPicker({
           </DropdownMenuRadioGroup>
           <DropdownMenuSeparator />
           <DropdownMenuItem className="min-h-9 gap-2.5" onSelect={() => setCreating(true)}>
-            <Plus className="size-4 text-muted-foreground" aria-hidden="true" />
+            <Plus className="size-4" aria-hidden="true" />
             Create Workspace
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -109,15 +104,12 @@ export function SidebarOrgPicker({
 
 function OrgItem({ org }: { org: SiteOrg }) {
   return (
-    <DropdownMenuRadioItem
-      value={org.login}
-      className="min-h-9 gap-2.5 py-1.5 data-[state=checked]:bg-foreground/[0.04]"
-    >
+    <DropdownMenuRadioItem value={org.login} className="min-h-9 gap-2.5 py-1.5">
       <Avatar login={org.login} url={org.avatarUrl} size={24} />
       <span className="min-w-0 flex-1">
-        <span className="block truncate font-mono text-sm leading-5">{org.login}</span>
+        <span className="block truncate text-sm leading-5">{org.login}</span>
         {org.kind === "user" && (
-          <span className="block text-xs leading-5 text-muted-foreground">Personal Workspace</span>
+          <span className="block text-xs leading-5 text-faint">Personal Workspace</span>
         )}
       </span>
     </DropdownMenuRadioItem>

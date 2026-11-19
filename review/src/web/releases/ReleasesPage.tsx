@@ -1,10 +1,11 @@
 import { ArrowUpRight } from "lucide-react";
 import React from "react";
-import { useParams, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
 import { formatAgo, plural } from "../api";
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
 import { GhostRelease } from "../ghosts";
 import { ListSkeleton } from "../LoadingSkeleton";
+import { useRepoParams } from "../paths";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import {
@@ -47,7 +48,7 @@ export interface ReleaseTarget {
 /** The repository the route names, as a Releases tab releases it. */
 function useRepositoryTarget(): ReleaseTarget {
   const { org } = useOrg();
-  const { owner = "", name = "" } = useParams();
+  const { owner = "", name = "" } = useRepoParams();
   const repo = `${owner}/${name}`;
   return {
     url: releasesUrl(org.login, repo),

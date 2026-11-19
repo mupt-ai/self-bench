@@ -36,13 +36,11 @@ test("a benchmark task opens in the task view with the files frozen when it was 
     await act(async () => {
       root.render(
         <MemoryRouter
-          initialEntries={[
-            "/benchmarks/terminal-bench/terminal-bench-2/tasks/terminal-bench/fix-git",
-          ]}
+          initialEntries={["/public/terminal-bench/terminal-bench-2/tasks/terminal-bench/fix-git"]}
         >
           <Routes>
             <Route element={<Outlet context={{ org: { login: "team" }, orgs: [] }} />}>
-              <Route path="/benchmarks/:owner/:name/tasks/*" element={<BenchmarkTaskPage />} />
+              <Route path="/public/:owner/:name/tasks/*" element={<BenchmarkTaskPage />} />
             </Route>
           </Routes>
         </MemoryRouter>,

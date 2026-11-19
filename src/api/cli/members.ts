@@ -15,8 +15,8 @@ interface Member {
   source: string;
 }
 
-/** `members`: the workspace's people, and the GitHub organizations it brings them from. */
-export async function membersCommand(args: string[]): Promise<void> {
+/** `member list`: the workspace's people, and the GitHub organizations it brings them from. */
+async function listMembers(args: string[]): Promise<void> {
   const { values } = parse(args);
   const reply = await requestJson(`${base(values)}/members`);
   const github = reply.github as { login: string }[];
@@ -34,9 +34,15 @@ export async function membersCommand(args: string[]): Promise<void> {
   );
 }
 
-/** `member invite|role|remove LOGIN`, `member invites`, `member revoke ID` (admins). */
+const MEMBER_ACTIONS = ["list", "invites", "invite", "revoke", "role", "remove"];
+const MEMBER_USAGE =
+  "usage: self-bench member list|invites | member invite|role|remove LOGIN | member revoke ID";
+
+/** `member list`, `member invite|role|remove LOGIN`, `member invites`, `member revoke ID` (admins). */
 export async function memberCommand(args: string[]): Promise<void> {
-  const [action, ...rest] = args;
+  const [action = "", ...rest] = args;
+  if (!MEMBER_ACTIONS.includes(action)) throw new Error(MEMBER_USAGE);
+  if (action === "list") return await listMembers(rest);
   const { values, positionals } = parse(rest, { role: { type: "string" } });
   const path = base(values);
   if (action === "invites") {
@@ -74,9 +80,7 @@ export async function memberCommand(args: string[]): Promise<void> {
   }
   if (action === "remove")
     return print(values, await requestJson(`${path}/members/${login}/delete`, "POST", {}));
-  throw new Error(
-    "usage: self-bench member invite LOGIN [--role admin|member] | role LOGIN admin|member | remove LOGIN | invites | revoke ID",
-  );
+  throw new Error(MEMBER_USAGE);
 }
 
 /** `workspace create NAME [--name TEXT]`, `workspace connect GITHUB_ORG`, `workspace rename TEXT`. */

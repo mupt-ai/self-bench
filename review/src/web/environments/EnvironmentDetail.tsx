@@ -77,7 +77,7 @@ export function EnvironmentDetail({
   return (
     <div className="grid gap-4 py-2">
       {environment.script !== undefined && (
-        <pre className="max-h-64 overflow-auto panel p-3 font-mono text-sm leading-6 whitespace-pre-wrap wrap-anywhere">
+        <pre className="max-h-64 overflow-auto rounded-lg border border-border bg-foreground/[0.03] px-3.5 py-3 font-mono text-xs leading-5 whitespace-pre-wrap text-foreground wrap-anywhere">
           {environment.script}
         </pre>
       )}
@@ -93,7 +93,7 @@ export function EnvironmentDetail({
             <li key={task.runId} className="grid gap-1">
               <span className="flex flex-wrap items-center gap-3">
                 <Link
-                  className="font-mono text-sm hover:underline"
+                  className="rounded-sm font-mono text-[13px] text-foreground transition-colors hover:text-brand focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   to={taskPath(fullName, task.task)}
                   onClick={(event) => event.stopPropagation()}
                 >

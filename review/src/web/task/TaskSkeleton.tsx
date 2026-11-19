@@ -1,6 +1,7 @@
 import { sheetBody, tab, tabList } from "../../components/viewer-ui";
 import { Skeleton } from "../LoadingSkeleton";
 import { pageGutter } from "../layout";
+import { repoPagePath } from "../paths";
 import { Breadcrumbs } from "../ui";
 import { taskTitle } from "./task-title";
 
@@ -15,8 +16,8 @@ export function TaskSkeleton({ fullName, taskId }: { fullName: string; taskId: s
       <header className={`border-b border-border bg-background py-5 ${pageGutter}`}>
         <Breadcrumbs
           items={[
-            { label: "Mined Repos", to: "/" },
-            { label: fullName, to: `/repos/${fullName}`, mono: true },
+            { label: "Repo Benchmarks", to: "/repos" },
+            { label: fullName, to: repoPagePath(fullName), mono: true },
             { label: "Task" },
           ]}
         />
@@ -32,7 +33,7 @@ export function TaskSkeleton({ fullName, taskId }: { fullName: string; taskId: s
         aria-hidden="true"
       >
         <aside className="overflow-hidden border-r border-b border-border md:border-b-0">
-          <div className="flex h-11 items-center border-b border-border px-4 text-xs font-semibold text-muted-foreground">
+          <div className="flex h-11 items-center border-b border-border px-4 text-xs font-medium text-muted-foreground">
             Files
           </div>
           <div className="space-y-3 p-4">

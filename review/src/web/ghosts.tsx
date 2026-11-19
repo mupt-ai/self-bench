@@ -20,7 +20,7 @@ function Bar({ width, strong = false }: { width: string; strong?: boolean }) {
 function Chip({ children, width = "3rem" }: { children?: ReactNode; width?: string }) {
   return (
     <span
-      className="flex h-5 shrink-0 items-center justify-center border border-foreground/15 px-1.5 text-xs text-(--faint)"
+      className="flex h-5 shrink-0 items-center justify-center border border-foreground/15 px-1.5 text-xs text-faint"
       style={{ minWidth: width }}
     >
       {children}
@@ -58,7 +58,7 @@ function Rows({
 }
 
 const ring = (size = "size-3") => (
-  <span className={cn("shrink-0 rounded-full border-[1.5px] border-(--faint)", size)} />
+  <span className={cn("shrink-0 rounded-full border border-(--faint)", size)} />
 );
 
 /** Tasks, each from a pull request, with its difficulty. */
@@ -88,7 +88,7 @@ export function GhostKeys() {
   return (
     <Rows
       rows={["50%", "40%"]}
-      mark={() => <span className="shrink-0 font-mono text-xs text-(--faint)">sbk_</span>}
+      mark={() => <span className="shrink-0 font-mono text-xs text-faint">sbk_</span>}
       end={(index) => <Chip width="6rem">{index === 0 ? "Read & Write" : "Read Only"}</Chip>}
     />
   );
@@ -99,7 +99,7 @@ export function GhostDiscovery() {
   return (
     <Rows
       rows={["62%", "48%", "56%"]}
-      mark={() => <span className="shrink-0 text-xs text-(--faint)">▸</span>}
+      mark={() => <span className="shrink-0 text-xs text-faint">▸</span>}
       end={() => <Chip width="4rem" />}
     />
   );
@@ -148,18 +148,18 @@ export function GhostRelease({ repo }: { repo: string }) {
     <div className="border border-foreground/[0.12] p-4">
       <div className="flex items-center gap-2.5">
         <span className="size-5 shrink-0 rounded-full bg-foreground/[0.08]" />
-        <span className="min-w-0 truncate font-mono text-sm text-(--faint)">{repo}</span>
+        <span className="min-w-0 truncate font-mono text-sm text-faint">{repo}</span>
       </div>
       <div className="mt-4 flex flex-col gap-2.5">
         {["Most Accurate", "Cheapest"].map((label) => (
-          <div key={label} className="flex items-center gap-3 text-xs text-(--faint)">
+          <div key={label} className="flex items-center gap-3 text-xs text-faint">
             <span className="w-24 shrink-0">{label}</span>
             <Bar width="40%" strong />
-            <span className="ml-auto font-mono">—%</span>
+            <span className="ml-auto tabular-nums">—%</span>
           </div>
         ))}
       </div>
-      <div className="mt-4 truncate border-t border-foreground/[0.08] pt-3 font-mono text-xs text-(--faint)">
+      <div className="mt-4 truncate border-t border-foreground/[0.08] pt-3 font-mono text-xs text-faint">
         selfbench.dev/{repo}
       </div>
     </div>
@@ -175,7 +175,7 @@ export function GhostUsage() {
         { title: "Sandbox Usage", segments: ["100%"] },
       ].map(({ title, segments }) => (
         <div key={title} className="border border-foreground/[0.12] p-4">
-          <div className="flex items-center justify-between gap-3 text-xs text-(--faint)">
+          <div className="flex items-center justify-between gap-3 text-xs text-faint">
             <span>{title}</span>
             <Bar width="3rem" />
           </div>

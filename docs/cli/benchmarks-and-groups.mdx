@@ -1,16 +1,35 @@
 ---
-title: "CLI: Benchmarks and Groups"
-sidebarTitle: "Benchmarks and Groups"
-description: "Evaluate Harbor registry datasets, and pool repositories into groups."
+title: "CLI: Public Benchmarks and Groups"
+sidebarTitle: "Public Benchmarks and Groups"
+description: "Add Harbor registry datasets as public benchmarks, and pool repositories into groups."
 icon: "layer-group"
 ---
 
-Evaluate, inspect, and release commands take `--benchmark ORG/NAME` or `--group SLUG` in place of `--repo`.
+Evaluate, inspect, and release commands take `--public ORG/NAME` or `--group SLUG` in place of `--repo`.
 
 | Command | Does |
 | --- | --- |
-| `benchmarks` · `benchmark add\|show\|tasks\|remove ORG/NAME[@REF]` | Harbor registry datasets |
-| `groups` · `group show\|delete SLUG` | Repository groups |
-| `group create\|update SLUG --name NAME --member OWNER/NAME [--member ...]` | Pool connected repositories |
+| `public list` | Public benchmarks added to the workspace, with their tasks and status |
+| `public add ORG/NAME[@REF]` | Add a Harbor registry dataset; its tasks are frozen at `REF` (`latest` without one) |
+| `public show\|tasks\|remove ORG/NAME` | Read one, list its tasks, or remove it |
+| `group list` · `group show\|delete SLUG` | Repo groups |
+| `group create\|update SLUG --name TEXT --member OWNER/NAME [--member ...] [--description TEXT]` | Pool connected repositories; `update` replaces the members |
 
-Benchmarks are never released.
+## Public Benchmarks
+
+A public benchmark is a dataset from Harbor's registry, such as Terminal-Bench. Adding one freezes its tasks; it is ready to run once its status is `ready`. Its results can be [released](/cli/publish).
+
+```bash
+self-bench public add terminal-bench/terminal-bench@2.0
+# Added terminal-bench/terminal-bench (adding); pass it as --public terminal-bench/terminal-bench.
+self-bench comparison create --public terminal-bench/terminal-bench --model gpt-6.1-sol --harness codex
+```
+
+## Groups
+
+A group is repo benchmarks evaluated and released together, as one line on selfbench.dev. Members are connected repositories, named `OWNER/NAME`.
+
+```bash
+self-bench group create web --name "Web Apps" --member acme/app --member acme/site
+self-bench results --group web
+```

@@ -1,6 +1,7 @@
 import { type ConnectedRepo, formatAgo } from "../api";
 import type { GroupView } from "../groups/api";
 import { GroupCard } from "../groups/GroupCard";
+import { repoPagePath } from "../paths";
 import { AddScopeButton, ScopeCard } from "../ScopeCard";
 
 export interface RepoStats {
@@ -63,7 +64,7 @@ function RepositoryCard({
   return (
     <ScopeCard
       name={repo.fullName}
-      to={`/repos/${repo.fullName}`}
+      to={repoPagePath(repo.fullName)}
       icon={<OwnerAvatar owner={repo.fullName.split("/")[0] ?? ""} />}
       details={[
         <span key="branch" className="font-mono">

@@ -68,8 +68,8 @@ export function HarnessesPage() {
         title="Harnesses"
         description="Save a change to an agent once, then run any tasks with and without it."
       >
-        <Button variant="primary" onClick={() => setEditing("new")}>
-          <Plus aria-hidden="true" />
+        <Button variant="primary" size="small" onClick={() => setEditing("new")}>
+          <Plus className="size-4" aria-hidden="true" />
           New Harness
         </Button>
       </PageHeader>
@@ -98,7 +98,7 @@ export function HarnessesPage() {
           <tbody>
             {harnesses.map((harness) => (
               <tr key={harness.id}>
-                <td className="font-semibold">{harness.name}</td>
+                <td className="font-medium">{harness.name}</td>
                 <td className="text-muted-foreground">
                   {harnessSummary(harness, models).join(" · ")}
                 </td>

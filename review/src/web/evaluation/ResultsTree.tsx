@@ -33,7 +33,7 @@ export function Toggle({
   return (
     <button
       type="button"
-      className="absolute inset-y-0 left-0 text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground"
+      className="absolute inset-y-0 left-0 text-muted-foreground hover:bg-accent hover:text-foreground"
       style={{ width: chevron + 12 }}
       aria-expanded={open}
       aria-label={label}
@@ -62,7 +62,7 @@ const ELBOW_INSET = 8;
 export function Elbow() {
   return (
     <span
-      className="pointer-events-none absolute rounded-bl-[6px] border-b-[1.5px] border-l-[1.5px] border-foreground/40"
+      className="pointer-events-none absolute rounded-bl-[6px] border-b border-l border-foreground/40"
       style={{
         left: CONFIGURATION_CHEVRON - 0.75,
         width: BATCH_CHEVRON - CONFIGURATION_CHEVRON - 6,

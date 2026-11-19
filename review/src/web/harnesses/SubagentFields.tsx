@@ -147,7 +147,7 @@ export function SubagentFields({
             ))}
           </Select>
           {stale && (
-            <span role="alert" className="text-sm text-warning">
+            <span role="alert" className="text-[13px] font-normal text-warning">
               Its saved credential no longer serves this model. Choose another.
             </span>
           )}
@@ -181,7 +181,7 @@ export function SubagentFields({
             ))}
           </Select>
           {unoffered && (
-            <span role="alert" className="text-sm text-warning">
+            <span role="alert" className="text-[13px] font-normal text-warning">
               The model no longer has this level on its credential. Choose another.
             </span>
           )}

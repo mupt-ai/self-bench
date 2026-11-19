@@ -83,7 +83,7 @@ export function DemoRunPage() {
         title="Run · Demo Repository"
         description="Compare models and harnesses against accepted tasks."
       />
-      <Notice className="mb-5">
+      <Notice tone="info" className="mb-5">
         Demo mode · Sample data only. You can explore the controls, but no evaluations are
         submitted.
       </Notice>
@@ -104,7 +104,7 @@ export function DemoRunPage() {
         <fieldset className="panel min-w-0 p-0" disabled>
           <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
             <div>
-              <h2 className="text-sm font-semibold">Models and Harnesses</h2>
+              <h2 className="text-sm font-medium">Models and Harnesses</h2>
               <p className="mt-1 text-xs text-muted-foreground">
                 {draft.models.length} of 12 configurations
               </p>

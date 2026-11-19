@@ -138,7 +138,7 @@ export function DeviceSignIn({
         role="status"
       >
         <Check className="text-success" size={18} aria-hidden="true" />
-        <h3 className="flex-1 text-sm font-semibold">{device.connected}</h3>
+        <h3 className="flex-1 text-sm font-medium">{device.connected}</h3>
         <Button type="button" variant="primary" onClick={() => void onDone()}>
           Done
         </Button>
@@ -190,7 +190,7 @@ export function DeviceSignIn({
               type="button"
               aria-label={copied ? "Code Copied" : "Copy Code"}
               title={copied ? "Code Copied" : "Copy Code"}
-              className="border-l border-border px-4 text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"
+              className="border-l border-border px-4 text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
               onClick={async () => {
                 try {
                   await navigator.clipboard.writeText(session?.instructions?.userCode ?? "");

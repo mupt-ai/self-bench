@@ -1,7 +1,7 @@
 import React from "react";
-import { useParams } from "react-router";
 import { AGENT_MINUTES } from "../../../../src/contracts/agent-limit";
 import { requestJson } from "../api";
+import { useRepoParams } from "../paths";
 import { InfoTooltip } from "../primitives/tooltip";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
@@ -11,7 +11,7 @@ type Result = { tone: "success" | "error"; text: string; retry?: boolean };
 
 export function RepoSettingsPage() {
   const { org } = useOrg();
-  const { owner = "", name = "" } = useParams();
+  const { owner = "", name = "" } = useRepoParams();
   useDocumentTitle(`Settings · ${owner}/${name} · SelfBench`);
   const path = `/api/orgs/${encodeURIComponent(org.login)}/repos/${owner}/${name}`;
   return <AgentLimit key={path} path={path} />;
@@ -94,7 +94,7 @@ function AgentLimit({ path }: { path: string }) {
         <div className="grid gap-5 p-6 sm:grid-cols-[minmax(0,1fr)_13rem] sm:items-start sm:gap-8">
           <div>
             <div className="flex items-center gap-1.5">
-              <h2 className="text-base leading-7 font-semibold">Agent Time Limit</h2>
+              <h2 className="text-base leading-7 font-medium">Agent Time Limit</h2>
               <InfoTooltip
                 label={`How long a model may work on each task before it is stopped and graded, from ${AGENT_MINUTES.min} to ${AGENT_MINUTES.max} minutes. Leave room for the repository's test suite. Past runs keep the limit they ran with.`}
               />
@@ -115,9 +115,9 @@ function AgentLimit({ path }: { path: string }) {
                   // A notice about the last save no longer describes what the field holds.
                   if (result?.tone === "success") setResult(undefined);
                 }}
-                className="min-w-0 flex-1 text-right font-mono tabular-nums"
+                className="min-w-0 flex-1 rounded-r-none text-right tabular-nums"
               />
-              <span className="flex shrink-0 items-center border border-l-0 border-input bg-muted px-3 text-sm text-muted-foreground">
+              <span className="flex shrink-0 items-center rounded-r-md border border-l-0 border-input bg-muted px-3 text-sm text-faint">
                 Minutes
               </span>
             </label>

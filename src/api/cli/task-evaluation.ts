@@ -1,7 +1,7 @@
 import type { ResultsReport, TaskResults } from "../../evaluation/results-report.js";
 import type { TaskAudit } from "../../evaluation/task-audit.js";
 import { requestJson } from "./api-client.js";
-import { flag, parse, positional, scopePath, type Values } from "./args.js";
+import { flag, parse, scopePath, taskArguments, type Values } from "./args.js";
 import { results } from "./evaluations.js";
 import { print, table, usd } from "./output.js";
 import { waitFor } from "./wait.js";
@@ -16,15 +16,13 @@ const FLAGS = {
 type TaskReport = ResultsReport & { audit?: TaskAudit };
 
 /**
- * `task results|explain|audit RUN_ID TASK_ID`: how every configuration did on one task, why the
+ * `task results|explain|audit TASK`: how every configuration did on one task, why the
  * failures failed, and whether the task itself is fair.
  */
 export async function taskEvaluationCommand(action: string, args: string[]): Promise<void> {
   const { values, positionals } = parse(args, FLAGS);
-  const task = {
-    runId: positional(positionals, 0, "RUN_ID"),
-    taskId: positional(positionals, 1, "TASK_ID"),
-  };
+  const { runId, taskId } = taskArguments(positionals);
+  const task = { runId, taskId };
   if (action === "explain") await explain(values, task);
   else if (action === "audit") await audit(values, task);
   const report = await results(values, task);

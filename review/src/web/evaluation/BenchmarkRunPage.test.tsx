@@ -69,11 +69,11 @@ test("a benchmark's Run page is a repository's: it picks tasks and asks for a ju
   try {
     await act(async () =>
       root.render(
-        <MemoryRouter initialEntries={["/benchmarks/terminal-bench/terminal-bench-2/run"]}>
+        <MemoryRouter initialEntries={["/public/terminal-bench/terminal-bench-2/run"]}>
           <Routes>
             <Route element={<Outlet context={{ org: { login: "team" }, orgs: [] }} />}>
               <Route
-                path="/benchmarks/:owner/:name/run"
+                path="/public/:owner/:name/run"
                 element={
                   <BenchmarkScope>
                     <RepoRunsProvider org="team" url={url}>
@@ -88,14 +88,15 @@ test("a benchmark's Run page is a repository's: it picks tasks and asks for a ju
       ),
     );
     expect(container.querySelector("h1")?.textContent).toBe("Run");
-    expect(container.textContent).toContain(
+    // The page's description is helper text, so it sits in the heading's tooltip.
+    expect(container.querySelector("h1 + button")?.getAttribute("aria-label")).toContain(
       "terminal-bench/terminal-bench-2 from Harbor's registry",
     );
     // Every task of the dataset starts picked, and none is called accepted.
     expect(container.textContent).toContain("2 Tasks");
     expect(container.textContent).not.toContain("Accepted Task");
     expect(
-      container.querySelector('a[href="/benchmarks/terminal-bench/terminal-bench-2"]'),
+      container.querySelector('a[href="/public/terminal-bench/terminal-bench-2"]'),
     ).not.toBeNull();
     const count = [...container.querySelectorAll("dt")].find(
       (term) => term.textContent === "Tasks",

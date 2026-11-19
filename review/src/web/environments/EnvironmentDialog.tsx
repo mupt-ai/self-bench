@@ -136,7 +136,10 @@ export function EnvironmentDialog({
             </div>
           ) : optionsError ? (
             <Notice>
-              {optionsError} <Button onClick={reload}>Try Again</Button>
+              {optionsError}{" "}
+              <Button size="small" onClick={reload}>
+                Try Again
+              </Button>
             </Notice>
           ) : !options ? (
             <p role="status" className="text-sm text-muted-foreground">
@@ -152,8 +155,8 @@ export function EnvironmentDialog({
           )}
           {error && <Notice>{error}</Notice>}
         </div>
-        <DialogFooter className="sticky bottom-0 justify-end">
-          <div className="flex gap-3">
+        <DialogFooter className="sticky bottom-0 justify-end bg-card">
+          <div className="flex gap-2">
             {step === 2 && (
               <Button variant="ghost" disabled={busy} onClick={() => setStep(1)}>
                 Back

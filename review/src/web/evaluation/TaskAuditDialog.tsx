@@ -1,13 +1,14 @@
 import { useRef } from "react";
 import { Dialog, DialogHeader } from "../Dialog";
 import { useSession } from "../session";
-import { Notice } from "../ui";
+import { feedbackLink } from "../task/feedback-link";
+import { buttonStyles, Notice } from "../ui";
 import { FailureExplanationForm } from "./FailureExplanationForm";
 import { OutcomeCircle } from "./ResultsMarks";
 import type { Configuration, TaskResult } from "./results-model";
 import { configurationDetail, momentLabel, taskParts } from "./results-presentation";
 import type { OutcomeGridTask } from "./TaskOutcomeGrid";
-import { taskPage } from "./TrialDialog";
+import { isRevisablePages, taskPage } from "./TrialDialog";
 import { useTaskAudit } from "./useTaskAudit";
 
 const AUDIT = { action: "Audit Task", busy: "Auditing…", model: "Audit Model" };
@@ -58,6 +59,8 @@ export function TaskAuditDialog({
       result.trial.rewards.reward === 0,
   ).length;
   const parts = taskParts(task.id);
+  const page = taskPage(pages, { runId: task.runId, taskId: task.id });
+  const revisable = isRevisablePages(pages);
   const last = state?.audit;
   // Offered from the failures the server can audit, without waiting for state to load.
   const offered = auditing || (enabled && auditableFailures > 0 && state?.available !== false);
@@ -99,23 +102,43 @@ export function TaskAuditDialog({
         <span className="font-mono text-xs text-muted-foreground">{task.id}</span>
         <a
           className="ml-auto text-sm font-medium underline decoration-foreground/25 underline-offset-4 hover:decoration-foreground"
-          href={taskPage(pages, { runId: task.runId, taskId: task.id })}
+          href={page}
           target="_blank"
           rel="noopener"
         >
           View Task
         </a>
+        {revisable && (
+          <a
+            className="text-sm font-medium underline decoration-foreground/25 underline-offset-4 hover:decoration-foreground"
+            href={feedbackLink(page)}
+            target="_blank"
+            rel="noopener"
+          >
+            Give Feedback
+          </a>
+        )}
       </div>
       <div className="min-w-0 space-y-6 p-4 sm:p-6">
         <section aria-label="Audit" className="space-y-3">
           {last && (
             <div className="space-y-1.5">
-              <h3 className="text-sm font-semibold">Verdict: {VERDICTS[last.verdict]}</h3>
+              <h3 className="text-sm font-medium">Verdict: {VERDICTS[last.verdict]}</h3>
               <p className="text-sm leading-6">{last.text}</p>
               <p className="text-xs text-muted-foreground">
                 {last.model} read {last.failures} failed of {last.attempts} scored{" "}
                 {last.attempts === 1 ? "attempt" : "attempts"} · {momentLabel(last.auditedAt)}
               </p>
+              {revisable && last.verdict !== "fair" && (
+                <a
+                  className={`${buttonStyles.primary} mt-2`}
+                  href={feedbackLink(page, last.text)}
+                  target="_blank"
+                  rel="noopener"
+                >
+                  Revise Task with This Audit
+                </a>
+              )}
             </div>
           )}
           {offered ? (
@@ -131,7 +154,7 @@ export function TaskAuditDialog({
           {error && <Notice>{error}</Notice>}
         </section>
         <section aria-labelledby="task-attempts" className="space-y-2">
-          <h3 id="task-attempts" className="text-sm font-semibold">
+          <h3 id="task-attempts" className="text-sm font-medium">
             Attempts
           </h3>
           <ul className="divide-y divide-border panel">
@@ -139,7 +162,7 @@ export function TaskAuditDialog({
               <li key={`${configuration.key}/${result.run.id}`}>
                 <button
                   type="button"
-                  className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-1 px-3 py-2.5 text-left text-sm hover:bg-foreground/[0.04] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-foreground"
+                  className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-1 px-3 py-2.5 text-left text-sm transition-colors hover:bg-foreground/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
                   onClick={() => onOpenTrial(result)}
                 >
                   <OutcomeCircle outcome={result.outcome} bare />

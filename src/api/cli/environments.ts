@@ -17,12 +17,12 @@ const coverage = (environment: EnvironmentItem) =>
   (environment.tasks.failed ? `, ${environment.tasks.failed} failed` : "");
 
 /**
- * `environments`; `environment create|show|build|delete [ID]`: a repository's scripts that change
+ * `environment list|create|show|build|delete [ID]`: a repository's scripts that change
  * its tasks' files, each approved task built and checked once, for run conditions to run
  * (environments.ts).
  */
-export async function environmentCommand(args: string[], listing: boolean): Promise<void> {
-  const [action, ...rest] = listing ? ["list", ...args] : args;
+export async function environmentCommand(args: string[]): Promise<void> {
+  const [action, ...rest] = args;
   const { values, positionals } = parse(rest, FLAGS);
   const repository = repositoryPath(values);
   const base = `${repository}/environments`;
@@ -72,7 +72,7 @@ export async function environmentCommand(args: string[], listing: boolean): Prom
       return print(values, await requestJson(one(), "DELETE"));
     default:
       throw new Error(
-        "usage: self-bench environments --repo R | environment create|show|build|delete [ID] --repo R",
+        "usage: self-bench environment list|create --repo R | environment show|build|delete ID --repo R",
       );
   }
 }

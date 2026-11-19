@@ -1,6 +1,6 @@
-import { Building2 } from "lucide-react";
 import React from "react";
 import { Avatar } from "../Dropdown";
+import { GitHubMark } from "../GitHubMark";
 import { InfoTooltip } from "../primitives/tooltip";
 import type { SiteOrg } from "../session";
 import { Button, Input, SectionHeader, Select } from "../ui";
@@ -16,16 +16,15 @@ import {
 } from "./members";
 import { useAction } from "./use-action";
 
-const tableHead =
-  "bg-muted/50 text-[10px] tracking-wider text-muted-foreground uppercase [&_th]:px-4 [&_th]:py-3 [&_th]:font-medium";
+const tableHead = "text-xs text-faint [&_th]:px-4 [&_th]:py-2.5 [&_th]:font-medium";
 
 export function WorkspaceNameForm({ org, onSaved }: { org: SiteOrg; onSaved(): void }) {
   const [name, setName] = React.useState(org.name ?? "");
   const { busy, run, message } = useAction();
   return (
     <section aria-labelledby="workspace-name-title">
-      <span className="mb-4 flex items-center gap-1.5">
-        <h2 id="workspace-name-title" className="text-sm leading-6 font-semibold">
+      <span className="mb-3 flex items-center gap-1.5">
+        <h2 id="workspace-name-title" className="text-base leading-6 font-medium">
           Display Name
         </h2>
         <InfoTooltip label={`The workspace's address, ${org.login}, stays as it is.`} />
@@ -68,8 +67,8 @@ export function GitHubSection({
   const { busy, run, message } = useAction();
   return (
     <section aria-labelledby="github-orgs-title">
-      <span className="mb-4 flex items-center gap-1.5">
-        <h2 id="github-orgs-title" className="text-sm leading-6 font-semibold">
+      <span className="mb-3 flex items-center gap-1.5">
+        <h2 id="github-orgs-title" className="text-base leading-6 font-medium">
           GitHub Organizations
         </h2>
         <InfoTooltip label="Members of a connected GitHub organization join this workspace when they sign in, and leave it when they leave the organization. Its private repositories can be connected here." />
@@ -79,7 +78,7 @@ export function GitHubSection({
           {connections.map((connection) => (
             <li key={connection.githubId} className="flex items-center gap-3 px-4 py-3 text-sm">
               <Avatar login={connection.login} size={20} />
-              <span className="font-mono">{connection.login}</span>
+              <span>{connection.login}</span>
             </li>
           ))}
         </ul>
@@ -152,18 +151,18 @@ export function MemberTable({
             <tbody className="divide-y divide-border">
               {members.map((member) => (
                 <tr key={member.login}>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-2.5">
                     <span className="flex items-center gap-2.5">
                       <Avatar login={member.login} url={member.avatarUrl} size={24} />
                       <span className="min-w-0">
-                        <span className="block font-mono">{member.login}</span>
+                        <span className="block">{member.login}</span>
                         {member.name && (
                           <span className="block text-xs text-muted-foreground">{member.name}</span>
                         )}
                       </span>
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-2.5">
                     {canManage ? (
                       <Select
                         aria-label={`Role for ${member.login}`}
@@ -182,24 +181,24 @@ export function MemberTable({
                       roleLabels[member.role]
                     )}
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">
+                  <td className="px-4 py-2.5 text-muted-foreground">
                     {member.source === "github" ? (
                       <span className="inline-flex items-center gap-1.5">
-                        <Building2 className="size-3.5" aria-hidden="true" />
+                        <GitHubMark className="size-3.5 text-faint" />
                         GitHub
                       </span>
                     ) : (
                       "Invite"
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-2.5 text-right">
                     {canManage && member.source === "invite" && (
                       <Button
                         size="small"
                         variant="ghost"
                         disabled={busy}
                         aria-label={`Remove ${member.login}`}
-                        className="text-destructive hover:bg-destructive/[0.06] hover:text-destructive"
+                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                         onClick={async () => {
                           if (await run(() => removeMember(org, member.login)))
                             await onChanged(`${member.login} removed.`);

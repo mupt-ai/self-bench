@@ -1,21 +1,83 @@
 ---
 title: "CLI: Review Tasks"
 sidebarTitle: "Review Tasks"
-description: "Read, revise, steer, and approve or reject generated tasks."
+description: "Give a task feedback, read and pull it, and approve or reject it."
 icon: "list-check"
 ---
 
-`R` is `--repo OWNER/NAME`, or another [scope](/cli/overview#conventions). Only approved tasks are evaluated.
+`B` is `--repo OWNER/NAME` or `--custom NAME`. `TASK` is `RUN_ID/TASK_ID`, as `task list` prints it. Only approved tasks are evaluated.
 
 | Command | Does |
 | --- | --- |
-| `tasks R [--state S]` | `S` is `needs_review`, `accepted`, `rejected`, `in_progress`, `failed`, or `cancelled` |
-| `task show RUN_ID TASK_ID R` | A task, its review, cost, and revisions |
-| `task pull RUN_ID TASK_ID [DIR] R` | Download its files: instruction, Dockerfile, patches, scripts, `workspace/` |
-| `task revise RUN_ID TASK_ID R (--feedback TEXT \| --feedback-file F) [--draft DIR]` | Revise from feedback; `--draft` sends your edited files too |
-| `task steer RUN_ID TASK_ID R (--feedback TEXT \| --feedback-file F)` | A note to a task still generating; its author reads it at its next turn |
-| `task steering RUN_ID TASK_ID R` | The notes sent, and which turn received each |
-| `task approve\|reject RUN_ID TASK_ID R [--note TEXT]` | Review it |
-| `task unreview\|cancel\|delete RUN_ID TASK_ID R` | Clear the review, stop generation, or delete |
+| `feedback TASK_URL "TEXT"` | Tell a task what to change. Steers it while it is written, or revises it once it is done |
+| `task list B [--state STATE]` | A benchmark's tasks, with their state, difficulty, and source |
+| `task show TASK B` | A task, its review, cost, and revisions |
+| `task pull TASK [DIR] B` | Download its files: instruction, Dockerfile, patches, scripts, `workspace/` |
+| `task approve\|reject TASK B [--note TEXT]` | Review it |
+| `task unreview\|cancel\|delete TASK B` | Clear the review, stop it being written, or delete it |
+| `task revise TASK B (--feedback TEXT \| --feedback-file F) [--draft DIR]` | Revise a finished task, with your own edits to its files |
+| `task steer TASK B (--feedback TEXT \| --feedback-file F)` | A note to a task still being written |
+| `task steering TASK B` | The notes sent, and which turn received each |
 
-`task revise` takes the same [generation options](/cli/build#generation-options) as `generate`.
+## Feedback
+
+`feedback` is the quickest way to fix a task. Copy the task's address from the app and say what is wrong:
+
+```bash
+self-bench feedback https://app.selfbench.dev/repos/acme/app/tasks/6f1c2e9a/fix-invoice-rounding \
+  "The hidden test pins the error message; check the status code instead."
+# Revising as pr-acme-app-482-r9c1d2e3f4a5b/fix-invoice-rounding (in_progress).
+# https://app.selfbench.dev/repos/acme/app/tasks/pr-acme-app-482-r9c1d2e3f4a5b/fix-invoice-rounding
+```
+
+It reads the task first and does the right thing for its state:
+
+| Task | `feedback` |
+| --- | --- |
+| Still being written (`in_progress`) | Sends a note its author reads at its next turn, as `task steer` does |
+| Finished (any other state) | Starts a revision from the feedback, as `task revise` does, and prints the revision's page |
+
+| Argument or Flag | Does |
+| --- | --- |
+| `TASK_URL` | The task's page: `/repos/OWNER/NAME/tasks/…` or `/custom/NAME/tasks/…`. No `--repo` needed |
+| `OWNER/NAME RUN_ID TASK_ID` | The task without its URL; a custom benchmark's `OWNER/NAME` is `evals/NAME`. `--repo` or `--custom` with `TASK` works too |
+| `"TEXT"` | The feedback. Quote it, or pass `-` to read it from stdin |
+| `--feedback-file FILE` | Read the feedback from a file |
+| `--from-audit` | Send the task's latest [fairness audit](/cli/inspect#task-audit), after any text of your own |
+
+`feedback` takes the [generation options](/cli/build#generation-options) for a revision. Use `task revise --draft` to send edited files as well.
+
+```bash
+# Hand the audit's findings to the author, with a note of your own.
+self-bench feedback https://app.selfbench.dev/custom/data-import-bugs/tasks/scn-evals-data-import-bugs-3f9a1c2b7d4e/scenario-rows-lost \
+  "Keep the CSV header." --from-audit
+pbpaste | self-bench feedback acme/app 6f1c2e9a fix-invoice-rounding -
+```
+
+## `task list`
+
+`--state` is `needs_review`, `accepted`, `rejected`, `in_progress`, `failed`, or `cancelled`.
+
+```bash
+self-bench task list --repo acme/app --state needs_review
+# TASK                             STATE         DIFFICULTY  SOURCE   NOTE
+# 6f1c2e9a/fix-invoice-rounding    needs_review  medium      PR #482
+```
+
+## `task pull` and `task revise --draft`
+
+`task pull` unpacks a task's files into a new or empty directory (`TASK_ID` by default). Edit them, then send them back with your feedback; the author revises from your copy.
+
+```bash
+self-bench task pull 6f1c2e9a/fix-invoice-rounding --repo acme/app
+self-bench task revise 6f1c2e9a/fix-invoice-rounding --repo acme/app \
+  --feedback "I loosened the test; keep it that way." --draft fix-invoice-rounding
+```
+
+## `task approve` and `task reject`
+
+Review a finished task. `--note` is kept with the review. `task unreview` clears it.
+
+```bash
+self-bench task approve 6f1c2e9a/fix-invoice-rounding --repo acme/app --note "Clear and fair."
+```

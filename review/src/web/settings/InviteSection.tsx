@@ -18,8 +18,8 @@ export function InviteSection({
   const { busy, run, message } = useAction();
   return (
     <section aria-labelledby="invites-title">
-      <span className="mb-4 flex items-center gap-1.5">
-        <h2 id="invites-title" className="text-sm leading-6 font-semibold">
+      <span className="mb-3 flex items-center gap-1.5">
+        <h2 id="invites-title" className="text-base leading-6 font-medium">
           Invites
         </h2>
         <InfoTooltip label="Invite anyone by GitHub username. They join the next time they sign in." />
@@ -63,7 +63,7 @@ export function InviteSection({
         <ul className="divide-y divide-border border border-border bg-card">
           {invites.map((invite) => (
             <li key={invite.id} className="flex items-center gap-3 px-4 py-3 text-sm">
-              <span className="min-w-0 flex-1 font-mono">{invite.githubLogin}</span>
+              <span className="min-w-0 flex-1">{invite.githubLogin}</span>
               <span className="text-muted-foreground">{roleLabels[invite.role]}</span>
               <Button
                 size="small"

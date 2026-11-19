@@ -3,7 +3,7 @@ import { formatAgo } from "../api";
 import { ScopeCard } from "../ScopeCard";
 import type { GroupView } from "./api";
 
-/** A repository group as a card on the Mined Repos page, opening its own pages. */
+/** A repository group as a card on the Repo Benchmarks page, opening its own pages. */
 export function GroupCard({ group, onRemove }: { group: GroupView; onRemove(): void }) {
   return (
     <ScopeCard

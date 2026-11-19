@@ -18,7 +18,7 @@ export function DropdownMenuContent({
         sideOffset={6}
         collisionPadding={12}
         className={cn(
-          "panel z-50 min-w-56 max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto bg-background p-1 text-sm text-foreground outline-none",
+          "z-50 min-w-56 max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto rounded-lg border border-border bg-popover p-1 text-sm text-popover-foreground shadow-lg shadow-black/40 outline-none",
           className,
         )}
         {...props}
@@ -27,12 +27,7 @@ export function DropdownMenuContent({
   );
 }
 export function DropdownMenuLabel({ className, ...props }: ComponentProps<typeof Primitive.Label>) {
-  return (
-    <Primitive.Label
-      className={cn("px-2 py-2 text-xs text-muted-foreground", className)}
-      {...props}
-    />
-  );
+  return <Primitive.Label className={cn("px-2 py-1.5 text-xs text-faint", className)} {...props} />;
 }
 export function DropdownMenuSeparator(props: ComponentProps<typeof Primitive.Separator>) {
   return <Primitive.Separator className="my-1 h-px bg-border" {...props} />;
@@ -41,7 +36,7 @@ export function DropdownMenuItem({ className, ...props }: ComponentProps<typeof 
   return (
     <Primitive.Item
       className={cn(
-        "flex cursor-default items-center gap-2 px-2 py-2 outline-none data-[highlighted]:bg-foreground/[0.06] data-[disabled]:pointer-events-none data-[disabled]:opacity-40 [&>svg]:size-4",
+        "flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 outline-none transition-colors data-[highlighted]:bg-foreground/10 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&>svg]:size-4 [&>svg]:text-faint",
         className,
       )}
       {...props}
@@ -56,14 +51,14 @@ export function DropdownMenuRadioItem({
   return (
     <Primitive.RadioItem
       className={cn(
-        "relative flex cursor-default items-center gap-2 px-2 py-2 pr-8 outline-none data-[highlighted]:bg-foreground/[0.06]",
+        "relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 pr-8 outline-none transition-colors data-[highlighted]:bg-foreground/10",
         className,
       )}
       {...props}
     >
       {children}
       <Primitive.ItemIndicator className="absolute right-2">
-        <Check className="size-3.5 text-foreground" />
+        <Check className="size-3.5 text-brand" />
       </Primitive.ItemIndicator>
     </Primitive.RadioItem>
   );
@@ -76,14 +71,14 @@ export function DropdownMenuCheckboxItem({
   return (
     <Primitive.CheckboxItem
       className={cn(
-        "relative flex cursor-default items-center gap-2 px-2 py-2 pr-8 outline-none data-[highlighted]:bg-foreground/[0.06]",
+        "relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 pr-8 outline-none transition-colors data-[highlighted]:bg-foreground/10",
         className,
       )}
       {...props}
     >
       {children}
       <Primitive.ItemIndicator className="absolute right-2">
-        <Check className="size-3.5 text-foreground" />
+        <Check className="size-3.5 text-brand" />
       </Primitive.ItemIndicator>
     </Primitive.CheckboxItem>
   );

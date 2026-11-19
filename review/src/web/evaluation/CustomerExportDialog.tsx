@@ -66,7 +66,7 @@ function CustomerExportDialog({ url, onClose }: { url: string; onClose(): void }
       size="medium"
     >
       <DialogBody>
-        <h2 className="mb-3 text-lg font-semibold">Export for Customer</h2>
+        <h2 className="mb-3 text-lg font-medium">Export for Customer</h2>
         <p className="text-sm text-muted-foreground">
           Shares the newest evaluation’s tasks as a Harbor ZIP.
         </p>
@@ -105,7 +105,7 @@ function CustomerExportDialog({ url, onClose }: { url: string; onClose(): void }
         </form>
         {exports.length > 0 && (
           <section className="mt-6 border-t border-border pt-4">
-            <h3 className="font-semibold">Customer Exports</h3>
+            <h3 className="font-medium">Customer Exports</h3>
             <ul className="mt-3 grid gap-4">
               {exports.map((entry) => (
                 <li key={entry.id} className="grid gap-1 text-sm">

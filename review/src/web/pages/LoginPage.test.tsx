@@ -12,6 +12,11 @@ test("GitHub sign-in shows progress, blocks repeat clicks, and resets on return"
     document: browser.document,
     HTMLElement: browser.HTMLElement,
     IS_REACT_ACT_ENVIRONMENT: true,
+    // GitHub's API, for the repository's star count.
+    fetch: async (url: string) =>
+      url === "https://api.github.com/repos/mupt-ai/self-bench"
+        ? Response.json({ stargazers_count: 1234 })
+        : new Response(null, { status: 404 }),
   };
   const previous = Object.keys(globals).map(
     (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const,
@@ -34,9 +39,11 @@ test("GitHub sign-in shows progress, blocks repeat clicks, and resets on return"
       throw new Error("Missing GitHub sign-in link");
     expect(container.querySelector("h1")?.textContent).toBe("Sign In");
     const lockup = container.querySelector('a[href="https://selfbench.dev"]');
-    expect(lockup?.getAttribute("aria-label")).toBe("self-bench by dari.dev Home");
-    expect(lockup?.textContent).toContain("self-bench");
-    expect(lockup?.textContent).toContain("by dari.dev");
+    expect(lockup?.getAttribute("aria-label")).toBe("selfbench.dev Home");
+    expect(lockup?.textContent).toBe("selfbench.dev");
+    const repo = container.querySelector('a[href="https://github.com/mupt-ai/self-bench"]');
+    expect(repo?.getAttribute("aria-label")).toBe("GitHub, 1,234 stars");
+    expect(repo?.textContent).toBe("1.2k");
     expect(link.textContent).toBe("Continue with GitHub");
     expect(link.getAttribute("aria-busy")).toBe("false");
     expect(container.querySelector('[role="alert"]')?.textContent).toBe(

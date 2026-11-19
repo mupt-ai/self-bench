@@ -1,11 +1,12 @@
-import { useNavigate, useParams } from "react-router";
+import { useNavigate } from "react-router";
 import { AddPrSheet } from "../AddPrSheet";
+import { repoPagePath, useRepoParams } from "../paths";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { RepoPage } from "./RepoPage";
 
 export function AddPrPage() {
-  const { owner, name } = useParams();
+  const { owner, name } = useRepoParams();
   const { org } = useOrg();
   const navigate = useNavigate();
   const fullName = `${owner}/${name}`;
@@ -17,8 +18,8 @@ export function AddPrPage() {
         key={`${org.login}/${fullName}`}
         org={org}
         fullName={fullName}
-        onClose={() => void navigate(`/repos/${fullName}`)}
-        onComplete={() => void navigate(`/repos/${fullName}?state=in_progress`)}
+        onClose={() => void navigate(repoPagePath(fullName))}
+        onComplete={() => void navigate(`${repoPagePath(fullName)}?state=in_progress`)}
       />
     </>
   );

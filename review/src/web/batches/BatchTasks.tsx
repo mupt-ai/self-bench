@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router";
 import { type BatchStatus, batchIsTerminal } from "../batch-api";
 import { GhostTasks } from "../ghosts";
+import { repoPagePath } from "../paths";
 import { cn } from "../primitives/cn";
 import { queueState, taskPath } from "../task/review-queue";
 import { DifficultyStamp } from "../task/state";
@@ -52,7 +53,7 @@ export function BatchTasks({ status, fullName }: { status: BatchStatus; fullName
     <section className="mt-6">
       <SectionHeader title="Tasks">
         <Link
-          to={`/repos/${fullName}`}
+          to={repoPagePath(fullName)}
           className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
         >
           View Dataset <ArrowRight className="size-3.5" aria-hidden="true" />
@@ -70,7 +71,7 @@ export function BatchTasks({ status, fullName }: { status: BatchStatus; fullName
                 onClick={() => setFilter(key)}
                 className={
                   filter === key
-                    ? "border-foreground bg-foreground text-background hover:border-foreground hover:bg-foreground/85"
+                    ? "border-foreground/40 bg-foreground/15 text-foreground hover:bg-foreground/15"
                     : undefined
                 }
               >
@@ -83,7 +84,7 @@ export function BatchTasks({ status, fullName }: { status: BatchStatus; fullName
       {tasks.length ? (
         <>
           <div
-            className="mb-2 hidden grid-cols-[minmax(0,1fr)_5rem_10rem_10rem] gap-3 px-4 text-xs font-semibold text-muted-foreground lg:grid"
+            className="mb-2 hidden grid-cols-[minmax(0,1fr)_5rem_10rem_10rem] gap-3 px-4 text-xs font-medium text-muted-foreground lg:grid"
             aria-hidden="true"
           >
             <span>Task</span>
@@ -100,7 +101,7 @@ export function BatchTasks({ status, fullName }: { status: BatchStatus; fullName
                   <Link
                     to={taskPath(fullName, { runId: status.runId, taskId: task.taskId })}
                     state={linkState}
-                    className="grid items-center gap-3 px-4 py-3.5 hover:bg-muted/60 lg:grid-cols-[minmax(0,1fr)_5rem_10rem_10rem]"
+                    className="grid items-center gap-3 px-4 py-3.5 hover:bg-accent lg:grid-cols-[minmax(0,1fr)_5rem_10rem_10rem]"
                   >
                     <span className="min-w-0">
                       <span className="block break-words font-mono text-sm font-medium">
@@ -127,7 +128,7 @@ export function BatchTasks({ status, fullName }: { status: BatchStatus; fullName
                         className={cn(
                           "text-xs",
                           activity === "running"
-                            ? "text-brand-foreground"
+                            ? "text-warning"
                             : activity === "accepted"
                               ? "text-success"
                               : activity === "infrastructure_failed"

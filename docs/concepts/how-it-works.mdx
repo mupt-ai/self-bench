@@ -1,6 +1,6 @@
 ---
 title: "How It Works"
-description: "How merged pull requests and described vibe evals become verified tasks, and how results are counted."
+description: "How merged pull requests and described custom tasks become verified tasks, and how results are counted."
 icon: "gears"
 ---
 
@@ -34,14 +34,14 @@ Hidden tests must share no files with the reference patch, and they may not impo
 
 The agent gets the base snapshot, the instruction, and its environment. It never sees the held-out tests or the reference solution. Its network reaches only its model's host. The verifier applies its patch to a clean copy, then restores the held-out test files, so tampering can only produce a tree it could have written directly.
 
-## Vibe Evals
+## Custom Tasks
 
-A vibe eval starts from a description instead of a PR.
+A custom task starts from a description instead of a PR.
 
-- A **repository vibe eval** starts from the repository at a commit you choose (a SHA, a branch, or `HEAD`). It is pinned to that commit and can be released with its repository.
-- A **workspace vibe eval** lives in an **eval**, a collection of your own tasks with no repository behind it. The author writes the starting files, and the tests read only what the agent leaves in `/app`. Evals are never released.
+- A **repository custom task** starts from the repository at a commit you choose (a SHA, a branch, or `HEAD`). It is pinned to that commit and can be released with its repository.
+- A **workspace custom task** lives in a **custom benchmark**, a collection of your own tasks with no repository behind it. The author writes the starting files, and the tests read only what the agent leaves in `/app`. Custom benchmarks are never released.
 
-Name the mistake the agent made and what a careful person would do. Attach real files where you can. One vibe eval is one data point, so write several.
+Name the mistake the agent made and what a careful person would do. Attach real files where you can. One custom task is one data point, so write several.
 
 ## Harnesses and Repo Ablations
 

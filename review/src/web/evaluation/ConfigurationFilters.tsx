@@ -60,19 +60,25 @@ function FacetMenu({
           type="button"
           aria-label={picked.length ? `${facet.label}: ${picked.join(", ")}` : facet.all}
           className={cn(
-            "group flex h-8 items-center gap-2 border bg-card px-3 text-xs font-semibold whitespace-nowrap hover:border-foreground/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/15",
-            first ? "border-foreground/50 text-foreground" : "border-border text-muted-foreground",
+            "group flex h-8 items-center gap-2 rounded-md border bg-transparent px-3 text-xs font-medium whitespace-nowrap transition-colors hover:border-foreground/40 hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+            first
+              ? "border-foreground/40 bg-foreground/5 text-foreground"
+              : "border-input text-muted-foreground",
           )}
         >
           {first ? (
             <>
               <span className="font-medium text-muted-foreground">{facet.label}</span>
               {color(first) && (
-                <span className="size-2" style={{ background: color(first) }} aria-hidden="true" />
+                <span
+                  className="size-2 rounded-full"
+                  style={{ background: color(first) }}
+                  aria-hidden="true"
+                />
               )}
               {first}
               {picked.length > 1 && (
-                <span className="font-mono font-medium text-muted-foreground">
+                <span className="font-medium tabular-nums text-muted-foreground">
                   +{picked.length - 1}
                 </span>
               )}
@@ -95,7 +101,7 @@ function FacetMenu({
         >
           <span className="size-2 shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1 truncate font-medium">{facet.all}</span>
-          <span className="font-mono text-muted-foreground tabular-nums">{candidates.length}</span>
+          <span className="text-muted-foreground tabular-nums">{candidates.length}</span>
         </DropdownMenuCheckboxItem>
         <DropdownMenuSeparator />
         {values.map((entry) => (
@@ -116,7 +122,7 @@ function FacetMenu({
               aria-hidden="true"
             />
             <span className="min-w-0 flex-1 truncate font-medium">{entry}</span>
-            <span className="font-mono text-muted-foreground tabular-nums">{count(entry)}</span>
+            <span className="text-muted-foreground tabular-nums">{count(entry)}</span>
           </DropdownMenuCheckboxItem>
         ))}
       </DropdownMenuContent>
@@ -165,7 +171,7 @@ export function ConfigurationToolbar({
         {any && (
           <button
             type="button"
-            className="h-8 px-2 text-xs font-semibold text-muted-foreground hover:text-foreground"
+            className="h-8 px-2 text-xs font-medium text-muted-foreground hover:text-foreground"
             onClick={() => {
               for (const facet of facets) onClearFacet(facet.key);
             }}
@@ -189,7 +195,7 @@ export function LayoutToggle({
   onChange(layout: "table" | "grid"): void;
 }) {
   return (
-    <fieldset className="flex h-8 border border-border bg-card text-xs font-semibold [&>button+button]:border-l [&>button+button]:border-border">
+    <fieldset className="flex h-8 border border-border bg-card text-xs font-medium [&>button+button]:border-l [&>button+button]:border-border">
       <legend className="sr-only">Layout</legend>
       {(["table", "grid"] as const).map((option) => (
         <button
@@ -197,7 +203,7 @@ export function LayoutToggle({
           type="button"
           aria-pressed={layout === option}
           className={cn(
-            "px-3 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/15",
+            "px-3 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
             layout === option && "bg-foreground/[0.06] text-foreground",
           )}
           onClick={() => onChange(option)}
@@ -229,7 +235,7 @@ export function ColumnHeading({
       <button
         type="button"
         className={cn(
-          "inline-flex items-center gap-1 font-semibold hover:text-foreground",
+          "inline-flex items-center gap-1 font-medium hover:text-foreground",
           active && "text-foreground",
         )}
         onClick={() => onSort(column)}

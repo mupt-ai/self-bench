@@ -5,6 +5,8 @@ description: "Scores, failure explanations, fairness audits, and model summaries
 icon: "chart-line"
 ---
 
+CLI: [Inspect Results](/cli/inspect).
+
 | Method | Route | Does |
 | --- | --- | --- |
 | `GET` | `{scope}/evaluations/results` | Scores, and each task's results |
@@ -12,7 +14,7 @@ icon: "chart-line"
 | `GET`, `POST` | `{scope}/evaluations/audit` | Audit a task's fairness |
 | `GET`, `POST` | `{scope}/evaluations/summaries` | Model summaries |
 
-Use `GET {scope}/evaluations/results` for scores rather than adding up trials. Results count each configuration's latest scored result on each counted task: a repository's accepted tasks, or a benchmark's tasks. Errors, cancellations, and trials still running don't count.
+Use `GET {scope}/evaluations/results` for scores rather than adding up trials. Results count each configuration's latest scored result on each counted task: a repo or custom benchmark's accepted tasks, or a public benchmark's tasks. Errors, cancellations, and trials still running don't count.
 
 ## Request Bodies
 

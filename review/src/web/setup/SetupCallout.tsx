@@ -30,13 +30,13 @@ export function SetupCallout({
     <section
       aria-label="Setup Needed"
       className={cn(
-        "flex flex-wrap items-center justify-between gap-4 border border-border bg-muted/60 p-4",
+        "flex flex-wrap items-center justify-between gap-4 rounded-md border border-border bg-muted p-4",
         className,
       )}
     >
       <div className="min-w-0 flex-1 basis-64">
-        <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          <span aria-hidden="true" className="size-2 shrink-0 bg-brand" />
+        <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+          <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-warning" />
           Connect {missing} to {action}.
         </p>
         <p className="mt-1 text-sm text-muted-foreground">{hint}</p>

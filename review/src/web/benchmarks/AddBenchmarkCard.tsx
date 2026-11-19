@@ -108,14 +108,14 @@ export function AddBenchmarkCard({
   };
   return (
     <form
-      className="relative flex h-full min-h-40 flex-col gap-3 border-[1.5px] border-dashed border-foreground/35 p-4"
+      className="relative flex h-full min-h-40 flex-col gap-3 border border-dashed border-foreground/25 bg-card p-4"
       onSubmit={(event) => {
         event.preventDefault();
         void add();
       }}
     >
       <div className="relative">
-        <label className="grid gap-2 text-sm font-semibold" htmlFor="benchmark-reference">
+        <label className="grid gap-2 text-[13px] font-medium" htmlFor="benchmark-reference">
           <span className="flex items-center gap-1.5">
             Harbor Registry Dataset
             <InfoTooltip label="Search Harbor's registry by name or description, or enter org/name@ref. Without @ref, each run uses the latest version." />
@@ -183,18 +183,20 @@ export function AddBenchmarkCard({
             id={listId}
             role="listbox"
             aria-label="Harbor Registry Datasets"
-            className="panel absolute inset-x-0 top-full z-30 mt-1 max-h-72 overflow-y-auto bg-background p-1"
+            className="absolute inset-x-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg shadow-black/40"
           >
             {registry.status === "loading" && (
-              <p className="px-3 py-2 text-sm text-muted-foreground">Loading Harbor's registry…</p>
+              <p className="px-2 py-1.5 text-[13px] text-muted-foreground">
+                Loading Harbor's registry…
+              </p>
             )}
             {registry.status === "failed" && (
-              <p className="px-3 py-2 text-sm text-muted-foreground">
+              <p className="px-2 py-1.5 text-[13px] text-muted-foreground">
                 Harbor's registry could not be listed. Enter org/name to add a dataset.
               </p>
             )}
             {registry.status === "ok" && shown.length === 0 && (
-              <p className="px-3 py-2 text-sm text-muted-foreground">
+              <p className="px-2 py-1.5 text-[13px] text-muted-foreground">
                 No datasets match. Enter org/name@ref to add one by name.
               </p>
             )}
@@ -211,9 +213,9 @@ export function AddBenchmarkCard({
                   aria-selected={index === active}
                   aria-disabled={block ? true : undefined}
                   className={cn(
-                    "grid w-full cursor-default gap-0.5 px-3 py-2 text-left",
-                    index === active && "bg-foreground/[0.06]",
-                    block && "opacity-55",
+                    "grid w-full cursor-default gap-0.5 rounded-sm px-2 py-1.5 text-left transition-colors",
+                    index === active && "bg-foreground/10",
+                    block && "opacity-50",
                   )}
                   onPointerEnter={() => setActive(index)}
                   // Keep focus in the box, so the list stays open and typing carries on.
@@ -221,7 +223,7 @@ export function AddBenchmarkCard({
                   onClick={() => choose(dataset)}
                 >
                   {/* The whole name, wrapped: its end is often what tells two datasets apart. */}
-                  <span className="font-mono text-sm wrap-anywhere">{dataset.name}</span>
+                  <span className="font-mono text-[13px] wrap-anywhere">{dataset.name}</span>
                   <span className="line-clamp-2 text-xs font-normal text-muted-foreground">
                     {[
                       block ??

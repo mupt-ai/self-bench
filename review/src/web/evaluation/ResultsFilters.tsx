@@ -43,14 +43,14 @@ function StateFilter<Key extends string>({
             aria-pressed={on && count > 0}
             disabled={!count}
             className={cn(
-              "inline-flex items-center gap-1.5 border px-2 py-0.5 hover:bg-foreground/[0.06] disabled:opacity-40 disabled:hover:bg-transparent",
+              "inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 transition-colors hover:border-foreground/40 hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-40 disabled:hover:bg-transparent",
               // A state with none is faded and never looks chosen, whatever its setting.
-              on && count ? "border-foreground/60 bg-foreground/[0.08]" : "border-border",
+              on && count ? "border-foreground/40 bg-foreground/15" : "border-input",
             )}
             onClick={() => onToggle(key)}
           >
             {circle}
-            <span className="font-mono text-xs text-muted-foreground tabular-nums">{count}</span>
+            <span className="text-xs text-muted-foreground tabular-nums">{count}</span>
           </button>
         );
       })}

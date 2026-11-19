@@ -167,7 +167,8 @@ export function trustedMutation(
  */
 export function isSitePage(pathname: string): boolean {
   if (/^\/(v1|v2|api|auth|assets)(\/|$)/.test(pathname)) return false;
-  if (/^\/(repos|benchmarks)\/[^/]+\/[^/]+(?:\/|$)/.test(pathname)) return true;
+  if (/^\/(repos|benchmarks|public)\/[^/]+\/[^/]+(?:\/|$)/.test(pathname)) return true;
+  if (/^\/custom\/[^/]+(?:\/|$)/.test(pathname)) return true;
   const last = pathname.split("/").pop() ?? "";
   return !last.includes(".");
 }

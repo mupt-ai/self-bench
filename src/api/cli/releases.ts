@@ -1,5 +1,5 @@
 import { requestJson } from "./api-client.js";
-import { flag, list, org, parse, positional, scopePath, type Values } from "./args.js";
+import { list, parse, positional, scopePath, type Values } from "./args.js";
 import { print, table } from "./output.js";
 
 interface PreviewSetting {
@@ -37,11 +37,12 @@ const releaseTable = (releases: Release[]) =>
   ]);
 
 /**
- * `releases`; `release preview|publish|withdraw`: a public repository's (or group's) results on
- * selfbench.dev. Publishing releases the preview it just read, so it never publishes unseen results.
+ * `release list|preview|publish|withdraw`: a public repository's, group's, or Public Benchmark's
+ * results on selfbench.dev. Publishing releases the preview it just read, so it never publishes
+ * unseen results.
  */
-export async function releaseCommand(args: string[], listing: boolean): Promise<void> {
-  const [action, ...rest] = listing ? ["list", ...args] : args;
+export async function releaseCommand(args: string[]): Promise<void> {
+  const [action, ...rest] = args;
   const { values, positionals } = parse(rest, {
     setting: { type: "string", multiple: true },
     "all-settings": { type: "boolean", default: false },
@@ -61,7 +62,10 @@ export async function releaseCommand(args: string[], listing: boolean): Promise<
   }
   const view = (await requestJson(`${base}/preview`)) as unknown as ReleaseView;
   if (action === "preview") return print(values, view, () => previewView(view));
-  if (action !== "publish") throw new Error("usage: self-bench release preview|publish|withdraw");
+  if (action !== "publish")
+    throw new Error(
+      "usage: self-bench release list|preview|publish --repo R | release withdraw ID",
+    );
   const reply = await requestJson(base, "POST", {
     settings: chosenSettings(values, view.preview.settings),
     head: view.head?.id ?? null,
@@ -84,7 +88,8 @@ function chosenSettings(values: Values, settings: PreviewSetting[]): string[] {
     : settings
         .filter((setting) => values["all-settings"] === true || setting.ticked)
         .map((setting) => setting.key);
-  if (chosen.length === 0) throw new Error("no settings to release; run `release preview`");
+  if (chosen.length === 0)
+    throw new Error("no settings to release; run `self-bench release preview`");
   return chosen;
 }
 
@@ -97,35 +102,4 @@ function previewView(view: ReleaseView): string {
     ["KEY", (setting) => setting.key],
   ]);
   return `${preview.tasks.length} approved tasks, ${preview.unrun} unrun\n\n${settings}`;
-}
-
-/** `benchmarks`; `benchmark add|show|tasks|remove NAME`: Harbor registry datasets to evaluate. */
-export async function benchmarkCommand(args: string[], listing: boolean): Promise<void> {
-  const [action, ...rest] = listing ? ["list", ...args] : args;
-  const { values, positionals } = parse(rest);
-  const base = `/api/orgs/${encodeURIComponent(org(values))}/benchmarks`;
-  if (action === "list") {
-    const reply = await requestJson(base);
-    const benchmarks = reply.benchmarks as {
-      name: string;
-      ref: string;
-      tasks: number;
-      status: string;
-    }[];
-    return print(values, reply, () =>
-      table(benchmarks, [
-        ["BENCHMARK", (benchmark) => benchmark.name],
-        ["REF", (benchmark) => benchmark.ref],
-        ["TASKS", (benchmark) => benchmark.tasks],
-        ["STATUS", (benchmark) => benchmark.status],
-      ]),
-    );
-  }
-  const name = flag(values, "benchmark") ?? positional(positionals, 0, "NAME");
-  if (action === "add") return print(values, await requestJson(base, "POST", { reference: name }));
-  const path = `${base}/${name.split("/").map(encodeURIComponent).join("/")}`;
-  if (action === "show") return print(values, await requestJson(path));
-  if (action === "tasks") return print(values, await requestJson(`${path}/tasks`));
-  if (action === "remove") return print(values, await requestJson(path, "DELETE"));
-  throw new Error("usage: self-bench benchmark add|show|tasks|remove NAME");
 }

@@ -205,7 +205,7 @@ export function ModelPicker<Model extends PickableModel>({
             {shown.map((model, index) => (
               <React.Fragment key={model.id}>
                 {model.group && model.group !== shown[index - 1]?.group && (
-                  <p className="px-3 pb-1 pt-2 text-xs font-semibold text-muted-foreground">
+                  <p className="px-3 pb-1 pt-2 text-xs font-medium text-muted-foreground">
                     {model.group}
                   </p>
                 )}

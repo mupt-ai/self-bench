@@ -49,12 +49,12 @@ function changes(harness: Saved): string {
 }
 
 /**
- * `harnesses`; `harness create|show|update|delete [ID]`: the workspace's saved harnesses
- * (routes/saved-harnesses.ts), which `compare --saved-harness ID` runs. `conditions` and
+ * `harness list|create|show|update|delete [ID]`: the workspace's saved harnesses
+ * (routes/saved-harnesses.ts), which `comparison create --saved-harness ID` runs. `conditions` and
  * `condition`, their older names, run the same commands.
  */
-export async function savedHarnessCommand(args: string[], listing: boolean): Promise<void> {
-  const [action, ...rest] = listing ? ["list", ...args] : args;
+export async function savedHarnessCommand(args: string[]): Promise<void> {
+  const [action, ...rest] = args;
   const { values, positionals } = parse(rest, FLAGS);
   const base = `/api/orgs/${encodeURIComponent(org(values))}/harnesses`;
   const one = () => `${base}/${encodeURIComponent(positional(positionals, 0, "ID"))}`;
@@ -88,7 +88,7 @@ export async function savedHarnessCommand(args: string[], listing: boolean): Pro
     case "delete":
       return print(values, await requestJson(one(), "DELETE"));
     default:
-      throw new Error("usage: self-bench harnesses | harness create|show|update|delete [ID]");
+      throw new Error("usage: self-bench harness list|create | harness show|update|delete ID");
   }
 }
 

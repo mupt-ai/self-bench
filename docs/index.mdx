@@ -1,17 +1,30 @@
 ---
 title: "SelfBench"
-description: "Private coding-agent benchmarks built from your repository's merged pull requests."
+description: "Coding-agent benchmarks built from your repositories, your own task descriptions, or public datasets."
 icon: "house"
 ---
 
-SelfBench turns merged pull requests into verified tasks, runs coding agents on them, and compares accuracy with cost. Use the app, the [CLI](/cli/overview), or the [API](/api/overview) for the same loop.
+SelfBench turns your work into verified coding tasks, runs coding agents on them, and compares accuracy with cost. Use the app, the [CLI](/cli/overview), or the [API](/api/overview) for the same loop.
+
+| Benchmark | Its Tasks | CLI Flag |
+| --- | --- | --- |
+| Repo Benchmark | Mined from a connected repository's merged PRs, plus custom tasks pinned to a commit | `--repo OWNER/NAME` |
+| Custom Benchmark | Custom tasks you describe, with no repository behind them | `--custom NAME` |
+| Public Benchmark | A Harbor registry dataset, such as Terminal-Bench | `--public ORG/NAME` |
 
 | Stage | Does | CLI | API |
 | --- | --- | --- | --- |
-| Build | Generate tasks from merged PRs or a described vibe eval | `generate`, `scenario create` | `…/batches`, `…/tasks/from-scenario` |
-| Review | Approve, reject, or revise each task | `task approve`, `task revise` | `…/tasks/{runId}/{taskId}/review`, `…/feedback` |
-| Evaluate | Run models and harnesses on approved tasks | `compare` | `…/evaluations/comparisons` |
+| Build | Generate tasks from merged PRs, or write a custom task from a description | `batch create`, `task create` | `…/batches`, `…/tasks/from-pr`, `…/tasks/from-scenario` |
+| Review | Give feedback, then approve or reject each task | `feedback`, `task approve` | `…/tasks/{runId}/{taskId}/feedback`, `…/steering`, `…/review` |
+| Evaluate | Run models and harnesses on approved tasks | `comparison create` | `…/evaluations/comparisons` |
 | Inspect | Scores, failure explanations, fairness audits | `results`, `task explain`, `task audit` | `…/evaluations/results`, `…/explain`, `…/audit` |
 | Publish | Release aggregate results on selfbench.dev | `release publish` | `…/releases` |
+
+To fix a task, copy its page address from the app and tell it what is wrong. [`feedback`](/cli/review#feedback) steers the task while it is being written, or revises it once it is done:
+
+```bash
+self-bench feedback https://app.selfbench.dev/repos/acme/app/tasks/6f1c2e9a/fix-invoice-rounding \
+  "The hidden test pins the error message; check the status code instead."
+```
 
 Start with the [Quickstart](/quickstart), or read [How It Works](/concepts/how-it-works) for the pipeline.

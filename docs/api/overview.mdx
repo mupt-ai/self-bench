@@ -13,7 +13,7 @@ curl https://app.selfbench.dev/api/me -H "Authorization: Bearer $SELFBENCH_API_K
 
 ## Conventions
 
-- **Scope.** Evaluation routes sit under `{scope}`: a repository or eval `/api/orgs/{org}/repos/{owner}/{name}` (an eval's owner is `evals`), a benchmark `/api/orgs/{org}/benchmarks/{dataset-org}/{dataset}`, or a group `/api/orgs/{org}/groups/{slug}`. `{repo}` is the repository form only.
+- **Scope.** Evaluation routes sit under `{scope}`: a repo benchmark `/api/orgs/{org}/repos/{owner}/{name}`, a custom benchmark `/api/orgs/{org}/repos/evals/{name}`, a public benchmark `/api/orgs/{org}/benchmarks/{dataset-org}/{dataset}`, or a group `/api/orgs/{org}/groups/{slug}`. `{repo}` is either of the first two.
 - **Tasks** are named by batch and task ID, `{runId}/{taskId}`.
 - **Configurations** are named by a setting `key`, shared by results, summaries, and releases.
 - **Generation.** Routes that author or build tasks take `generation`: the models, sandbox, and credentials to use. Leave it out to use the managed models and sandbox, where the deployment offers them.
@@ -32,7 +32,7 @@ curl https://app.selfbench.dev/api/me -H "Authorization: Bearer $SELFBENCH_API_K
 | [Harnesses](/api/harnesses) | `/api/orgs/{org}/harnesses` |
 | [Evaluate](/api/evaluate) | `{scope}/evaluations/catalog`, `…/comparisons`, `{scope}/evaluations` |
 | [Inspect Results](/api/inspect) | `{scope}/evaluations/results`, `…/explain`, `…/audit`, `…/summaries` |
-| [Publish and Export](/api/publish) | `{repo}/releases`, `{scope}/evaluations/exports` |
-| [Benchmarks and Groups](/api/benchmarks-and-groups) | `/api/orgs/{org}/benchmarks`, `/api/orgs/{org}/groups` |
+| [Publish and Export](/api/publish) | `{scope}/releases`, `{scope}/evaluations/exports` |
+| [Public Benchmarks and Groups](/api/benchmarks-and-groups) | `/api/orgs/{org}/benchmarks`, `/api/orgs/{org}/groups` |
 
 Read released results without a key through the [Public API](/api/public).

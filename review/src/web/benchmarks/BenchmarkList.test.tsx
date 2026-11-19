@@ -24,7 +24,7 @@ test("each benchmark is a box like a repository's, with one more box to add a da
       />
     </MemoryRouter>,
   );
-  expect(html).toContain('href="/benchmarks/terminal-bench/terminal-bench-2"');
+  expect(html).toContain('href="/public/terminal-bench/terminal-bench-2"');
   expect(html).toContain('aria-label="Open terminal-bench/terminal-bench-2"');
   expect(html).toContain(">89</span></dd>");
   expect(html).toContain(">3</span></dd>");

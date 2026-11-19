@@ -3,7 +3,8 @@ import React from "react";
 import { CHATGPT_SIGN_IN_MAX_SANDBOXES } from "../../../../src/contracts/config/execution-limits";
 import type { CredentialDraft, CredentialInfo } from "../../../../src/db/credentials";
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
-import { Button, fieldStyles, Input, Select } from "../ui";
+import { cn } from "../primitives/cn";
+import { Button, fieldStyles, Input, Select, segmentedGroupStyles, segmentStyles } from "../ui";
 import { ClaudeSignIn } from "./ClaudeSignIn";
 import { CredentialSecret } from "./CredentialSecret";
 import { CredentialLimitFields, CustomEndpointFields } from "./CredentialSettings";
@@ -96,7 +97,7 @@ export function CredentialEditor({
       >
         <DialogBody>
           {previous && (
-            <p className="border-l-2 border-input pl-3 text-xs leading-5 text-muted-foreground">
+            <p className="rounded-md border border-brand/40 bg-brand/10 p-3 text-sm">
               Creates a new credential. Existing runs keep the original.
             </p>
           )}
@@ -128,13 +129,13 @@ export function CredentialEditor({
             {signIn && (
               <fieldset>
                 <legend className="sr-only">Authentication</legend>
-                <div className="grid grid-cols-2 gap-1 border border-input bg-muted p-1">
+                <div className={cn(segmentedGroupStyles, "grid w-full grid-cols-2")}>
                   {[{ id: "api-key", label: "API Key" }, signIn].map((option) => (
                     <button
                       key={option.id}
                       type="button"
                       aria-pressed={draft.auth === option.id}
-                      className={`px-2 py-1.5 text-sm font-medium transition-colors ${draft.auth === option.id ? "bg-background text-foreground shadow-[0_1px_2px_rgb(0_0_0/0.08)]" : "text-muted-foreground hover:text-foreground"}`}
+                      className={segmentStyles(draft.auth === option.id)}
                       onClick={() => {
                         setDraft({
                           ...draft,

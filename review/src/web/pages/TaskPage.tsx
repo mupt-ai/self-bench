@@ -1,14 +1,15 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import React from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { isEvalName } from "../../../../src/contracts/evals";
 import { fetchTask, type TaskItem } from "../api";
+import { GitHubMark } from "../GitHubMark";
 import { pageGutter } from "../layout";
+import { repoPagePath, useRepoParams } from "../paths";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { FeedbackSheet } from "../task/FeedbackSheet";
 import { LiveTaskState } from "../task/LiveTaskState";
-import { ReviewBar } from "../task/ReviewBar";
 import {
   isTyping,
   queuePosition,
@@ -18,6 +19,7 @@ import {
   taskPath,
 } from "../task/review-queue";
 import { prefetchTaskFiles, rowFor, siteTaskSource } from "../task/site-source";
+import { TaskActions } from "../task/TaskActions";
 import { TaskCost, TaskGenerationControls } from "../task/TaskGenerationControls";
 import { TaskSkeleton } from "../task/TaskSkeleton";
 import { TaskView } from "../task/TaskView";
@@ -25,16 +27,25 @@ import { taskTitle } from "../task/task-title";
 import { taskTechnicalDetails } from "../task/technical-details";
 import { Breadcrumbs, Button, Notice, PageFrame } from "../ui";
 
+/** Whether a link goes to GitHub, so it can carry GitHub's mark. */
+function isGitHub(url: string): boolean {
+  try {
+    return new URL(url).hostname === "github.com";
+  } catch {
+    return false;
+  }
+}
+
 /** Keyed by the route, so a new task never inherits the previous task's state or controls. */
 export function TaskPage() {
   const { org } = useOrg();
-  const { owner = "", name = "", runId = "", taskId = "" } = useParams();
+  const { owner = "", name = "", runId = "", taskId = "" } = useRepoParams();
   return <TaskPageContent key={JSON.stringify([org.login, owner, name, runId, taskId])} />;
 }
 
 function TaskPageContent() {
   const { org } = useOrg();
-  const { owner = "", name = "", runId = "", taskId = "" } = useParams();
+  const { owner = "", name = "", runId = "", taskId = "" } = useRepoParams();
   const fullName = `${owner}/${name}`;
   const [task, setTask] = React.useState<TaskItem | null | undefined>(undefined);
   const [revisions, setRevisions] = React.useState<TaskItem[]>([]);
@@ -117,7 +128,7 @@ function TaskPageContent() {
     return (
       <PageFrame>
         <Notice>
-          Task not found. <Link to={`/repos/${fullName}`}>Back to {fullName}</Link>
+          Task not found. <Link to={repoPagePath(fullName)}>Back to {fullName}</Link>
         </Notice>
       </PageFrame>
     );
@@ -131,16 +142,16 @@ function TaskPageContent() {
           <Breadcrumbs
             items={[
               isEvalName(fullName)
-                ? { label: "Vibe Evals", to: "/evals" }
-                : { label: "Mined Repos", to: "/" },
+                ? { label: "Custom Benchmarks", to: "/custom" }
+                : { label: "Repo Benchmarks", to: "/repos" },
               {
                 label: fullName,
-                to: queue?.backLabel === "Dataset" ? queue.back : `/repos/${fullName}`,
+                to: queue?.backLabel === "Dataset" ? queue.back : repoPagePath(fullName),
                 mono: true,
               },
               {
                 label: "Batch",
-                to: `/repos/${fullName}/batches/${encodeURIComponent(task.runId)}`,
+                to: `${repoPagePath(fullName)}/batches/${encodeURIComponent(task.runId)}`,
               },
             ]}
           />
@@ -149,12 +160,15 @@ function TaskPageContent() {
           >
             {task.sourceUrl ? (
               <a
-                className="hover:underline hover:underline-offset-4"
+                className="group hover:underline hover:underline-offset-4"
                 href={task.sourceUrl}
                 target="_blank"
                 rel="noreferrer"
               >
                 {title}
+                {isGitHub(task.sourceUrl) && (
+                  <GitHubMark className="ml-2 inline size-4 align-[-0.125em] text-faint group-hover:text-foreground" />
+                )}
               </a>
             ) : (
               title
@@ -174,7 +188,7 @@ function TaskPageContent() {
             <div className="mt-3 text-sm leading-6 text-muted-foreground">
               {task.reasonSummary && <p>{task.reasonSummary}</p>}
               {technicalDetails && (
-                <details className="mt-2 [&_summary]:cursor-pointer [&_pre]:mt-2 [&_pre]:max-h-64 [&_pre]:overflow-auto [&_pre]:font-mono [&_pre]:text-xs [&_pre]:whitespace-pre-wrap [&_pre]:wrap-anywhere">
+                <details className="mt-2 [&_summary]:cursor-pointer [&_pre]:mt-2 [&_pre]:max-h-64 [&_pre]:overflow-auto [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-border [&_pre]:bg-foreground/[0.03] [&_pre]:px-3.5 [&_pre]:py-3 [&_pre]:font-mono [&_pre]:text-xs [&_pre]:leading-5 [&_pre]:text-foreground [&_pre]:whitespace-pre-wrap [&_pre]:wrap-anywhere">
                   <summary>Technical Details</summary>
                   <pre>{technicalDetails}</pre>
                 </details>
@@ -197,19 +211,13 @@ function TaskPageContent() {
             fullName={fullName}
             onRequested={() => void refresh()}
           />
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {task.state !== "in_progress" &&
-              task.state !== "failed" &&
-              task.state !== "cancelled" && (
-                <ReviewBar
-                  org={org.login}
-                  fullName={fullName}
-                  task={task}
-                  onReview={onReview}
-                  onDecided={onDecided}
-                />
-              )}
-          </div>
+          <TaskActions
+            org={org.login}
+            fullName={fullName}
+            task={task}
+            onReview={onReview}
+            onDecided={onDecided}
+          />
         </div>
       </header>
       <TaskView
@@ -267,7 +275,7 @@ function QueueNav({
       >
         <ChevronLeft aria-hidden="true" />
       </Button>
-      <span className="font-mono text-xs tabular-nums text-muted-foreground" role="status">
+      <span className="text-xs tabular-nums text-muted-foreground" role="status">
         {position.index + 1} of {queue.tasks.length}
       </span>
       <Button

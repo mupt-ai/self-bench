@@ -121,7 +121,7 @@ export function RunMissing({
           {work.settings.map((setting) => (
             <li key={setting.label} className="flex items-baseline gap-3 px-4 py-2">
               <span className="min-w-0 flex-1 break-words">{setting.label}</span>
-              <span className="shrink-0 font-mono tabular-nums text-muted-foreground">
+              <span className="shrink-0 tabular-nums text-muted-foreground">
                 {plural(setting.missing, "task")}
               </span>
             </li>
@@ -179,7 +179,7 @@ export function RunMissing({
   );
   if (compact) {
     return (
-      <tr className="bg-muted/30">
+      <tr className="bg-foreground/[0.03]">
         <td colSpan={6} className={`relative ${BATCH_INDENT}`}>
           <Elbow />
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -197,7 +197,7 @@ export function RunMissing({
   return (
     <section className="panel mb-5 flex flex-wrap items-center justify-between gap-3 p-4">
       <div className="min-w-0">
-        <h2 className="text-sm font-semibold">Missing Results</h2>
+        <h2 className="text-sm font-medium">Missing Results</h2>
         <p className="text-sm text-muted-foreground">
           {plural(work.settings.length, "setting")} run here{" "}
           {work.settings.length === 1 ? "is" : "are"} missing {plural(work.trials, "result")}: new

@@ -1,14 +1,31 @@
 ---
 title: "CLI: Publish"
 sidebarTitle: "Publish"
-description: "Release a public repository's results to selfbench.dev."
+description: "Release a public repository's, group's, or public benchmark's results to selfbench.dev."
 icon: "globe"
 ---
 
-Only public repositories, and groups of them, can be released to selfbench.dev. `R` is `--repo OWNER/NAME` or `--group SLUG`.
+Public repo benchmarks, groups of them, and public benchmarks can be released to selfbench.dev; custom benchmarks and private repositories can't. `S` is `--repo OWNER/NAME`, `--group SLUG`, or `--public ORG/NAME`.
 
 | Command | Does |
 | --- | --- |
-| `release preview R` | The settings, tasks, and coverage a release would publish |
-| `release publish R [--setting KEY ... \| --all-settings] [--publish-tasks] [--publish-trials] [--publish-summaries]` | Release the preview it just read |
-| `releases R` · `release withdraw RELEASE_ID R` | List or withdraw releases |
+| `release preview S` | The settings, tasks, and coverage a release would publish |
+| `release publish S [--setting KEY ... \| --all-settings] [--publish-tasks] [--publish-trials] [--publish-summaries]` | Release the preview it just read |
+| `release list S` · `release withdraw ID S` | List releases, or withdraw one |
+
+## `release publish`
+
+Reads the preview and releases exactly it, so it never publishes results you haven't seen. Without `--setting` or `--all-settings`, it releases the settings the app ticks by default.
+
+| Flag | Does |
+| --- | --- |
+| `--setting KEY` (repeatable) | A setting from `release preview` to release |
+| `--all-settings` | Every setting in the preview |
+| `--publish-tasks` | Publish the tasks themselves, which anyone can then read and download |
+| `--publish-trials` | With `--publish-tasks`, each setting's pass or fail on each task, with its grading and redacted transcript |
+| `--publish-summaries` | The Model Summaries report |
+
+```bash
+self-bench release preview --repo acme/app
+self-bench release publish --repo acme/app --all-settings --publish-summaries
+```

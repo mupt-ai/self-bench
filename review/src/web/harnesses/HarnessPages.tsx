@@ -24,19 +24,19 @@ export function PageSteps({
   onPick: (page: Page) => void;
 }) {
   return (
-    <ol
-      aria-label="Harness Steps"
-      className="flex gap-6 border-b border-border pb-4 text-sm font-medium"
-    >
+    <ol aria-label="Harness Steps" className="flex gap-6 border-b border-border text-sm">
       {PAGES.map((label, index) => (
         <li key={label}>
           <button
             type="button"
             disabled={disabled}
             aria-current={page === index + 1 ? "step" : undefined}
-            className={
-              page === index + 1 ? "text-foreground" : "text-muted-foreground hover:text-foreground"
-            }
+            className={cn(
+              "-mb-px rounded-t-sm border-b-2 px-0.5 pb-2.5 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50",
+              page === index + 1
+                ? "border-brand font-medium text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
             onClick={() => onPick((index + 1) as Page)}
           >
             {index + 1}. {label}
@@ -93,7 +93,7 @@ export function SkillFields({
       {skills.length < MAX_SKILLS && (
         <div>
           <Button size="small" disabled={disabled} onClick={() => onChange([...skills, ""])}>
-            <Plus aria-hidden="true" />
+            <Plus className="size-4" aria-hidden="true" />
             Add Skill
           </Button>
         </div>

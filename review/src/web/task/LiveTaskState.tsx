@@ -59,9 +59,7 @@ export function LiveTaskState({
   return (
     <span
       role="status"
-      className={
-        activity === "running" ? "text-sm text-brand-foreground" : "text-sm text-muted-foreground"
-      }
+      className={activity === "running" ? "text-sm text-warning" : "text-sm text-muted-foreground"}
     >
       {label}
     </span>

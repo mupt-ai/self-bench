@@ -49,7 +49,7 @@ export function PrSelectionList({
         {visible.map((pr) => (
           <label
             key={pr.number}
-            className={`relative flex w-full cursor-pointer items-start gap-3 border-b border-border px-3 py-3 text-left text-foreground hover:bg-muted has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-foreground/40 has-[:disabled]:cursor-default has-[:disabled]:opacity-55${selected.has(pr.number) ? " bg-foreground/[0.04]" : ""}`}
+            className={`relative flex w-full cursor-pointer items-start gap-3 border-b border-border px-3 py-3 text-left text-foreground hover:bg-accent has-[:focus-visible]:ring-1 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-ring has-[:disabled]:cursor-default has-[:disabled]:opacity-55${selected.has(pr.number) ? " bg-foreground/[0.04]" : ""}`}
             onPointerDown={(event) => event.stopPropagation()}
           >
             <input
@@ -61,7 +61,7 @@ export function PrSelectionList({
             />
             <span
               aria-hidden="true"
-              className={`flex size-4 shrink-0 items-center justify-center self-center border ${selected.has(pr.number) ? "border-foreground bg-foreground text-background" : "border-foreground/30 bg-card"}`}
+              className={`flex size-4 shrink-0 items-center justify-center self-center rounded-sm border ${selected.has(pr.number) ? "border-foreground bg-foreground text-background" : "border-foreground/30 bg-card"}`}
             >
               {selected.has(pr.number) && (
                 <svg
@@ -84,7 +84,7 @@ export function PrSelectionList({
                 <span className="font-mono">#{pr.number}</span>
                 <span className="min-w-0 break-all">{pr.author}</span>
                 {started.has(pr.number) && (
-                  <span className="font-semibold text-brand-foreground">Started</span>
+                  <span className="font-medium text-warning">Started</span>
                 )}
                 <span className="ml-auto whitespace-nowrap">{formatAgo(pr.mergedAt)}</span>
               </span>

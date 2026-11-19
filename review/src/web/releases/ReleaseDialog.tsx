@@ -132,7 +132,7 @@ export function ReleaseDialog({
     >
       <header className="flex items-start justify-between gap-4 px-4 pt-4 sm:px-6 sm:pt-5">
         <div className="min-w-0">
-          <h2 id="release-title" className="text-base font-semibold tracking-tight">
+          <h2 id="release-title" className="text-base font-medium">
             Release Results
           </h2>
           <p id="release-description" className="mt-0.5 text-sm text-muted-foreground">
@@ -147,7 +147,7 @@ export function ReleaseDialog({
           aria-label="Close"
           disabled={busy}
           onClick={onClose}
-          className="-mt-0.5 -mr-1.5 inline-flex size-7 shrink-0 items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
+          className="-mt-0.5 -mr-1.5 inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-40"
         >
           <X aria-hidden="true" className="size-4" />
         </button>

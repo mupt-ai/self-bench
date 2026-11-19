@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { GhostUsage } from "../ghosts";
+import { InfoTooltip } from "../primitives/tooltip";
 import { EmptyState } from "../ui";
 import { type BillingUsageSummary, formatBillingDollars } from "./billing";
 
@@ -22,23 +23,21 @@ export function BillingUsage({ usage }: { usage: BillingUsageSummary }) {
 
   return (
     <section aria-labelledby="recorded-usage-title">
-      <div className="mb-3 flex items-end justify-between gap-3">
-        <div>
-          <h2 id="recorded-usage-title" className="text-sm font-medium">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5">
+          <h2 id="recorded-usage-title" className="text-base font-medium">
             Recorded Usage
           </h2>
-          <p className="mt-1 text-xs text-muted-foreground">
-            All managed usage recorded for this organization.
-          </p>
+          <InfoTooltip label="All managed usage recorded for this organization." />
         </div>
-        <span className="text-[10px] tracking-wider text-muted-foreground uppercase">All Time</span>
+        <span className="text-xs text-faint">All Time</span>
       </div>
       {!hasUsage ? (
         <EmptyState title="No Managed Usage Yet" visual={<GhostUsage />}>
           Model token and sandbox runtime totals will appear here after the first managed run.
         </EmptyState>
       ) : (
-        <div className="grid gap-3 lg:grid-cols-2">
+        <div className="grid gap-px border border-border bg-border lg:grid-cols-2">
           <UsagePanel title="Model Usage">
             <dl className="flex items-end justify-between gap-4 border-b border-border pb-4">
               <Metric label="Tokens" value={usage.tokens.toLocaleString()} prominent />
@@ -49,7 +48,7 @@ export function BillingUsage({ usage }: { usage: BillingUsageSummary }) {
               />
             </dl>
             <div
-              className="mt-4 flex h-2 w-full overflow-hidden bg-muted"
+              className="mt-4 flex h-1.5 w-full overflow-hidden rounded-full bg-muted"
               role="img"
               aria-label={tokenSegments
                 .map(({ label, value }) => `${label}: ${value.toLocaleString()} tokens`)
@@ -64,8 +63,8 @@ export function BillingUsage({ usage }: { usage: BillingUsageSummary }) {
             <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
               {tokenSegments.map(({ label, value, className }) => (
                 <div key={label}>
-                  <dt className="flex items-center gap-2 text-[10px] tracking-wider text-muted-foreground uppercase">
-                    <span className={`size-1.5 ${className}`} aria-hidden="true" />
+                  <dt className="flex items-center gap-2 text-xs text-faint">
+                    <span className={`size-1.5 rounded-full ${className}`} aria-hidden="true" />
                     {label}
                   </dt>
                   <dd className="mt-1 text-xs tabular-nums text-foreground">
@@ -111,10 +110,8 @@ export function BillingUsage({ usage }: { usage: BillingUsageSummary }) {
 
 function UsagePanel({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="border border-border bg-card p-4" aria-label={title}>
-      <h3 className="mb-4 text-xs font-medium tracking-wider text-muted-foreground uppercase">
-        {title}
-      </h3>
+    <section className="min-w-0 bg-card p-4" aria-label={title}>
+      <h3 className="mb-4 text-sm font-medium">{title}</h3>
       {children}
     </section>
   );
@@ -133,9 +130,9 @@ function Metric({
 }) {
   return (
     <div className={align === "right" ? "text-right" : undefined}>
-      <dt className="text-[10px] tracking-wider text-muted-foreground uppercase">{label}</dt>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd
-        className={`mt-1 tabular-nums text-foreground ${prominent ? "text-xl font-medium" : "text-sm"}`}
+        className={`mt-1.5 tabular-nums text-foreground ${prominent ? "text-2xl font-medium tracking-[-0.03em]" : "text-sm"}`}
       >
         {value}
       </dd>

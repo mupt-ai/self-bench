@@ -172,7 +172,7 @@ export function AddPrSheet({ org, fullName, onClose, onComplete }: AddPrSheetPro
           <div className="max-h-40 shrink-0 overflow-auto border-t border-border px-4 py-3 text-sm leading-5 sm:px-6">
             <p role="status" className="text-muted-foreground">
               {error.started > 0 && (
-                <span className="text-brand-foreground">{error.started} started · </span>
+                <span className="text-warning">{error.started} started · </span>
               )}
               <span className="text-destructive">{error.failed.length} failed</span>
               <span> — failed PRs remain selected.</span>
@@ -193,7 +193,7 @@ export function AddPrSheet({ org, fullName, onClose, onComplete }: AddPrSheetPro
         )}
         <DialogFooter className="sticky bottom-0 justify-between">
           <span className="text-sm text-muted-foreground">
-            <span className="font-mono tabular-nums">{selected.size}</span> Selected
+            <span className="tabular-nums">{selected.size}</span> Selected
           </span>
           <div className="ml-auto flex gap-3">
             {step === 2 && (

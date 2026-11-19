@@ -1,6 +1,7 @@
 import React from "react";
 import { Link, useParams } from "react-router";
 import { ListSkeleton } from "../LoadingSkeleton";
+import { publicPagePath } from "../paths";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { DataTable, Notice, PageContent, PageHeader, SearchInput } from "../ui";
@@ -61,10 +62,10 @@ export function BenchmarkDatasetPage() {
             <tbody>
               {shown.map((task) => (
                 <tr key={task.taskId}>
-                  <td className="font-mono text-sm wrap-anywhere">
+                  <td className="font-mono text-[13px] wrap-anywhere">
                     <Link
-                      className="hover:underline hover:underline-offset-4"
-                      to={`/benchmarks/${fullName}/tasks/${task.taskId}`}
+                      className="rounded-sm transition-colors hover:text-brand focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      to={`${publicPagePath(fullName)}/tasks/${task.taskId}`}
                     >
                       {task.taskId}
                     </Link>

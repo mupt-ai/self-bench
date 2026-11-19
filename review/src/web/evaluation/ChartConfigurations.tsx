@@ -89,7 +89,7 @@ export function ChartConfigurations({
       <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 marker:hidden [&::-webkit-details-marker]:hidden">
         <ListChecks className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <span className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold">
+          <span className="block text-sm font-medium">
             {chosen.length} {chosen.length === 1 ? "Configuration" : "Configurations"}
           </span>
           <span className="mt-1 block text-xs text-muted-foreground">{summary}</span>

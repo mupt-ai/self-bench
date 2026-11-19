@@ -42,7 +42,7 @@ function Glyph({ tone, fill }: { tone: string; fill: Fill }) {
  */
 function Circle({ label, tone, filled }: { label?: string; tone: string; filled: boolean }) {
   return (
-    <span className="inline-flex items-center gap-1.5 font-mono text-xs font-medium whitespace-nowrap">
+    <span className="inline-flex items-center gap-1.5 text-xs font-medium whitespace-nowrap">
       <Glyph tone={tone} fill={filled ? "full" : "none"} />
       {label}
     </span>
@@ -68,7 +68,7 @@ const outcomeGlyphs: Record<Outcome, { tone: string; fill: Fill }> = {
 /** A task's result as a glyph, with its name unless `bare`, where the filter above names it. */
 export function OutcomeCircle({ outcome, bare = false }: { outcome: Outcome; bare?: boolean }) {
   return (
-    <span className="inline-flex items-center gap-1.5 font-mono text-xs font-medium whitespace-nowrap">
+    <span className="inline-flex items-center gap-1.5 text-xs font-medium whitespace-nowrap">
       <Glyph {...outcomeGlyphs[outcome]} />
       {!bare && outcomeLabels[outcome]}
     </span>
@@ -109,10 +109,9 @@ export function StateDetails({
     <InfoTooltip
       label={label}
       side="right"
-      contentClassName="border border-border bg-card text-foreground"
       content={
-        <span className="block font-mono">
-          <span className="mb-1 block font-sans font-semibold">
+        <span className="block tabular-nums">
+          <span className="mb-1 block font-medium">
             {finished} of {total} finished
           </span>
           {present.map((outcome) => (
@@ -129,9 +128,8 @@ export function StateDetails({
       <button
         type="button"
         aria-label={label}
-        // A badge in the theme's accent, gold in light and blue in dark, so it shows on either; the
-        // mark takes the accent's own shade in light, which the deeper one overpowered.
-        className="grid size-4 shrink-0 cursor-help place-items-center self-center rounded-[3px] border border-brand/60 bg-brand/10 text-brand hover:border-brand hover:bg-brand/20 [:root[data-theme=dark]_&]:text-brand-foreground"
+        // A small badge in the mint accent.
+        className="grid size-4 shrink-0 cursor-help place-items-center self-center rounded-sm border border-brand/40 bg-brand/10 text-brand transition-colors hover:border-brand hover:bg-brand/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       >
         <Asterisk className="size-2.5" strokeWidth={3} aria-hidden="true" />
       </button>
@@ -203,7 +201,7 @@ export function ConfigurationName({ configuration }: { configuration: Configurat
         aria-hidden="true"
       />
       <span className="min-w-0">
-        <span className="block truncate font-semibold">
+        <span className="block truncate font-medium">
           {configuration.label}
           {configuration.condition && (
             <span className="font-normal text-muted-foreground">

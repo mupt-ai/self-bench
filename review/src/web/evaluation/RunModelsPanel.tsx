@@ -29,7 +29,7 @@ export function RunModelsPanel<D extends ComparisonSelection>({
     <fieldset className="panel min-w-0 p-0" disabled={disabled}>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
         <div>
-          <h2 className="text-sm font-semibold">Models and Harnesses</h2>
+          <h2 className="text-sm font-medium">Models and Harnesses</h2>
           <p className="mt-1 text-xs text-muted-foreground">
             {draft.models.length} of 12 configurations
           </p>

@@ -3,7 +3,7 @@ import type { AgentFeedEvent } from "../../../src/harnesses/pi/agent-feed";
 const eventText = "max-w-[96ch] whitespace-pre-wrap wrap-anywhere text-foreground";
 const codeText = `${eventText} font-mono text-xs leading-5`;
 const summaryClass =
-  "grid min-h-10 cursor-pointer list-none grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2 px-3 py-2 text-left leading-4 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-foreground/40 [&::-webkit-details-marker]:hidden sm:px-4";
+  "grid min-h-10 cursor-pointer list-none grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2 px-3 py-2 text-left leading-4 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden sm:px-4";
 
 export function AgentTraceEvent({ event }: { event: AgentFeedEvent }) {
   const time = event.timestamp ? formatEventTime(event.timestamp) : "";
@@ -16,7 +16,7 @@ export function AgentTraceEvent({ event }: { event: AgentFeedEvent }) {
         </pre>
         {time && (
           <time
-            className="justify-self-end font-mono text-[10px] leading-5 text-muted-foreground"
+            className="justify-self-end font-mono text-[11px] leading-5 text-muted-foreground"
             dateTime={event.timestamp}
           >
             {time}
@@ -51,22 +51,22 @@ export function AgentTraceEvent({ event }: { event: AgentFeedEvent }) {
       <summary className={summaryClass}>
         <span
           aria-hidden="true"
-          className="mt-0.5 text-[10px] text-muted-foreground before:content-['▸'] group-open/event:before:content-['▾']"
+          className="mt-0.5 text-[11px] text-muted-foreground before:content-['▸'] group-open/event:before:content-['▾']"
         />
         <span className="min-w-0">
           <span className="flex min-w-0 items-baseline gap-2">
-            <span className="shrink-0 text-xs font-semibold text-foreground">{label}</span>
+            <span className="shrink-0 text-xs font-medium text-foreground">{label}</span>
             {detail && (
               <span className="truncate font-mono text-xs text-muted-foreground">· {detail}</span>
             )}
           </span>
-          <span className="block truncate font-mono text-[10px] leading-4 text-muted-foreground">
+          <span className="block truncate font-mono text-[11px] leading-4 text-muted-foreground">
             {eventPreview(text, emptyPreview)}
           </span>
         </span>
         {time && (
           <time
-            className="justify-self-end font-mono text-[10px] text-muted-foreground"
+            className="justify-self-end font-mono text-[11px] text-muted-foreground"
             dateTime={event.timestamp}
           >
             {time}
@@ -74,9 +74,7 @@ export function AgentTraceEvent({ event }: { event: AgentFeedEvent }) {
         )}
       </summary>
       <div className="border-t border-border/70 bg-muted/30 px-3 py-2 sm:px-4 sm:pl-9">
-        <p className="m-0 text-[11px] font-semibold text-muted-foreground">
-          {event.kind === "tool" ? "Arguments" : "Output"}
-        </p>
+        <p className="m-0 text-xs text-faint">{event.kind === "tool" ? "Arguments" : "Output"}</p>
         <pre className={`${codeText} mt-1`}>{formatTraceText(text) || emptyPreview}</pre>
       </div>
     </details>
@@ -99,16 +97,16 @@ function EventHeading({
       className={`flex w-full items-baseline gap-2 ${align === "right" ? "justify-end" : "justify-start"}`}
     >
       <span
-        className={`font-semibold ${align === "right" ? "text-[10px] text-destructive" : "text-xs text-destructive"}`}
+        className={`font-medium ${align === "right" ? "text-[11px] text-destructive" : "text-xs text-destructive"}`}
       >
         {label}
       </span>
       {time && (
         <>
-          <span aria-hidden="true" className="font-mono text-[10px] text-muted-foreground">
+          <span aria-hidden="true" className="font-mono text-[11px] text-muted-foreground">
             ·
           </span>
-          <time className="font-mono text-[10px] text-muted-foreground" dateTime={timestamp}>
+          <time className="font-mono text-[11px] text-muted-foreground" dateTime={timestamp}>
             {time}
           </time>
         </>

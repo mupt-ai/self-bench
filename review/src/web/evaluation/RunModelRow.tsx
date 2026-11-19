@@ -14,7 +14,7 @@ import { Input, Select } from "../ui";
 import { nextModelSelection, pickerValue, savedSelection } from "./model-selection";
 import { rowHarnessOptions, savedHarnessOption } from "./row-harness-options";
 
-const mobileLabel = "mb-2 block text-xs font-semibold text-muted-foreground xl:hidden";
+const mobileLabel = "mb-2 block text-xs font-medium text-muted-foreground xl:hidden";
 
 type ModelSelection = ComparisonDraft["models"][number];
 
