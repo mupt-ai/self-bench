@@ -34,7 +34,7 @@ export const taskPage = (
     : `${pages}/tasks/${encodeURIComponent(runId)}/${encodeURIComponent(taskId)}`;
 
 /** A public benchmark's pages: its tasks come from a registry, so feedback cannot revise them. */
-export const isPublicPages = (pages: string) => pages.startsWith("/public/");
+const isPublicPages = (pages: string) => pages.startsWith("/public/");
 
 /** Pages whose tasks have their own page to give feedback on: a repository's or a custom benchmark's. */
 export const isRevisablePages = (pages: string) =>
