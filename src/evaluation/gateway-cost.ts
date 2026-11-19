@@ -105,9 +105,23 @@ export async function measureTrial(
     modelAuth: CredentialInfo["auth"];
     subagentAuth?: CredentialInfo["auth"] | undefined;
     gateway?: { at: TrialGateway; orgId: number } | undefined;
+    /** The Dari connection the trial's LLM judge called with, whose usage Dari reports. */
+    dariJudge?: { at: TrialGateway; orgId: number; credentialId: string } | undefined;
   },
 ): Promise<Partial<EvaluationTrial>> {
-  const { gateway } = route;
+  const { gateway, dariJudge } = route;
+  // Its judge's calls on a Dari connection are recorded as a judge's, outside the trial's cost.
+  if (dariJudge?.at.dariLink && dariJudge.at.recordUsage)
+    await recordDariLinkUsage(
+      dariJudge.at.dariLink,
+      {
+        orgId: dariJudge.orgId,
+        credentialId: dariJudge.credentialId,
+        tags: { trial: gatewayTrialTag(run, index) },
+        judge: true,
+      },
+      { record: dariJudge.at.recordUsage, listCost: servedModelCost },
+    ).catch((error: unknown) => reportError(error, { tags: { route: "dari-link-usage" } }));
   // A Dari Link trial called Dari directly: its usage is Dari's to report, copied here first.
   const { dariLink, recordUsage } = gateway?.at ?? {};
   const credentialId = run.credentials?.modelCredentialId;

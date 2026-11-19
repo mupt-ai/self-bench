@@ -118,6 +118,12 @@ export async function revokeDari(
   if (app && secret) await revoke({ ...app, token: secret.refreshToken });
 }
 
+/**
+ * The Dari tag an LLM judge's calls carry for their trial (judge.ts): never `trial`, which the
+ * trial's own calls on the same connection carry and are read back by.
+ */
+export const DARI_JUDGE_TAG = "judge-trial";
+
 /** A Dari credential's grant as the Link client's calls take it. */
 export type DariLinkGrants = (
   orgId: number,
@@ -186,20 +192,28 @@ export async function dariLinkConnection(
 
 /**
  * Copies what Dari recorded a trial's calls using into SelfBench's usage records, one row per model
- * and level at the model's list price, so its cost reads like any gateway trial's. Idempotent.
+ * and level at the model's list price, so its cost reads like any gateway trial's. With `judge`,
+ * the calls are its LLM judge's, which the gateway forwarded to Dari (judge.ts) under a tag of
+ * their own, and are recorded as a judge's, outside the trial's cost. Idempotent.
  */
 export async function recordDariLinkUsage(
   grants: DariLinkGrants,
-  trial: { orgId: number; credentialId: string; tags: Readonly<Record<string, string>> },
+  trial: {
+    orgId: number;
+    credentialId: string;
+    tags: Readonly<Record<string, string>>;
+    judge?: boolean;
+  },
   deps: {
     record: (usage: GatewayUsage) => Promise<void>;
     listCost?: (model: string, usage: TokenUsage) => number | undefined;
   },
 ): Promise<void> {
-  const { orgId, credentialId, tags } = trial;
+  const { orgId, credentialId, judge } = trial;
+  const tags = judge ? { ...trial.tags, judge: "true" } : trial.tags;
   const report = await usage({
     ...(await grants(orgId, credentialId)),
-    tags: { trial: tags.trial ?? "" },
+    tags: { [judge ? DARI_JUDGE_TAG : "trial"]: tags.trial ?? "" },
   });
   for (const entry of report.by_model) {
     const model = dariModelId(entry.model);
@@ -211,7 +225,7 @@ export async function recordDariLinkUsage(
     };
     const cost = deps.listCost?.(model, counts);
     await deps.record({
-      requestId: `dari-link:${tags.trial}:${model}:${entry.thinking ?? ""}`,
+      requestId: `${judge ? "dari-link-judge" : "dari-link"}:${tags.trial}:${model}:${entry.thinking ?? ""}`,
       orgId,
       credentialId,
       model,

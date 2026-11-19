@@ -4,6 +4,7 @@ import { pipeline } from "node:stream/promises";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import { createPrioritySelectorBackend, createRequestHandler } from "@mupt-ai/dari-gateway";
 import { GATEWAY_PATH } from "./connection.js";
+import { DARI_LINK_JUDGE, forwardDariJudge } from "./dari-link/judge.js";
 import { type SelfBenchGatewayDeps, selfBenchPlatform } from "./platform.js";
 import { withServedModel } from "./served-model.js";
 import { readTrialKey, type TrialKey } from "./trial-key.js";
@@ -41,13 +42,43 @@ export function gatewayRoute(deps: SelfBenchGatewayDeps) {
     const abort = new AbortController();
     response.on("close", () => abort.abort());
     const hasBody = request.method !== "GET" && request.method !== "HEAD";
+    const headers = Object.entries(request.headers).flatMap(([name, value]) =>
+      value === undefined ? [] : (Array.isArray(value) ? value : [value]).map((v) => [name, v]),
+    ) as [string, string][];
+    const answer =
+      key?.judge?.provider === DARI_LINK_JUDGE
+        ? // A judge on a Dari connection is answered by the user's Dari (dari-link/judge.ts).
+          await forwardDariJudge(
+            deps.dariLink,
+            deps.credentials.secret,
+            { ...key, judge: key.judge },
+            {
+              path: `${target.pathname}${target.search}`,
+              method: request.method ?? "GET",
+              headers,
+              body: hasBody ? Buffer.concat(await request.toArray()) : undefined,
+              signal: abort.signal,
+            },
+          )
+        : await answerHere(request, target, key, hasBody, headers, abort.signal);
+    response.writeHead(answer.status, Object.fromEntries(answer.headers));
+    if (!answer.body) response.end();
+    else await pipeline(Readable.fromWeb(answer.body as unknown as NodeReadableStream), response);
+  }
+
+  async function answerHere(
+    request: IncomingMessage,
+    target: URL,
+    key: TrialKey | undefined,
+    hasBody: boolean,
+    headers: [string, string][],
+    signal: AbortSignal,
+  ) {
     const judge = hasBody ? key?.judge : undefined;
-    const answer = await handle(
+    return await handle(
       new Request(target, {
         method: request.method,
-        headers: Object.entries(request.headers).flatMap(([name, value]) =>
-          value === undefined ? [] : (Array.isArray(value) ? value : [value]).map((v) => [name, v]),
-        ) as [string, string][],
+        headers,
         ...(hasBody
           ? {
               body: judge
@@ -60,12 +91,9 @@ export function gatewayRoute(deps: SelfBenchGatewayDeps) {
               duplex: "half",
             }
           : {}),
-        signal: abort.signal,
+        signal,
       } as RequestInit),
     );
-    response.writeHead(answer.status, Object.fromEntries(answer.headers));
-    if (!answer.body) response.end();
-    else await pipeline(Readable.fromWeb(answer.body as unknown as NodeReadableStream), response);
   }
 }
 

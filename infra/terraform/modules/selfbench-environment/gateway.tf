@@ -4,17 +4,20 @@
 # keep calling the address they already reach. It runs as the API's identity, which already
 # reads the vault key and the database, but is given only the values the gateway needs.
 locals {
-  gateway_secret_keys = ["database_url", "eval_credential_key", "sandbox_secret", "managed_openrouter_api_key"]
+  # A judge on a Dari connection is forwarded to Dari on its grant, with SelfBench's Dari Link app.
+  gateway_secret_keys = ["database_url", "eval_credential_key", "sandbox_secret", "managed_openrouter_api_key", "dari_link_client_secret"]
   gateway_secret_env = {
     for key in local.gateway_secret_keys : local.readable_secrets[key].env => local.readable_secrets[key].id
     if local.readable_secrets[key].enabled
   }
   gateway_env = { for name, value in {
-    SELFBENCH_API_HOST           = local.shared_env.SELFBENCH_API_HOST
-    SELFBENCH_API_PORT           = local.shared_env.SELFBENCH_API_PORT
-    SELFBENCH_CUSTOM_MODEL_HOSTS = lookup(local.shared_env, "SELFBENCH_CUSTOM_MODEL_HOSTS", null)
-    SELFBENCH_MANAGED_OFFERING   = lookup(local.shared_env, "SELFBENCH_MANAGED_OFFERING", null)
-    SENTRY_DSN                   = var.sentry_dsn
+    SELFBENCH_API_HOST            = local.shared_env.SELFBENCH_API_HOST
+    SELFBENCH_API_PORT            = local.shared_env.SELFBENCH_API_PORT
+    SELFBENCH_CUSTOM_MODEL_HOSTS  = lookup(local.shared_env, "SELFBENCH_CUSTOM_MODEL_HOSTS", null)
+    SELFBENCH_MANAGED_OFFERING    = lookup(local.shared_env, "SELFBENCH_MANAGED_OFFERING", null)
+    SELFBENCH_DARI_LINK_URL       = lookup(local.shared_env, "SELFBENCH_DARI_LINK_URL", null)
+    SELFBENCH_DARI_LINK_CLIENT_ID = lookup(local.shared_env, "SELFBENCH_DARI_LINK_CLIENT_ID", null)
+    SENTRY_DSN                    = var.sentry_dsn
   } : name => value if value != null }
   # The results site never serves the gateway; every other app host does.
   gateway_hosts = [for domain in var.api_domains : domain if domain != var.results_site_domain]

@@ -157,6 +157,8 @@ async function runTrial(context: {
   subagentAuth?: CredentialInfo["auth"];
   /** The organization a gateway trial's calls were recorded under. */
   gatewayOrgId?: number;
+  /** The Dari connection the trial's LLM judge called with, whose usage Dari reports. */
+  dariJudge?: { orgId: number; credentialId: string };
   child: NodeJS.ProcessEnv;
   extraAllowedHosts?: readonly string[];
   verifierEnv?: readonly string[];
@@ -212,6 +214,9 @@ async function runTrial(context: {
             subagentAuth: context.subagentAuth,
             ...(context.gatewayOrgId !== undefined && options.gateway
               ? { gateway: { at: options.gateway, orgId: context.gatewayOrgId } }
+              : {}),
+            ...(context.dariJudge && options.gateway
+              ? { dariJudge: { at: options.gateway, ...context.dariJudge } }
               : {}),
           },
         ),

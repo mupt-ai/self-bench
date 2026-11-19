@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type { ArtifactStore } from "../artifacts/index.js";
 import { trialTimeouts } from "../contracts/agent-limit.js";
 import { type GatewayConnection, gatewayConnection } from "../gateway/connection.js";
+import { DARI_LINK_JUDGE } from "../gateway/dari-link/judge.js";
 import { dariLinkConnection, dariRefusal } from "../gateway/dari-link/link.js";
 import {
   assertHarborVersion,
@@ -189,6 +190,15 @@ export async function setUpTrial(
     ...(execution.subagentAuth ? { subagentAuth: execution.subagentAuth } : {}),
     // A gateway trial's cost is what the gateway recorded for its calls (runner.ts).
     ...(gatewayed ? { gatewayOrgId: execution.credential.orgId } : {}),
+    // A judge on a Dari connection called Dari through the gateway: Dari reports its usage.
+    ...(execution.judge?.provider === DARI_LINK_JUDGE
+      ? {
+          dariJudge: {
+            orgId: execution.credential.orgId,
+            credentialId: execution.judge.credentialId,
+          },
+        }
+      : {}),
     child: {
       ...judged.child,
       ...pull,
