@@ -8,33 +8,16 @@ export const providers = [
   { id: "meta", label: "Meta" },
   ...gatewayIds.map((id) => ({ id, label: gateways[id].label })),
   { id: "custom", label: "Custom Endpoint" },
+  { id: "dari-link", label: "Dari Link" },
 ] as const;
-/** The subscription sign-in a model provider offers beside its API key, and the CLI it runs. */
+/**
+ * The provider sign-ins SelfBench took before Connect with Dari, by the label past runs and saved
+ * credentials still show. Nothing new is made with them.
+ */
 export const signIns = [
-  {
-    id: "codex-login",
-    kind: "openai",
-    label: "ChatGPT Sign-In",
-    harness: "Codex",
-    name: "Codex",
-    importLabel: "Import auth.json",
-  },
-  {
-    id: "claude-login",
-    kind: "anthropic",
-    label: "Claude Sign-In",
-    harness: "Claude Code",
-    name: "Claude",
-    importLabel: "Paste a Setup Token",
-  },
-  {
-    id: "muse-login",
-    kind: "meta",
-    label: "Meta Sign-In",
-    harness: "Muse Code",
-    name: "Muse Code",
-    importLabel: undefined,
-  },
+  { id: "codex-login", label: "ChatGPT Sign-In", harness: "Codex" },
+  { id: "claude-login", label: "Claude Sign-In", harness: "Claude Code" },
+  { id: "muse-login", label: "Meta Sign-In", harness: "Muse Code" },
 ] as const;
 const signInOf = (auth: CredentialInfo["auth"]) => signIns.find((entry) => entry.id === auth);
 export const sandboxes = [
@@ -47,6 +30,7 @@ export function isSandbox(kind: CredentialInfo["kind"]) {
   return sandboxes.some((entry) => entry.id === kind);
 }
 export function credentialProvider(credential: Pick<CredentialInfo, "kind" | "auth">) {
+  if (credential.auth === "dari-link") return "Dari";
   return (
     signInOf(credential.auth)?.harness ??
     [...providers, ...sandboxes].find((entry) => entry.id === credential.kind)?.label ??
@@ -66,6 +50,7 @@ export function endpointLabel(endpoint: string): string {
   }
 }
 export function credentialAccess(credential: Pick<CredentialInfo, "kind" | "auth">) {
+  if (credential.auth === "dari-link") return "Connected via Dari";
   return (
     signInOf(credential.auth)?.label ?? (credential.kind === "modal" ? "Token Pair" : "API Key")
   );

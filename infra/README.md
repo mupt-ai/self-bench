@@ -89,6 +89,7 @@ The managed offering's secrets are not Terraform's. Create each one, with its ve
 
 - `selfbench-managed-openrouter-api-key`, `selfbench-managed-e2b-api-key`, `selfbench-managed-modal-token-id` and `selfbench-managed-modal-token-secret` when `managed_offering` is true
 - `selfbench-stripe-secret-key` and `selfbench-stripe-webhook-secret` when `managed_offering` is true and `stripe_price_id` is set
+- `selfbench-dari-link-client-secret` when `dari_link_client_id` is set: the client secret of that Dari Link app
 
 ```sh
 gcloud secrets create selfbench-managed-e2b-api-key --project PROJECT --replication-policy=user-managed --locations=REGION

@@ -23,7 +23,15 @@ import type { Harness } from "./models.js";
 
 export { catalogVersion } from "../contracts/models.js";
 
-export type CatalogProvider = "openai" | "anthropic" | "meta" | GatewayId | "dari" | "custom";
+export type CatalogProvider =
+  | "openai"
+  | "anthropic"
+  | "meta"
+  | GatewayId
+  | "dari"
+  | "custom"
+  // A Dari Link connection: its route's `model` is Dari's id, `provider/model`.
+  | "dari-link";
 
 /** Evaluation's view of a catalog model: the credential it runs on and its native harnesses. */
 export interface CatalogModel {

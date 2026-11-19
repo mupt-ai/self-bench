@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type { ArtifactStore } from "../artifacts/index.js";
 import { trialTimeouts } from "../contracts/agent-limit.js";
 import { type GatewayConnection, gatewayConnection } from "../gateway/connection.js";
+import { dariLinkConnection, dariRefusal } from "../gateway/dari-link/link.js";
 import {
   assertHarborVersion,
   HARBOR_PROCESS_TIMEOUT_MS,
@@ -107,7 +108,25 @@ export async function setUpTrial(
   };
   const tags = { run: run.id, trial: gatewayTrialTag(run, index), harness: trial.harness };
   let connection: GatewayConnection | undefined;
-  if (gatewayed) {
+  if (gatewayed && execution.auth === "dari-link") {
+    // On the user's own plans through Dari: the trial calls Dari itself, on a child token minted
+    // for it (gateway/dari-link/link.ts).
+    const grants = gatewayAt().dariLink;
+    if (!grants) throw refuseTrial("Dari Link is not configured on this worker");
+    const thinking = pinnedThinking(trial.harness, input.thinking);
+    connection = await dariLinkConnection(grants, {
+      orgId: execution.credential.orgId,
+      credentialId: execution.credential.id,
+      model: gatewayModelId(input),
+      ...(thinking ? { thinking } : {}),
+      tags,
+    }).catch((error: unknown) => {
+      // Dari's refusal is final; Dari being unreachable is retried.
+      const refusal = dariRefusal(error);
+      throw refusal ? refuseTrial(refusal) : error;
+    });
+    secrets.push(connection.key);
+  } else if (gatewayed) {
     const at = gatewayAt();
     const thinking = pinnedThinking(trial.harness, input.thinking);
     connection = gatewayConnection(at.api.url, at.api.secret, {

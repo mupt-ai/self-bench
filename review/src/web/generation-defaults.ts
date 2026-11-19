@@ -77,9 +77,7 @@ export function withDefaultCredentials(
     const compatible = options.credentials.filter((item) => modelCredentialMatches(item, models));
     next = {
       ...next,
-      modelCredentialId:
-        compatible.find((item) => item.auth === "api-key")?.id ??
-        compatible.find((item) => item.auth === "codex-login")?.id,
+      modelCredentialId: (compatible.find((item) => item.auth === "api-key") ?? compatible[0])?.id,
     };
   }
   const fill = (kind: string, current?: string) => {

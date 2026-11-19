@@ -40,6 +40,7 @@ module "selfbench" {
   github_oauth_client_id      = var.github_oauth_client_id
   stripe_price_id             = var.stripe_price_id
   managed_offering            = var.managed_offering
+  dari_link_client_id         = var.dari_link_client_id
   sentry_dsn                  = var.sentry_dsn
   sentry_browser_dsn          = var.sentry_browser_dsn
   posthog_api_key             = var.posthog_api_key

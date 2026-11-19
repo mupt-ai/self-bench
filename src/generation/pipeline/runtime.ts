@@ -5,6 +5,8 @@ import { loadWorkerConfig, type SelfBenchWorkerConfig } from "../../contracts/co
 import type { RunRequest } from "../../contracts/index.js";
 import type { UsageLedger } from "../../db/usage.js";
 import type { Vault } from "../../db/vault.js";
+import { type DariLinkGrants, dariRefusal } from "../../gateway/dari-link/link.js";
+import { PI_DARI_LINK_KEY } from "../../harnesses/pi/model-auth.js";
 import {
   capacityLimitedSandbox,
   credentialsCapacity,
@@ -20,6 +22,7 @@ import {
   generationRuntimeOwner,
   stageAuthoring,
 } from "../settings/credentials.js";
+import { generationDariLink } from "../settings/dari-link.js";
 import { generationConfigEnvironment } from "../settings/run.js";
 import { generationExecutionBackend } from "../settings/settings.js";
 import { safeHeartbeat } from "./helpers.js";
@@ -38,6 +41,8 @@ export async function withGenerationRuntime<T>(
   usage?: UsageLedger,
   /** "agent" sandboxes call the model; "compile" sandboxes do not; "harbor" runs Harbor checks. */
   work: "agent" | "compile" | "harbor" = "agent",
+  /** A worker's Dari Link tokens, which a stage on a Dari connection mints its child token from. */
+  dariLink?: DariLinkGrants,
 ) {
   if (!run.generation) return action(legacySandbox, config.harborEnvironment, run);
   let env: NodeJS.ProcessEnv;
@@ -65,6 +70,31 @@ export async function withGenerationRuntime<T>(
       error instanceof Error ? error.message : "Generation credentials unavailable",
       "GenerationConfiguration",
     );
+  }
+  // A Dari connection's stage calls the gateway on a child token minted for its model now, which
+  // Pi takes from the environment (PI_DARI_LINK_KEY) and its models.json (generation/settings).
+  let dari: Awaited<ReturnType<typeof generationDariLink>> | undefined;
+  if (authoring.provider === "dari-link") {
+    if (!dariLink)
+      throw ApplicationFailure.nonRetryable(
+        "Dari Link is not configured on this worker.",
+        "GenerationConfiguration",
+      );
+    try {
+      dari = await generationDariLink(dariLink, {
+        orgId: run.generation.orgId ?? run.generation.ownerId,
+        credentialId: settings.modelCredentialId ?? "",
+        runId: run.runId,
+        role: stage,
+        model: authoring.model,
+        reasoning: authoring.reasoningEffort,
+      });
+    } catch (error) {
+      // Dari's refusal is final; Dari being unreachable is retried.
+      const refusal = dariRefusal(error);
+      throw refusal ? ApplicationFailure.nonRetryable(refusal, "GenerationConfiguration") : error;
+    }
+    env = { ...env, [PI_DARI_LINK_KEY]: dari.key };
   }
   let selected: SelfBenchWorkerConfig;
   try {
@@ -117,6 +147,7 @@ export async function withGenerationRuntime<T>(
           ),
         }
       : selected.execution;
+  const piModels = dari?.piModels ?? authoring.piModels;
   const configuredRun = {
     ...run,
     authoring: {
@@ -124,7 +155,7 @@ export async function withGenerationRuntime<T>(
       provider: authoring.provider as RunRequest["authoring"]["provider"],
       model: authoring.model,
       reasoningEffort: authoring.reasoningEffort as RunRequest["authoring"]["reasoningEffort"],
-      ...(authoring.piModels ? { piModels: authoring.piModels } : {}),
+      ...(piModels ? { piModels } : {}),
     },
   };
   const orgId = generation.orgId ?? generation.ownerId;

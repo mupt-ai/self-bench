@@ -1,21 +1,22 @@
 import type { ThinkingLevel } from "../contracts/models.js";
-import type { CredentialInfo } from "../db/credentials.js";
 import type { GatewayConnection } from "../gateway/connection.js";
+import { dariRequestName } from "../gateway/dari-link/connection.js";
 import { registryModel } from "../gateway/model-config.js";
 import type { CustomEndpointApi, PinnedThinking, TrialKey } from "../gateway/trial-key.js";
 import { catalogEntry } from "../gateways/catalog.js";
 import { gateways } from "../gateways/index.js";
 import { isDariRun } from "./dari/cost.js";
 import { thinkingArguments } from "./models.js";
+import { linkedMuseTrial } from "./muse-trial.js";
 import { refuseTrial } from "./refusal.js";
 import type { EvaluationInput, EvaluationRun, Harness } from "./types.js";
 
 /**
- * How a trial's agent reaches its model. Every API key and ChatGPT or Claude sign-in goes through
- * SelfBench's gateway, which pins the model, holds the key or plan, and records each call's cost.
+ * How a trial's agent reaches its model. Every API key goes through SelfBench's gateway, which pins
+ * the model, holds the key, and records each call's cost.
  * Routes that stay direct: Dari's router on Pi (the gateway reads a reported cost only from
  * OpenRouter and Vercel, so dari/cost.ts prices it by its own response), and Muse Code on a Meta
- * sign-in or key (its sign-in key is minted inside its CLI, and its CLI reads its model list from
+ * key (its CLI reads its model list from
  * its endpoint's origin and takes the endpoint only from its own settings).
  */
 export type TrialRoute = "gateway" | "direct";
@@ -23,17 +24,19 @@ export type TrialRoute = "gateway" | "direct";
 export function trialRoute(
   input: Pick<EvaluationInput, "credentials" | "modelName">,
   harness: Harness,
-  auth: CredentialInfo["auth"] = input.credentials?.auth ?? "api-key",
 ): TrialRoute {
-  if (auth === "muse-login" || (harness === "pi" && isDariRun(input))) return "direct";
+  if (harness === "pi" && isDariRun(input)) return "direct";
   return harness === "muse-code" && input.credentials?.provider === "meta" ? "direct" : "gateway";
 }
 
-/** The gateway's id for the trial's model, `provider/model`: a custom endpoint's under `custom/`. */
+/**
+ * The gateway's id for the trial's model, `provider/model`: a custom endpoint's under `custom/`,
+ * and on a Dari connection Dari's own id (recorded as `dari-link/<provider>/<model>`).
+ */
 export function gatewayModelId(input: Pick<EvaluationInput, "credentials" | "modelName">): string {
-  return input.credentials?.provider === "custom"
-    ? `custom/${input.modelName.slice(input.modelName.indexOf("/") + 1)}`
-    : input.modelName;
+  const rest = input.modelName.slice(input.modelName.indexOf("/") + 1);
+  if (input.credentials?.provider === "custom") return `custom/${rest}`;
+  return input.credentials?.provider === "dari-link" ? rest : input.modelName;
 }
 
 /**
@@ -69,14 +72,9 @@ export function endpointPicksEffort(
   return harness === "codex" || (!!endpoint && !!registryModel(endpoint, gatewayModelId(input)));
 }
 
-/** The name a request carries for the gateway's model `id`, which the gateway serves exactly. */
-function gatewayRequestName(id: string): string {
-  return `dari/model/${id}`;
-}
-
 /** The model name a gateway trial's requests carry, which the gateway serves exactly. */
 export function gatewayRequestModel(input: Pick<EvaluationInput, "credentials" | "modelName">) {
-  return gatewayRequestName(gatewayModelId(input));
+  return dariRequestName(gatewayModelId(input));
 }
 
 /**
@@ -133,8 +131,8 @@ export interface SolverTrial {
 /**
  * Adapts a trial's connection to its harness. Through the gateway (`connection`), every harness
  * gets the gateway's address and the trial key under the variables its protocol reads, and asks
- * for the one model the key serves. Direct, Muse Code keeps its Meta sign-in or key, and Pi Dari's
- * router endpoint.
+ * for the one model the key serves (Muse Code its trial token, on a Dari connection). Direct, Muse
+ * Code keeps its Meta key, and Pi Dari's router endpoint.
  */
 export function gatewayTrial(
   input: EvaluationInput,
@@ -182,7 +180,7 @@ function subagentArguments({ subagent }: Pick<EvaluationInput, "subagent">): str
   if (!subagent) return [];
   return [
     "--agent-kwarg",
-    `subagent_model=${gatewayRequestName(subagent.model)}`,
+    `subagent_model=${dariRequestName(subagent.model)}`,
     ...(subagent.prompt === undefined
       ? []
       : ["--agent-kwarg", `subagent_prompt=${JSON.stringify(subagent.prompt)}`]),
@@ -212,6 +210,7 @@ function gatewayRouted(
       extraAllowedHosts,
     };
   }
+  if (harness === "muse-code") return linkedMuseTrial(input, connection, child, requestModel);
   Object.assign(child, {
     OPENAI_API_KEY: key,
     OPENAI_BASE_URL: connection.openAiBase,

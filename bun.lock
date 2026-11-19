@@ -8,7 +8,7 @@
         "@earendil-works/pi-ai": "0.84.0",
         "@earendil-works/pi-coding-agent": "0.84.0",
         "@google-cloud/storage": "^7.22.0",
-        "@mupt-ai/dari-gateway": "1.0.310",
+        "@mupt-ai/dari-gateway": "1.0.328",
         "@radix-ui/react-dropdown-menu": "2.1.24",
         "@radix-ui/react-slot": "1.3.3",
         "@radix-ui/react-tooltip": "1.2.16",
@@ -369,11 +369,11 @@
 
     "@mistralai/mistralai": ["@mistralai/mistralai@2.2.6", "", { "dependencies": { "@opentelemetry/semantic-conventions": "^1.40.0", "ws": "^8.18.0", "zod": "^3.25.0 || ^4.0.0", "zod-to-json-schema": "^3.25.0" }, "peerDependencies": { "@opentelemetry/api": "^1.9.0" }, "optionalPeers": ["@opentelemetry/api"] }, "sha512-W8pX7zHxjJvMIpw8JMxeJEleapXX0Q9NPszdNzqkM3MIEoIGPObdodujj+WHteXEvGfaP/AMwlNyRfEzSY6dQQ=="],
 
-    "@mupt-ai/dari-gateway": ["@mupt-ai/dari-gateway@1.0.310", "", { "dependencies": { "@aws-sdk/client-sts": "3.1063.0", "@mupt-ai/dari-router": "1.0.310", "@mupt-ai/pi-ai": "1.5.2-mupt.1" }, "bin": { "dari-gateway": "dist/self_host/main.js" } }, "sha512-P2k+Hf1PPadNcoAIW00VtLgZdbbsc2+NnyYxW5yMyBvnT/qQV/JfhEiO5eJniG2nmq8drlxe+DHpZth4XltDcg=="],
+    "@mupt-ai/dari-gateway": ["@mupt-ai/dari-gateway@1.0.328", "", { "dependencies": { "@aws-sdk/client-sts": "3.1063.0", "@mupt-ai/dari-router": "1.0.328", "@mupt-ai/pi-ai": "1.5.2-mupt.1" }, "bin": { "dari-gateway": "dist/self_host/main.js", "dari-gateway-stub": "dist/self_host/stub_main.js" } }, "sha512-Zr5k7o1ZrmIbGng5/w4x60ufOjdWKyLpBxBal2J1krN0R2CA24d8zWGCoDvAGiGaEGm8OE0yRYbQsQDrwWaTxw=="],
 
     "@mupt-ai/dari-pareto": ["@mupt-ai/dari-pareto@0.7.0", "", { "peerDependencies": { "react": ">=18 <20", "react-dom": ">=18 <20" }, "optionalPeers": ["react-dom"] }, "sha512-5N38vHzXqQjRKWTkWK0EyBQZ7yEf+FHSDilp2A8/6A13nR13m7E77k2uYt5g+U8U18nPnycBTEQQJjg7aoU23A=="],
 
-    "@mupt-ai/dari-router": ["@mupt-ai/dari-router@1.0.310", "", {}, "sha512-wj0GjrxvO5EhL0lIm/7o9onT8AXstRS88ducPnExVttgHrLekaSBZ5hDtcKY0ppFpKIn9OIKq5P2BAjDfvGwxw=="],
+    "@mupt-ai/dari-router": ["@mupt-ai/dari-router@1.0.328", "", {}, "sha512-SFKIXPysDq+S2K4g9+MYKcW7SxB7ASI3pHGefz6Mk1l2o1yI9aAHPCimj6HdM6RXbNHA/GAKugIN3XM/XAKMiA=="],
 
     "@mupt-ai/pi-ai": ["@mupt-ai/pi-ai@1.5.2-mupt.1", "", { "dependencies": { "@anthropic-ai/sdk": "0.129.0", "@aws-sdk/client-bedrock-runtime": "3.1127.0", "@earendil-works/pi-schema": "1.5.2", "@earendil-works/pi-telemetry": "1.5.2", "@google/genai": "2.21.0", "@smithy/node-http-handler": "4.12.1", "http-proxy-agent": "9.1.0", "https-proxy-agent": "9.1.0", "openai": "7.19.0", "partial-json": "0.1.7" }, "bin": { "pi-ai": "dist/cli.js" } }, "sha512-gxDiI2OF8lghyyHkCpYjeUrEi4mtZ6FKsJUbdD+gwsJpbOn1AvfzILWXKyI1y0AWRLRfap8JlSFNRNAVH7AxGw=="],
 

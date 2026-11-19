@@ -2,47 +2,27 @@ import { readFileSync } from "node:fs";
 import { gateways } from "../../gateways/index.js";
 import { requestJson } from "./api-client.js";
 import { flag, type Values } from "./args.js";
-import { signIn } from "./credential-sign-in.js";
 import { ask, Cancelled, choose, grayLine, interactive, step } from "./tui.js";
 
 const SUBTITLE = "Connect a credential";
 
-/** Something a workspace can connect: a pasted key, or a provider sign-in. */
+/** A key a workspace can paste. Plans connect in the app, with Connect with Dari. */
 interface Provider {
   label: string;
   kind: string;
   description: string;
   sandbox?: true;
-  signIn?: "codex-login" | "claude-login" | "muse-login";
   /** Fields asked for besides the secret, as the API names them. */
   extra?: { field: "tokenId" | "teamId" | "projectId" | "endpoint"; prompt: string }[];
   secretPrompt?: string;
 }
 
 const PROVIDERS: Provider[] = [
-  {
-    label: "ChatGPT Sign-In",
-    kind: "openai",
-    signIn: "codex-login",
-    description: "Runs Codex on your ChatGPT plan; generates tasks too",
-  },
   { label: "OpenAI API Key", kind: "openai", description: "GPT models through any harness" },
-  {
-    label: "Claude Sign-In",
-    kind: "anthropic",
-    signIn: "claude-login",
-    description: "Runs Claude Code on your Claude plan; evaluations only",
-  },
   {
     label: "Anthropic API Key",
     kind: "anthropic",
     description: "Claude models through any harness",
-  },
-  {
-    label: "Meta Sign-In",
-    kind: "meta",
-    signIn: "muse-login",
-    description: "Runs Muse Code on your Meta account; evaluations only",
   },
   { label: "Meta API Key", kind: "meta", description: "Meta models through any harness" },
   ...Object.entries(gateways).map(([kind, gateway]) => ({
@@ -102,7 +82,6 @@ export async function addCredential(
         })
       : undefined) ??
     provider.label;
-  if (provider.signIn) return await signIn(base, provider.signIn, provider.label, name);
   const extra: Record<string, string> = {};
   for (const { field, prompt } of provider.extra ?? []) {
     const given = flag(
@@ -135,26 +114,18 @@ export async function addCredential(
 
 async function pickProvider(values: Values): Promise<Provider> {
   const kind = flag(values, "kind");
-  const signIn = flag(values, "sign-in");
-  if (signIn) {
-    const auth = { chatgpt: "codex-login", claude: "claude-login", meta: "muse-login" }[signIn];
-    const found = PROVIDERS.find((provider) => provider.signIn === auth);
-    if (!found) throw new Error("--sign-in is chatgpt, claude, or meta");
-    return found;
-  }
   if (kind) {
-    const found = PROVIDERS.find((provider) => provider.kind === kind && !provider.signIn);
+    const found = PROVIDERS.find((provider) => provider.kind === kind);
     if (!found)
       throw new Error(
         `unknown --kind ${kind}; one of ${[...new Set(PROVIDERS.map((p) => p.kind))].join(", ")}`,
       );
     return found;
   }
-  if (!interactive())
-    throw new Error("credential add needs --kind or --sign-in when not in a terminal");
+  if (!interactive()) throw new Error("credential add needs --kind when not in a terminal");
   const sandbox =
     (await choose(SUBTITLE, "What do you want to connect?", [
-      { label: "Model Access", description: "A sign-in or API key that runs models" },
+      { label: "Model Access", description: "An API key that runs models" },
       {
         label: "Sandbox",
         description: "A cloud account that runs tasks: E2B, Modal, Daytona, Vercel",

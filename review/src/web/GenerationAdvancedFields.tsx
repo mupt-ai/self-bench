@@ -6,7 +6,7 @@ import {
   harborEnvironmentLabels,
 } from "../../../src/contracts/config/providers";
 import type { CredentialInfo } from "../../../src/db/credentials";
-import { managedRuns } from "../../../src/generation/settings/models";
+import { generationCredentialRuns, managedRuns } from "../../../src/generation/settings/models";
 import {
   type GenerationSandbox,
   type GenerationSettings,
@@ -38,8 +38,15 @@ export function AdvancedFields({
   const hints = generationHints(managed);
   const models = options?.models ?? [];
   const chosen = chosenModels(value, models);
-  // Managed access runs on OpenRouter, so it offers only the models OpenRouter serves.
-  const offered = value.modelAccess === "managed" ? models.filter(managedRuns) : models;
+  // Managed access runs on OpenRouter, so it offers only the models OpenRouter serves. Stored
+  // credentials offer the models one of them can run: a Dari connection's, among them.
+  const credentials = options?.credentials ?? [];
+  const offered =
+    value.modelAccess === "managed"
+      ? models.filter(managedRuns)
+      : models.filter((model) =>
+          credentials.some((credential) => generationCredentialRuns(model, credential)),
+        );
   const compatible = (credential: CredentialInfo) => modelCredentialMatches(credential, chosen);
   return (
     <div className="grid min-w-0 gap-6">

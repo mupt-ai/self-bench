@@ -12,7 +12,7 @@ import {
   SECRET,
   startTrialApi,
 } from "../support/gateway-trial-api.js";
-import { UPSTREAM_KEYS, type UpstreamCall, VAULT_SECRETS } from "../support/gateway-upstream.js";
+import { type UpstreamCall, VAULT_SECRETS } from "../support/gateway-upstream.js";
 
 // Each harness's request on each kind of credential, from the trial's environment through the
 // gateway to the provider's stand-in and the usage row (support/gateway-trial-api.ts).
@@ -95,25 +95,6 @@ describe("a real trial's path through the gateway", () => {
         8 * (gatewayModelPrice("meta/muse-spark-1.3")?.input ?? 0) * 1e-6 +
         3 * (gatewayModelPrice("meta/muse-spark-1.3")?.output ?? 0) * 1e-6,
     },
-    {
-      name: "Codex on a ChatGPT sign-in (the Codex backend, on the plan)",
-      harness: "codex",
-      credential: "codex-login",
-      send: (env, trial) => responses(env, trial.model.replace(/^openai\//, "")),
-      upstreamPath: "/codex/responses",
-      upstreamKey: (call) => call.authorization,
-      // A plan bills nothing; its calls are priced at the model's list price for comparison.
-      expectedCost: 8 * 0.1e-6 + 3 * 0.5e-6,
-    },
-    {
-      name: "Claude Code on a Claude sign-in (Messages, on the plan)",
-      harness: "claude-code",
-      credential: "claude-login",
-      send: (env, trial) => messages(env, trial.model),
-      upstreamPath: "/v1/messages",
-      upstreamKey: (call) => call.authorization,
-      expectedCost: 8 * 2e-6 + 3 * 10e-6,
-    },
   ];
 
   for (const testCase of CASES) {
@@ -132,8 +113,7 @@ describe("a real trial's path through the gateway", () => {
       const everything = JSON.stringify({ child: env, args: trial.agentArguments });
       for (const raw of Object.values(hostEnv))
         if (raw.startsWith("raw-")) expect(everything).not.toContain(raw);
-      for (const secret of [...Object.values(VAULT_SECRETS), ...Object.values(UPSTREAM_KEYS)])
-        expect(everything).not.toContain(secret);
+      for (const secret of Object.values(VAULT_SECRETS)) expect(everything).not.toContain(secret);
       expect(readTrialKey(connection.key, SECRET)).toMatchObject({ model, tags: { trial: tag } });
       expect(gatewayRequestModel(input)).toBe(`dari/model/${model}`);
 
@@ -145,9 +125,9 @@ describe("a real trial's path through the gateway", () => {
       expect(api.upstream.calls).toEqual([
         expect.objectContaining({ path: testCase.upstreamPath, model: native(model) }),
       ]);
-      // The provider saw the vault's secret (a sign-in's access token), never the trial key.
+      // The provider saw the vault's secret, never the trial key.
       expect(testCase.upstreamKey(api.upstream.calls[0] as UpstreamCall)).toContain(
-        UPSTREAM_KEYS[testCase.credential],
+        VAULT_SECRETS[testCase.credential],
       );
       expect(JSON.stringify(api.upstream.calls)).not.toContain(connection.key);
 
@@ -176,7 +156,7 @@ describe("a real trial's path through the gateway", () => {
       return responses(trial.child, trial.model.replace(/^openai\//, ""), extra);
     };
     api.upstream.calls.length = 0;
-    const summary = await send("codex-login", { reasoning: { effort: "low", summary: "auto" } });
+    const summary = await send("openai", { reasoning: { effort: "low", summary: "auto" } });
     expect(summary.status).toBe(200);
     await summary.text();
     api.upstream.calls.length = 0;

@@ -49,7 +49,7 @@ export function buildRunRequest(config: SelfBenchConfig, submission: RunSubmissi
 }
 
 function authoring(model: string): RunRequest["authoring"] {
-  return { provider: "openai-codex", model, reasoningEffort: "high" };
+  return { provider: "openai", model, reasoningEffort: "high" };
 }
 
 function version(config: SelfBenchConfig, selfbenchCommit: string): RunRequest["version"] {

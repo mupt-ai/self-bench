@@ -43,7 +43,7 @@ const runVersionSchema = z
 const runIdSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{2,62}$/);
 
 const authoringSchema = z.object({
-  provider: z.enum(["openai-codex", "openai", "anthropic", ...gatewayIds]),
+  provider: z.enum(["openai-codex", "openai", "anthropic", "dari-link", ...gatewayIds]),
   model: z.string().min(1),
   reasoningEffort: z.enum(["low", "medium", "high"]),
   /** Pi's models.json for a gateway model, as the run's submission resolved it. */

@@ -30,7 +30,6 @@ test("subagent authorization is exact, uses its own credential, and stays solver
         auth: "api-key",
       }),
       secret: async (_org, id) => ({ value: `${id}-secret` }),
-      renew: async () => {},
     },
     endpoint: (value) => value,
     modelPrice: () => ({ input: 1, output: 2 }),

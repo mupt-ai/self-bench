@@ -9,6 +9,7 @@ import type {
 } from "../../contracts/index.js";
 import type { UsageLedger } from "../../db/usage.js";
 import type { Vault } from "../../db/vault.js";
+import type { DariLinkGrants } from "../../gateway/dari-link/link.js";
 import { createSandboxExecutor } from "../../sandbox/index.js";
 import type { SandboxJobOutcome } from "../../sandbox/jobs.js";
 import { taskImageBuilder } from "../images/builder.js";
@@ -90,6 +91,7 @@ export function createActivities(
   config: SelfBenchWorkerConfig,
   vault?: Vault,
   usage?: UsageLedger,
+  dariLink?: DariLinkGrants,
 ): WorkerActivities {
   const store = createArtifactStore(config.artifact);
   const fallback = createSandboxExecutor(config.execution);
@@ -105,7 +107,7 @@ export function createActivities(
     stage: "author" | "verifier",
     action: Parameters<typeof withGenerationRuntime<T>>[5],
     work?: Parameters<typeof withGenerationRuntime<T>>[7],
-  ) => withGenerationRuntime(config, vault, run, stage, fallback, action, usage, work);
+  ) => withGenerationRuntime(config, vault, run, stage, fallback, action, usage, work, dariLink);
   return {
     startDiscoveryShard: (input) =>
       runtime(input.run, "author", (sandbox, _harbor, run) =>

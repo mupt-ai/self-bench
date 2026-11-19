@@ -72,7 +72,7 @@ test("the setup popup stays closed for members, set-up orgs, and the managed off
   canManage = true;
   expect(await visit("managed", true)).toBe("closed");
   credentials = [
-    { id: "a", name: "Codex", kind: "openai", auth: "codex-login" },
+    { id: "a", name: "OpenAI", kind: "openai", auth: "api-key" },
     { id: "b", name: "Modal", kind: "modal", auth: "api-key" },
   ];
   expect(await visit("ready")).toBe("closed");

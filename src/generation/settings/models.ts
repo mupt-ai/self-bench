@@ -1,6 +1,8 @@
 import type { CredentialInfo } from "../../db/credentials.js";
 import { type CatalogModel, evaluationCatalog } from "../../evaluation/catalog.js";
+import { credentialRoute, linkedOnly } from "../../evaluation/link-routes.js";
 import { modelRoutes, routeFor } from "../../evaluation/models.js";
+import { dariRequestName } from "../../gateway/dari-link/connection.js";
 import {
   type GatewayId,
   gatewayIds,
@@ -17,13 +19,19 @@ let indexed:
   | { listings: readonly (readonly ListedModel[])[]; models: Map<string, CatalogModel> }
   | undefined;
 
+/** The credential a generation model runs on: a stored key, or a Dari connection (`dari-link`). */
+export type GenerationCredential = Pick<CredentialInfo, "kind" | "auth" | "linkModels">;
+
 /**
  * Generation offers the run page's models: the curated catalog plus every model the gateways
  * list (evaluationCatalog). Authoring and verification run in Pi, which every route drives: a
- * model's native provider key (OpenAI API key, ChatGPT sign-in, or Anthropic) and any gateway
- * that serves it. Managed access is OpenRouter behind a platform key.
+ * model's native provider key (OpenAI or Anthropic), any gateway that
+ * serves it, and a Dari connection's models (`credential`, which only it lists by its own id).
  */
-export function generationModel(id: string): CatalogModel | undefined {
+export function generationModel(
+  id: string,
+  credential?: GenerationCredential,
+): CatalogModel | undefined {
   // Building the catalog merges every listing, and stages and usage rows look models up often,
   // so it is rebuilt only when a refresh replaces a listing.
   const listings = gatewayIds.map(listedModels);
@@ -36,20 +44,19 @@ export function generationModel(id: string): CatalogModel | undefined {
           .map((model) => [model.id, model]),
       ),
     };
-  return indexed.models.get(id);
+  return indexed.models.get(id) ?? linkedOnly(id, credential);
 }
 
-/** Whether a stored credential can run the model in Pi. */
+/**
+ * Whether a stored credential can run the model in Pi. A Dari connection runs what it serves for
+ * any app, and so generates; a model only its Claude or Muse plan serves runs on that plan's own
+ * agent alone (link-routes.ts), which has no Pi route, so it cannot.
+ */
 export function generationCredentialRuns(
   model: CatalogModel,
-  credential: Pick<CredentialInfo, "kind" | "auth">,
+  credential: GenerationCredential,
 ): boolean {
-  if (credential.auth === "codex-login")
-    return credential.kind === "openai" && model.provider === "openai";
-  // A route only a vendor's own CLI drives, as Muse Code drives Meta's, has no Pi.
-  return (
-    credential.auth === "api-key" && !!routeFor(model, credential.kind)?.harnesses.includes("pi")
-  );
+  return !!credentialRoute(model, credential)?.harnesses.includes("pi");
 }
 
 /**
@@ -63,16 +70,16 @@ export function managedRuns(model: CatalogModel): boolean {
 /**
  * Resolves the Pi provider and model id for one stage's model under the selected credential, or
  * under managed access (no credential), which is OpenRouter behind a platform key. Pi names each
- * gateway's provider by its id, and a ChatGPT sign-in "openai-codex".
+ * gateway's provider by its id.
  */
 export function generationModelRoute(
   id: string,
-  credential: Pick<CredentialInfo, "kind" | "auth"> | undefined,
-): { provider: "openai" | "openai-codex" | "anthropic" | GatewayId; model: string } {
-  const model = generationModel(id);
+  credential: GenerationCredential | undefined,
+): { provider: "openai" | "anthropic" | "dari-link" | GatewayId; model: string } {
+  const model = generationModel(id, credential);
   if (!model) throw new Error(`Unknown generation model ${id}`);
   const runs = credential ? generationCredentialRuns(model, credential) : managedRuns(model);
-  const route = runs ? routeFor(model, credential?.kind ?? "openrouter") : undefined;
+  const route = runs ? credentialRoute(model, credential ?? { kind: "openrouter" }) : undefined;
   // Catalog models never route to a custom endpoint, nor run Pi on Meta's own key
   // (generationCredentialRuns); the check narrows the provider.
   if (
@@ -82,10 +89,10 @@ export function generationModelRoute(
     route.provider === "dari"
   )
     throw new Error(`${model.label} cannot run on this credential`);
-  return {
-    provider: credential?.auth === "codex-login" ? "openai-codex" : route.provider,
-    model: route.model,
-  };
+  // A Dari connection's model is named as its gateway serves it (dari/model/<id>).
+  return route.provider === "dari-link"
+    ? { provider: "dari-link", model: dariRequestName(route.model) }
+    : { provider: route.provider, model: route.model };
 }
 
 /** OpenRouter's rates, which managed generation runs through and is billed at. */

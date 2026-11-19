@@ -1,7 +1,8 @@
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import type { ComparisonSelection } from "../../../../src/evaluation/comparisons";
-import { routeFor, thinkingOptions } from "../../../../src/evaluation/models";
+import { credentialRoute, linkedCatalogModels } from "../../../../src/evaluation/link-routes";
+import { thinkingOptions } from "../../../../src/evaluation/models";
 import { credentialRunsAll, customModel, hasDuplicateModelSelections } from "./model-selection";
 
 /**
@@ -39,7 +40,7 @@ export function selectionReady({
           : models.find((entry) => entry.id === selection.catalogId);
       const credential = credentials.find((entry) => entry.id === selection.credentialId);
       if (!model || !credential) return false;
-      const route = routeFor(model, credential.kind);
+      const route = credentialRoute(model, credential);
       const levels = thinkingOptions(route ?? model, selection.harnesses);
       return (
         credentialRunsAll(model, credential, selection.harnesses) &&
@@ -69,4 +70,9 @@ export function runCredentials(
       : []),
     ...(credentials ?? []),
   ];
+}
+
+/** The models a Run page offers: the catalog's, and those only a Dari connection serves. */
+export function runModels(models: CatalogModel[], credentials: CredentialInfo[]): CatalogModel[] {
+  return [...models, ...linkedCatalogModels(models, credentials)];
 }

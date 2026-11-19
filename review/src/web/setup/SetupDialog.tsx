@@ -1,49 +1,45 @@
-import { X } from "lucide-react";
+import { Check, X } from "lucide-react";
 import React from "react";
-import { Link } from "react-router";
 import type { CredentialDraft, CredentialInfo } from "../../../../src/db/credentials";
+import type { DariLinkBrowserConfig } from "../../../../src/gateway/dari-link/connection";
 import { Dialog } from "../Dialog";
 import { evaluationRequest } from "../evaluation/api";
-import { ClaudeSignIn } from "../evaluation/ClaudeSignIn";
 import { isSandbox } from "../evaluation/credential-presentation";
-import { DeviceSignIn } from "../evaluation/DeviceSignIn";
+import { useDariConnect } from "../evaluation/DariConnect";
 import { cn } from "../primitives/cn";
 import { Button, iconButtonStyles } from "../ui";
 import { covered, setupCoverage } from "./readiness";
 import { SandboxForm } from "./SandboxForm";
 import { type Choice, Choices, Status } from "./SetupRows";
 
-const plans = [
-  {
-    id: "codex-login",
-    title: "ChatGPT",
-    detail: "Runs Codex. Generates tasks and evaluates OpenAI models.",
-  },
-  {
-    id: "claude-login",
-    title: "Claude",
-    detail: "Runs Claude Code. Evaluates Claude models, but can't generate tasks.",
-  },
-] as const;
 const sandboxes = [
   { id: "modal", title: "Modal", detail: "Generates tasks and runs evaluations." },
   { id: "e2b", title: "E2B", detail: "Generates tasks and runs evaluations." },
+  { id: "vercel", title: "Vercel", detail: "Generates tasks. Evaluations need another sandbox." },
+  {
+    id: "daytona",
+    title: "Daytona",
+    detail: "Runs evaluations. Generating tasks needs another sandbox.",
+  },
 ] as const;
 
 /**
- * First-run setup as one popup: sign in with a coding plan, connect a sandbox, then see what
- * the organization can run. The sign-ins are the Credentials page's own flows, started inline.
+ * First-run setup as one popup: connect an AI subscription with Dari, connect a sandbox, then see
+ * what the organization can run. Both are the Credentials page's own flows, started inline.
  */
 export function SetupDialog({
   org,
   credentials,
   canManage,
+  dariLink,
   refresh,
   onClose,
 }: {
   org: string;
   credentials: CredentialInfo[];
   canManage: boolean;
+  /** What Connect with Dari needs; null when this deployment has no Dari Link. */
+  dariLink: DariLinkBrowserConfig | null;
   refresh(): Promise<void>;
   onClose(): void;
 }) {
@@ -66,14 +62,12 @@ export function SetupDialog({
     go(next);
   };
   const connectedTo = (id: Choice) =>
-    credentials.find(
-      (entry) => entry.auth === id || (entry.kind === id && entry.auth === "api-key"),
-    );
+    credentials.find((entry) => entry.kind === id && entry.auth === "api-key");
   const ready = covered(coverage.generate) && covered(coverage.evaluate);
   const heading = [
     {
-      title: "Connect a Coding Plan",
-      body: "Sign in with ChatGPT or Claude and SelfBench runs its agents on your plan. Runs count against your plan's usage limits.",
+      title: "Connect Your AI Subscription",
+      body: "Connect a Claude or ChatGPT plan, or an API key, with Dari, and SelfBench runs its agents on it. Runs count against your plan's usage limits, or are billed to your key.",
     },
     {
       title: "Choose Where Tasks Run",
@@ -136,31 +130,11 @@ export function SetupDialog({
         </p>
         <div className="mt-6">
           {step === 0 && (
-            <Choices
-              items={plans}
-              open={open}
-              connectedTo={connectedTo}
-              onToggle={setOpen}
-              render={(id) =>
-                id === "codex-login" ? (
-                  <DeviceSignIn
-                    login="codex-login"
-                    org={org}
-                    name="Codex"
-                    autoStart
-                    onActiveChange={() => undefined}
-                    onDone={() => connected(1)}
-                  />
-                ) : (
-                  <ClaudeSignIn
-                    org={org}
-                    name="Claude"
-                    autoStart
-                    onActiveChange={() => undefined}
-                    onDone={() => connected(1)}
-                  />
-                )
-              }
+            <DariStep
+              org={org}
+              config={dariLink}
+              linked={credentials.filter((entry) => entry.auth === "dari-link")}
+              onConnected={() => connected(1)}
             />
           )}
           {step === 1 && (
@@ -171,7 +145,7 @@ export function SetupDialog({
               onToggle={setOpen}
               render={(id) => (
                 <SandboxForm
-                  kind={id as "modal" | "e2b"}
+                  kind={id}
                   onSave={async (draft: CredentialDraft) => {
                     await evaluationRequest(url, draft);
                     await connected(2);
@@ -181,18 +155,6 @@ export function SetupDialog({
             />
           )}
           {step === 2 && <Status coverage={coverage} />}
-          {step < 2 && (
-            <p className="mt-4 text-sm text-muted-foreground">
-              {step === 0 ? "Have an API key instead? " : "Using Vercel or Daytona? "}
-              <Link
-                to="/settings/credentials"
-                onClick={onClose}
-                className="rounded-sm font-medium text-foreground underline decoration-foreground/35 underline-offset-4 transition-colors hover:decoration-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                Add It in Credentials
-              </Link>
-            </p>
-          )}
         </div>
       </div>
       <footer className="flex items-center gap-2 border-t border-border bg-card px-5 py-4 sm:px-7">
@@ -217,5 +179,53 @@ export function SetupDialog({
         </div>
       </footer>
     </Dialog>
+  );
+}
+
+/** Setup's first step: Connect with Dari, and what is already connected through it. */
+function DariStep({
+  org,
+  config,
+  linked,
+  onConnected,
+}: {
+  org: string;
+  config: DariLinkBrowserConfig | null;
+  linked: CredentialInfo[];
+  onConnected(): Promise<void>;
+}) {
+  const dari = useDariConnect(org, config, onConnected);
+  if (!config)
+    return (
+      <p className="panel px-4 py-4 text-sm text-muted-foreground">
+        Connecting AI subscriptions needs Dari Link, which isn't configured on this deployment.
+      </p>
+    );
+  return (
+    <div className="space-y-4">
+      {linked.length > 0 && (
+        <ul className="panel divide-y divide-border">
+          {linked.map((credential) => (
+            <li key={credential.id} className="flex items-center gap-2 px-4 py-3.5 text-sm">
+              <Check className="size-4 text-success" aria-hidden="true" />
+              {credential.name}
+            </li>
+          ))}
+        </ul>
+      )}
+      <Button
+        variant={linked.length ? "secondary" : "primary"}
+        className="w-full"
+        disabled={dari.connecting}
+        onClick={dari.connect}
+      >
+        {dari.connecting ? "Connecting…" : linked.length ? "Connect Another" : "Connect with Dari"}
+      </Button>
+      {dari.error && (
+        <p role="alert" className="text-sm leading-6 text-destructive">
+          {dari.error}
+        </p>
+      )}
+    </div>
   );
 }

@@ -72,29 +72,3 @@ test("credential add takes the secret from an environment variable, never an arg
     "--value-env",
   );
 });
-
-test("a device sign-in polls until the provider approves it", async () => {
-  const started = {
-    id: "l1",
-    status: "waiting",
-    instructions: { verificationUrl: "https://x", userCode: "AB-12" },
-  };
-  const error = spyOn(console, "error").mockImplementation(() => undefined);
-  try {
-    const sent = await cli(
-      ["credential", "add", "--org", "acme", "--sign-in", "chatgpt", "--name", "Mine"],
-      {
-        [`POST ${base}/codex-login`]: started,
-        [`GET ${base}/codex-login/l1`]: { id: "l1", status: "saved", credential: { id: "c2" } },
-      },
-    );
-    expect(sent.map((request) => `${request.method} ${request.path}`)).toEqual([
-      `POST ${base}/codex-login`,
-      `GET ${base}/codex-login/l1`,
-    ]);
-    expect(sent[0]?.body).toEqual({ name: "Mine" });
-    expect(String(error.mock.calls[0]?.[0])).toContain("AB-12");
-  } finally {
-    error.mockRestore();
-  }
-});

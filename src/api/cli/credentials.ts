@@ -5,7 +5,6 @@ import { print, table } from "./output.js";
 
 const FLAGS = {
   kind: { type: "string" },
-  "sign-in": { type: "string" },
   name: { type: "string" },
   "value-env": { type: "string" },
   "value-stdin": { type: "boolean", default: false },
@@ -17,7 +16,7 @@ const FLAGS = {
 
 const basePath = (values: Values) => `/api/orgs/${encodeURIComponent(org(values))}/credentials`;
 
-/** `credential list|add|rename|remove|complete`: the workspace's saved keys and sign-ins. */
+/** `credential list|add|rename|remove`: the workspace's saved keys. */
 export async function credentialCommand(args: string[]): Promise<void> {
   const [action, ...rest] = args;
   const { values, positionals } = parse(rest, FLAGS);
@@ -55,15 +54,6 @@ export async function credentialCommand(args: string[]): Promise<void> {
     case "remove": {
       const id = encodeURIComponent(positional(positionals, 0, "credential ID"));
       return print(values, await requestJson(`${base}/${id}/delete`, "POST"), () => "Removed.");
-    }
-    case "complete": {
-      // A Claude sign-in started without a terminal: the code Anthropic showed after approval.
-      const id = encodeURIComponent(positional(positionals, 0, "sign-in ID"));
-      const code = positional(positionals, 1, "CODE");
-      return print(
-        values,
-        await requestJson(`${base}/claude-login/${id}/complete`, "POST", { code }),
-      );
     }
     default:
       throw new Error("usage: self-bench credential list|add | credential rename|remove ID");

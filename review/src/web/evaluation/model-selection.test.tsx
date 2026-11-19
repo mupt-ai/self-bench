@@ -28,26 +28,16 @@ const credential: CredentialInfo = {
   createdAt: "2026-09-11T00:00:00Z",
 };
 
-test("requested harness chooses a compatible credential and respects login restrictions", () => {
-  const openai: CatalogModel = { ...model, provider: "openai" };
-  const login: CredentialInfo = { ...credential, kind: "openai", auth: "codex-login" };
-  expect(nextModelSelection(openai, [login], "pi")).toBeUndefined();
-  expect(
-    nextModelSelection(openai, [login, { ...login, id: "api-key", auth: "api-key" }], "pi"),
-  ).toEqual({ catalogId: model.id, credentialId: "api-key", harnesses: ["pi"] });
-  // A Meta key defaults to Muse Code and runs any harness; a Meta sign-in only Muse Code.
+test("requested harness chooses a credential that runs it", () => {
+  // A Meta key defaults to Muse Code and runs any harness.
   const spark: CatalogModel = { ...model, provider: "meta", harnesses: ["muse-code"] };
   const metaKey: CredentialInfo = { ...credential, kind: "meta" };
-  const museLogin: CredentialInfo = { ...metaKey, id: "muse-login", auth: "muse-login" };
   expect(nextModelSelection(spark, [metaKey])?.harnesses).toEqual(["muse-code"]);
-  expect(nextModelSelection(spark, [museLogin], "claude-code")).toBeUndefined();
-  expect(nextModelSelection(spark, [museLogin, metaKey], "claude-code")).toEqual({
+  expect(nextModelSelection(spark, [metaKey], "claude-code")).toEqual({
     catalogId: model.id,
     credentialId: metaKey.id,
     harnesses: ["claude-code"],
   });
-  const claudeLogin: CredentialInfo = { ...credential, auth: "claude-login" };
-  expect(nextModelSelection(model, [claudeLogin], "pi")).toBeUndefined();
 });
 
 test("duplicates match model, effective thinking level, and harness, not credential", () => {
@@ -194,12 +184,17 @@ test("selection skips incompatible credentials and fills the first compatible ro
   ).toEqual({ catalogId: model.id, credentialId: credential.id, harnesses: ["claude-code"] });
 });
 
-test("selection uses Codex for a compatible login credential", () => {
+test("selection uses Claude Code for a model only a Claude plan connected with Dari serves", () => {
   expect(
-    nextModelSelection({ ...model, provider: "openai" }, [
-      { ...credential, kind: "openai", auth: "codex-login" },
+    nextModelSelection(model, [
+      {
+        ...credential,
+        kind: "dari-link",
+        auth: "dari-link",
+        linkModels: { models: [{ id: "anthropic/test", only: "claude-code" }], prefixes: [] },
+      },
     ]),
-  ).toEqual({ catalogId: model.id, credentialId: credential.id, harnesses: ["codex"] });
+  ).toEqual({ catalogId: model.id, credentialId: credential.id, harnesses: ["claude-code"] });
 });
 
 test("an empty inline row offers the model picker and disables dependent controls", () => {

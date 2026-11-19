@@ -1,7 +1,7 @@
 import type { HarnessOptions } from "../../../../src/contracts/harness-options";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import { type CatalogModel, hostedSandboxes } from "../../../../src/evaluation/catalog";
-import { credentialRunsHarness, routeFor } from "../../../../src/evaluation/models";
+import { credentialRoute, linkedOnly } from "../../../../src/evaluation/link-routes";
 import type { EvaluationRun, Harness } from "./api";
 import { isSandbox } from "./credential-presentation";
 import { outcomeOf } from "./results-model";
@@ -164,11 +164,11 @@ export function retrySandboxes(
 
 /**
  * The model credentials a retry may run on: the run's own first, then the org's other saved ones
- * that run its model on its harness (another key, gateway or Dari router). A custom model stays on
+ * that run its model on its harness (another key, gateway, Dari router or Dari connection). A custom model stays on
  * its own endpoint, and until the catalog loads only the run's own is offered.
  */
 export function retryModelCredentials<
-  Credential extends Pick<CredentialInfo, "id" | "kind" | "auth">,
+  Credential extends Pick<CredentialInfo, "id" | "kind" | "auth" | "linkModels">,
 >(
   run: EvaluationRun,
   harness: Harness,
@@ -180,9 +180,11 @@ export function retryModelCredentials<
     run.model === "custom" ? undefined : catalog?.find((entry) => entry.id === run.model);
   const runs = (credential: Credential) => {
     if (credential.id === own) return true;
-    if (!model || isSandbox(credential.kind) || credential.kind === "custom") return false;
-    const route = routeFor(model, credential.kind);
-    return !!route?.harnesses.includes(harness) && credentialRunsHarness(credential.auth, harness);
+    if (!catalog || run.model === "custom") return false;
+    if (isSandbox(credential.kind) || credential.kind === "custom") return false;
+    // A model the catalog does not know is one only a Dari connection lists, by Dari's id.
+    const served = model ?? linkedOnly(run.model, credential);
+    return !!served && !!credentialRoute(served, credential)?.harnesses.includes(harness);
   };
   const isOwn = (credential: Credential) => credential.id === own;
   const offered = saved.filter(runs);

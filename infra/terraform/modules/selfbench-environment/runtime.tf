@@ -98,14 +98,27 @@ locals {
       enabled = var.managed_offering
     }
   }
+  # Connect with Dari's client secret for SelfBench's Dari Link app, read once dari_link_client_id
+  # is set. Like the managed values, operators add it before turning it on and Terraform only
+  # grants access.
+  link_secrets = {
+    dari_link_client_secret = {
+      id      = "selfbench-dari-link-client-secret"
+      env     = "SELFBENCH_DARI_LINK_CLIENT_SECRET"
+      api     = true
+      worker  = true
+      enabled = var.dari_link_client_id != null
+    }
+  }
   # Secrets nothing reads any more. Their containers stay, since secrets are never destroyed.
   retired_secrets = {
     task_canary = "selfbench-task-canary"
   }
-  readable_secrets = merge(local.runtime_secrets, local.managed_secrets)
+  readable_secrets = merge(local.runtime_secrets, local.managed_secrets, local.link_secrets)
   secret_ids = merge(
     { for key, secret in google_secret_manager_secret.value : key => secret.secret_id },
     { for key, secret in local.managed_secrets : key => secret.id },
+    { for key, secret in local.link_secrets : key => secret.id },
   )
   temporal_secret = {
     id  = "selfbench-temporal-api-key"
@@ -139,6 +152,9 @@ locals {
     SELFBENCH_MANAGED_OFFERING          = var.managed_offering ? "true" : null
     SELFBENCH_MANAGED_MODAL_ENVIRONMENT = var.managed_offering ? local.name : null
     SENTRY_DSN                          = var.sentry_dsn
+    # Connect with Dari: the gateway and SelfBench's client on it; the worker mints trial tokens.
+    SELFBENCH_DARI_LINK_URL       = var.dari_link_client_id != null ? var.dari_link_url : null
+    SELFBENCH_DARI_LINK_CLIENT_ID = var.dari_link_client_id
   } : name => value if value != null })
   api_env = merge(local.shared_env, { for name, value in {
     GITHUB_OAUTH_CLIENT_ID       = var.github_oauth_client_id
