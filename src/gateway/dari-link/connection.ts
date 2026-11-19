@@ -67,6 +67,8 @@ export interface DariLinkModels {
     readonly only?: DariLinkOnly;
   }[];
   readonly prefixes: readonly string[];
+  /** What the user shared, as Dari names it: `Claude`, `ChatGPT`, `OpenRouter API Key`. */
+  readonly plans?: readonly string[];
 }
 
 /** Dari's model id as SelfBench saves it: a request's name for it without `dari/model/`. */
@@ -107,6 +109,13 @@ function grantModels(grant: Pick<LinkGrant, "plans" | "models">): DariLinkModels
       ...new Set(
         grant.plans.flatMap((plan) =>
           plan.model_prefix && !onlyHarness[plan.serves] ? [plan.model_prefix] : [],
+        ),
+      ),
+    ],
+    plans: [
+      ...new Set(
+        grant.plans.map((plan) =>
+          plan.kind === DARI_API_KEY ? plan.plan || plan.title : plan.title || plan.kind,
         ),
       ),
     ],

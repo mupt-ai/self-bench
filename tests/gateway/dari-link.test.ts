@@ -64,6 +64,8 @@ describe("Dari Link", () => {
     );
     expect(credential?.linkModels?.models).toContainEqual(expect.objectContaining({ id: GPT }));
     expect(credential?.linkModels?.prefixes).toEqual(["openrouter/"]);
+    // The Credentials page names what was shared, not just "Dari".
+    expect(credential?.linkModels?.plans).toEqual(["Claude", "ChatGPT", "OpenRouter API Key"]);
     // A verifier the page did not make is refused.
     const forged = await link.server.request("/api/orgs/avyay/credentials/dari-link", {
       method: "POST",

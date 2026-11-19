@@ -49,8 +49,12 @@ export function endpointLabel(endpoint: string): string {
     return endpoint;
   }
 }
-export function credentialAccess(credential: Pick<CredentialInfo, "kind" | "auth">) {
-  if (credential.auth === "dari-link") return "Connected via Dari";
+export function credentialAccess(
+  credential: Pick<CredentialInfo, "kind" | "auth"> & Pick<Partial<CredentialInfo>, "linkModels">,
+) {
+  // A Dari connection by what it shares: `Claude, ChatGPT, OpenRouter API Key`.
+  if (credential.auth === "dari-link")
+    return credential.linkModels?.plans?.join(", ") || "Nothing Shared";
   return (
     signInOf(credential.auth)?.label ?? (credential.kind === "modal" ? "Token Pair" : "API Key")
   );
