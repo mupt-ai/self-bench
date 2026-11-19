@@ -1,10 +1,11 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import React from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { isEvalName } from "../../../../src/contracts/evals";
 import { fetchTask, type TaskItem } from "../api";
 import { GitHubMark } from "../GitHubMark";
 import { pageGutter } from "../layout";
+import { repoPagePath, useRepoParams } from "../paths";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { FeedbackSheet } from "../task/FeedbackSheet";
@@ -38,13 +39,13 @@ function isGitHub(url: string): boolean {
 /** Keyed by the route, so a new task never inherits the previous task's state or controls. */
 export function TaskPage() {
   const { org } = useOrg();
-  const { owner = "", name = "", runId = "", taskId = "" } = useParams();
+  const { owner = "", name = "", runId = "", taskId = "" } = useRepoParams();
   return <TaskPageContent key={JSON.stringify([org.login, owner, name, runId, taskId])} />;
 }
 
 function TaskPageContent() {
   const { org } = useOrg();
-  const { owner = "", name = "", runId = "", taskId = "" } = useParams();
+  const { owner = "", name = "", runId = "", taskId = "" } = useRepoParams();
   const fullName = `${owner}/${name}`;
   const [task, setTask] = React.useState<TaskItem | null | undefined>(undefined);
   const [revisions, setRevisions] = React.useState<TaskItem[]>([]);
@@ -127,7 +128,7 @@ function TaskPageContent() {
     return (
       <PageFrame>
         <Notice>
-          Task not found. <Link to={`/repos/${fullName}`}>Back to {fullName}</Link>
+          Task not found. <Link to={repoPagePath(fullName)}>Back to {fullName}</Link>
         </Notice>
       </PageFrame>
     );
@@ -141,16 +142,16 @@ function TaskPageContent() {
           <Breadcrumbs
             items={[
               isEvalName(fullName)
-                ? { label: "Custom Benchmarks", to: "/evals" }
-                : { label: "Repo Benchmarks", to: "/" },
+                ? { label: "Custom Benchmarks", to: "/custom" }
+                : { label: "Repo Benchmarks", to: "/repos" },
               {
                 label: fullName,
-                to: queue?.backLabel === "Dataset" ? queue.back : `/repos/${fullName}`,
+                to: queue?.backLabel === "Dataset" ? queue.back : repoPagePath(fullName),
                 mono: true,
               },
               {
                 label: "Batch",
-                to: `/repos/${fullName}/batches/${encodeURIComponent(task.runId)}`,
+                to: `${repoPagePath(fullName)}/batches/${encodeURIComponent(task.runId)}`,
               },
             ]}
           />

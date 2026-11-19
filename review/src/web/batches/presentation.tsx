@@ -1,8 +1,9 @@
 import type { BatchStatus } from "../batch-api";
+import { repoPagePath } from "../paths";
 import { cn } from "../primitives/cn";
 
 export const batchPath = (fullName: string, runId?: string) =>
-  `/repos/${fullName}/batches${runId ? `/${encodeURIComponent(runId)}` : ""}`;
+  `${repoPagePath(fullName)}/batches${runId ? `/${encodeURIComponent(runId)}` : ""}`;
 export const batchName = (runId: string) => `Batch ${runId.replace(/^batch-/, "").slice(0, 8)}`;
 export const batchDate = (date: string) =>
   new Date(date).toLocaleString(undefined, {

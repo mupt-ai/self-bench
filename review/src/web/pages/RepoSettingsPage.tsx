@@ -1,7 +1,7 @@
 import React from "react";
-import { useParams } from "react-router";
 import { AGENT_MINUTES } from "../../../../src/contracts/agent-limit";
 import { requestJson } from "../api";
+import { useRepoParams } from "../paths";
 import { InfoTooltip } from "../primitives/tooltip";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
@@ -11,7 +11,7 @@ type Result = { tone: "success" | "error"; text: string; retry?: boolean };
 
 export function RepoSettingsPage() {
   const { org } = useOrg();
-  const { owner = "", name = "" } = useParams();
+  const { owner = "", name = "" } = useRepoParams();
   useDocumentTitle(`Settings · ${owner}/${name} · SelfBench`);
   const path = `/api/orgs/${encodeURIComponent(org.login)}/repos/${owner}/${name}`;
   return <AgentLimit key={path} path={path} />;

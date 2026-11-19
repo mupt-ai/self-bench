@@ -3,6 +3,7 @@ import { useParams } from "react-router";
 import type { TaskSource } from "../../sources/types";
 import type { CandidateArtifacts } from "../../types";
 import { pageGutter } from "../layout";
+import { publicPagePath } from "../paths";
 import { InfoTooltip } from "../primitives/tooltip";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
@@ -28,8 +29,8 @@ export function BenchmarkTaskPage() {
       <header className={`border-b border-border bg-background py-5 ${pageGutter}`}>
         <Breadcrumbs
           items={[
-            { label: "Public Benchmarks", to: "/benchmarks" },
-            { label: fullName, to: `/benchmarks/${fullName}`, mono: true },
+            { label: "Public Benchmarks", to: "/public" },
+            { label: fullName, to: publicPagePath(fullName), mono: true },
             { label: "Task" },
           ]}
         />

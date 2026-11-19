@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router";
 import { SESSION_EXPIRED } from "../session-expired";
 import { forgetPerson, identifyPerson } from "../telemetry";
 import { BatchesPage } from "./batches/BatchesPage";
@@ -90,7 +90,8 @@ export function WebApp() {
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/demo/run" element={<DemoRunPage />} />
                 <Route element={<RequireUser />}>
-                  <Route index element={<ReposPage />} />
+                  <Route index element={<Navigate to="/repos" replace />} />
+                  <Route path="repos" element={<ReposPage />} />
                   <Route path="settings/credentials" element={<CredentialsPage />} />
                   <Route path="settings/api-keys" element={<ApiKeysPage />} />
                   <Route path="settings/members" element={<MembersPage />} />
@@ -102,8 +103,14 @@ export function WebApp() {
                   {session.status === "signed-in" && session.managedOffering && (
                     <Route path="settings/billing" element={<BillingPage />} />
                   )}
-                  <Route path="evals" element={<EvalsPage />} />
-                  <Route path="groups" element={<Navigate to="/" replace />} />
+                  <Route path="custom" element={<EvalsPage />} />
+                  <Route path="evals" element={<Navigate to="/custom" replace />} />
+                  <Route
+                    path="repos/evals/:name/*"
+                    element={<MovedTo prefix="/custom" from={3} />}
+                  />
+                  <Route path="benchmarks/*" element={<MovedTo prefix="/public" from={2} />} />
+                  <Route path="groups" element={<Navigate to="/repos" replace />} />
                   <Route path="groups/:slug" element={<GroupLayout />}>
                     <Route index element={<GroupDatasetPage />} />
                     <Route path="run" element={<RunPage />} />
@@ -115,8 +122,8 @@ export function WebApp() {
                       element={<Navigate to="../results" replace />}
                     />
                   </Route>
-                  <Route path="benchmarks" element={<BenchmarksPage />} />
-                  <Route path="benchmarks/:owner/:name" element={<BenchmarkLayout />}>
+                  <Route path="public" element={<BenchmarksPage />} />
+                  <Route path="public/:owner/:name" element={<BenchmarkLayout />}>
                     <Route index element={<BenchmarkDatasetPage />} />
                     <Route path="run" element={<RunPage />} />
                     <Route path="results" element={<EvaluationPage />} />
@@ -127,33 +134,14 @@ export function WebApp() {
                     />
                   </Route>
                   <Route path="repos/:owner/:name" element={<RepoLayout />}>
-                    <Route index element={<RepoPage />} />
-                    <Route path="batches" element={<BatchesPage />} />
-                    <Route path="batches/:batchId" element={<BatchPage />} />
-                    <Route path="add-prs" element={<AddPrPage />} />
-                    <Route path="add-scenario" element={<AddScenarioPage start="repository" />} />
-                    <Route
-                      path="add-workspace-scenario"
-                      element={<AddScenarioPage start="workspace" />}
-                    />
-                    <Route path="evaluations" element={<EvaluationPage />} />
-                    <Route path="results" element={<EvaluationPage />} />
-                    <Route path="releases" element={<ReleasesPage />} />
-                    <Route path="dataset" element={<Navigate to=".." replace />} />
-                    <Route path="run" element={<RunPage />} />
-                    <Route path="environments" element={<EnvironmentsPage />} />
-                    <Route path="settings" element={<RepoSettingsPage />} />
-                    <Route
-                      path="settings/credentials"
-                      element={<Navigate to="/settings/credentials" replace />}
-                    />
-                    <Route
-                      path="comparisons/:comparisonId"
-                      element={<Navigate to="../results" replace />}
-                    />
+                    {repoRoutes()}
+                  </Route>
+                  <Route path="custom/:name" element={<RepoLayout />}>
+                    {repoRoutes()}
                   </Route>
                   <Route path="repos/:owner/:name/tasks/:runId/:taskId" element={<TaskPage />} />
-                  <Route path="benchmarks/:owner/:name/tasks/*" element={<BenchmarkTaskPage />} />
+                  <Route path="custom/:name/tasks/:runId/:taskId" element={<TaskPage />} />
+                  <Route path="public/:owner/:name/tasks/*" element={<BenchmarkTaskPage />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Route>
               </Routes>
@@ -171,4 +159,38 @@ function RequireUser() {
   return (
     <SiteLayout user={session.user} orgs={session.orgs} managedOffering={session.managedOffering} />
   );
+}
+
+/** A repository's or custom benchmark's pages, the same under `/repos/:owner/:name` and `/custom/:name`. */
+function repoRoutes() {
+  return (
+    <>
+      <Route index element={<RepoPage />} />
+      <Route path="batches" element={<BatchesPage />} />
+      <Route path="batches/:batchId" element={<BatchPage />} />
+      <Route path="add-prs" element={<AddPrPage />} />
+      <Route path="add-task" element={<AddScenarioPage />} />
+      <Route path="add-scenario" element={<Navigate to="../add-task" replace />} />
+      <Route path="add-workspace-scenario" element={<Navigate to="../add-task" replace />} />
+      <Route path="evaluations" element={<EvaluationPage />} />
+      <Route path="results" element={<EvaluationPage />} />
+      <Route path="releases" element={<ReleasesPage />} />
+      <Route path="dataset" element={<Navigate to=".." replace />} />
+      <Route path="run" element={<RunPage />} />
+      <Route path="environments" element={<EnvironmentsPage />} />
+      <Route path="settings" element={<RepoSettingsPage />} />
+      <Route
+        path="settings/credentials"
+        element={<Navigate to="/settings/credentials" replace />}
+      />
+      <Route path="comparisons/:comparisonId" element={<Navigate to="../results" replace />} />
+    </>
+  );
+}
+
+/** An old address (`/benchmarks/...`, `/repos/evals/...`): the same page at its new one. */
+function MovedTo({ prefix, from }: { prefix: string; from: number }) {
+  const { pathname, search, hash } = useLocation();
+  const rest = pathname.split("/").slice(from).join("/");
+  return <Navigate to={`${prefix}${rest ? `/${rest}` : ""}${search}${hash}`} replace />;
 }

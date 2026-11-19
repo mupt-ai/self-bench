@@ -1,5 +1,6 @@
 import { Package } from "lucide-react";
 import { formatAgo } from "../api";
+import { publicPagePath } from "../paths";
 import { ScopeCard } from "../ScopeCard";
 import { AddBenchmarkCard } from "./AddBenchmarkCard";
 import type { Benchmark, RegistryDataset } from "./api";
@@ -48,7 +49,7 @@ function BenchmarkCard({
   return (
     <ScopeCard
       name={benchmark.name}
-      {...(ready ? { to: `/benchmarks/${benchmark.name}` } : {})}
+      {...(ready ? { to: publicPagePath(benchmark.name) } : {})}
       icon={<Package className="size-5 shrink-0 text-faint" aria-hidden="true" />}
       details={[
         "Harbor Registry",

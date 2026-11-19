@@ -13,6 +13,7 @@ import {
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
 import { createEval } from "../evals-api";
 import { CardGridSkeleton } from "../LoadingSkeleton";
+import { repoPagePath } from "../paths";
 import { InfoTooltip } from "../primitives/tooltip";
 import { AddScopeButton, ScopeCard } from "../ScopeCard";
 import { useOrg } from "../SiteLayout";
@@ -69,7 +70,7 @@ export function EvalsPage() {
               <li key={entry.fullName}>
                 <ScopeCard
                   name={nameOf(entry)}
-                  to={`/repos/${entry.fullName}`}
+                  to={repoPagePath(entry.fullName)}
                   icon={
                     <FlaskConical
                       className="size-5 shrink-0 text-muted-foreground"
@@ -101,7 +102,7 @@ export function EvalsPage() {
         <NewEvalDialog
           org={org.login}
           onClose={() => setCreating(false)}
-          onCreated={(entry) => navigate(`/repos/${entry.fullName}`)}
+          onCreated={(entry) => navigate(repoPagePath(entry.fullName))}
         />
       )}
     </PageFrame>

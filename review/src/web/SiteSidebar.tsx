@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import React from "react";
 import { Link, useLocation } from "react-router";
-import { EVAL_OWNER } from "../../../src/contracts/evals";
 import { AppLockup } from "./Lockup";
 import {
   SidebarContent,
@@ -67,24 +66,21 @@ function sectionsOf(billing: boolean): { label: string; items: NavItem[] }[] {
         {
           // Repositories and groups of repositories, mined from coding repos.
           label: "Repo Benchmarks",
-          to: "/",
+          to: "/repos",
           icon: FolderGit2,
-          active: (path) =>
-            path === "/" ||
-            path.startsWith("/groups") ||
-            (path.startsWith("/repos/") && !path.startsWith(`/repos/${EVAL_OWNER}/`)),
+          active: (path) => path.startsWith("/repos") || path.startsWith("/groups"),
         },
         {
           label: "Public Benchmarks",
-          to: "/benchmarks",
+          to: "/public",
           icon: Gauge,
-          active: (path) => path.startsWith("/benchmarks"),
+          active: (path) => path.startsWith("/public"),
         },
         {
           label: "Custom Benchmarks",
-          to: "/evals",
+          to: "/custom",
           icon: FlaskConical,
-          active: (path) => path.startsWith("/evals") || path.startsWith(`/repos/${EVAL_OWNER}/`),
+          active: (path) => path.startsWith("/custom"),
         },
       ],
     },

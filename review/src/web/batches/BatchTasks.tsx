@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router";
 import { type BatchStatus, batchIsTerminal } from "../batch-api";
 import { GhostTasks } from "../ghosts";
+import { repoPagePath } from "../paths";
 import { cn } from "../primitives/cn";
 import { queueState, taskPath } from "../task/review-queue";
 import { DifficultyStamp } from "../task/state";
@@ -52,7 +53,7 @@ export function BatchTasks({ status, fullName }: { status: BatchStatus; fullName
     <section className="mt-6">
       <SectionHeader title="Tasks">
         <Link
-          to={`/repos/${fullName}`}
+          to={repoPagePath(fullName)}
           className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
         >
           View Dataset <ArrowRight className="size-3.5" aria-hidden="true" />

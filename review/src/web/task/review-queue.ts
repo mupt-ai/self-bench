@@ -1,3 +1,4 @@
+import { repoPagePath } from "../paths";
 /** A task in a list the reviewer opened, enough to route to it. */
 export interface TaskRef {
   readonly runId: string;
@@ -15,7 +16,7 @@ export interface ReviewQueue {
 }
 
 export function taskPath(fullName: string, task: TaskRef): string {
-  return `/repos/${fullName}/tasks/${encodeURIComponent(task.runId)}/${encodeURIComponent(task.taskId)}`;
+  return `${repoPagePath(fullName)}/tasks/${encodeURIComponent(task.runId)}/${encodeURIComponent(task.taskId)}`;
 }
 
 export function queueState(

@@ -1,6 +1,6 @@
-import { useParams } from "react-router";
 import { isEvalName } from "../../../src/contracts/evals";
 import { BatchProvider } from "./batches/BatchProvider";
+import { useRepoParams } from "./paths";
 import { ScopeLayout } from "./ScopeLayout";
 import { useOrg } from "./SiteLayout";
 
@@ -9,7 +9,7 @@ import { useOrg } from "./SiteLayout";
  * and its environments. An eval has no pull requests to batch and is never released.
  */
 export function RepoLayout() {
-  const { owner, name } = useParams();
+  const { owner, name } = useRepoParams();
   const { org } = useOrg();
   const repo = `${owner}/${name}`;
   const evalScope = isEvalName(repo);

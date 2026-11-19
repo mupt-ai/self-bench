@@ -1,7 +1,7 @@
 import { ChevronRight, Plus } from "lucide-react";
 import React from "react";
-import { useParams } from "react-router";
 import { formatAgo } from "../api";
+import { useRepoParams } from "../paths";
 import { cn } from "../primitives/cn";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
@@ -25,7 +25,7 @@ const coverage = ({ tasks }: EnvironmentItem) =>
  */
 export function EnvironmentsPage() {
   const { org } = useOrg();
-  const { owner = "", name = "" } = useParams();
+  const { owner = "", name = "" } = useRepoParams();
   const fullName = `${owner}/${name}`;
   useDocumentTitle(`Repo Ablations · ${fullName} · SelfBench`);
   const [environments, setEnvironments] = React.useState<EnvironmentItem[]>();

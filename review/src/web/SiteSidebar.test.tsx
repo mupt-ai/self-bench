@@ -98,17 +98,17 @@ test("sidebar supports the compact icon mode", () => {
 
 test("sidebar preserves active navigation across repository and settings routes", () => {
   for (const [path, href] of [
-    ["/", "/"],
-    ["/repos/example-account/example-repo", "/"],
-    ["/evals", "/evals"],
-    // An eval's pages sit under /repos/evals/, but belong to Evals, not Repositories.
-    ["/repos/evals/data-import-bugs/run", "/evals"],
+    ["/repos", "/repos"],
+    ["/repos/example-account/example-repo", "/repos"],
+    ["/public/terminal-bench/terminal-bench-2", "/public"],
+    ["/custom", "/custom"],
+    ["/custom/data-import-bugs/run", "/custom"],
     ["/settings/credentials", "/settings/credentials"],
     ["/settings/api-keys", "/settings/api-keys"],
     ["/settings/members", "/settings/members"],
     ["/settings/billing", "/settings/billing"],
     // Groups are part of Repo Benchmarks.
-    ["/groups/python-web/results", "/"],
+    ["/groups/python-web/results", "/repos"],
   ]) {
     const html = renderSidebar(path);
     const active = html.match(/<a[^>]*data-active="true"[^>]*>/g) ?? [];
