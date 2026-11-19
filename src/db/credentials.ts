@@ -150,7 +150,13 @@ export function createCredentialStore(db: Database, key: string) {
   /** A Dari connection's models, from its sealed grant: never stored apart from it. */
   const linked = (row: typeof credentials.$inferSelect) => {
     if (row.auth !== "dari-link") return {};
-    const models = linkModelsOf(open(row)?.value);
+    // An unreadable connection lists without models rather than failing every credential.
+    let models: ReturnType<typeof linkModelsOf>;
+    try {
+      models = linkModelsOf(open(row)?.value);
+    } catch {
+      return {};
+    }
     return models ? { linkModels: models } : {};
   };
   const live = (orgId: number, id: string) =>
