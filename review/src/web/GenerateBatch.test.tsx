@@ -115,9 +115,15 @@ test("batch creation is one dialog that closes and opens the submitted batch onc
       expect(container.querySelector(`input[aria-label="${label}"]`)?.getAttribute("max")).toBe(
         String(MAX_CANDIDATES_PER_RUN),
       );
+    // Features come first and are the default; their tiers are counted in PRs.
+    expect(button("Features").getAttribute("aria-pressed")).toBe("true");
     expect(
-      container.querySelector(`[aria-label="1–${MAX_CANDIDATES_PER_RUN} candidates total."]`),
-    ).not.toBeNull();
+      container
+        .querySelector('[aria-label^="1–"][aria-label*="candidates total."]')
+        ?.getAttribute("aria-label"),
+    ).toBe(
+      `1–${MAX_CANDIDATES_PER_RUN} candidates total. A feature's tier is how many PRs built it: easy 1–3 PRs, medium 4–8 PRs, hard 9+ PRs.`,
+    );
     // One dialog: the generation settings sit beside the counts with no wizard step.
     expect(button("Author Model").textContent).toBe("GPT-6.1 Sol");
     expect(container.textContent).not.toContain("Configure Generation");
@@ -155,6 +161,7 @@ test("batch creation is one dialog that closes and opens the submitted batch onc
       {
         candidateCounts: { easy: 1, medium: 1, hard: 1 },
         focus: "Next.js server actions",
+        unit: "feature",
         generation: {
           authorModel: "gpt-6-astra",
           verifierModel: "gpt-6-sol",

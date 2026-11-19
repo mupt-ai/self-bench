@@ -1,4 +1,5 @@
-import type { FeatureCandidate } from "../../contracts/index.js";
+import { type FeatureCandidate, featureTierSummary } from "../../contracts/index.js";
+import { easyFloor } from "../task/audit.js";
 import { renderPrompt } from "./prompts.js";
 
 /**
@@ -10,13 +11,14 @@ export function featureAuthoringPrompt(
   shared: {
     readonly howToWork: string;
     readonly feedback: string;
-    readonly tiers: string;
     readonly limits: string;
     readonly maintainer: string;
   },
 ): string {
   return renderPrompt("feature-authoring", {
     ...shared,
+    tiers: featureTierSummary(),
+    floor: easyFloor(),
     title: candidate.title,
     baseCommit: candidate.baseCommit,
     completedCommit: candidate.completedCommit,

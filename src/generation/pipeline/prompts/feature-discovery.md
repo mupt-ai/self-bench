@@ -10,7 +10,7 @@ You are choosing features of this repository ({{repositoryUrl}}) to become bench
 - A feature is {{minimum}}, all merged into the default branch, that together deliver something a user or caller can exercise end to end once the last one lands. Leave out PRs of the group that are only refactors, docs, or tests, unless the feature needs them.
 - Prefer features whose finished behavior can be tested from outside: a command, an HTTP endpoint, a rendered page, a public API, a stored record. Skip features that need live third-party accounts, hardware, or a production deploy to observe.
 - Keep each feature buildable from one base. Skip one whose PRs are interleaved with so much unrelated rework of the same code that its PRs no longer apply to the commit before the first of them.
-- Tier by the feature's combined implementation core (no tests, generated code, formatting, or unrelated cleanup): {{tiers}}. Use the highest tier the feature honestly meets.
+- A feature's tier is how many PRs built it: {{tiers}}. Count only PRs that carry the feature's implementation; don't pad a feature with refactors, docs, or tests to reach a tier, or split one to fit another.
 - Skip PRs whose implementation lives in paths the repository marks `export-ignore` in .gitattributes; the task snapshot won't contain them.
 - Skip any feature with a PR listed in /work/excluded-source-prs.json (check a number with jq; don't read the whole list).
 - A PR belongs to at most one feature. Only PRs from {{repositoryUrl}}. Never invent PRs or request text. Don't modify the repository.

@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Difficulty } from "../../contracts/index.js";
 import { errorMessage } from "../../lib/util.js";
-import { auditPatches, auditScenarioPatches } from "./audit.js";
+import { auditFeaturePatches, auditPatches, auditScenarioPatches } from "./audit.js";
 import { baseImageProblems } from "./dockerfile.js";
 import { assertSafePatchPaths } from "./paths.js";
 
@@ -28,7 +28,7 @@ export type Submission = Readonly<Record<(typeof SUBMISSION_FILES)[number], stri
  * Where a task's snapshot comes from: a pull request's repository at its base commit, or the
  * `workspace/` a scenario's author writes beside these files (scenario-workspace.ts).
  */
-export type TaskSource = "pull_request" | "scenario";
+export type TaskSource = "pull_request" | "scenario" | "feature";
 
 export interface SubmissionCheck {
   /** What keeps the submission from compiling. */
@@ -84,7 +84,12 @@ export function checkSubmission(
     if (SECRET_MATERIAL.test(submission[name])) errors.push(`${name} references secret material`);
   }
   if (errors.length > 0) return { errors, blockers: [], difficulty: assigned };
-  const audit = source === "scenario" ? auditScenarioPatches : auditPatches;
+  const audit =
+    source === "scenario"
+      ? auditScenarioPatches
+      : source === "feature"
+        ? auditFeaturePatches
+        : auditPatches;
   return { errors, ...audit(submission["gold.patch"], submission["test.patch"], assigned) };
 }
 

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
   type FeatureCandidate,
   featureCandidateSchema,
+  featureDifficulty,
   type PullRequestCandidate,
 } from "../../src/contracts/index.js";
 import { planCandidates } from "../../src/generation/batches/record.js";
@@ -10,16 +11,17 @@ import { authoringPrompt } from "../../src/generation/pipeline/authoring.js";
 import { discoveryPrompt } from "../../src/generation/pipeline/discovery.js";
 import { featureRequest } from "../../src/generation/pipeline/feature-discovery.js";
 import { taskSourceEnvironment } from "../../src/generation/pipeline/task-source.js";
+import { auditFeaturePatches, auditPatches } from "../../src/generation/task/audit.js";
 import { taskToml } from "../../src/generation/task/render.js";
 import { candidate, run } from "../support/workflow-fixture.js";
 
 const artifact = { uri: "file:///p", sha256: "a".repeat(64), sizeBytes: 1, contentType: "x" };
 
-function feature(id: string, prs: readonly number[], difficulty = "hard" as const) {
+function feature(id: string, prs: readonly number[]) {
   return featureCandidateSchema.parse({
     kind: "feature",
     candidateId: id,
-    difficulty,
+    difficulty: featureDifficulty(prs.length),
     title: "Saved Searches",
     request: "People can save a search, list their saved searches, and rerun one.",
     pullRequests: prs.map((number, index) => ({
@@ -51,6 +53,34 @@ test("a feature names each PR once, at its own canonical URL", () => {
   ).toThrow("matching number");
 });
 
+test("a feature's tier is how many PRs built it, whatever its reference's size", () => {
+  expect([1, 3, 4, 8, 9, 25].map(featureDifficulty)).toEqual([
+    "easy",
+    "easy",
+    "medium",
+    "medium",
+    "hard",
+    "hard",
+  ]);
+  expect(() =>
+    featureCandidateSchema.parse({ ...feature("x", [1, 2]), difficulty: "hard" }),
+  ).toThrow("a feature of 2 pull requests is easy");
+  const small =
+    "diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n" +
+    Array.from({ length: 30 }, (_, i) => `+line ${i}`).join("\n");
+  const tests = "diff --git a/t.ts b/t.ts\n--- a/t.ts\n+++ b/t.ts\n+t";
+  // A PR task this size drops to easy; a nine-PR feature stays hard.
+  expect(auditPatches(small, tests, "hard").difficulty).toBe("easy");
+  expect(auditFeaturePatches(small, tests, "hard")).toEqual({ difficulty: "hard", blockers: [] });
+  expect(
+    auditFeaturePatches(
+      tests.replace("t.ts", "src/b.ts").replaceAll("t.ts", "src/b.ts"),
+      tests,
+      "hard",
+    ).blockers,
+  ).toHaveLength(1);
+});
+
 test("a feature's author builds the reference from its PRs and tests the feature end to end", () => {
   const saved = feature("saved-searches", [10, 14, 21]);
   const brief = authoringPrompt(saved, 1);
@@ -61,6 +91,7 @@ test("a feature's author builds the reference from its PRs and tests the feature
   );
   expect(brief).toContain("git cherry-pick");
   expect(brief).toContain("# Test the Feature End to End");
+  expect(brief).toContain("so it stays easy whatever gold.patch's size");
   expect(brief).toContain(saved.request);
   expect(brief).not.toContain("{{");
   expect(authoringPrompt(saved, 2, "report")).toContain("re-cloned");
@@ -81,6 +112,7 @@ test("feature discovery groups recent PRs, or searches the whole history for a r
   expect(open).toContain("two or more merged pull requests");
   expect(open).toContain("Call submit_features");
   expect(open).not.toContain("# The Requested Feature");
+  expect(open).toContain("easy 1–3 PRs, medium 4–8 PRs, hard 9+ PRs");
   expect(open).not.toContain("{{");
 
   const requested = discoveryPrompt(
@@ -132,7 +164,7 @@ test("planning gives each PR to one task: a feature loses to any earlier claim o
     result: { candidates, report: artifact },
   });
   const batch: GenerationBatch = {
-    run: { ...run, unit: "feature", candidateCounts: { easy: 0, medium: 0, hard: 3 } },
+    run: { ...run, unit: "feature", candidateCounts: { easy: 3, medium: 0, hard: 3 } },
     taskQueue: "q",
     phase: "discovering",
     // Shards take turns newest window first, so the second shard's first pick goes first.

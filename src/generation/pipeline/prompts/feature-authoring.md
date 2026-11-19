@@ -7,7 +7,7 @@ You are turning one feature of this repository into a benchmark task. The featur
 - Feature: {{title}}
 - Base commit: {{baseCommit}} (cloned at /work/repo; the default branch just before the first PR landed)
 - Completed commit: {{completedCommit}} (the default branch once the last PR landed)
-- Estimated difficulty: {{difficulty}}
+- Difficulty: {{difficulty}}
 
 Its pull requests, in merge order, each with the commit it landed as on the default branch:
 
@@ -79,7 +79,7 @@ The Dockerfile's build context holds only `repo.tar.gz`, the base commit's files
 
 # Difficulty
 
-The task takes the hardest tier gold.patch reaches, up to the estimated difficulty: {{tiers}}. verify blocks a gold.patch below easy.
+A feature's tier is how many PRs built it ({{tiers}}), so it stays {{difficulty}} whatever gold.patch's size. verify still blocks a gold.patch under {{floor}}.
 
 {{howToWork}}
 {{feedback}}

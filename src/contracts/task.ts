@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { artifactRefSchema, commitSchema, difficultySchema } from "./common.js";
+import { featureDifficulty } from "./feature-tiers.js";
 
 const candidateIdSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/);
 
@@ -110,6 +111,13 @@ export const featureCandidateSchema = z
         code: "custom",
         path: ["pullRequests"],
         message: "a feature lists each pull request once",
+      });
+    }
+    if (candidate.difficulty !== featureDifficulty(numbers.length)) {
+      context.addIssue({
+        code: "custom",
+        path: ["difficulty"],
+        message: `a feature of ${numbers.length} pull requests is ${featureDifficulty(numbers.length)}`,
       });
     }
   });

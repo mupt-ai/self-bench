@@ -82,7 +82,7 @@ export async function compileSubmission(
   const check = checkSubmission(
     submission,
     candidate.difficulty,
-    scenario ? "scenario" : "pull_request",
+    candidate.kind === "scenario" || candidate.kind === "feature" ? candidate.kind : "pull_request",
   );
   const workspace = join(input.directory, WORKSPACE_DIRECTORY);
   const errors = [

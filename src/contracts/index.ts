@@ -1,4 +1,5 @@
 export * from "./common.js";
+export * from "./feature-tiers.js";
 export * from "./results.js";
 export * from "./run.js";
 export * from "./task.js";

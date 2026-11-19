@@ -265,9 +265,9 @@ export function authoringPrompt(
       maintainer,
     });
   }
-  const tiers = authoringTiers();
   if (candidate.kind === "feature")
-    return featureAuthoringPrompt(candidate, { ...shared, tiers, limits, maintainer });
+    return featureAuthoringPrompt(candidate, { ...shared, limits, maintainer });
+  const tiers = authoringTiers();
   return renderPrompt("authoring", {
     ...shared,
     sourceUrl: candidate.sourceUrl,

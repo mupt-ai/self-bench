@@ -5,6 +5,8 @@ import {
   MAX_CANDIDATES_PER_RUN,
   MAX_FOCUS_LENGTH,
 } from "../../../src/contracts/config/execution-limits";
+import { FEATURE_TIER_PRS } from "../../../src/contracts/feature-tiers";
+import { BatchUnitPicker } from "./BatchUnitPicker";
 import {
   type BatchRepoId,
   BatchRequestError,
@@ -20,14 +22,7 @@ import { cn } from "./primitives/cn";
 import { InfoTooltip } from "./primitives/tooltip";
 import { covered, setupCoverage } from "./setup/readiness";
 import { SetupCallout } from "./setup/SetupCallout";
-import {
-  Button,
-  controlStyles,
-  fieldStyles,
-  Input,
-  segmentedGroupStyles,
-  segmentStyles,
-} from "./ui";
+import { Button, controlStyles, fieldStyles, Input } from "./ui";
 import { useGenerationSettings } from "./useGenerationSettings";
 
 function storedFocus(key: string): string {
@@ -53,6 +48,9 @@ export interface GenerateBatchProps {
   onStarted?: (runId: string, warning?: string) => void;
 }
 
+const TOTAL = `1–${MAX_CANDIDATES_PER_RUN} candidates total.`;
+const FEATURE_TIERS = `A feature's tier is how many PRs built it: easy ${FEATURE_TIER_PRS.easy}, medium ${FEATURE_TIER_PRS.medium}, hard ${FEATURE_TIER_PRS.hard}.`;
+
 /** One dialog: candidate counts and generation settings, submitted together. */
 export function GenerateBatch({
   repoId,
@@ -70,7 +68,7 @@ export function GenerateBatch({
   const { org, fullName } = repoId;
   const focusKey = `selfbench-batch-focus:${org}:${fullName}`;
   const [focus, setFocus] = React.useState(() => storedFocus(focusKey));
-  const [unit, setUnit] = React.useState<BatchUnit>("pull_request");
+  const [unit, setUnit] = React.useState<BatchUnit>("feature");
   const features = unit === "feature";
   const {
     settings,
@@ -151,35 +149,11 @@ export function GenerateBatch({
             }}
           >
             <div className="px-4 pt-6 pb-6 sm:px-6">
-              <fieldset className="m-0 mb-8 min-w-0 border-0 p-0" aria-label="Build Tasks From">
-                <legend className="mb-4 flex items-center gap-1.5 text-sm font-medium">
-                  Build Tasks From
-                  <InfoTooltip label="A pull request task asks for one merged PR's change. A feature task asks for a whole feature the repository built over several merged PRs, and grades it with end-to-end tests." />
-                </legend>
-                <div className={cn(segmentedGroupStyles, "grid w-full grid-cols-2")}>
-                  {(
-                    [
-                      { id: "pull_request", label: "Pull Requests" },
-                      { id: "feature", label: "Features" },
-                    ] as const
-                  ).map((option) => (
-                    <button
-                      key={option.id}
-                      type="button"
-                      aria-pressed={unit === option.id}
-                      className={segmentStyles(unit === option.id)}
-                      disabled={busy}
-                      onClick={() => setUnit(option.id)}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </fieldset>
+              <BatchUnitPicker unit={unit} disabled={busy} onChange={setUnit} />
               <fieldset className="m-0 min-w-0 border-0 p-0" aria-label="Candidates">
                 <legend className="mb-4 flex items-center gap-1.5 text-sm font-medium">
                   Candidates
-                  <InfoTooltip label={`1–${MAX_CANDIDATES_PER_RUN} candidates total.`} />
+                  <InfoTooltip label={features ? `${TOTAL} ${FEATURE_TIERS}` : TOTAL} />
                 </legend>
                 <div className="grid grid-cols-3 gap-3">
                   {(

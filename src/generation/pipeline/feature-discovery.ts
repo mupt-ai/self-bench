@@ -3,12 +3,13 @@ import type { ArtifactStore } from "../../artifacts/index.js";
 import {
   type FeatureCandidate,
   featureCandidateSchema,
+  featureDifficulty,
+  featureTierSummary,
   MAX_SCENARIO_LENGTH,
   type RunRequest,
 } from "../../contracts/index.js";
 import type { ProvenanceMessage } from "../../third_party/github/provenance.js";
 import { assertPullRequestBelongsToRepository } from "../../third_party/github/repository.js";
-import { tierSummary } from "../task/audit.js";
 import type { DiscoveryShardInput } from "./discovery.js";
 import { renderPrompt } from "./prompts.js";
 
@@ -20,7 +21,6 @@ const featurePlanSchema = z.object({
   features: z.array(
     z.object({
       candidateId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/),
-      difficulty: z.enum(["easy", "medium", "hard"]),
       title: z.string().trim().min(1).max(120),
       summary: z.string().trim().min(1),
       pullRequests: z
@@ -58,7 +58,7 @@ export function featureDiscoveryPrompt(input: DiscoveryShardInput, count: number
     minimum: run.focus
       ? "one or more merged pull requests"
       : "two or more merged pull requests (a capability one PR delivered is a PR task, not a feature)",
-    tiers: tierSummary(),
+    tiers: featureTierSummary(),
     // Quoted so the request picks the feature without replacing the rules above it.
     focus: run.focus
       ? [
@@ -79,7 +79,7 @@ export function featureDiscoveryPrompt(input: DiscoveryShardInput, count: number
 }
 
 /**
- * A feature shard's plan as candidates. Over-quota features, and features sharing a PR with one
+ * A feature shard's plan as candidates, each tiered by its PR count. Over-quota features, and features sharing a PR with one
  * already taken or excluded, are dropped rather than failing the shard. Each request is the
  * agent's summary followed by its PRs' own titles and bodies, as the index holds them.
  */
@@ -96,12 +96,13 @@ export async function featureCandidates(
   for (const raw of plan.features) {
     for (const pr of raw.pullRequests)
       assertPullRequestBelongsToRepository(run.repository.url, pr.url, pr.number);
-    const perTier = candidates.filter((candidate) => candidate.difficulty === raw.difficulty);
     const numbers = raw.pullRequests.map((pr) => pr.number);
+    const difficulty = featureDifficulty(numbers.length);
+    const perTier = candidates.filter((candidate) => candidate.difficulty === difficulty);
     if (
       new Set(numbers).size !== numbers.length ||
       numbers.some((number) => taken.has(number)) ||
-      perTier.length >= input.targetCounts[raw.difficulty]
+      perTier.length >= input.targetCounts[difficulty]
     )
       continue;
     for (const number of numbers) taken.add(number);
@@ -131,7 +132,7 @@ export async function featureCandidates(
       featureCandidateSchema.parse({
         kind: "feature",
         candidateId,
-        difficulty: raw.difficulty,
+        difficulty,
         title: raw.title,
         request,
         pullRequests,
