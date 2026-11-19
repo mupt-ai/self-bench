@@ -36,6 +36,10 @@ export const taskPage = (
 /** A public benchmark's pages: its tasks come from a registry, so feedback cannot revise them. */
 export const isPublicPages = (pages: string) => pages.startsWith("/public/");
 
+/** Pages whose tasks have their own page to give feedback on: a repository's or a custom benchmark's. */
+export const isRevisablePages = (pages: string) =>
+  pages.startsWith("/repos/") || pages.startsWith("/custom/");
+
 /** The model's catalog name, or a custom endpoint's typed name, as the table names it. */
 function modelName(run: EvaluationRun): string {
   if (run.model === "custom") return run.modelName.replace(/^openai\//, "");
@@ -179,7 +183,7 @@ function TrialDialogContent({
         >
           View Task
         </a>
-        {!isPublicPages(pages) && (
+        {isRevisablePages(pages) && (
           <a
             className="text-sm font-medium underline decoration-foreground/25 underline-offset-4 hover:decoration-foreground"
             href={feedbackLink(taskPage(pages, trial))}

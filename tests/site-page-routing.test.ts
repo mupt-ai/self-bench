@@ -11,6 +11,8 @@ describe("site page routing", () => {
     "/repos/example/.github",
     "/repos/vercel/next%2Ejs",
     "/benchmarks/snorkel-ai/senior-swe-bench-v2026.06/results",
+    "/public/snorkel-ai/senior-swe-bench-v2026.06",
+    "/custom/release-notes.v2",
     "/",
     "/login",
     "/settings/credentials",

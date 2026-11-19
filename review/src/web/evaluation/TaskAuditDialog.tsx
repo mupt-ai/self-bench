@@ -8,7 +8,7 @@ import { OutcomeCircle } from "./ResultsMarks";
 import type { Configuration, TaskResult } from "./results-model";
 import { configurationDetail, momentLabel, taskParts } from "./results-presentation";
 import type { OutcomeGridTask } from "./TaskOutcomeGrid";
-import { isPublicPages, taskPage } from "./TrialDialog";
+import { isRevisablePages, taskPage } from "./TrialDialog";
 import { useTaskAudit } from "./useTaskAudit";
 
 const AUDIT = { action: "Audit Task", busy: "Auditing…", model: "Audit Model" };
@@ -60,7 +60,7 @@ export function TaskAuditDialog({
   ).length;
   const parts = taskParts(task.id);
   const page = taskPage(pages, { runId: task.runId, taskId: task.id });
-  const revisable = !isPublicPages(pages);
+  const revisable = isRevisablePages(pages);
   const last = state?.audit;
   // Offered from the failures the server can audit, without waiting for state to load.
   const offered = auditing || (enabled && auditableFailures > 0 && state?.available !== false);
