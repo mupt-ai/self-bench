@@ -75,16 +75,16 @@ function sectionsOf(billing: boolean): { label: string; items: NavItem[] }[] {
             (path.startsWith("/repos/") && !path.startsWith(`/repos/${EVAL_OWNER}/`)),
         },
         {
-          label: "Vibe Evals",
-          to: "/evals",
-          icon: FlaskConical,
-          active: (path) => path.startsWith("/evals") || path.startsWith(`/repos/${EVAL_OWNER}/`),
-        },
-        {
           label: "Public Benchmarks",
           to: "/benchmarks",
           icon: Gauge,
           active: (path) => path.startsWith("/benchmarks"),
+        },
+        {
+          label: "Vibe Evals",
+          to: "/evals",
+          icon: FlaskConical,
+          active: (path) => path.startsWith("/evals") || path.startsWith(`/repos/${EVAL_OWNER}/`),
         },
       ],
     },

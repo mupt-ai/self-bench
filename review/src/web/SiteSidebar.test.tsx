@@ -52,7 +52,7 @@ test("sidebar exposes labeled navigation and credentials", () => {
 
 test("sidebar sorts its pages into named sections, in order", () => {
   const html = renderSidebar("/");
-  const order = ["Benchmarks", "Mined Repos", "Vibe Evals", "Public Benchmarks"]
+  const order = ["Benchmarks", "Mined Repos", "Public Benchmarks", "Vibe Evals"]
     .concat(["Workspace", "Members", "Credentials", "Harnesses", "API Keys", "Billing"])
     .map((label) => html.indexOf(`>${label}</`));
   expect(order.every((at) => at >= 0)).toBe(true);
