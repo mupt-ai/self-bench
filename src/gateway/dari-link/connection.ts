@@ -1,5 +1,5 @@
 // What a Dari connection serves, shared with the web app, so no Node imports.
-import type { LinkGrant } from "@mupt-ai/dari-gateway/link/client";
+import type { LinkGrant, LinkPlan } from "@mupt-ai/dari-gateway/link/client";
 import { z } from "zod";
 
 /** Dari's kind for an API key on a grant. */
@@ -159,3 +159,14 @@ export interface DariLinkBrowserConfig {
   readonly clientId: string;
   readonly redirectUri: string;
 }
+
+/** A connection's plans as Dari reports them now: each one's state and usage windows. */
+export type DariLinkStatus =
+  | {
+      readonly manageUrl: string;
+      readonly plans: readonly Pick<
+        LinkPlan,
+        "id" | "kind" | "title" | "plan" | "account_email" | "state" | "available_at" | "usage"
+      >[];
+    }
+  | { readonly error: string; readonly unlinked: boolean };

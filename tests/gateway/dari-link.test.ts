@@ -74,6 +74,23 @@ describe("Dari Link", () => {
     expect(forged.status).toBe(400);
   });
 
+  test("the Credentials page reads each plan's state and usage from Dari", async () => {
+    const response = await link.server.request(
+      `/api/orgs/avyay/credentials/${credentialId}/dari-status`,
+    );
+    expect(response.status).toBe(200);
+    const status = (await response.json()) as {
+      manageUrl: string;
+      plans: { title: string; state: string; usage: unknown[] }[];
+    };
+    expect(status.manageUrl).toStartWith("http");
+    expect(status.plans.map((plan) => [plan.title, plan.state])).toEqual([
+      ["Claude", "ready"],
+      ["ChatGPT", "ready"],
+      ["OpenRouter", "ready"],
+    ]);
+  });
+
   test("a trial calls Dari on a child token for its model, and its usage is read back", async () => {
     const run = await trial(GPT);
     const secret = (await link.vault.credentials.secret(link.orgId, credentialId))?.value ?? "";
@@ -158,5 +175,9 @@ describe("Dari Link", () => {
     expect(response.status).toBe(401);
     const refused = await trial(GPT).catch((error: unknown) => error);
     expect(dariRefusal(refused)).toContain("Connect again");
+    const status = await link.server.request(
+      `/api/orgs/avyay/credentials/${credentialId}/dari-status`,
+    );
+    expect(await status.json()).toMatchObject({ unlinked: true });
   });
 });

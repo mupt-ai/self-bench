@@ -12,6 +12,7 @@ import { CredentialGroup } from "./CredentialGroup";
 import { EditCredentialDialog } from "./CredentialSettings";
 import { isSandbox } from "./credential-presentation";
 import { useDariConnect } from "./DariConnect";
+import { DariPlans } from "./DariPlans";
 import { DeleteCredentialDialog } from "./DeleteCredentialDialog";
 
 type Editor = { previous?: CredentialInfo; kind?: CredentialDraft["kind"] };
@@ -113,6 +114,7 @@ function CredentialsContent({ org }: { org: string }) {
               credentials={credentials.filter((entry) => entry.auth === "dari-link")}
               addLabel={dari.connecting ? "Connecting…" : "Connect with Dari"}
               onEdit={setChanging}
+              detail={(credential) => <DariPlans org={org} credentialId={credential.id} />}
               {...(data?.dariLink ? { onAdd: dari.connect } : {})}
             />
             {dari.error && (
