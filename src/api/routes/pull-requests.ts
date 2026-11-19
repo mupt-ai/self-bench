@@ -8,6 +8,7 @@ import type { TaskStore } from "../../db/tasks.js";
 import type { User, UserStore } from "../../db/users.js";
 import type { Vault } from "../../db/vault.js";
 import { evaluationCatalog } from "../../evaluation/catalog.js";
+import { linkedCatalogModels } from "../../evaluation/link-routes.js";
 import { managedOffer } from "../../generation/billing/managed.js";
 import { saveGenerationRecords } from "../../generation/settings/credentials.js";
 import {
@@ -119,10 +120,13 @@ export function createPullRequestRoutes(options: PullRequestRoutesOptions): Pull
         const billing = options.billing
           ? await options.billing.status(tenant.id)
           : { configured: false, eligible: true, status: "disabled", cancelAtPeriodEnd: false };
+        const credentials = options.vault ? await options.vault.credentials.list(tenant.id) : [];
+        // A Dari connection's models are its own, as its grant lists them (linkedCatalogModels).
+        const catalog = evaluationCatalog();
         sendJson(response, 200, {
-          models: evaluationCatalog(),
+          models: [...catalog, ...linkedCatalogModels(catalog, credentials)],
           sandboxes: HOSTED_EXECUTION_BACKENDS,
-          credentials: options.vault ? await options.vault.credentials.list(tenant.id) : [],
+          credentials,
           available: !!options.vault,
           managed: managedOffer(),
           billing: { ...billing, canManage: tenant.role === "admin" },

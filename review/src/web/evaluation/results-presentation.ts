@@ -53,6 +53,8 @@ export function routeLabel(
     return credential?.endpoint ? endpointLabel(credential.endpoint) : "Custom Endpoint";
   }
   const auth = run.credentials?.auth ?? credential?.auth;
+  // Every run on a Dari connection, including those saved when a connection was one per kind.
+  if (auth === "dari-link") return "Dari Link";
   const signIn = signIns.find((entry) => entry.id === auth);
   if (signIn) return signIn.label;
   const name = providers.find((entry) => entry.id === provider)?.label ?? provider;

@@ -25,7 +25,7 @@ class SkipsSystemNode:
         await super().ensure_system_dependencies(environment, dependencies)
 
 
-# The gateway's id for a model on an OpenAI key or ChatGPT sign-in (gatewayRequestModel).
+# The gateway's id for a model on an OpenAI key (gatewayRequestModel).
 OPENAI_MODELS = "dari/model/openai/"
 # A run with a subagent model measures the two models working together, so its agent is told to
 # delegate: left to itself it may do the whole task on the run's own model. A run condition gives

@@ -14,6 +14,8 @@ import { createVault } from "../db/vault.js";
 import { createEvaluationActivities } from "../evaluation/activities.js";
 import { createBenchmarkAddActivities } from "../evaluation/benchmark-add-activities.js";
 import { keepRunSummaries } from "../evaluation/store.js";
+import { dariLinkApp, dariLinkGrants } from "../gateway/dari-link/link.js";
+import type { GatewayUsage } from "../gateway/platform.js";
 import { createGatewayUsageStore } from "../gateway/usage-store.js";
 import { keepGatewaysFresh } from "../gateways/catalog.js";
 import { createBatchActivities } from "../generation/batches/activities.js";
@@ -58,7 +60,9 @@ const vault =
 const usage = vault && database ? createUsageStore(database.db) : undefined;
 const artifacts = createArtifactStore(config.artifact);
 if (database) keepRunSummaries(artifacts, createRunSummaryStore(database.db));
-const { verifyCompiled, ...generation } = createActivities(config, vault, usage);
+// Dari Link connections, which generation's and evaluation's trials mint their child tokens from.
+const dariLink = vault ? dariLinkGrants(vault.credentials, dariLinkApp(process.env)) : undefined;
+const { verifyCompiled, ...generation } = createActivities(config, vault, usage, dariLink);
 // Batches and task rows need the database; candidate workflows write their rows through it.
 const tasks = database ? createTaskStore(database.db) : undefined;
 const batches =
@@ -84,6 +88,7 @@ const sandboxApi =
 // killed long before one could finish.
 const stopping = new AbortController();
 process.once("SIGTERM", () => stopping.abort());
+const gatewayUsage = database ? createGatewayUsageStore(database.db) : undefined;
 // API keys' trials call the API's model gateway, at the address sandboxes reach the API by (the
 // one their callbacks use), and read back what it recorded their calls cost.
 const { runSolverTrial, prepareTaskImages, ...evaluation } = createEvaluationActivities(
@@ -91,8 +96,13 @@ const { runSolverTrial, prepareTaskImages, ...evaluation } = createEvaluationAct
   vault,
   sandboxApi,
   stopping.signal,
-  sandboxApi && database
-    ? { api: sandboxApi, usage: createGatewayUsageStore(database.db) }
+  sandboxApi && database && gatewayUsage
+    ? {
+        api: sandboxApi,
+        usage: gatewayUsage,
+        recordUsage: (usage: GatewayUsage) => gatewayUsage.record(usage),
+        ...(dariLink ? { dariLink } : {}),
+      }
     : undefined,
 );
 // Adding a registry dataset: the freeze on the Harbor queue, the box's record on this one.

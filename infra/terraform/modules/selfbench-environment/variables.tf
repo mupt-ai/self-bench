@@ -112,6 +112,16 @@ variable "stripe_price_id" {
   type        = string
   default     = null
 }
+variable "dari_link_client_id" {
+  description = "Client id of SelfBench's Dari Link app (Connect with Dari), registered in the dari.dev organization with this environment's /api/dari-link/callback. Setting it turns Connect with Dari on and requires the selfbench-dari-link-client-secret secret. Null leaves it off."
+  type        = string
+  default     = null
+}
+variable "dari_link_url" {
+  description = "Base URL of the Dari Link gateway."
+  type        = string
+  default     = "https://routing.dari.dev"
+}
 variable "managed_offering" {
   description = "Offer managed models and sandboxes on the platform's OpenRouter, E2B and Modal accounts (the selfbench-managed-* secrets), billed through Stripe when stripe_price_id is set. False keeps the deployment bring-your-own-key only: no managed secrets are read and the Stripe inputs are ignored."
   type        = bool

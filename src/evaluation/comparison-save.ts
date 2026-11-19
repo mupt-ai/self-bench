@@ -22,7 +22,8 @@ import {
 import type { ComparisonSelection } from "./comparisons.js";
 import { conditionRefusal } from "./conditions.js";
 import { trialRoute } from "./gateway-trial.js";
-import { defaultThinking, routeFor, signInRefusal, thinkingOptions } from "./models.js";
+import { credentialRoute, linkedOnly } from "./link-routes.js";
+import { defaultThinking, thinkingOptions } from "./models.js";
 import { assertTasksFitSandbox } from "./resource-check.js";
 import { listRuns } from "./run-list.js";
 import { type EvaluationScope, sameScope } from "./scope.js";
@@ -136,19 +137,18 @@ export async function saveComparison(
             model: selected.customModel,
             harnesses: ["pi"],
           }
-        : catalogModels.find((entry) => entry.id === selected.catalogId);
+        : (catalogModels.find((entry) => entry.id === selected.catalogId) ??
+          linkedOnly(selected.catalogId, saved.get(selected.credentialId)));
     if (!model || (selected.catalogId !== "custom" && selected.customModel))
       throw new Error("Unknown model");
     const managedModel = selected.credentialId === "managed-model";
     const credential = managedModel
       ? { id: "managed-model", kind: "openrouter" as const, auth: "api-key" as const }
       : saved.get(selected.credentialId);
-    const route = credential ? routeFor(model, credential.kind) : undefined;
+    const route = credential ? credentialRoute(model, credential) : undefined;
     if (managedModel && !managed.models)
       throw new Error("Managed models are not available on this deployment.");
     if (!credential || !route) throw new Error("Select your matching provider credential");
-    const refusal = signInRefusal(credential.auth, selected.harnesses);
-    if (refusal) throw new Error(refusal);
     if (
       selected.harnesses.some((harness) => !route.harnesses.includes(harness)) ||
       new Set(selected.harnesses).size !== selected.harnesses.length

@@ -1,15 +1,10 @@
-"""Run Harbor's Muse Code on a Meta sign-in, at every effort Muse takes, and turn its session log
-into Harbor's trajectory and token totals."""
+"""Run Harbor's Muse Code on a Meta key or a Dari connection, at every effort Muse takes, and
+turn its session log into Harbor's trajectory and token totals."""
 import json
-from dataclasses import replace
-from pathlib import Path
 from typing import Annotated, Literal
 from pydantic import Field
 from harbor.agents.installed.muse_code import MuseCode, MuseCodeOptions
 from harbor.agents.options import Cli
-
-# Stands in for META_API_KEY on a signed-in trial, so Harbor's run proceeds; never sent to Muse.
-SIGNED_IN = "selfbench-muse-sign-in"
 
 
 class SelfBenchMuseCodeOptions(MuseCodeOptions):
@@ -22,50 +17,25 @@ class SelfBenchMuseCodeOptions(MuseCodeOptions):
     contributor_mode: Annotated[Literal["on", "off"] | None, Cli("--contributor-mode")] = Field(
         default="off", description="Whether Meta may train on the session."
     )
-    # The sandbox's network allows only Meta's API, and Meta's own search would reach past it.
+    # Muse sends its key to a base URL only when its settings name it and pin bearer auth, as on a
+    # Dari connection, whose trial token is the key: both are set from this one URL.
+    bearer_base_url: Annotated[
+        str | None,
+        Cli(
+            "-c",
+            format="-c 'endpoint_transport.base_url=\"{value}\"' -c 'endpoint_transport.auth=\"bearer\"'",
+        ),
+    ] = Field(default=None, description="A base URL Muse calls with its key as a bearer token.")
+    # The sandbox's network allows only its model's host, and Meta's own search would reach past it.
     disable_web_tools: Annotated[bool, Cli("--disable-web-tools")] = Field(
         default=True, description="Turn off Muse's web tools."
     )
 
 
 class SelfBenchMuseCode(MuseCode):
-    """Harbor's Muse Code, signed in from MUSE_AUTH_JSON_PATH when it names a Muse auth.json."""
+    """Harbor's Muse Code with SelfBench's options."""
 
     options_model = SelfBenchMuseCodeOptions
-
-    @classmethod
-    def check_model_credentials(cls, connection, *, kwargs, env, explicit_env=None):
-        # A signed-in trial has no META_API_KEY: Muse mints its key from the sign-in.
-        if env.get("MUSE_AUTH_JSON_PATH"):
-            return
-        super().check_model_credentials(
-            connection, kwargs=kwargs, env=env, explicit_env=explicit_env
-        )
-
-    @property
-    def model_connection(self):
-        connection = super().model_connection
-        if self._get_env("MUSE_AUTH_JSON_PATH") and not connection.api_key:
-            return replace(connection, api_key=SIGNED_IN)
-        return connection
-
-    async def run(self, instruction, environment, context):
-        auth = self._get_env("MUSE_AUTH_JSON_PATH")
-        if auth:
-            # Muse Code's own credential file, holding the sign-in's token, where Harbor's run
-            # points XDG_CONFIG_HOME; at startup Muse mints its subscription key from it and
-            # writes the key back into the file.
-            muse = f"{self._config_home}/muse"
-            await self.exec_as_agent(environment, command=f"mkdir -p {muse}")
-            await self._upload_agent_owned_file(environment, Path(auth), f"{muse}/auth.json")
-            await self.exec_as_agent(environment, command=f"chmod 600 {muse}/auth.json")
-        return await super().run(instruction, environment, context)
-
-    async def exec_as_agent(self, environment, command, env=None, **kwargs):
-        # A key in the environment would take priority over the sign-in.
-        if env and env.get("META_API_KEY") == SIGNED_IN:
-            env = {name: value for name, value in env.items() if name != "META_API_KEY"}
-        return await super().exec_as_agent(environment, command, env=env, **kwargs)
 
     def populate_context_post_run(self, context):
         logs = sorted((self.logs_dir / "sessions").glob("**/session.jsonl"))

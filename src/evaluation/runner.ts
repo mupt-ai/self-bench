@@ -153,7 +153,7 @@ async function runTrial(context: {
   agent: string;
   agentArguments: string[];
   modelAuth: CredentialInfo["auth"];
-  /** The sign-in type of the credential serving the run's subagent model, when it has one. */
+  /** The auth of the credential serving the run's subagent model, when it has one. */
   subagentAuth?: CredentialInfo["auth"];
   /** The organization a gateway trial's calls were recorded under. */
   gatewayOrgId?: number;

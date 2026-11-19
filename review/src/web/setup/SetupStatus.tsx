@@ -1,12 +1,21 @@
 import React from "react";
 import type { CredentialInfo } from "../../../../src/db/credentials";
+import type { DariLinkBrowserConfig } from "../../../../src/gateway/dari-link/connection";
 import { evaluationRequest } from "../evaluation/api";
 import { covered, setupCoverage } from "./readiness";
+
+type Loaded = {
+  credentials: CredentialInfo[];
+  canManage: boolean;
+  dariLink?: DariLinkBrowserConfig | null;
+};
 
 interface SetupStatus {
   /** The organization's credentials, once loaded. */
   credentials?: CredentialInfo[];
   canManage: boolean;
+  /** What Connect with Dari needs, once loaded; null when this deployment has no Dari Link. */
+  dariLink?: DariLinkBrowserConfig | null;
   error?: string;
   /** Loaded, and the organization cannot yet both generate and evaluate on its own credentials. */
   incomplete: boolean;
@@ -44,16 +53,14 @@ export function useSetupStatusSource(org: string, managedOffering: boolean): Set
   // Each result remembers its org's URL, so a switch never shows the previous org's state.
   const [loaded, setLoaded] = React.useState<{
     url: string;
-    data?: { credentials: CredentialInfo[]; canManage: boolean };
+    data?: Loaded;
     error?: string;
   }>();
   const latest = React.useRef(0);
   const load = React.useCallback(async () => {
     const request = ++latest.current;
     try {
-      const data = await evaluationRequest<{ credentials: CredentialInfo[]; canManage: boolean }>(
-        url,
-      );
+      const data = await evaluationRequest<Loaded>(url);
       if (request === latest.current) setLoaded({ url, data });
     } catch (cause) {
       if (request !== latest.current) return;
@@ -93,6 +100,7 @@ export function useSetupStatusSource(org: string, managedOffering: boolean): Set
     () => ({
       credentials: data?.credentials,
       canManage: data?.canManage ?? false,
+      dariLink: data ? (data.dariLink ?? null) : undefined,
       error,
       incomplete,
       refresh: load,

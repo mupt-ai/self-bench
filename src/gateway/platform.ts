@@ -19,7 +19,6 @@ import {
 } from "./model-config.js";
 import { routerTables, subagentRouterModel } from "./router-models.js";
 import { servedCost } from "./served-model.js";
-import { signInCredential } from "./sign-in.js";
 import { judgeCredential, readTrialKey, solverCredential, type TrialKey } from "./trial-key.js";
 
 export { withManagedModel } from "./managed-model.js";
@@ -53,8 +52,6 @@ export interface SelfBenchGatewayDeps {
       id: string,
     ): Promise<Pick<CredentialInfo, "id" | "kind" | "auth" | "endpoint"> | undefined>;
     secret(orgId: number, id: string): Promise<Pick<CredentialSecret, "value"> | undefined>;
-    /** Saves a sign-in's refreshed tokens. */
-    renew(orgId: number, id: string, value: string): Promise<void>;
   };
   /**
    * The gateway's config for a model Pi's catalog may lack (its provider, native id, API and
@@ -112,7 +109,7 @@ const unavailable = (what: string) =>
  * solver part pins one model on one of the org's credentials, and a subagent model on its own
  * credential when the run names one: the router is strict, so the gateway serves exactly those
  * (the run's model at the key's thinking level, when it names one) and never falls back or
- * leases. A sign-in serves it on the plan the platform supplies. Its judge part lets the task's
+ * leases. Its judge part lets the task's
  * judge call any model of its credential's provider (`strict_providers`). Conversation routing
  * state is not kept, since a strict router never reads it.
  */
@@ -187,17 +184,9 @@ export function selfBenchPlatform(deps: SelfBenchGatewayDeps): SelfBenchPlatform
         deps.credentials.secret(key.orgId, id),
       ]);
       if (!info || !secret?.value) throw unavailable("The trial's credential");
-      // A sign-in is served on its plan, never as an API key.
-      const supplied =
-        info.auth === "api-key"
-          ? { apiKey: secret.value }
-          : await signInCredential(
-              info,
-              secret.value,
-              (value) => deps.credentials.renew(key.orgId, id, value),
-              deps.captureError,
-            );
-      if (!supplied) throw unavailable("The trial's sign-in");
+      // A Dari Link grant's trials call Dari directly (gateway/dari-link), never through here.
+      if (info.auth !== "api-key") throw unavailable("The trial's credential");
+      const supplied = { apiKey: secret.value };
       // A Dari or custom credential's own endpoint replaces the provider's.
       if (info.kind === "dari")
         return { ...supplied, baseUrl: dariEndpoint(info.endpoint ?? undefined) };

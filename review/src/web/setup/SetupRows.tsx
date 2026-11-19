@@ -6,7 +6,7 @@ import { cn } from "../primitives/cn";
 import { Button } from "../ui";
 import { covered, type setupCoverage } from "./readiness";
 
-export type Choice = "codex-login" | "claude-login" | "modal" | "e2b";
+export type Choice = "modal" | "e2b";
 
 /** The setup popup's options for one step; the chosen one opens its connection flow in place. */
 export function Choices({
@@ -70,14 +70,14 @@ export function Status({ coverage }: { coverage: ReturnType<typeof setupCoverage
       label: "Generate Tasks",
       ready: covered(coverage.generate),
       missing: !coverage.generate.model
-        ? "Needs a ChatGPT sign-in or a model API key."
+        ? "Needs a model that can write tasks, such as a ChatGPT plan or an API key connected with Dari. Claude and Muse plans only run evaluations."
         : "Needs a Modal, E2B, or Vercel sandbox.",
     },
     {
       label: "Run Evaluations",
       ready: covered(coverage.evaluate),
       missing: !coverage.evaluate.model
-        ? "Needs a ChatGPT or Claude sign-in, or a model API key."
+        ? "Needs a plan or an API key, connected with Dari."
         : "Needs a Modal, E2B, or Daytona sandbox.",
     },
   ];

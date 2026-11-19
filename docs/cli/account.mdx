@@ -35,9 +35,8 @@ Workspace admins connect the model access and sandboxes runs use. Secrets never 
 | Command | Does |
 | --- | --- |
 | `credential list` | Saved credentials, with the IDs flags take (`--credential ID`) |
-| `credential add` | Pick a provider, then paste its key (masked) or sign in |
+| `credential add` | Pick a provider, then paste its key (masked). Plans connect in the app, with Connect with Dari |
 | `credential add --kind KIND (--value-env VAR \| --value-stdin) [--name NAME]` | Add a key without prompts |
-| `credential add --sign-in chatgpt\|claude\|meta` | A ChatGPT, Claude, or Meta sign-in |
 | `credential rename ID NAME` · `credential remove ID` | Rename or remove one |
 
 `KIND` is `openai`, `anthropic`, `meta`, `openrouter`, `vercel-ai-gateway`, `dari`, `custom` (with `--endpoint`), `e2b`, `modal` (with `--token-id`), `daytona`, or `vercel` (with `--team-id` and `--project-id`). See [Credentials](/concepts/credentials).

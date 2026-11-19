@@ -2,7 +2,7 @@ import type { SubagentThinking } from "../contracts/conditions.js";
 import type { CredentialInfo } from "../db/credentials.js";
 import type { CatalogModel } from "./catalog.js";
 import type { ComparisonSelection } from "./comparisons.js";
-import { defaultThinking, type Harness, routeFor, signInRefusal } from "./models.js";
+import { defaultThinking, type Harness, routeFor } from "./models.js";
 import { routerPart, subagentPart } from "./setting.js";
 import { subagentCredentials, subagentRefusal, subagentThinkingLevels } from "./subagents.js";
 import type { EvaluationRun, SubagentModel } from "./types.js";
@@ -97,9 +97,7 @@ export function selectedSubagent(
   const route = subagent && credential && routeFor(subagent, credential.kind);
   if (!subagent || !credential || !route)
     throw new Error("Select a subagent model and its matching provider credential");
-  const refusal =
-    subagentRefusal(harnesses, provider, route.provider) ??
-    signInRefusal(credential.auth, harnesses);
+  const refusal = subagentRefusal(harnesses, provider, route.provider);
   if (refusal) throw new Error(refusal);
   if (harnesses.some((harness) => !route.harnesses.includes(harness)))
     throw new Error("The subagent model's credential does not run every selected harness");

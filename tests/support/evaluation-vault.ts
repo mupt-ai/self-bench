@@ -11,6 +11,7 @@ import {
 import { type EncryptedRecordStore, RecordStoreError } from "../../src/db/encrypted-records.js";
 import type { Vault } from "../../src/db/vault.js";
 import { sameScope } from "../../src/evaluation/scope.js";
+import { linkModelsOf } from "../../src/gateway/dari-link/connection.js";
 
 export class MemoryRecords implements EncryptedRecordStore {
   private entries = new Map<string, { value: unknown; version: number }>();
@@ -40,7 +41,10 @@ export function memoryVault(records: EncryptedRecordStore = new MemoryRecords())
   }: CredentialInfo & {
     orgId: number;
     secret?: CredentialSecret;
-  }): CredentialInfo => structuredClone(info);
+  }): CredentialInfo => {
+    const models = info.auth === "dari-link" ? linkModelsOf(_secret?.value) : undefined;
+    return structuredClone({ ...info, ...(models ? { linkModels: models } : {}) });
+  };
   const live = (orgId: number, id: string) => {
     const row = rows.get(id);
     return row?.orgId === orgId && row.secret ? row : undefined;

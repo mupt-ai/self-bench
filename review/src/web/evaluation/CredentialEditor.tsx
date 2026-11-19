@@ -1,40 +1,33 @@
-import { CircleAlert } from "lucide-react";
 import React from "react";
-import { CHATGPT_SIGN_IN_MAX_SANDBOXES } from "../../../../src/contracts/config/execution-limits";
 import type { CredentialDraft, CredentialInfo } from "../../../../src/db/credentials";
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
-import { cn } from "../primitives/cn";
-import { Button, fieldStyles, Input, Select, segmentedGroupStyles, segmentStyles } from "../ui";
-import { ClaudeSignIn } from "./ClaudeSignIn";
+import { Button, fieldStyles, Input, Select } from "../ui";
 import { CredentialSecret } from "./CredentialSecret";
-import { CredentialLimitFields, CustomEndpointFields } from "./CredentialSettings";
-import { isSandbox, providers, sandboxes, signIns } from "./credential-presentation";
-import { DariRouterField } from "./DariRouterField";
-import { DeviceSignIn } from "./DeviceSignIn";
+import { CredentialLimitFields } from "./CredentialSettings";
+import { CustomEndpointFields } from "./CustomEndpointFields";
+import { sandboxes } from "./credential-presentation";
 
+/**
+ * Adds a sandbox account or a custom endpoint, or replaces one with a new one. Plans and provider
+ * keys connect with Connect with Dari, never here.
+ */
 export function CredentialEditor({
   previous,
-  kind = "openai",
-  auth = "api-key",
+  kind = "modal",
   org,
   onSave,
-  onSaved,
   onCancel,
 }: {
   previous?: CredentialInfo;
   kind?: CredentialDraft["kind"];
-  auth?: CredentialDraft["auth"];
   org: string;
   onSave(value: CredentialDraft): Promise<void>;
-  onSaved(): Promise<void>;
   onCancel(): void;
 }) {
   const [draft, setDraft] = React.useState<CredentialDraft>({
-    name: previous
-      ? `${previous.name} replacement`.slice(0, 80)
-      : (signIns.find((entry) => entry.id === auth)?.name ?? ""),
+    name: previous ? `${previous.name} replacement`.slice(0, 80) : "",
     kind: previous?.kind ?? kind,
-    auth: previous?.auth ?? auth,
+    auth: "api-key",
     value: "",
     endpoint: previous?.endpoint,
     maxSandboxes: previous?.maxSandboxes,
@@ -43,22 +36,15 @@ export function CredentialEditor({
     ...(previous?.models ? { models: previous.models } : {}),
   });
   const [busy, setBusy] = React.useState(false);
-  const [signingIn, setSigningIn] = React.useState(false);
-  const [importing, setImporting] = React.useState(false);
   const [error, setError] = React.useState("");
   const name = React.useRef<HTMLInputElement>(null);
-  const signIn = signIns.find((entry) => entry.kind === draft.kind);
-  const isLogin = draft.auth !== "api-key" && !importing;
-  const sandbox = isSandbox(previous?.kind ?? kind);
-  const choices = sandbox ? sandboxes : providers;
+  const endpoint = draft.kind === "custom";
   const keyLabel =
-    draft.auth === "claude-login"
-      ? "Claude Code Token"
-      : draft.kind === "modal"
-        ? "Modal Token Secret"
-        : draft.kind === "vercel"
-          ? "Vercel Token"
-          : "API Key";
+    draft.kind === "modal"
+      ? "Modal Token Secret"
+      : draft.kind === "vercel"
+        ? "Vercel Token"
+        : "API Key";
   return (
     <Dialog
       initialFocus={name}
@@ -68,7 +54,7 @@ export function CredentialEditor({
       aria-describedby="credential-description"
     >
       <DialogHeader
-        title={previous ? "Replace Credential" : sandbox ? "Add Sandbox" : "Add Provider"}
+        title={previous ? "Replace Credential" : endpoint ? "Add Endpoint" : "Add Sandbox"}
         titleId="credential-title"
         descriptionId="credential-description"
         description={<>Shared with {org}.</>}
@@ -78,16 +64,11 @@ export function CredentialEditor({
       <form
         onSubmit={async (event) => {
           event.preventDefault();
-          if (busy || isLogin) return;
+          if (busy) return;
           setBusy(true);
           setError("");
           try {
-            // A token copied from a terminal can wrap across lines.
-            await onSave(
-              draft.auth === "claude-login"
-                ? { ...draft, value: draft.value.replace(/\s+/g, "") }
-                : draft,
-            );
+            await onSave(draft);
           } catch (cause) {
             setError(cause instanceof Error ? cause.message : "Could not save credential");
           } finally {
@@ -101,56 +82,31 @@ export function CredentialEditor({
               Creates a new credential. Existing runs keep the original.
             </p>
           )}
-          <fieldset disabled={busy || signingIn} className="space-y-5">
-            <label className={fieldStyles} htmlFor="credential-provider">
-              {sandbox ? "Sandbox" : "Provider"}
-              <Select
-                id="credential-provider"
-                value={draft.kind}
-                onChange={(event) => {
-                  setDraft({
-                    name: draft.name,
-                    kind: event.target.value as CredentialDraft["kind"],
-                    auth: "api-key",
-                    value: "",
-                    maxSandboxes: draft.maxSandboxes,
-                  });
-                  setImporting(false);
-                  setError("");
-                }}
-              >
-                {choices.map((entry) => (
-                  <option key={entry.id} value={entry.id}>
-                    {entry.label}
-                  </option>
-                ))}
-              </Select>
-            </label>
-            {signIn && (
-              <fieldset>
-                <legend className="sr-only">Authentication</legend>
-                <div className={cn(segmentedGroupStyles, "grid w-full grid-cols-2")}>
-                  {[{ id: "api-key", label: "API Key" }, signIn].map((option) => (
-                    <button
-                      key={option.id}
-                      type="button"
-                      aria-pressed={draft.auth === option.id}
-                      className={segmentStyles(draft.auth === option.id)}
-                      onClick={() => {
-                        setDraft({
-                          ...draft,
-                          auth: option.id as CredentialDraft["auth"],
-                          value: "",
-                        });
-                        setImporting(false);
-                        setError("");
-                      }}
-                    >
-                      {option.label}
-                    </button>
+          <fieldset disabled={busy} className="space-y-5">
+            {!endpoint && (
+              <label className={fieldStyles} htmlFor="credential-provider">
+                Sandbox
+                <Select
+                  id="credential-provider"
+                  value={draft.kind}
+                  onChange={(event) => {
+                    setDraft({
+                      name: draft.name,
+                      kind: event.target.value as CredentialDraft["kind"],
+                      auth: "api-key",
+                      value: "",
+                      maxSandboxes: draft.maxSandboxes,
+                    });
+                    setError("");
+                  }}
+                >
+                  {sandboxes.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.label}
+                    </option>
                   ))}
-                </div>
-              </fieldset>
+                </Select>
+              </label>
             )}
             <label className={fieldStyles} htmlFor="credential-name">
               Name
@@ -159,115 +115,65 @@ export function CredentialEditor({
                 id="credential-name"
                 required
                 maxLength={80}
-                placeholder={`e.g. Team ${draft.auth === "api-key" ? "account" : signIn?.name}`}
+                placeholder={endpoint ? "e.g. Fireworks" : "e.g. Team account"}
                 value={draft.name}
                 onChange={(event) => setDraft({ ...draft, name: event.target.value })}
               />
             </label>
           </fieldset>
-          {(draft.auth === "claude-login" || draft.auth === "muse-login") && (
-            <p
-              role="note"
-              className="flex items-start gap-2 border-l-2 border-warning pl-3 text-xs leading-5 text-muted-foreground"
-            >
-              <CircleAlert aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-warning" />
-              <span>
-                {draft.auth === "claude-login"
-                  ? "A Claude plan only works with the Claude Code harness; other harnesses need an API key."
-                  : "A Muse Code plan only works with the Muse Code harness."}{" "}
-                Runs count against your plan's usage limits.
-              </span>
-            </p>
-          )}
-          {isLogin && draft.auth === "claude-login" ? (
-            <ClaudeSignIn
-              org={org}
-              name={draft.name}
-              onActiveChange={setSigningIn}
-              onDone={onSaved}
-            />
-          ) : isLogin && (draft.auth === "codex-login" || draft.auth === "muse-login") ? (
-            <DeviceSignIn
-              login={draft.auth}
-              org={org}
-              name={draft.name}
-              onActiveChange={setSigningIn}
-              onDone={onSaved}
-            />
-          ) : (
-            <fieldset className="space-y-5" disabled={busy}>
-              {draft.kind === "dari" && (
-                <DariRouterField
-                  value={draft.endpoint}
-                  onChange={(endpoint) => setDraft({ ...draft, endpoint })}
+          <fieldset className="space-y-5" disabled={busy}>
+            {endpoint && (
+              <CustomEndpointFields
+                endpoint={draft.endpoint ?? ""}
+                models={(draft.models ?? []).join(", ")}
+                onChange={(value) =>
+                  setDraft({
+                    ...draft,
+                    endpoint: value.endpoint,
+                    ...(value.models.length ? { models: value.models } : { models: undefined }),
+                  })
+                }
+              />
+            )}
+            {draft.kind === "modal" && (
+              <label className={fieldStyles} htmlFor="credential-token-id">
+                Modal Token ID
+                <Input
+                  id="credential-token-id"
+                  required
+                  autoComplete="off"
+                  maxLength={4096}
+                  value={draft.tokenId ?? ""}
+                  onChange={(event) => setDraft({ ...draft, tokenId: event.target.value })}
                 />
-              )}
-              {draft.kind === "custom" && (
-                <CustomEndpointFields
-                  endpoint={draft.endpoint ?? ""}
-                  models={(draft.models ?? []).join(", ")}
-                  onChange={({ endpoint, models }) => setDraft({ ...draft, endpoint, models })}
-                />
-              )}
-              {draft.kind === "modal" && (
-                <label className={fieldStyles} htmlFor="credential-token-id">
-                  Modal Token ID
+              </label>
+            )}
+            {draft.kind === "vercel" &&
+              (["teamId", "projectId"] as const).map((key) => (
+                <label key={key} className={fieldStyles} htmlFor={`credential-${key}`}>
+                  {key === "teamId" ? "Vercel Team ID" : "Vercel Project ID"}
                   <Input
-                    id="credential-token-id"
+                    id={`credential-${key}`}
                     required
                     autoComplete="off"
-                    maxLength={4096}
-                    value={draft.tokenId ?? ""}
-                    onChange={(event) => setDraft({ ...draft, tokenId: event.target.value })}
+                    maxLength={256}
+                    value={draft[key] ?? ""}
+                    onChange={(event) => setDraft({ ...draft, [key]: event.target.value })}
                   />
                 </label>
-              )}
-              {draft.kind === "vercel" &&
-                (["teamId", "projectId"] as const).map((key) => (
-                  <label key={key} className={fieldStyles} htmlFor={`credential-${key}`}>
-                    {key === "teamId" ? "Vercel Team ID" : "Vercel Project ID"}
-                    <Input
-                      id={`credential-${key}`}
-                      required
-                      autoComplete="off"
-                      maxLength={256}
-                      value={draft[key] ?? ""}
-                      onChange={(event) => setDraft({ ...draft, [key]: event.target.value })}
-                    />
-                  </label>
-                ))}
-              <CredentialLimitFields
-                kind={draft.kind}
-                limits={draft}
-                fallback={draft.auth === "codex-login" ? CHATGPT_SIGN_IN_MAX_SANDBOXES : undefined}
-                onChange={(limits) => setDraft({ ...draft, ...limits })}
-              />
-              <CredentialSecret
-                draft={draft}
-                setDraft={setDraft}
-                importing={importing && draft.auth === "codex-login"}
-                setError={setError}
-                keyLabel={keyLabel}
-                {...(draft.auth === "claude-login"
-                  ? { hint: "Run claude setup-token and paste the token it prints." }
-                  : {})}
-                key={`${draft.kind}-${draft.auth}`}
-              />
-            </fieldset>
-          )}
-          {draft.auth !== "api-key" && signIn?.importLabel && !signingIn && (
-            <button
-              type="button"
-              className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
-              onClick={() => {
-                setImporting((value) => !value);
-                setDraft({ ...draft, value: "" });
-                setError("");
-              }}
-            >
-              {importing ? "Use Browser Sign-In" : signIn?.importLabel}
-            </button>
-          )}
+              ))}
+            <CredentialLimitFields
+              kind={draft.kind}
+              limits={draft}
+              onChange={(limits) => setDraft({ ...draft, ...limits })}
+            />
+            <CredentialSecret
+              draft={draft}
+              setDraft={setDraft}
+              keyLabel={keyLabel}
+              key={draft.kind}
+            />
+          </fieldset>
           {error && (
             <p role="alert" className="text-sm leading-6 text-destructive">
               {error}
@@ -277,17 +183,15 @@ export function CredentialEditor({
         <DialogFooter>
           <div className="flex gap-2">
             <Button type="button" variant="ghost" disabled={busy} onClick={onCancel}>
-              {signingIn ? "Cancel Sign-In" : "Cancel"}
+              Cancel
             </Button>
-            {!isLogin && (
-              <Button
-                type="submit"
-                variant="primary"
-                disabled={busy || !draft.value || !draft.name.trim()}
-              >
-                {busy ? "Saving…" : "Save"}
-              </Button>
-            )}
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={busy || !draft.value || !draft.name.trim()}
+            >
+              {busy ? "Saving…" : "Save"}
+            </Button>
           </div>
         </DialogFooter>
       </form>

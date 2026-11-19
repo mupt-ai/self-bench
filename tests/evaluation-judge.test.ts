@@ -177,15 +177,4 @@ test("a trial names its judge credential for the gateway, and never reads its ke
   const execution = await credentialExecution(input, "/home", { PATH: "/bin" }, vault);
   expect(execution.judge).toEqual({ credentialId: judgeKey.id, provider: "anthropic" });
   expect(JSON.stringify(execution)).not.toContain("judge-secret");
-  const signIn = await vault.credentials.create(
-    1,
-    { name: "Claude", kind: "anthropic", auth: "claude-login", value: "sk-ant-oat01-token" },
-    {},
-  );
-  const refused = await credentialedInput(vault, (draft) => {
-    if (draft.credentials) draft.credentials.judgeCredentialId = signIn.id;
-  });
-  await expect(credentialExecution(refused, "/home", {}, vault)).rejects.toThrow(
-    "Judge credential unavailable",
-  );
 });

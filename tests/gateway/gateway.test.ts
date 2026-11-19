@@ -54,7 +54,6 @@ beforeAll(async () => {
       find: async (orgId, id) => (orgId === 7 && id === CREDENTIAL ? credential : undefined),
       secret: async (orgId, id) =>
         orgId === 7 && id === CREDENTIAL ? { value: "byok-secret" } : undefined,
-      renew: async () => {},
     },
     modelConfig: (model) =>
       model === MODEL

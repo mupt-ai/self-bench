@@ -302,6 +302,13 @@
       "when": 1794600000000,
       "tag": "0042_saved_harnesses",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1794967001400,
+      "tag": "0043_retire_provider_sign_ins",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
-import { readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { readFile } from "node:fs/promises";
 import type { EvaluationInput } from "../../src/evaluation/types.js";
 import { HARBOR_VERSION } from "../../src/harnesses/harbor/command.js";
 import { runCommand } from "../../src/lib/process.js";
@@ -148,34 +147,34 @@ test("the worker image installs the Harbor version SelfBench supports", async ()
 });
 
 harbor(
-  "Muse Code on a Meta sign-in runs signed in, off contributor mode, without web tools",
+  "Muse Code on a Meta key runs with the key, off contributor mode, without web tools",
   async () => {
-    const auth = join(runtime, "muse-auth.json");
-    await writeFile(auth, '{"providers":{"meta":{"access_token":"t"}}}');
     const trialInput = {
       ...input("meta", "meta/muse-spark-1.3"),
       thinking: "max",
     } as EvaluationInput;
-    trialInput.credentials = { ...trialInput.credentials, auth: "muse-login" } as never;
-    const { recorded, start } = await run(trialInput, "muse-code", { MUSE_AUTH_JSON_PATH: auth });
+    const { start } = await run(trialInput, "muse-code", { META_API_KEY: "meta-key" });
     const muse = start("muse exec");
+    expect(muse.env.META_API_KEY).toBe("meta-key");
     expect(muse.command).toContain("--contributor-mode off");
     expect(muse.command).toContain("--disable-web-tools");
     expect(muse.command).toContain("--reasoning-effort max");
-    // A key in the environment would win over the sign-in.
-    expect(muse.env).not.toHaveProperty("META_API_KEY");
-    const authFile = Object.keys(recorded.files).find((path) => path.endsWith("/muse/auth.json"));
-    expect(authFile && recorded.files[authFile]).toContain("access_token");
-    expect(muse.env.XDG_CONFIG_HOME && authFile?.startsWith(muse.env.XDG_CONFIG_HOME)).toBe(true);
   },
 );
 
-harbor("Muse Code on a Meta key runs with the key", async () => {
-  const { start } = await run(input("meta", "meta/muse-spark-1.3"), "muse-code", {
-    META_API_KEY: "meta-key",
-  });
+harbor("Muse Code on a Dari connection sends its trial token to Dari as a bearer key", async () => {
+  const { start, key } = await run(
+    input("dari-link", "dari-link/meta/muse-spark-1.3"),
+    "muse-code",
+  );
   const muse = start("muse exec");
-  expect(muse.env.META_API_KEY).toBe("meta-key");
+  const args = argv(muse.command, "muse");
+  expect(muse.env.META_API_KEY).toBe(key);
+  expect(args[args.indexOf("--model") + 1]).toBe("dari/model/meta/muse-spark-1.3");
+  expect(args[args.indexOf("--base-url") + 1]).toBe("https://api.selfbench.test/gateway/v1");
+  // Muse sends a key only to a base URL its settings name and pin to bearer auth.
+  expect(args).toContain('endpoint_transport.base_url="https://api.selfbench.test/gateway/v1"');
+  expect(args).toContain('endpoint_transport.auth="bearer"');
   expect(muse.command).toContain("--contributor-mode off");
 });
 

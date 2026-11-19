@@ -8,10 +8,31 @@ import { SetupDialog } from "./SetupDialog";
 
 const claude: CredentialInfo = {
   id: "claude",
-  name: "Claude",
-  kind: "anthropic",
-  auth: "claude-login",
+  name: "Dari · a@example.com",
+  kind: "dari-link",
+  auth: "dari-link",
   createdAt: "",
+  linkModels: { models: [{ id: "anthropic/claude-opus-5-5", only: "claude-code" }], prefixes: [] },
+};
+const chatgpt: CredentialInfo = {
+  id: "chatgpt",
+  name: "Dari · b@example.com",
+  kind: "dari-link",
+  auth: "dari-link",
+  createdAt: "",
+  linkModels: { models: [{ id: "openai/gpt-6-astra" }], prefixes: [] },
+};
+const modal: CredentialInfo = {
+  id: "modal",
+  name: "Modal",
+  kind: "modal",
+  auth: "api-key",
+  createdAt: "",
+};
+const dariLink = {
+  gatewayUrl: "https://routing.dari.test",
+  clientId: "lnk_selfbench",
+  redirectUri: "https://selfbench.test/api/dari-link/callback",
 };
 
 let browser: Window;
@@ -38,8 +59,6 @@ beforeEach(() => {
   posts = [];
   const fetch = spyOn(globalThis, "fetch").mockImplementation((async (input, init) => {
     posts.push({ url: String(input), body: JSON.parse(String(init?.body ?? "null")) });
-    // A sign-in start that never resolves keeps the flow on its preparing state.
-    if (String(input).endsWith("/codex-login")) return new Promise<Response>(() => {});
     return Response.json({});
   }) as typeof globalThis.fetch);
   restore = () => {
@@ -62,7 +81,11 @@ afterEach(async () => {
   await browser.happyDOM.close();
 });
 
-async function render(credentials: CredentialInfo[], canManage = true) {
+async function render(
+  credentials: CredentialInfo[],
+  canManage = true,
+  config: typeof dariLink | null = dariLink,
+) {
   await act(async () => {
     root.render(
       <MemoryRouter>
@@ -70,6 +93,7 @@ async function render(credentials: CredentialInfo[], canManage = true) {
           org="team"
           credentials={credentials}
           canManage={canManage}
+          dariLink={config}
           refresh={refresh}
           onClose={onClose}
         />
@@ -104,17 +128,23 @@ async function type(id: string, value: string) {
   });
 }
 
-test("a new org starts at the coding plan, and Connect begins that plan's sign-in", async () => {
+test("a new org starts at Connect with Dari, the only way to connect a subscription", async () => {
   await render([]);
-  expect(heading()).toBe("Connect a Coding Plan");
+  expect(heading()).toBe("Connect Your AI Subscription");
+  expect(button("Connect with Dari")).toBeDefined();
   expect(button("Skip for Now")).toBeDefined();
-  await click("Connect ChatGPT");
-  expect(posts).toEqual([
-    { url: "/api/orgs/team/credentials/codex-login", body: { name: "Codex" } },
-  ]);
+  // Nothing is pasted or signed in to here: keys and plans alike are connected on Dari.
+  expect(container.querySelector("input, textarea")).toBeNull();
+  expect(container.textContent).not.toContain("Sign-In");
 });
 
-test("after a Claude sign-in, a sandbox finishes evaluation but generation still needs ChatGPT", async () => {
+test("without Dari Link on the deployment, the first step says so instead of offering a button", async () => {
+  await render([], true, null);
+  expect(button("Connect with Dari")).toBeUndefined();
+  expect(container.textContent).toContain("isn't configured on this deployment");
+});
+
+test("after connecting a Claude plan, a sandbox finishes evaluation but not generation", async () => {
   await render([claude]);
   expect(heading()).toBe("Choose Where Tasks Run");
   await click("Connect Modal");
@@ -135,13 +165,22 @@ test("after a Claude sign-in, a sandbox finishes evaluation but generation still
   ]);
   expect(refresh).toHaveBeenCalledTimes(1);
   expect(heading()).toBe("Almost There");
-  expect(container.textContent).toContain("Needs a ChatGPT sign-in or a model API key.");
+  expect(container.textContent).toContain(
+    "Needs a model that can write tasks, such as a ChatGPT plan or an API key connected with Dari. Claude and Muse plans only run evaluations.",
+  );
+});
+
+test("a ChatGPT plan connected with Dari, and a sandbox, is ready to generate and evaluate", async () => {
+  await render([chatgpt, modal]);
+  expect(heading()).toBe("You're Set");
+  expect(container.textContent).not.toContain("Needs a model");
+  expect(container.textContent).toContain("Ready.");
 });
 
 test("members see what is missing and who can connect it, without connect actions", async () => {
   await render([], false);
   expect(heading()).toBe("Setup Needs an Admin");
-  expect(button("Connect ChatGPT")).toBeUndefined();
+  expect(button("Connect with Dari")).toBeUndefined();
   await click("Done");
   expect(onClose).toHaveBeenCalledTimes(1);
 });

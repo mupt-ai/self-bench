@@ -79,7 +79,6 @@ beforeAll(async () => {
         orgId === 7 && credentials[id]
           ? { value: id === FIREWORKS ? "fpk_test" : "baseten-key" }
           : undefined,
-      renew: async () => {},
     },
     servedModelCost,
     recordUsage: (entry) => usage.push(entry),
