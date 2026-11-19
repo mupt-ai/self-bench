@@ -5,11 +5,14 @@ import { Button, fieldStyles, Input, Select } from "../ui";
 import { CredentialSecret } from "./CredentialSecret";
 import { CredentialLimitFields } from "./CredentialSettings";
 import { CustomEndpointFields } from "./CustomEndpointFields";
-import { sandboxes } from "./credential-presentation";
+import { isSandbox, providers, sandboxes } from "./credential-presentation";
+
+/** Provider and gateway keys: for judges, and for models Dari does not connect. */
+const keyProviders = providers.filter((entry) => entry.id !== "custom" && entry.id !== "dari-link");
 
 /**
- * Adds a sandbox account or a custom endpoint, or replaces one with a new one. Plans and provider
- * keys connect with Connect with Dari, never here.
+ * Adds a sandbox account, a provider or gateway API key, or a custom endpoint, or replaces one
+ * with a new one. Plans connect with Connect with Dari, never here.
  */
 export function CredentialEditor({
   previous,
@@ -39,6 +42,8 @@ export function CredentialEditor({
   const [error, setError] = React.useState("");
   const name = React.useRef<HTMLInputElement>(null);
   const endpoint = draft.kind === "custom";
+  const sandbox = isSandbox(draft.kind);
+  const choices = sandbox ? sandboxes : keyProviders;
   const keyLabel =
     draft.kind === "modal"
       ? "Modal Token Secret"
@@ -54,7 +59,15 @@ export function CredentialEditor({
       aria-describedby="credential-description"
     >
       <DialogHeader
-        title={previous ? "Replace Credential" : endpoint ? "Add Endpoint" : "Add Sandbox"}
+        title={
+          previous
+            ? "Replace Credential"
+            : endpoint
+              ? "Add Endpoint"
+              : sandbox
+                ? "Add Sandbox"
+                : "Add API Key"
+        }
         titleId="credential-title"
         descriptionId="credential-description"
         description={<>Shared with {org}.</>}
@@ -85,7 +98,7 @@ export function CredentialEditor({
           <fieldset disabled={busy} className="space-y-5">
             {!endpoint && (
               <label className={fieldStyles} htmlFor="credential-provider">
-                Sandbox
+                {sandbox ? "Sandbox" : "Provider"}
                 <Select
                   id="credential-provider"
                   value={draft.kind}
@@ -100,7 +113,7 @@ export function CredentialEditor({
                     setError("");
                   }}
                 >
-                  {sandboxes.map((entry) => (
+                  {choices.map((entry) => (
                     <option key={entry.id} value={entry.id}>
                       {entry.label}
                     </option>

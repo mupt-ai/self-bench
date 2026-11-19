@@ -140,15 +140,16 @@ function CredentialsContent({ org }: { org: string }) {
             onReplace={(previous) => setEditing({ previous })}
             onAdd={() => setEditing({ kind: "custom" })}
           />
-          {/* Provider API keys saved before Connect with Dari became the only way to add one. */}
-          {keys.length > 0 && (
-            <CredentialGroup
-              {...groupProps}
-              title="Other Model Credentials"
-              credentials={keys}
-              onEdit={setChanging}
-            />
-          )}
+          {/* Provider and gateway keys: what an LLM judge calls with, and models Dari does not connect. */}
+          <CredentialGroup
+            {...groupProps}
+            title="API Keys"
+            credentials={keys}
+            addLabel="Add API Key"
+            onEdit={setChanging}
+            onReplace={(previous) => setEditing({ previous })}
+            onAdd={() => setEditing({ kind: "openai" })}
+          />
         </div>
       )}
       {editing && (
