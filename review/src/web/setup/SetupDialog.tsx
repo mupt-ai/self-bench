@@ -1,6 +1,5 @@
 import { Check, X } from "lucide-react";
 import React from "react";
-import { Link } from "react-router";
 import type { CredentialDraft, CredentialInfo } from "../../../../src/db/credentials";
 import type { DariLinkBrowserConfig } from "../../../../src/gateway/dari-link/connection";
 import { Dialog } from "../Dialog";
@@ -16,6 +15,12 @@ import { type Choice, Choices, Status } from "./SetupRows";
 const sandboxes = [
   { id: "modal", title: "Modal", detail: "Generates tasks and runs evaluations." },
   { id: "e2b", title: "E2B", detail: "Generates tasks and runs evaluations." },
+  { id: "vercel", title: "Vercel", detail: "Generates tasks. Evaluations need another sandbox." },
+  {
+    id: "daytona",
+    title: "Daytona",
+    detail: "Runs evaluations. Generating tasks needs another sandbox.",
+  },
 ] as const;
 
 /**
@@ -140,7 +145,7 @@ export function SetupDialog({
               onToggle={setOpen}
               render={(id) => (
                 <SandboxForm
-                  kind={id as "modal" | "e2b"}
+                  kind={id}
                   onSave={async (draft: CredentialDraft) => {
                     await evaluationRequest(url, draft);
                     await connected(2);
@@ -150,18 +155,6 @@ export function SetupDialog({
             />
           )}
           {step === 2 && <Status coverage={coverage} />}
-          {step === 1 && (
-            <p className="mt-4 text-sm text-muted-foreground">
-              Using Vercel or Daytona?{" "}
-              <Link
-                to="/settings/credentials"
-                onClick={onClose}
-                className="rounded-sm font-medium text-foreground underline decoration-foreground/35 underline-offset-4 transition-colors hover:decoration-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                Add It in Credentials
-              </Link>
-            </p>
-          )}
         </div>
       </div>
       <footer className="flex items-center gap-2 border-t border-border bg-card px-5 py-4 sm:px-7">

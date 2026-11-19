@@ -148,7 +148,7 @@ test("after connecting a Claude plan, a sandbox finishes evaluation but not gene
   await render([claude]);
   expect(heading()).toBe("Choose Where Tasks Run");
   await click("Connect Modal");
-  await type("setup-token-id", "ak-1");
+  await type("setup-tokenId", "ak-1");
   await type("setup-secret", "as-1");
   await act(async () => {
     container

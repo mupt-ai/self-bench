@@ -6,7 +6,7 @@ import { cn } from "../primitives/cn";
 import { Button } from "../ui";
 import { covered, type setupCoverage } from "./readiness";
 
-export type Choice = "modal" | "e2b";
+export type Choice = "modal" | "e2b" | "daytona" | "vercel";
 
 /** The setup popup's options for one step; the chosen one opens its connection flow in place. */
 export function Choices({
