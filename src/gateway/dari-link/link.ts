@@ -68,8 +68,9 @@ function credentialName(grant: LinkTokenSet): string {
 }
 
 /**
- * Redeems the popup's code and saves the grant as a credential (kind `dari-link`). Every approval is
- * a new grant, so connecting again adds a connection.
+ * Redeems the popup's code and saves the grant as the workspace's one Dari connection (a
+ * credential of kind `dari-link`). Connecting again puts the new grant on that same credential, so
+ * runs and pickers that name it keep working, and ends the grant it replaced on Dari.
  */
 export async function connectDari(
   vault: Vault,
@@ -102,8 +103,21 @@ export async function connectDari(
         ? { maxSandboxes: CHATGPT_SIGN_IN_MAX_SANDBOXES }
         : {}),
     });
-    const created = await vault.credentials.create(orgId, draft, {}, randomUUID());
-    return { id: created.id, name: created.name };
+    const current = (await vault.credentials.list(orgId)).find(
+      (credential) => credential.auth === "dari-link",
+    );
+    if (!current) {
+      const created = await vault.credentials.create(orgId, draft, {}, randomUUID());
+      return { id: created.id, name: created.name };
+    }
+    const replaced = (await vault.credentials.secret(orgId, current.id))?.value;
+    // The new grant is saved last: once it is, nothing below fails.
+    await vault.credentials.rename(orgId, current.id, draft.name);
+    await vault.credentials.renew(orgId, current.id, draft.value);
+    const previous = replaced ? readDariLinkSecret(replaced) : undefined;
+    if (previous && previous.grant.grantId !== grantId)
+      await revoke({ ...app, token: previous.refreshToken }).catch(() => undefined);
+    return { id: current.id, name: draft.name };
   } catch (error) {
     // A grant SelfBench could not save would stay on the user's Dari with nothing here to end it.
     await revoke({ ...app, token: refreshToken }).catch(() => undefined);

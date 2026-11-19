@@ -112,7 +112,13 @@ function CredentialsContent({ org }: { org: string }) {
               {...groupProps}
               title="AI Subscriptions"
               credentials={credentials.filter((entry) => entry.auth === "dari-link")}
-              addLabel={dari.connecting ? "Connecting…" : "Connect with Dari"}
+              addLabel={
+                dari.connecting
+                  ? "Connecting…"
+                  : credentials.some((entry) => entry.auth === "dari-link")
+                    ? "Update Plans"
+                    : "Connect with Dari"
+              }
               onEdit={setChanging}
               detail={(credential) => <DariPlans org={org} credentialId={credential.id} />}
               {...(data?.dariLink ? { onAdd: dari.connect } : {})}

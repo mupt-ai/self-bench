@@ -118,6 +118,25 @@ describe("Dari Link", () => {
     expect(dariRefusal(refused)).toStartWith("Dari refused this model:");
   });
 
+  test("connecting again updates the one connection and ends the grant it replaced", async () => {
+    const before = await link.vault.credentials.secret(link.orgId, credentialId);
+    const old = JSON.parse(before?.value ?? "{}") as { refreshToken: string };
+    expect((await link.connect()).status).toBe(201);
+    const { credentials } = await link.list();
+    expect(credentials.map((credential) => credential.id)).toEqual([credentialId]);
+    const after = JSON.parse(
+      (await link.vault.credentials.secret(link.orgId, credentialId))?.value ?? "{}",
+    ) as { refreshToken: string };
+    expect(after.refreshToken).not.toBe(old.refreshToken);
+    // The replaced grant is gone on Dari; the credential runs on the new one.
+    const replaced = await dariLinkConnection(
+      async () => ({ ...link.dari.app, refreshToken: old.refreshToken }),
+      { orgId: link.orgId, credentialId, model: GPT, tags: {} },
+    ).catch((error: unknown) => error);
+    expect(dariRefusal(replaced)).toContain("Connect again");
+    expect((await trial(GPT)).env.OPENAI_API_KEY).toStartWith("dlk_ct_");
+  });
+
   test("an approval SelfBench cannot save is ended on Dari", async () => {
     const grants = async () =>
       (
@@ -133,6 +152,7 @@ describe("Dari Link", () => {
       credentials: {
         ...link.vault.credentials,
         create: () => Promise.reject(new Error("Credential limit reached")),
+        renew: () => Promise.reject(new Error("Credential limit reached")),
       },
     };
     const approved = await link.dari.connect();

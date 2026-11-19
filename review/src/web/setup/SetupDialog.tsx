@@ -222,7 +222,7 @@ function DariStep({
         disabled={dari.connecting}
         onClick={dari.connect}
       >
-        {dari.connecting ? "Connecting…" : linked.length ? "Connect Another" : "Connect with Dari"}
+        {dari.connecting ? "Connecting…" : linked.length ? "Update Plans" : "Connect with Dari"}
       </Button>
       {dari.error && (
         <p role="alert" className="text-sm leading-6 text-destructive">
