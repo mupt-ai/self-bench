@@ -5,6 +5,7 @@ import type { AuthoredTaskDraft } from "../../contracts/index.js";
 import type { TaskRecord, TaskStart } from "../../db/tasks.js";
 import type { User } from "../../db/users.js";
 import { saveGenerationRecords } from "../../generation/settings/credentials.js";
+import { reviseFeature } from "../../generation/tasks/feature-revision.js";
 import { MAX_FEEDBACK_LENGTH } from "../../generation/tasks/feedback-limit.js";
 import { stageRevisionDraft, submittedDraft } from "../../generation/tasks/revision.js";
 import { reviseScenario } from "../../generation/tasks/scenario-revision.js";
@@ -143,7 +144,7 @@ export async function taskFeedbackRoute(
     "task revision started",
     {
       ...(generation ? generationProperties(generation.settings) : {}),
-      source: scenario ? "scenario" : "pull_request",
+      source: task.sourcePrs?.length ? "feature" : scenario ? "scenario" : "pull_request",
       edited: uploaded !== undefined,
     },
     tenant,
@@ -169,8 +170,9 @@ interface RevisionStart<Row> {
 }
 
 /**
- * Starts a new run of a PR's or scenario's task from `stage`'s draft: a scenario's keeps the
- * original scenario, and a PR's reads the PR again with the person's token, on the task's own base.
+ * Starts a new run of a PR's, feature's, or scenario's task from `stage`'s draft: a scenario's
+ * keeps the original scenario, a feature's its PRs and base, and a PR's reads the PR again with the
+ * person's token, on the task's own base.
  */
 export async function startRevision<Row extends { readonly runId: string }>(
   options: RevisionRouteOptions,
@@ -178,9 +180,11 @@ export async function startRevision<Row extends { readonly runId: string }>(
 ): Promise<{ row: Row } | { status: number; error: string }> {
   const { repo, task, user } = start;
   if (task.sourcePr === undefined) {
-    // A repository scenario's run clones its commit with the person's token, as a PR's does.
+    // A feature's or a repository scenario's run clones the repository with the person's token,
+    // as a PR's does; a feature keeps its PRs, a scenario its scenario.
     const token = task.baseCommit ? await options.users.gitHubToken(user.githubId) : undefined;
-    const row = await reviseScenario({
+    const revise = task.sourcePrs?.length ? reviseFeature : reviseScenario;
+    const row = await revise({
       ...options,
       repository: repo,
       task,

@@ -27,6 +27,6 @@ icon: "hammer"
 | `POST /api/orgs/{org}/repos` | `{ fullName: "owner/name" }` |
 | `PATCH {repo}` | `{ agentMinutes }` |
 | `POST /api/orgs/{org}/evals` | `{ name }` |
-| `POST {repo}/batches` | `{ candidateCounts: { easy, medium, hard } (1–300 total), focus?, generation }` |
+| `POST {repo}/batches` | `{ candidateCounts: { easy, medium, hard } (1–300 total), focus?, unit?: pull_request\|feature, generation }`. With `unit: "feature"`, each task is a feature built over several merged PRs, and `focus` describes the feature to find |
 | `POST {repo}/tasks/from-pr` | `{ pr: number or URL, generation }` |
 | `POST {repo}/tasks/from-scenario` | `{ title (≤120), scenario (the description, ≤20,000 chars), commit? (repo benchmarks only: SHA, branch, or HEAD), difficulty?: easy\|medium\|hard, attachments?: [{ name, content: base64 }] (≤20 files, 20 MB), generation }` |

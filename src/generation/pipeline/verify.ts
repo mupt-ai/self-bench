@@ -75,11 +75,19 @@ export async function compileTask(
           difficulty: candidate.difficulty,
           ...(candidate.baseCommit ? { baseCommit: candidate.baseCommit } : {}),
         }
-      : {
-          sourcePr: candidate.sourcePr,
-          baseCommit: candidate.baseCommit,
-          difficulty: candidate.difficulty,
-        };
+      : candidate.kind === "feature"
+        ? {
+            kind: "feature",
+            title: candidate.title,
+            difficulty: candidate.difficulty,
+            baseCommit: candidate.baseCommit,
+            sourcePrs: candidate.pullRequests.map((pr) => pr.number),
+          }
+        : {
+            sourcePr: candidate.sourcePr,
+            baseCommit: candidate.baseCommit,
+            difficulty: candidate.difficulty,
+          };
   return await runSandboxJob(
     sandbox,
     {

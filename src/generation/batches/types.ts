@@ -2,6 +2,7 @@ import type {
   ArtifactRef,
   CandidateWorkflowResult,
   DiscoveryResult,
+  FeatureCandidate,
   PullRequestCandidate,
   RunRequest,
 } from "../../contracts/index.js";
@@ -22,8 +23,8 @@ interface BatchShard extends BatchItem {
   result?: DiscoveryResult;
 }
 interface BatchCandidate extends BatchItem {
-  /** Batches only ever author merged pull requests. */
-  candidate: PullRequestCandidate;
+  /** Batches author merged pull requests, or features built over several. */
+  candidate: PullRequestCandidate | FeatureCandidate;
   result?: CandidateWorkflowResult;
 }
 /** Phases after which a batch never changes again. */

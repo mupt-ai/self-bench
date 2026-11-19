@@ -9,7 +9,7 @@ test("discovery rejects unsafe candidate IDs before writing so the agent can cor
   let tool!: { parameters: unknown; execute: unknown };
   discoveryExtension({
     registerTool: (value) => {
-      tool = value;
+      if (value.name === "submit_discovery") tool = value;
     },
   } as ExtensionAPI);
   const root = await mkdtemp(join(tmpdir(), "selfbench-discovery-"));

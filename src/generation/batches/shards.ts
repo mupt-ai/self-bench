@@ -6,6 +6,10 @@ const DEFAULT_PRS_PER_SHARD = 25;
 export const FOCUSED_PRS_PER_SHARD = 150;
 /** Up to 4,800 PRs, which with filtering headroom stays within the 10,000-PR fetch bound. */
 export const MAX_FOCUSED_DISCOVERY_SHARDS = 32;
+/** A feature shard skims titles to group PRs, and a feature's PRs should share one window. */
+export const FEATURE_PRS_PER_SHARD = 200;
+/** A requested feature is one search through the whole history, by one agent. */
+export const REQUESTED_FEATURE_INDEX = 400;
 /** How many times its share of each tier a focused shard may propose. */
 export const FOCUSED_SHARD_SURPLUS = 3;
 

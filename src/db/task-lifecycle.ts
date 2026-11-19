@@ -22,6 +22,8 @@ export interface PlannedTask {
   /** A scenario's task has no base commit: its author writes the workspace. */
   readonly baseCommit?: string;
   readonly title?: string;
+  /** A feature's merged pull requests, in merge order. */
+  readonly sourcePrs?: readonly number[];
   readonly difficulty: "easy" | "medium" | "hard";
   readonly stage: string;
   /** The candidate workflow that owns the row. */
@@ -69,6 +71,7 @@ export function taskLifecycle(db: Database, now: () => Date) {
             sourceUrl: row.sourceUrl ?? null,
             baseCommit: row.baseCommit ?? null,
             title: row.title ?? null,
+            sourcePrs: row.sourcePrs ? [...row.sourcePrs] : null,
             difficulty: row.difficulty,
             pipelineStatus: "in_progress" as const,
             stage: row.stage,

@@ -91,7 +91,9 @@ export function createBatchRoutes(options: BatchRoutesOptions): BatchRoutes {
               ? "Choose valid generation models, reasoning, sandbox, and credentials."
               : invalid("focus")
                 ? `Focus must be 1–${MAX_FOCUS_LENGTH} characters.`
-                : `Request 1–${MAX_CANDIDATES_PER_RUN} candidates total using nonnegative whole counts for easy, medium and hard.`,
+                : invalid("unit")
+                  ? "Unit must be pull_request or feature."
+                  : `Request 1–${MAX_CANDIDATES_PER_RUN} candidates total using nonnegative whole counts for easy, medium and hard.`,
           });
           return true;
         }
@@ -145,6 +147,7 @@ export function createBatchRoutes(options: BatchRoutesOptions): BatchRoutes {
           ...options,
           candidateCounts: parsed.data.candidateCounts,
           ...(parsed.data.focus ? { focus: parsed.data.focus } : {}),
+          ...(parsed.data.unit ? { unit: parsed.data.unit } : {}),
           ...(generation ? { generation } : {}),
           repo,
           token,
@@ -174,6 +177,7 @@ export function createBatchRoutes(options: BatchRoutesOptions): BatchRoutes {
           {
             candidates: counts.easy + counts.medium + counts.hard,
             focused: parsed.data.focus !== undefined,
+            unit: parsed.data.unit ?? "pull_request",
             ...(generation ? generationProperties(generation.settings) : {}),
           },
           tenant,

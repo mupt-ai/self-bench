@@ -13,9 +13,10 @@ import {
 } from "../../contracts/index.js";
 import type { SandboxExecutor } from "../../sandbox/index.js";
 import type { SandboxJobOutcome } from "../../sandbox/jobs.js";
-import { difficultyThresholds } from "../task/audit.js";
+import { authoringTiers } from "../task/audit.js";
 import { TASK_LIMITS } from "../task/render.js";
 import { finishAgent, startAgent } from "./agent.js";
+import { featureAuthoringPrompt } from "./feature-authoring.js";
 import { artifactFile, readAsset } from "./helpers.js";
 import { renderPrompt } from "./prompts.js";
 import type { SandboxCallback } from "./sandbox-job.js";
@@ -210,7 +211,9 @@ export function authoringPrompt(
     ? "scenario-how-to-work"
     : candidate.kind === "scenario"
       ? "repository-scenario-how-to-work"
-      : "how-to-work";
+      : candidate.kind === "feature"
+        ? "feature-how-to-work"
+        : "how-to-work";
   const shared = {
     howToWork: renderPrompt(howToWork, {
       verifyBudget: AUTHOR_VERIFY_BUDGET,
@@ -262,12 +265,9 @@ export function authoringPrompt(
       maintainer,
     });
   }
-  const tiers = Object.entries(difficultyThresholds)
-    .map(
-      ([tier, t]) =>
-        `${tier}: ≥${t.changedLines} changed implementation lines across ≥${t.implementationFiles} file${t.implementationFiles === 1 ? "" : "s"}`,
-    )
-    .join("; ");
+  const tiers = authoringTiers();
+  if (candidate.kind === "feature")
+    return featureAuthoringPrompt(candidate, { ...shared, tiers, limits, maintainer });
   return renderPrompt("authoring", {
     ...shared,
     sourceUrl: candidate.sourceUrl,

@@ -60,7 +60,70 @@ const scenarioCandidateSchema = z.object({
 
 export type ScenarioCandidate = z.infer<typeof scenarioCandidateSchema>;
 
-export type Candidate = PullRequestCandidate | ScenarioCandidate;
+/** The most merged pull requests one feature task is built from. */
+const MAX_FEATURE_PULL_REQUESTS = 25;
+
+const featurePullRequestSchema = z
+  .object({
+    number: z.number().int().positive(),
+    url: z.string().url(),
+    title: z.string().trim().min(1).max(500),
+    /** The commit the PR landed as on the default branch (its merge or squash commit). */
+    mergeCommit: commitSchema,
+  })
+  .superRefine((pr, context) => {
+    if (!pullRequestNumberMatches(pr.url, pr.number)) {
+      context.addIssue({
+        code: "custom",
+        path: ["url"],
+        message: "url must be a canonical GitHub pull request URL matching number",
+      });
+    }
+  });
+
+/**
+ * A feature: one capability the repository gained over several merged pull requests. The agent
+ * starts from the commit before the first of them landed, and the hidden tests exercise the
+ * finished feature end to end, as a user or caller meets it. The author builds the reference
+ * implementation from the PRs' own changes, in merge order.
+ */
+export const featureCandidateSchema = z
+  .object({
+    kind: z.literal("feature"),
+    candidateId: candidateIdSchema,
+    difficulty: difficultySchema,
+    title: z.string().trim().min(1).max(MAX_SCENARIO_TITLE_LENGTH),
+    /** What the feature does, from its PRs' own descriptions (and the requester's, when asked). */
+    request: z.string().min(1).max(MAX_SCENARIO_LENGTH),
+    /** In merge order. */
+    pullRequests: z.array(featurePullRequestSchema).min(1).max(MAX_FEATURE_PULL_REQUESTS),
+    /** The default branch just before the first PR landed. */
+    baseCommit: commitSchema,
+    /** The default branch once the last PR landed. */
+    completedCommit: commitSchema,
+    provenance: artifactRefSchema,
+  })
+  .superRefine((candidate, context) => {
+    const numbers = candidate.pullRequests.map((pr) => pr.number);
+    if (new Set(numbers).size !== numbers.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["pullRequests"],
+        message: "a feature lists each pull request once",
+      });
+    }
+  });
+
+export type FeatureCandidate = z.infer<typeof featureCandidateSchema>;
+
+export type Candidate = PullRequestCandidate | ScenarioCandidate | FeatureCandidate;
+
+/** The merged pull requests a candidate is built from: one PR's, a feature's several, a scenario's none. */
+export function candidatePullRequests(candidate: Candidate): number[] {
+  if (candidate.kind === "scenario") return [];
+  if (candidate.kind === "feature") return candidate.pullRequests.map((pr) => pr.number);
+  return [candidate.sourcePr];
+}
 
 /** What an author hands off: its submission (generation/task/submission.ts) as a tarball. */
 export const authoredTaskDraftSchema = z.object({

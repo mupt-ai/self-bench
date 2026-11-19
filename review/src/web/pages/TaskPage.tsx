@@ -8,6 +8,7 @@ import { pageGutter } from "../layout";
 import { repoPagePath, useRepoParams } from "../paths";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
+import { FeaturePullRequests } from "../task/FeaturePullRequests";
 import { FeedbackSheet } from "../task/FeedbackSheet";
 import { LiveTaskState } from "../task/LiveTaskState";
 import {
@@ -174,6 +175,9 @@ function TaskPageContent() {
               title
             )}
           </h1>
+          {task.sourcePrs?.length ? (
+            <FeaturePullRequests fullName={fullName} pullRequests={task.sourcePrs} />
+          ) : null}
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
             <LiveTaskState task={task} org={org.login} fullName={fullName} />
             <TaskCost task={task} />

@@ -8,6 +8,7 @@ import {
 import {
   type BatchRepoId,
   BatchRequestError,
+  type BatchUnit,
   type CandidateCounts,
   startBatch,
   validCandidateCounts,
@@ -19,7 +20,14 @@ import { cn } from "./primitives/cn";
 import { InfoTooltip } from "./primitives/tooltip";
 import { covered, setupCoverage } from "./setup/readiness";
 import { SetupCallout } from "./setup/SetupCallout";
-import { Button, controlStyles, fieldStyles, Input } from "./ui";
+import {
+  Button,
+  controlStyles,
+  fieldStyles,
+  Input,
+  segmentedGroupStyles,
+  segmentStyles,
+} from "./ui";
 import { useGenerationSettings } from "./useGenerationSettings";
 
 function storedFocus(key: string): string {
@@ -62,6 +70,8 @@ export function GenerateBatch({
   const { org, fullName } = repoId;
   const focusKey = `selfbench-batch-focus:${org}:${fullName}`;
   const [focus, setFocus] = React.useState(() => storedFocus(focusKey));
+  const [unit, setUnit] = React.useState<BatchUnit>("pull_request");
+  const features = unit === "feature";
   const {
     settings,
     setSettings,
@@ -81,7 +91,7 @@ export function GenerateBatch({
     setError(undefined);
     try {
       rememberFocus(focusKey, focus);
-      const result = await startBatch({ org, fullName }, counts, settings, focus);
+      const result = await startBatch({ org, fullName }, counts, settings, focus, unit);
       setOpen(false);
       onStarted?.(result.runId);
     } catch (cause) {
@@ -141,6 +151,31 @@ export function GenerateBatch({
             }}
           >
             <div className="px-4 pt-6 pb-6 sm:px-6">
+              <fieldset className="m-0 mb-8 min-w-0 border-0 p-0" aria-label="Build Tasks From">
+                <legend className="mb-4 flex items-center gap-1.5 text-sm font-medium">
+                  Build Tasks From
+                  <InfoTooltip label="A pull request task asks for one merged PR's change. A feature task asks for a whole feature the repository built over several merged PRs, and grades it with end-to-end tests." />
+                </legend>
+                <div className={cn(segmentedGroupStyles, "grid w-full grid-cols-2")}>
+                  {(
+                    [
+                      { id: "pull_request", label: "Pull Requests" },
+                      { id: "feature", label: "Features" },
+                    ] as const
+                  ).map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      aria-pressed={unit === option.id}
+                      className={segmentStyles(unit === option.id)}
+                      disabled={busy}
+                      onClick={() => setUnit(option.id)}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
               <fieldset className="m-0 min-w-0 border-0 p-0" aria-label="Candidates">
                 <legend className="mb-4 flex items-center gap-1.5 text-sm font-medium">
                   Candidates
@@ -179,15 +214,25 @@ export function GenerateBatch({
               </fieldset>
               <label htmlFor="batch-focus" className={cn(fieldStyles, "mt-8")}>
                 <span className="flex items-center gap-1.5">
-                  Focus
-                  <InfoTooltip label="Optional. Describe the PRs discovery should pick. With a focus, it searches further back and may return fewer candidates." />
+                  {features ? "Feature" : "Focus"}
+                  <InfoTooltip
+                    label={
+                      features
+                        ? "Optional. Describe the feature you want a task for; discovery searches the repository's whole history for the PRs that built it. Leave blank to have it find features in recent PRs."
+                        : "Optional. Describe the PRs discovery should pick. With a focus, it searches further back and may return fewer candidates."
+                    }
+                  />
                 </span>
                 <textarea
                   id="batch-focus"
-                  aria-label="Focus"
+                  aria-label={features ? "Feature" : "Focus"}
                   rows={3}
                   maxLength={MAX_FOCUS_LENGTH}
-                  placeholder="Complex Next.js features: App Router, server actions, middleware, caching"
+                  placeholder={
+                    features
+                      ? "Session replay network recording: capturing requests, filtering, and showing them in the player"
+                      : "Complex Next.js features: App Router, server actions, middleware, caching"
+                  }
                   className={cn(controlStyles, "h-auto resize-y py-2")}
                   value={focus}
                   disabled={busy}

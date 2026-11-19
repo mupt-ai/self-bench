@@ -8,7 +8,7 @@ export interface PatchAudit {
 }
 
 /** Each tier's least gold patch, easiest first. */
-export const difficultyThresholds: Record<
+const difficultyThresholds: Record<
   Difficulty,
   { readonly implementationFiles: number; readonly changedLines: number }
 > = {
@@ -16,6 +16,23 @@ export const difficultyThresholds: Record<
   medium: { implementationFiles: 2, changedLines: 50 },
   hard: { implementationFiles: 3, changedLines: 100 },
 };
+
+/** Each tier's least gold patch, as an author's brief states it. */
+export function authoringTiers(): string {
+  return Object.entries(difficultyThresholds)
+    .map(
+      ([tier, t]) =>
+        `${tier}: ≥${t.changedLines} changed implementation lines across ≥${t.implementationFiles} file${t.implementationFiles === 1 ? "" : "s"}`,
+    )
+    .join("; ");
+}
+
+/** Each tier's least gold patch, as discovery prompts state it. */
+export function tierSummary(): string {
+  return Object.entries(difficultyThresholds)
+    .map(([tier, t]) => `${tier} ≥${t.changedLines} lines across ≥${t.implementationFiles} files`)
+    .join(", ");
+}
 
 /**
  * Whether the patches make a benchmark: the hidden tests and the reference solution share no

@@ -1,4 +1,4 @@
-import { GitPullRequest, NotebookPen } from "lucide-react";
+import { GitPullRequest, Layers, NotebookPen } from "lucide-react";
 import { Link } from "react-router";
 import type { TaskItem } from "../api";
 import { cn } from "../primitives/cn";
@@ -96,6 +96,16 @@ export function TaskList({
                   <>
                     <GitPullRequest className="size-3.5" aria-hidden="true" />#{task.sourcePr}
                   </>
+                ) : task.sourcePrs?.length ? (
+                  <span
+                    className="flex min-w-0 items-center gap-1.5"
+                    title={`${task.title ?? "Feature"}: ${task.sourcePrs.map((pr) => `#${pr}`).join(", ")}`}
+                  >
+                    <Layers className="size-3.5 shrink-0" aria-hidden="true" />
+                    <span className="truncate font-sans">
+                      Feature · {task.sourcePrs.length} PR{task.sourcePrs.length === 1 ? "" : "s"}
+                    </span>
+                  </span>
                 ) : task.title ? (
                   <span className="flex min-w-0 items-center gap-1.5" title={task.title}>
                     <NotebookPen className="size-3.5 shrink-0" aria-hidden="true" />

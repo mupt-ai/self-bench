@@ -34,6 +34,12 @@ Hidden tests must share no files with the reference patch, and they may not impo
 
 The agent gets the base snapshot, the instruction, and its environment. It never sees the held-out tests or the reference solution. Its network reaches only its model's host. The verifier applies its patch to a clean copy, then restores the held-out test files, so tampering can only produce a tree it could have written directly.
 
+## Feature Tasks
+
+A feature task asks for a whole feature instead of one PR's change. Many features land over several merged PRs: a command and its options, an API resource and its UI, a plugin system and its first plugins. Discovery groups those PRs into one feature, the agent starts from the commit before the first of them landed, and the reference solution is the PRs' own changes replayed in merge order. Its hidden tests are end to end: they run the command, call the server, render the page, or read the stored record, and cover the feature's flows together, not one helper. A feature task passes the same gates as a PR's.
+
+Start one with **Generate Batch → Features**. Leave the feature blank to have discovery find features among recent PRs, or describe one ("saved searches: save, list, and rerun a search") to have it search the repository's whole history for the PRs that built it.
+
 ## Custom Tasks
 
 A custom task starts from a description instead of a PR.

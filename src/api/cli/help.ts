@@ -58,6 +58,10 @@ const SECTIONS: Section[] = [
   pr list R [--page N]                       merged pull requests
   batch create R --easy N --medium N --hard N [--focus TEXT]
                                              pick merged PRs and write a task from each
+  batch create R --features --hard N [--focus FEATURE]
+                                             find features built over several merged PRs
+                                             (or the one --focus describes) and write an
+                                             end-to-end task from each
   batch list R | batch show|cancel BATCH R   follow or stop batches
   group list | group show|delete SLUG        repo groups
   group create|update SLUG --name TEXT --member OWNER/NAME [--member ...] [--description TEXT]`,
