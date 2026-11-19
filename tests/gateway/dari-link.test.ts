@@ -72,12 +72,31 @@ describe("Dari Link", () => {
     );
     expect(credential?.linkModels?.models).toContainEqual(expect.objectContaining({ id: GPT }));
     expect(credential?.linkModels?.prefixes).toEqual(["openrouter/"]);
+    // The Credentials page names what was shared, not just "Dari".
+    expect(credential?.linkModels?.plans).toEqual(["Claude", "ChatGPT", "OpenRouter API Key"]);
     // A verifier the page did not make is refused.
     const forged = await link.server.request("/api/orgs/avyay/credentials/dari-link", {
       method: "POST",
       body: JSON.stringify({ code: "dlk_code_x", codeVerifier: "v".repeat(43) }),
     });
     expect(forged.status).toBe(400);
+  });
+
+  test("the Credentials page reads each plan's state and usage from Dari", async () => {
+    const response = await link.server.request(
+      `/api/orgs/avyay/credentials/${credentialId}/dari-status`,
+    );
+    expect(response.status).toBe(200);
+    const status = (await response.json()) as {
+      manageUrl: string;
+      plans: { title: string; state: string; usage: unknown[] }[];
+    };
+    expect(status.manageUrl).toStartWith("http");
+    expect(status.plans.map((plan) => [plan.title, plan.state])).toEqual([
+      ["Claude", "ready"],
+      ["ChatGPT", "ready"],
+      ["OpenRouter", "ready"],
+    ]);
   });
 
   test("a trial calls Dari on a child token for its model, and its usage is read back", async () => {
@@ -107,6 +126,25 @@ describe("Dari Link", () => {
     expect(dariRefusal(refused)).toStartWith("Dari refused this model:");
   });
 
+  test("connecting again updates the one connection and ends the grant it replaced", async () => {
+    const before = await link.vault.credentials.secret(link.orgId, credentialId);
+    const old = JSON.parse(before?.value ?? "{}") as { refreshToken: string };
+    expect((await link.connect()).status).toBe(201);
+    const { credentials } = await link.list();
+    expect(credentials.map((credential) => credential.id)).toEqual([credentialId]);
+    const after = JSON.parse(
+      (await link.vault.credentials.secret(link.orgId, credentialId))?.value ?? "{}",
+    ) as { refreshToken: string };
+    expect(after.refreshToken).not.toBe(old.refreshToken);
+    // The replaced grant is gone on Dari; the credential runs on the new one.
+    const replaced = await dariLinkConnection(
+      async () => ({ ...link.dari.app, refreshToken: old.refreshToken }),
+      { orgId: link.orgId, credentialId, model: GPT, tags: {} },
+    ).catch((error: unknown) => error);
+    expect(dariRefusal(replaced)).toContain("Connect again");
+    expect((await trial(GPT)).env.OPENAI_API_KEY).toStartWith("dlk_ct_");
+  });
+
   test("an approval SelfBench cannot save is ended on Dari", async () => {
     const grants = async () =>
       (
@@ -122,6 +160,7 @@ describe("Dari Link", () => {
       credentials: {
         ...link.vault.credentials,
         create: () => Promise.reject(new Error("Credential limit reached")),
+        renew: () => Promise.reject(new Error("Credential limit reached")),
       },
     };
     const approved = await link.dari.connect();
@@ -262,6 +301,10 @@ describe("Dari Link", () => {
     expect(response.status).toBe(401);
     const refused = await trial(GPT).catch((error: unknown) => error);
     expect(dariRefusal(refused)).toContain("Connect again");
+    const status = await link.server.request(
+      `/api/orgs/avyay/credentials/${credentialId}/dari-status`,
+    );
+    expect(await status.json()).toMatchObject({ unlinked: true });
   });
 });
 

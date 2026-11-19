@@ -1,5 +1,5 @@
 // What a Dari connection serves, shared with the web app, so no Node imports.
-import type { LinkGrant } from "@mupt-ai/dari-gateway/link/client";
+import type { LinkGrant, LinkPlan } from "@mupt-ai/dari-gateway/link/client";
 import { z } from "zod";
 
 /** Dari's kind for an API key on a grant. */
@@ -67,6 +67,8 @@ export interface DariLinkModels {
     readonly only?: DariLinkOnly;
   }[];
   readonly prefixes: readonly string[];
+  /** What the user shared, as Dari names it: `Claude`, `ChatGPT`, `OpenRouter API Key`. */
+  readonly plans?: readonly string[];
 }
 
 /** Dari's model id as SelfBench saves it: a request's name for it without `dari/model/`. */
@@ -110,6 +112,13 @@ function grantModels(grant: Pick<LinkGrant, "plans" | "models">): DariLinkModels
         ),
       ),
     ],
+    plans: [
+      ...new Set(
+        grant.plans.map((plan) =>
+          plan.kind === DARI_API_KEY ? plan.plan || plan.title : plan.title || plan.kind,
+        ),
+      ),
+    ],
   };
 }
 
@@ -150,3 +159,14 @@ export interface DariLinkBrowserConfig {
   readonly clientId: string;
   readonly redirectUri: string;
 }
+
+/** A connection's plans as Dari reports them now: each one's state and usage windows. */
+export type DariLinkStatus =
+  | {
+      readonly manageUrl: string;
+      readonly plans: readonly Pick<
+        LinkPlan,
+        "id" | "kind" | "title" | "plan" | "account_email" | "state" | "available_at" | "usage"
+      >[];
+    }
+  | { readonly error: string; readonly unlinked: boolean };

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   childToken,
   exchange,
+  grant,
   LinkError,
   type LinkTokenSet,
   revoke,
@@ -17,6 +18,7 @@ import type { GatewayUsage } from "../platform.js";
 import {
   DARI_API_KEY,
   type DariLinkSecret,
+  type DariLinkStatus,
   dariModelId,
   dariRequestName,
   readDariLinkSecret,
@@ -66,8 +68,9 @@ function credentialName(grant: LinkTokenSet): string {
 }
 
 /**
- * Redeems the popup's code and saves the grant as a credential (kind `dari-link`). Every approval is
- * a new grant, so connecting again adds a connection.
+ * Redeems the popup's code and saves the grant as the workspace's one Dari connection (a
+ * credential of kind `dari-link`). Connecting again puts the new grant on that same credential, so
+ * runs and pickers that name it keep working, and ends the grant it replaced on Dari.
  */
 export async function connectDari(
   vault: Vault,
@@ -100,8 +103,29 @@ export async function connectDari(
         ? { maxSandboxes: CHATGPT_SIGN_IN_MAX_SANDBOXES }
         : {}),
     });
-    const created = await vault.credentials.create(orgId, draft, {}, randomUUID());
-    return { id: created.id, name: created.name };
+    const current = (await vault.credentials.list(orgId)).find(
+      (credential) => credential.auth === "dari-link",
+    );
+    if (!current) {
+      const created = await vault.credentials.create(orgId, draft, {}, randomUUID());
+      return { id: created.id, name: created.name };
+    }
+    const replaced = (await vault.credentials.secret(orgId, current.id))?.value;
+    // The new grant is saved last: once it is, nothing below fails.
+    await vault.credentials.rename(orgId, current.id, draft.name);
+    // A plan caps the connection's sandboxes (an admin's lower cap stays); keys alone lift the cap.
+    const cap = draft.maxSandboxes;
+    const limit = cap
+      ? Math.min(current.maxSandboxes ?? cap, cap)
+      : current.maxSandboxes === CHATGPT_SIGN_IN_MAX_SANDBOXES
+        ? undefined
+        : current.maxSandboxes;
+    if (limit !== current.maxSandboxes) await vault.credentials.limit(orgId, current.id, limit);
+    await vault.credentials.renew(orgId, current.id, draft.value);
+    const previous = replaced ? readDariLinkSecret(replaced) : undefined;
+    if (previous && previous.grant.grantId !== grantId)
+      await revoke({ ...app, token: previous.refreshToken }).catch(() => undefined);
+    return { id: current.id, name: draft.name };
   } catch (error) {
     // A grant SelfBench could not save would stay on the user's Dari with nothing here to end it.
     await revoke({ ...app, token: refreshToken }).catch(() => undefined);
@@ -141,6 +165,43 @@ export function dariLinkGrants(
     if (!secret) throw new LinkError("not_linked", "The Dari connection is gone", 401);
     return { ...app, refreshToken: secret.refreshToken };
   };
+}
+
+/** Reads a connection's plans from Dari for the Credentials page; Dari's refusal comes back as text. */
+export async function dariLinkStatus(
+  grants: DariLinkGrants,
+  orgId: number,
+  credentialId: string,
+): Promise<DariLinkStatus> {
+  try {
+    const now = await grant(await grants(orgId, credentialId));
+    return {
+      manageUrl: now.manageUrl,
+      plans: now.plans.map(
+        ({ id, kind, title, plan, account_email, state, available_at, usage }) => ({
+          id,
+          kind,
+          title,
+          plan,
+          account_email,
+          state,
+          available_at,
+          usage,
+        }),
+      ),
+    };
+  } catch (error) {
+    if (!(error instanceof LinkError)) throw error;
+    return {
+      error:
+        error.code === "not_configured"
+          ? "Dari Link is not configured here."
+          : error.unlinked
+            ? "This Dari connection was revoked or expired. Choose Update Plans to connect again."
+            : `Dari did not answer: ${error.message}`,
+      unlinked: error.unlinked,
+    };
+  }
 }
 
 /** Dari's refusal as a sentence for the run's error, or undefined when it may pass on retry. */

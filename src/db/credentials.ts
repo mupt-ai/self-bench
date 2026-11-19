@@ -275,7 +275,7 @@ export function createCredentialStore(db: Database, key: string) {
         .returning({ id: credentials.id });
       if (!renamed) throw new Error("Credential not found");
     },
-    /** Replaces a Dari Link grant's saved tokens with refreshed ones (gateway/dari-link). */
+    /** Puts a new Dari Link grant on the workspace's connection (gateway/dari-link/link.ts). */
     async renew(orgId: number, id: string, value: string): Promise<void> {
       await db
         .update(credentials)

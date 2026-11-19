@@ -4,7 +4,7 @@ import type { CredentialDraft, CredentialInfo } from "../../../../src/db/credent
 import type { DariLinkBrowserConfig } from "../../../../src/gateway/dari-link/connection";
 import { Dialog } from "../Dialog";
 import { evaluationRequest } from "../evaluation/api";
-import { isSandbox } from "../evaluation/credential-presentation";
+import { credentialAccess, isSandbox } from "../evaluation/credential-presentation";
 import { useDariConnect } from "../evaluation/DariConnect";
 import { cn } from "../primitives/cn";
 import { Button, iconButtonStyles } from "../ui";
@@ -207,8 +207,11 @@ function DariStep({
         <ul className="panel divide-y divide-border">
           {linked.map((credential) => (
             <li key={credential.id} className="flex items-center gap-2 px-4 py-3.5 text-sm">
-              <Check className="size-4 text-success" aria-hidden="true" />
-              {credential.name}
+              <Check className="size-4 shrink-0 text-success" aria-hidden="true" />
+              <span className="min-w-0 truncate">{credential.name}</span>
+              <span className="ml-auto truncate text-muted-foreground">
+                {credentialAccess(credential)}
+              </span>
             </li>
           ))}
         </ul>
@@ -219,7 +222,7 @@ function DariStep({
         disabled={dari.connecting}
         onClick={dari.connect}
       >
-        {dari.connecting ? "Connecting…" : linked.length ? "Connect Another" : "Connect with Dari"}
+        {dari.connecting ? "Connecting…" : linked.length ? "Update Plans" : "Connect with Dari"}
       </Button>
       {dari.error && (
         <p role="alert" className="text-sm leading-6 text-destructive">

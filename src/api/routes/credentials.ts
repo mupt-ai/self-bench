@@ -10,6 +10,8 @@ import {
   connectDari,
   DARI_LINK_CALLBACK_PATH,
   dariLinkApp,
+  dariLinkGrants,
+  dariLinkStatus,
   revokeDari,
 } from "../../gateway/dari-link/link.js";
 import { reportError } from "../../lib/telemetry/sentry.js";
@@ -20,7 +22,7 @@ import { readBody, sendJson, trustedMutation } from "../http.js";
 import type { EvaluationRoutesOptions } from "./evaluations.js";
 
 const pattern =
-  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/credentials(?:\/([a-f0-9-]{36})\/(delete|limit|update|infer-limits)|\/(dari-link))?$/;
+  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/credentials(?:\/([a-f0-9-]{36})\/(delete|limit|update|infer-limits|dari-status)|\/(dari-link))?$/;
 /** What `DariLink.open` resolved with in the browser. */
 const dariLinkSchema = z
   .object({ code: z.string().min(1).max(2048), codeVerifier: z.string().min(43).max(128) })
@@ -88,6 +90,10 @@ export async function credentialRoutes(
         dariLink:
           gatewayUrl && clientId && redirectUri ? { gatewayUrl, clientId, redirectUri } : null,
       });
+    } else if (!mutation && credentialId && action === "dari-status") {
+      // Each plan's state and usage now, from Dari: never stored here.
+      const grants = dariLinkGrants(credentials, dariLink ?? undefined);
+      sendJson(response, 200, await dariLinkStatus(grants, org.id, credentialId));
     } else if (mutation && credentialId && (action === "update" || action === "limit")) {
       const { name, maxSandboxes, maxBuilds, models, resourceLimits } = updateSchema.parse(
         JSON.parse((await readBody(request, 8192)).toString()),
