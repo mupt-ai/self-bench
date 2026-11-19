@@ -11,9 +11,9 @@ import {
   DARI_LINK_CALLBACK_PATH,
   dariLinkApp,
   dariLinkGrants,
-  dariLinkStatus,
   revokeDari,
 } from "../../gateway/dari-link/link.js";
+import { dariLinkStatus } from "../../gateway/dari-link/status.js";
 import { reportError } from "../../lib/telemetry/sentry.js";
 import { inferResourceLimits } from "../../sandbox/resource-inference.js";
 import { resourceLimitsSchema, savedResourceLimits } from "../../sandbox/resources.js";
