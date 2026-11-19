@@ -66,7 +66,7 @@ function sectionsOf(billing: boolean): { label: string; items: NavItem[] }[] {
       items: [
         {
           // Repositories and groups of repositories, mined from coding repos.
-          label: "Mined Repos",
+          label: "Repo Benchmarks",
           to: "/",
           icon: FolderGit2,
           active: (path) =>
@@ -81,7 +81,7 @@ function sectionsOf(billing: boolean): { label: string; items: NavItem[] }[] {
           active: (path) => path.startsWith("/benchmarks"),
         },
         {
-          label: "Vibe Evals",
+          label: "Custom Benchmarks",
           to: "/evals",
           icon: FlaskConical,
           active: (path) => path.startsWith("/evals") || path.startsWith(`/repos/${EVAL_OWNER}/`),

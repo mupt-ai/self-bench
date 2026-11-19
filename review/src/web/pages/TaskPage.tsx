@@ -141,8 +141,8 @@ function TaskPageContent() {
           <Breadcrumbs
             items={[
               isEvalName(fullName)
-                ? { label: "Vibe Evals", to: "/evals" }
-                : { label: "Mined Repos", to: "/" },
+                ? { label: "Custom Benchmarks", to: "/evals" }
+                : { label: "Repo Benchmarks", to: "/" },
               {
                 label: fullName,
                 to: queue?.backLabel === "Dataset" ? queue.back : `/repos/${fullName}`,

@@ -180,7 +180,7 @@ function RepoTasksPage() {
               aria-disabled={deleting}
             >
               <Plus aria-hidden="true" />
-              Add Workspace Vibe Eval
+              Add Custom Task
             </Link>
           ) : (
             <>
@@ -204,7 +204,7 @@ function RepoTasksPage() {
                 aria-disabled={deleting}
               >
                 <NotebookPen aria-hidden="true" />
-                Add Vibe Eval
+                Add Custom Task
               </Link>
             </>
           )}

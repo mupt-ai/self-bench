@@ -35,7 +35,7 @@ function statsOf(counts: RepoTaskCounts | undefined): RepoStats {
 }
 
 /**
- * Mined Repos: the workspace's connected repositories and its groups, in one list. A group is
+ * Repo Benchmarks: the workspace's connected repositories and its groups, in one list. A group is
  * evaluated like one repository over all its members' approved tasks.
  */
 export function ReposPage() {
@@ -128,8 +128,8 @@ export function ReposPage() {
   return (
     <PageFrame>
       <PageHeader
-        title="Connected Repositories"
-        description={`Repositories available to ${org.login}.`}
+        title="Repo Benchmarks"
+        description={`Benchmarks mined from repositories available to ${org.login}.`}
       >
         <Button size="small" onClick={() => setConnecting("public")}>
           <Plus className="mr-1 h-4 w-4" aria-hidden="true" />

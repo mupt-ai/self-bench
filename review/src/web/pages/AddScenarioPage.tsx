@@ -14,7 +14,7 @@ export function AddScenarioPage({ start }: { start: ScenarioStart }) {
   const navigate = useNavigate();
   const fullName = `${owner}/${name}`;
   useDocumentTitle(
-    `${start === "repository" ? "Add Vibe Eval" : "Add Workspace Vibe Eval"} · ${fullName}`,
+    `${start === "repository" ? "Add Custom Task" : "Add Custom Task"} · ${fullName}`,
   );
   return (
     <>

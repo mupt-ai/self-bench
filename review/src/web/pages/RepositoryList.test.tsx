@@ -55,7 +55,7 @@ test("an empty list still offers the connect card", () => {
   expect(html).toContain('aria-label="Connect a Repository"');
 });
 
-test("the Mined Repos list offers a new group next to connecting a repository", () => {
+test("the Repo Benchmarks list offers a new group next to connecting a repository", () => {
   const html = renderToStaticMarkup(
     <MemoryRouter>
       <RepositoryList

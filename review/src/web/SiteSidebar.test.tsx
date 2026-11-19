@@ -32,8 +32,8 @@ test("sidebar exposes labeled navigation and credentials", () => {
   expect(links).toHaveLength(9);
   expect(html).toContain('aria-label="Members"');
   expect(html).toContain('aria-label="Workspace Navigation"');
-  expect(html).toContain('aria-label="Mined Repos"');
-  expect(html).toContain('aria-label="Vibe Evals"');
+  expect(html).toContain('aria-label="Repo Benchmarks"');
+  expect(html).toContain('aria-label="Custom Benchmarks"');
   expect(html).toContain('aria-label="Public Benchmarks"');
   expect(html).toContain(">Public Benchmarks</span>");
   expect(html).toContain('aria-label="Credentials"');
@@ -52,7 +52,7 @@ test("sidebar exposes labeled navigation and credentials", () => {
 
 test("sidebar sorts its pages into named sections, in order", () => {
   const html = renderSidebar("/");
-  const order = ["Benchmarks", "Mined Repos", "Public Benchmarks", "Vibe Evals"]
+  const order = ["Benchmarks", "Repo Benchmarks", "Public Benchmarks", "Custom Benchmarks"]
     .concat(["Workspace", "Members", "Credentials", "Harnesses", "API Keys", "Billing"])
     .map((label) => html.indexOf(`>${label}</`));
   expect(order.every((at) => at >= 0)).toBe(true);
@@ -107,7 +107,7 @@ test("sidebar preserves active navigation across repository and settings routes"
     ["/settings/api-keys", "/settings/api-keys"],
     ["/settings/members", "/settings/members"],
     ["/settings/billing", "/settings/billing"],
-    // Groups are part of Mined Repos.
+    // Groups are part of Repo Benchmarks.
     ["/groups/python-web/results", "/"],
   ]) {
     const html = renderSidebar(path);

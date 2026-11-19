@@ -49,7 +49,7 @@ export function useEvaluationScope(): EvaluationScope {
       url: groupsUrl(org.login, slug, "/evaluations"),
       pages: `/groups/${slug}`,
       label: slug,
-      parent: { label: "Mined Repos", to: "/" },
+      parent: { label: "Repo Benchmarks", to: "/" },
     };
   return benchmark
     ? {
@@ -65,9 +65,9 @@ export function useEvaluationScope(): EvaluationScope {
         url: evaluationUrl(org.login, full),
         pages: `/repos/${full}`,
         label: full,
-        // An eval's pages are a repository's, but it is listed under Vibe Evals.
+        // An eval's pages are a repository's, but it is listed under Custom Benchmarks.
         parent: isEvalName(full)
-          ? { label: "Vibe Evals", to: "/evals" }
-          : { label: "Mined Repos", to: "/" },
+          ? { label: "Custom Benchmarks", to: "/evals" }
+          : { label: "Repo Benchmarks", to: "/" },
       };
 }

@@ -28,7 +28,7 @@ export interface AddScenarioSheetProps {
 
 const COPY = {
   repository: {
-    heading: "Add Vibe Eval",
+    heading: "Add Custom Task",
     about:
       "Describe a change to make in this repository, ideally one an agent got wrong. The agent starts from the repository at the commit you choose; the author writes the instruction, a reference implementation, and hidden tests.",
     titlePlaceholder: "Personalised Dashboard on Cache Components",
@@ -36,7 +36,7 @@ const COPY = {
       "For example: our team dashboard awaits all its data at the top of the page, so it blocks for two seconds. Enable Cache Components and make it load fast, without leaking one member's data to another.",
   },
   workspace: {
-    heading: "Add Workspace Vibe Eval",
+    heading: "Add Custom Task",
     about:
       "Describe a task an agent should handle, ideally one it got wrong, with any real files from it. The author builds the files the agent starts with, the instruction, and hidden tests that check the outcome.",
     titlePlaceholder: "CSV Import Drops Quoted Rows",
@@ -124,7 +124,7 @@ export function AddScenarioSheet({
           closeRef={closeButton}
           busy={busy}
         />
-        <GenerationSteps step={step} firstStep="Describe Vibe Eval" />
+        <GenerationSteps step={step} firstStep="Describe Task" />
         <div className="px-4 pb-6 sm:px-6">
           {step === 1 ? (
             <div className="grid gap-4">
