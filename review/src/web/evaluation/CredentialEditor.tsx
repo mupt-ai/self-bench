@@ -6,6 +6,7 @@ import { CredentialSecret } from "./CredentialSecret";
 import { CredentialLimitFields } from "./CredentialSettings";
 import { CustomEndpointFields } from "./CustomEndpointFields";
 import { isSandbox, providers, sandboxes } from "./credential-presentation";
+import { DariRouterField } from "./DariRouterField";
 
 /** Provider and gateway keys: for judges, and for models Dari does not connect. */
 const keyProviders = providers.filter((entry) => entry.id !== "custom" && entry.id !== "dari-link");
@@ -135,6 +136,12 @@ export function CredentialEditor({
             </label>
           </fieldset>
           <fieldset className="space-y-5" disabled={busy}>
+            {draft.kind === "dari" && (
+              <DariRouterField
+                value={draft.endpoint}
+                onChange={(value) => setDraft({ ...draft, endpoint: value })}
+              />
+            )}
             {endpoint && (
               <CustomEndpointFields
                 endpoint={draft.endpoint ?? ""}
