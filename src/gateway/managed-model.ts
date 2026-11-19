@@ -20,6 +20,5 @@ export function withManagedModel(
           ? { value: managedKey }
           : undefined
         : credentials.secret(orgId, id),
-    renew: (orgId, id, value) => credentials.renew(orgId, id, value),
   };
 }

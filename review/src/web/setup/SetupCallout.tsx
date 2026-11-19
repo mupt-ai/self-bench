@@ -1,4 +1,5 @@
 import { cn } from "../primitives/cn";
+import { InfoTooltip } from "../primitives/tooltip";
 import { Button } from "../ui";
 import type { Coverage } from "./readiness";
 import { useSetupStatus } from "./SetupStatus";
@@ -14,6 +15,7 @@ export function SetupCallout({
   coverage: Coverage;
   /** What the missing credentials block, as in "Connect a sandbox to {action}." */
   action: string;
+  /** Why, as a tooltip beside the message (AGENTS.md: helper text lives in tooltips). */
   hint: string;
   /** Runs before the popup opens, as when the blocked form is itself a dialog to close. */
   onOpen?: () => void;
@@ -37,9 +39,11 @@ export function SetupCallout({
       <div className="min-w-0 flex-1 basis-64">
         <p className="flex items-center gap-2 text-sm font-medium text-foreground">
           <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-warning" />
-          Connect {missing} to {action}.
+          <span>
+            Connect {missing} to {action}.
+          </span>
+          <InfoTooltip label={hint} />
         </p>
-        <p className="mt-1 text-sm text-muted-foreground">{hint}</p>
       </div>
       <Button
         variant="primary"

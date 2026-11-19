@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, count, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { createSecretBox } from "../api/auth/crypto.js";
-import { CHATGPT_SIGN_IN_MAX_SANDBOXES } from "../contracts/config/execution-limits.js";
+import { type DariLinkModels, linkModelsOf } from "../gateway/dari-link/connection.js";
 import { gatewayIds } from "../gateways/index.js";
 import {
   type ResourceLimits,
@@ -13,8 +13,10 @@ import type { Database } from "./client.js";
 import { credentialEndpoint, dariEndpoint } from "./credential-endpoints.js";
 import {
   type CredentialSecret,
+  connectableAuths,
+  type credentialAuths,
+  dariLinkGrant,
   isSandboxKind,
-  museSignIn,
   sandboxKinds,
   savedModelsSchema,
 } from "./credential-kinds.js";
@@ -23,6 +25,8 @@ import { credentials } from "./schema.js";
 
 const credentialKinds = [
   "dari",
+  // A Dari Link connection: the user's plans and keys, whatever models they serve.
+  "dari-link",
   "openai",
   "anthropic",
   "meta",
@@ -36,10 +40,6 @@ const providerId = z
   .min(1)
   .max(256)
   .regex(/^[a-zA-Z0-9_-]+$/);
-/** API keys, and the subscription sign-ins of Codex (ChatGPT), Claude Code (Claude), and Muse Code (Meta). */
-export const credentialAuths = ["api-key", "codex-login", "claude-login", "muse-login"] as const;
-/** Claude Code's subscription token, as `claude setup-token` prints it. */
-const claudeToken = /^sk-ant-oat[A-Za-z0-9_-]+$/;
 /**
  * How many sandboxes use a credential at once. For a sandbox account, those it runs (its plan's
  * limit, or less to leave room for other work); for a model key or sign-in, those whose agent
@@ -51,7 +51,7 @@ export const credentialSchema = z
   .object({
     name: z.string().trim().min(1).max(80),
     kind: z.enum(credentialKinds),
-    auth: z.enum(credentialAuths).default("api-key"),
+    auth: z.enum(connectableAuths).default("api-key"),
     value: z.string().min(1).max(24_000),
     tokenId: z.string().max(4096).optional(),
     // Accepted and ignored: clients written before the gateway still send an OpenRouter management
@@ -69,28 +69,12 @@ export const credentialSchema = z
   .strict()
   .superRefine((value, context) => {
     const issue = (message: string) => context.addIssue({ code: "custom", message });
-    if (value.auth === "codex-login") {
-      try {
-        const json = JSON.parse(value.value);
-        if (
-          value.kind !== "openai" ||
-          !json.tokens?.access_token ||
-          !json.tokens?.refresh_token ||
-          json.OPENAI_API_KEY
-        )
-          throw new Error();
-      } catch {
-        issue("Provide a Codex ChatGPT auth.json, not an API key");
-      }
-    } else if (value.auth === "claude-login") {
-      if (value.kind !== "anthropic" || !claudeToken.test(value.value))
-        issue("Provide a Claude Code token from claude setup-token, not an API key");
-    } else if (value.auth === "muse-login") {
-      if (value.kind !== "meta" || !museSignIn(value.value))
-        issue("Provide a Muse Code auth.json from a Meta sign-in, not an API key");
+    if (value.auth === "dari-link" || value.kind === "dari-link") {
+      if (value.auth !== "dari-link" || !dariLinkGrant(value))
+        issue("Connect Dari plans with Connect with Dari");
     } else if (/[\r\n\0]/.test(value.value)) issue("API keys must be a single line");
     else if (value.kind === "anthropic" && value.value.startsWith("sk-ant-oat"))
-      issue("This is a Claude subscription token; add it as a Claude sign-in instead");
+      issue("This is a Claude subscription token; connect the plan with Connect with Dari");
     if ((value.kind === "modal") !== !!value.tokenId) issue("Modal requires a token ID and secret");
     if (
       value.kind === "vercel" ? !value.teamId || !value.projectId : value.teamId || value.projectId
@@ -129,8 +113,10 @@ export interface CredentialInfo {
   resourceLimits?: ResourceLimits;
   /** A custom endpoint's saved model IDs. */
   models?: string[];
+  /** What a Dari connection serves, as its grant last said; read, never typed. */
+  linkModels?: DariLinkModels;
 }
-export { type CredentialSecret, savedModelsSchema } from "./credential-kinds.js";
+export { type CredentialSecret, credentialAuths, savedModelsSchema } from "./credential-kinds.js";
 
 const CREDENTIAL_LIMIT = 200;
 
@@ -149,7 +135,30 @@ export function createCredentialStore(db: Database, key: string) {
     ...(row.maxBuilds ? { maxBuilds: row.maxBuilds } : {}),
     ...(row.resourceLimits ? { resourceLimits: row.resourceLimits } : {}),
     ...(row.models?.length ? { models: row.models } : {}),
+    ...linked(row),
   });
+  const open = (row: typeof credentials.$inferSelect): CredentialSecret | undefined => {
+    if (!row.secret) return undefined;
+    try {
+      const sealed = JSON.parse(box.open(Buffer.from(row.secret, "base64")));
+      if (sealed.id !== row.id) throw new Error();
+      return sealed.secret as CredentialSecret;
+    } catch {
+      throw new RecordStoreError(503, "Encrypted credential integrity check failed");
+    }
+  };
+  /** A Dari connection's models, from its sealed grant: never stored apart from it. */
+  const linked = (row: typeof credentials.$inferSelect) => {
+    if (row.auth !== "dari-link") return {};
+    // An unreadable connection lists without models rather than failing every credential.
+    let models: ReturnType<typeof linkModelsOf>;
+    try {
+      models = linkModelsOf(open(row)?.value);
+    } catch {
+      return {};
+    }
+    return models ? { linkModels: models } : {};
+  };
   const live = (orgId: number, id: string) =>
     and(eq(credentials.orgId, orgId), eq(credentials.id, id), isNull(credentials.deletedAt));
   const seal = (id: string, secret: CredentialSecret) =>
@@ -172,14 +181,7 @@ export function createCredentialStore(db: Database, key: string) {
     async secret(orgId: number, id: string): Promise<CredentialSecret | undefined> {
       if (!z.uuid().safeParse(id).success) return undefined;
       const [row] = await db.select().from(credentials).where(live(orgId, id));
-      if (!row?.secret) return undefined;
-      try {
-        const sealed = JSON.parse(box.open(Buffer.from(row.secret, "base64")));
-        if (sealed.id !== row.id) throw new Error();
-        return sealed.secret as CredentialSecret;
-      } catch {
-        throw new RecordStoreError(503, "Encrypted credential integrity check failed");
-      }
+      return row ? open(row) : undefined;
     },
     /** Saving the same `id` twice is a no-op, so a retried save never duplicates. */
     async create(
@@ -213,9 +215,7 @@ export function createCredentialStore(db: Database, key: string) {
           kind: parsed.kind,
           auth: parsed.auth,
           endpoint,
-          maxSandboxes:
-            parsed.maxSandboxes ??
-            (parsed.auth === "codex-login" ? CHATGPT_SIGN_IN_MAX_SANDBOXES : undefined),
+          maxSandboxes: parsed.maxSandboxes,
           maxBuilds: parsed.maxBuilds,
           resourceLimits: savedResourceLimits(parsed.resourceLimits),
           ...(parsed.models?.length ? { models: parsed.models } : {}),
@@ -275,7 +275,7 @@ export function createCredentialStore(db: Database, key: string) {
         .returning({ id: credentials.id });
       if (!renamed) throw new Error("Credential not found");
     },
-    /** Replaces a sign-in's saved tokens with refreshed ones (gateway/sign-in.ts). */
+    /** Replaces a Dari Link grant's saved tokens with refreshed ones (gateway/dari-link). */
     async renew(orgId: number, id: string, value: string): Promise<void> {
       await db
         .update(credentials)

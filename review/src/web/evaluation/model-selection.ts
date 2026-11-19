@@ -2,12 +2,8 @@ import { dariRouterId } from "../../../../src/db/credential-endpoints";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
-import {
-  credentialRunsHarness,
-  defaultThinking,
-  routeFor,
-  thinkingOptions,
-} from "../../../../src/evaluation/models";
+import { credentialRoute, type RouteCredential } from "../../../../src/evaluation/link-routes";
+import { defaultThinking, thinkingOptions } from "../../../../src/evaluation/models";
 import type { Harness } from "./api";
 
 export const customModel: CatalogModel = {
@@ -73,30 +69,22 @@ export function nextModelSelection(
   requestedHarness?: Harness,
 ): ComparisonDraft["models"][number] | undefined {
   for (const credential of credentials) {
-    const harness = routeFor(model, credential.kind)?.harnesses.find(
-      (candidate) =>
-        (!requestedHarness || requestedHarness === candidate) &&
-        credentialRunsHarness(credential.auth, candidate),
+    const harness = credentialRoute(model, credential)?.harnesses.find(
+      (candidate) => !requestedHarness || requestedHarness === candidate,
     );
     if (harness) return { catalogId: model.id, credentialId: credential.id, harnesses: [harness] };
   }
   return undefined;
 }
 
-/** Whether the credential's route for the model, and its sign-in if any, runs every harness. */
+/** Whether the credential's route for the model runs every harness. */
 export function credentialRunsAll(
   model: CatalogModel,
   credential: CredentialInfo,
   harnesses: Harness[],
 ): boolean {
-  const route = routeFor(model, credential.kind);
-  return (
-    !!route &&
-    harnesses.every(
-      (harness) =>
-        route.harnesses.includes(harness) && credentialRunsHarness(credential.auth, harness),
-    )
-  );
+  const route = credentialRoute(model, credential);
+  return !!route && harnesses.every((harness) => route.harnesses.includes(harness));
 }
 
 /**
@@ -108,7 +96,7 @@ export function hasModelSelection(
   model: CatalogModel,
   selections: ComparisonDraft["models"],
   candidate: ComparisonDraft["models"][number],
-  credentials: readonly Pick<CredentialInfo, "id" | "kind" | "endpoint">[],
+  credentials: readonly (Pick<CredentialInfo, "id" | "endpoint"> & RouteCredential)[],
 ): boolean {
   // Each Dari router is a configuration of its own, so two Dari keys naming different routers
   // are two rows; the default router is one, whichever key serves it.
@@ -119,8 +107,8 @@ export function hasModelSelection(
     return dariRouterId(credential.endpoint) ?? "";
   };
   const effectiveThinking = (selection: ComparisonDraft["models"][number]) => {
-    const kind = credentials.find((entry) => entry.id === selection.credentialId)?.kind;
-    const route = kind ? routeFor(model, kind) : undefined;
+    const credential = credentials.find((entry) => entry.id === selection.credentialId);
+    const route = credential ? credentialRoute(model, credential) : undefined;
     return (
       selection.thinking ?? defaultThinking(thinkingOptions(route ?? model, selection.harnesses))
     );
@@ -141,7 +129,7 @@ export function hasModelSelection(
 export function hasDuplicateModelSelections(
   models: CatalogModel[],
   selections: ComparisonDraft["models"],
-  credentials: readonly Pick<CredentialInfo, "id" | "kind" | "endpoint">[],
+  credentials: readonly (Pick<CredentialInfo, "id" | "endpoint"> & RouteCredential)[],
 ): boolean {
   return selections.some((selection, index) => {
     const model = models.find((entry) => entry.id === selection.catalogId);

@@ -11,6 +11,7 @@ export function CredentialGroup({
   loading,
   canManage,
   sandbox = false,
+  addLabel = sandbox ? "Add Sandbox" : "Add Provider",
   onAdd,
   onEdit,
   onReplace,
@@ -21,10 +22,12 @@ export function CredentialGroup({
   loading: boolean;
   canManage: boolean;
   sandbox?: boolean;
-  onAdd(): void;
+  addLabel?: string;
+  /** Adds one; left out where credentials of this group are no longer added here. */
+  onAdd?(): void;
   /** Opens a credential's name and limits for editing. */
   onEdit?(credential: CredentialInfo): void;
-  onReplace(credential: CredentialInfo): void;
+  onReplace?(credential: CredentialInfo): void;
   onDelete(credential: CredentialInfo): void;
 }) {
   return (
@@ -41,10 +44,10 @@ export function CredentialGroup({
           </>
         }
       >
-        {canManage && (
+        {canManage && onAdd && (
           <Button size="small" onClick={onAdd}>
             <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
-            {sandbox ? "Add Sandbox" : "Add Provider"}
+            {addLabel}
           </Button>
         )}
         {loading && <Skeleton className="h-8 w-28" />}
@@ -85,7 +88,7 @@ export function CredentialGroup({
                 <CredentialActions
                   name={credential.name}
                   {...(onEdit ? { onEdit: () => onEdit(credential) } : {})}
-                  onReplace={() => onReplace(credential)}
+                  {...(onReplace ? { onReplace: () => onReplace(credential) } : {})}
                   onDelete={() => onDelete(credential)}
                 />
               )}

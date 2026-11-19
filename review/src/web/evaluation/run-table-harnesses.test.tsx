@@ -3,7 +3,7 @@ import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import { rowHarnessOptions } from "./row-harness-options";
 
-test("a Meta key runs every harness and a Meta or Claude sign-in only its own CLI", () => {
+test("a Meta key runs every harness, and Claude via Dari only Claude Code", () => {
   const spark: CatalogModel = {
     id: "muse-spark-test",
     label: "Muse Spark Test",
@@ -20,8 +20,16 @@ test("a Meta key runs every harness and a Meta or Claude sign-in only its own CL
   };
   const credentials = [
     { id: "meta-key", name: "Meta", kind: "meta", auth: "api-key" },
-    { id: "muse-login", name: "Muse", kind: "meta", auth: "muse-login" },
-    { id: "claude-login", name: "Claude", kind: "anthropic", auth: "claude-login" },
+    {
+      id: "claude-dari",
+      name: "Dari",
+      kind: "dari-link",
+      auth: "dari-link",
+      linkModels: {
+        models: [{ id: "anthropic/muse-spark-test", only: "claude-code" }],
+        prefixes: [],
+      },
+    },
   ] as CredentialInfo[];
   const harnesses = (model: CatalogModel, credentialId: string) =>
     rowHarnessOptions(
@@ -38,6 +46,5 @@ test("a Meta key runs every harness and a Meta or Claude sign-in only its own CL
     "terminus-2",
     "muse-code",
   ]);
-  expect(harnesses(spark, "muse-login")).toEqual(["muse-code"]);
-  expect(harnesses(opus, "claude-login")).toEqual(["claude-code"]);
+  expect(harnesses(opus, "claude-dari")).toEqual(["claude-code"]);
 });

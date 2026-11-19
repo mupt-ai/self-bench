@@ -165,6 +165,7 @@ export function SiteLayout({
               org={org.login}
               credentials={setup.credentials}
               canManage={setup.canManage}
+              dariLink={setup.dariLink ?? null}
               refresh={setup.refresh}
               onClose={setup.closeDialog}
             />

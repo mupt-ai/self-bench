@@ -27,7 +27,7 @@ function input(provider: string, modelName: string, thinking?: string): Evaluati
   } as EvaluationInput;
 }
 
-test("every API key and ChatGPT or Claude sign-in takes the gateway; Dari's router on Pi and Muse Code stay direct", () => {
+test("every API key and ChatGPT or Claude sign-in takes the gateway; Dari's router on Pi and Muse Code on Meta stay direct", () => {
   const signIn = (provider: string, auth: string) =>
     ({ modelName: `${provider}/model`, credentials: { provider, auth } }) as EvaluationInput;
   const meta = input("meta", "meta/muse-spark-1.3", "high");
@@ -51,6 +51,29 @@ test("every API key and ChatGPT or Claude sign-in takes the gateway; Dari's rout
     agentArguments: ["--agent-kwarg", "reasoning_effort=high"],
     child: env,
     extraAllowedHosts: ["api.meta.ai"],
+  });
+  // On a Dari connection, Muse Code calls Dari with the trial's token, and reaches only Dari.
+  const linked = input("dari-link", "dari-link/meta/muse-spark-1.3", "high");
+  expect(trialRoute(linked, "muse-code")).toBe("gateway");
+  const connection = {
+    openAiBase: "https://routing.dari.test/v1",
+    anthropicBase: "https://routing.dari.test",
+    key: "dlk_ct_trial",
+    host: "routing.dari.test",
+  };
+  expect(gatewayTrial(linked, "muse-code", linked.modelName, env, connection)).toEqual({
+    model: "meta/dari/model/meta/muse-spark-1.3",
+    agent: "harbor_muse:SelfBenchMuseCode",
+    agentArguments: [
+      "--agent-kwarg",
+      "reasoning_effort=high",
+      "--agent-kwarg",
+      "base_url=https://routing.dari.test/v1",
+      "--agent-kwarg",
+      "bearer_base_url=https://routing.dari.test/v1",
+    ],
+    child: { PATH: "/bin", META_API_KEY: "dlk_ct_trial" },
+    extraAllowedHosts: ["routing.dari.test"],
   });
   const dari = input("custom", "openai/dari/routing");
   const endpoint = { OPENAI_API_KEY: "key", OPENAI_BASE_URL: "https://models.example/v1" };

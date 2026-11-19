@@ -101,3 +101,43 @@ test("a run keeps the routes, Pi models and rates it was submitted with after th
   expect(managedModelCostUsd("qwen/qwen4-coder", tokens)).toBeUndefined();
   expect(managedModelCostUsd("qwen/qwen4-coder", tokens, routes.author.rates)).toBe(1);
 });
+
+// A Dari connection runs generation on the models it serves for any app, and never on a model only
+// a Claude or Muse plan serves, which runs only its own agent (link-routes.ts).
+const dariConnection = {
+  kind: "dari-link",
+  auth: "dari-link",
+  linkModels: {
+    models: [
+      { id: "openai/gpt-6-astra" },
+      { id: "anthropic/claude-sonnet-5-5", only: "claude-code" },
+      { id: "opencode-go/glm-5.3" },
+    ],
+    prefixes: [],
+  },
+} as const;
+
+test("a Dari connection generates with the models any of its apps serve, and not a Claude plan's", async () => {
+  const astra = generationModel("gpt-6-astra", dariConnection);
+  if (!astra) throw new Error("Missing model");
+  expect(generationCredentialRuns(astra, dariConnection)).toBe(true);
+  expect(generationModelRoute(astra.id, dariConnection)).toEqual({
+    provider: "dari-link",
+    model: "dari/model/openai/gpt-6-astra",
+  });
+  // A model its connection lists only for Claude Code: no Pi route, so not for generation.
+  const sonnet = generationModel("claude-sonnet-5-5", dariConnection);
+  if (!sonnet) throw new Error("Missing model");
+  expect(generationCredentialRuns(sonnet, dariConnection)).toBe(false);
+  expect(() => generationModelRoute(sonnet.id, dariConnection)).toThrow(
+    "Claude Sonnet 5.5 cannot run on this credential",
+  );
+  // A model only the connection lists, as the catalog does not know it.
+  expect(generationModel("opencode-go/glm-5.3")).toBeUndefined();
+  const glm = generationModel("opencode-go/glm-5.3", dariConnection);
+  expect(glm).toMatchObject({ provider: "dari-link", label: "opencode-go/glm-5.3" });
+  expect(generationModelRoute("opencode-go/glm-5.3", dariConnection)).toEqual({
+    provider: "dari-link",
+    model: "dari/model/opencode-go/glm-5.3",
+  });
+});

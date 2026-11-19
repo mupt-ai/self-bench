@@ -203,7 +203,6 @@ test("Vercel credential editor exposes token, team and project fields", () => {
       org="example-org"
       onCancel={() => {}}
       onSave={async () => {}}
-      onSaved={async () => {}}
     />,
   );
   for (const label of ["Vercel Token", "Vercel Team ID", "Vercel Project ID"])

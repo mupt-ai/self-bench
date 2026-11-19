@@ -1,7 +1,7 @@
 import type { SubagentThinking } from "../contracts/conditions.js";
 import type { CredentialInfo } from "../db/credentials.js";
 import type { CatalogModel } from "./catalog.js";
-import { type Harness, harnessLabels, routeFor, signInRefusal } from "./models.js";
+import { type Harness, harnessLabels, routeFor } from "./models.js";
 
 /**
  * A subagent model: the model a run's delegated agents call in place of the run's own, so one
@@ -83,8 +83,10 @@ export function subagentCredentials<Credential extends Pick<CredentialInfo, "kin
     const route = providerServesSubagent(credential.kind) && routeFor(model, credential.kind);
     return (
       !!route &&
+      // A Dari Link grant serves the trial's own model, relayed as the harness sent it; its
+      // subagents would need the gateway's rebuilt calls, which a Claude plan refuses.
+      credential.auth !== "dari-link" &&
       harnesses.every((harness) => route.harnesses.includes(harness)) &&
-      !signInRefusal(credential.auth, harnesses) &&
       (!thinking || subagentThinkingLevels(model, credential.kind).includes(thinking))
     );
   });

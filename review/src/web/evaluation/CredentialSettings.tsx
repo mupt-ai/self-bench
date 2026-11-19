@@ -55,7 +55,7 @@ function SandboxLimitField({
 }
 
 /** Model IDs as typed: separated by commas, spaces or new lines. */
-function parseModelIds(text: string): string[] {
+export function parseModelIds(text: string): string[] {
   return [...new Set(text.split(/[\s,]+/).filter(Boolean))];
 }
 
@@ -63,7 +63,13 @@ function parseModelIds(text: string): string[] {
  * A custom endpoint's saved model IDs, which the Run page offers with the credential, so a router
  * such as Shift-1 or Switchyard need not be typed each time.
  */
-function ModelIdsField({ value, onChange }: { value: string; onChange(value: string): void }) {
+export function ModelIdsField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange(value: string): void;
+}) {
   return (
     <label className={fieldStyles} htmlFor="credential-models">
       <span className="flex items-center gap-1.5">
@@ -79,48 +85,6 @@ function ModelIdsField({ value, onChange }: { value: string; onChange(value: str
         onChange={(event) => onChange(event.target.value)}
       />
     </label>
-  );
-}
-
-/** A new custom endpoint's address and saved model IDs. */
-export function CustomEndpointFields({
-  endpoint,
-  models,
-  onChange,
-}: {
-  endpoint: string;
-  models: string;
-  onChange(value: { endpoint: string; models: string[] }): void;
-}) {
-  // The typed text is kept as typed, so a trailing comma is not lost while the IDs are edited.
-  const [text, setText] = React.useState(models);
-  return (
-    <>
-      <label className={fieldStyles} htmlFor="credential-endpoint">
-        <span className="flex items-center gap-1.5">
-          Endpoint
-          <InfoTooltip label="An OpenAI-compatible HTTPS endpoint on an approved host." />
-        </span>
-        <Input
-          id="credential-endpoint"
-          aria-label="Endpoint"
-          type="url"
-          required
-          placeholder="https://approved-host.example/v1"
-          value={endpoint}
-          onChange={(event) =>
-            onChange({ endpoint: event.target.value, models: parseModelIds(text) })
-          }
-        />
-      </label>
-      <ModelIdsField
-        value={text}
-        onChange={(next) => {
-          setText(next);
-          onChange({ endpoint, models: parseModelIds(next) });
-        }}
-      />
-    </>
   );
 }
 

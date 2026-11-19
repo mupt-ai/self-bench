@@ -1,12 +1,7 @@
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
-import {
-  credentialRunsHarness,
-  type Harness,
-  harnessOptions,
-  modelHarnesses,
-  routeFor,
-} from "../../../../src/evaluation/models";
+import { credentialRoute, type RouteCredential } from "../../../../src/evaluation/link-routes";
+import { type Harness, harnessOptions, modelHarnesses } from "../../../../src/evaluation/models";
 import type { SavedHarness } from "../harnesses/harness-api";
 import { harnessSummary } from "../harnesses/harness-summary";
 import { savedHarnessAgent } from "./run-harnesses";
@@ -32,16 +27,15 @@ export const savedHarnessOption = (id: number) => `saved:${id}`;
  */
 export function rowHarnessOptions(
   model: CatalogModel,
-  credential: Pick<CredentialInfo, "kind" | "auth"> | undefined,
+  credential: (Pick<CredentialInfo, "auth"> & RouteCredential) | undefined,
   /** The agent the row runs now, when it runs one. */
   current: Harness | undefined,
   saved: readonly SavedHarness[] | undefined,
   models: readonly CatalogModel[] = [],
 ): RowHarnessOption[] {
-  const route = credential ? routeFor(model, credential.kind) : undefined;
+  const route = credential ? credentialRoute(model, credential) : undefined;
   const supports = (harness: Harness) =>
-    (route?.harnesses ?? modelHarnesses(model)).includes(harness) &&
-    credentialRunsHarness(credential?.auth ?? "api-key", harness);
+    (route?.harnesses ?? modelHarnesses(model)).includes(harness);
   const harnesses = (saved ?? []).flatMap((entry): RowHarnessOption[] => {
     const agent = savedHarnessAgent(entry, current);
     if (!agent || !supports(agent)) return [];

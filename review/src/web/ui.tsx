@@ -64,20 +64,6 @@ export const chipStyles =
 export const badgeStyles =
   "inline-flex items-center rounded-sm border px-1.5 py-0.5 text-[11px] font-medium";
 
-/** A row of mutually exclusive choices: the group is rounded, its segments are divided. */
-export const segmentedGroupStyles =
-  "inline-flex overflow-hidden rounded-md border border-input divide-x divide-border text-[13px]";
-export function segmentStyles(selected: boolean, chart = false) {
-  return cn(
-    "px-2.5 py-1 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring",
-    selected
-      ? chart
-        ? "bg-foreground text-background"
-        : "bg-foreground/15 text-foreground"
-      : "text-muted-foreground hover:bg-accent hover:text-foreground",
-  );
-}
-
 /** An icon-only button that is not the Button primitive. */
 export const iconButtonStyles =
   "inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50";

@@ -31,7 +31,7 @@ import { RunSubmitted } from "./RunSubmitted";
 import { RunTaskPicker } from "./RunTaskPicker";
 import { restoreRunDraft } from "./run-draft";
 import { harnessesProblem } from "./run-harnesses";
-import { runCredentials, selectionReady } from "./run-readiness";
+import { runModels as offered, runCredentials, selectionReady } from "./run-readiness";
 import { type EvaluationScope, useEvaluationScope } from "./useEvaluationScope";
 import { useHarnessChoices } from "./useHarnessChoices";
 
@@ -139,13 +139,14 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
     };
   }, [url]);
   const availableCredentials = runCredentials(credentials, managed?.models);
+  const runModels = offered(models, availableCredentials);
   const selected = draft.models.filter((model) => model.harnesses.length > 0);
   const pairs = selected.reduce((count, model) => count + model.harnesses.length, 0);
   // Tasks graded by an LLM need a credential for it, which the run fills their judge variables from.
   const judgeReady =
     !judge?.variables.length ||
     judgeCredentials(credentials ?? []).some((entry) => entry.id === draft.judgeCredentialId);
-  const choices = useHarnessChoices(org.login, scope.repo, models, availableCredentials);
+  const choices = useHarnessChoices(org.login, scope.repo, runModels, availableCredentials);
   const picks = harnessesProblem(draft, choices);
   const ready =
     tasksReady &&
@@ -154,7 +155,7 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
     !picks &&
     selectionReady({
       draft,
-      models,
+      models: runModels,
       credentials: availableCredentials,
       managedSandbox: !!managed?.sandbox,
     });
@@ -273,7 +274,7 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
       ) : null}
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
         <RunModelsPanel
-          models={models}
+          models={runModels}
           credentials={availableCredentials}
           draft={draft}
           saved={choices.saved}

@@ -13,15 +13,13 @@ import type { StopEvaluation } from "../../evaluation/cancel.js";
 import { repositoryDataset } from "../../evaluation/dataset.js";
 import type { FailureExplainer, ModelSummarizer, TaskAuditor } from "../../evaluation/start.js";
 import type { EvaluationInput } from "../../evaluation/types.js";
-import type { ClaudeLogins } from "../../harnesses/claude-code/login.js";
-import type { CodexLogins } from "../../harnesses/codex/login.js";
-import type { MuseLogins } from "../../harnesses/muse-code/login.js";
+import type { DariLinkApp } from "../../gateway/dari-link/link.js";
 import { lookupRepositoryById } from "../../public/release-sources.js";
 import type { inferResourceLimits } from "../../sandbox/resource-inference.js";
 import { tenantFor } from "../auth/tenant.js";
 import { sendJson } from "../http.js";
 import { benchmarkRoutes } from "./benchmarks.js";
-import { credentialRoutes } from "./credentials.js";
+import { credentialRoutes, dariLinkCallbackRoute } from "./credentials.js";
 import { type CustomerExportRegistry, customerExportRoute } from "./customer-exports.js";
 import { EVALUATIONS_PATH, handleScopedEvaluations } from "./evaluation-scope.js";
 import { groupRoutes } from "./groups.js";
@@ -74,9 +72,8 @@ export interface EvaluationRoutesOptions {
     changed?: (paths: string[]) => void;
   };
   vault?: Vault;
-  codexLogins?: CodexLogins;
-  claudeLogins?: ClaudeLogins;
-  museLogins?: MuseLogins;
+  /** SelfBench's Dari Link app; defaults to the environment's, and null turns Dari Link off. */
+  dariLinkApp?: DariLinkApp | null;
   /** Reads a sandbox account's per-sandbox limits from its provider (resource-inference.ts). */
   inferResourceLimits?: typeof inferResourceLimits;
 }
@@ -108,6 +105,7 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
       user: User,
     ): Promise<boolean> {
       if (await credentialRoutes(options, request, url, response, user)) return true;
+      if (dariLinkCallbackRoute(request, url, response)) return true;
       if (await savedHarnessRoutes(options, request, url, response, user)) return true;
       if (await memberRoutes(options, request, url, response, user)) return true;
       if (await benchmarkRoutes(options, request, url, response, user)) return true;

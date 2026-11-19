@@ -8,7 +8,7 @@ export interface ClaudeCodeUsage {
   usage: TokenUsage;
   /** Each request's usage, which adds up to `usage`. */
   requests: HarborCallUsage[];
-  /** The part of `usage.cacheWrite` cached for an hour, which Claude sign-ins request. */
+  /** The part of `usage.cacheWrite` cached for an hour, which Claude plans request. */
   hourCacheWrite: number;
   largestPrompt: number;
   /** The model of every request that used tokens. */

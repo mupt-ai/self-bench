@@ -1,6 +1,7 @@
 import { HOSTED_EXECUTION_BACKENDS } from "../../../../src/contracts/config/providers";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import { catalog, hostedSandboxes } from "../../../../src/evaluation/catalog";
+import { linkedCatalogModels } from "../../../../src/evaluation/link-routes";
 import { generationCredentialRuns } from "../../../../src/generation/settings/models";
 import { isSandbox } from "../evaluation/credential-presentation";
 
@@ -10,13 +11,14 @@ export interface Coverage {
   sandbox: boolean;
 }
 
-type Credential = Pick<CredentialInfo, "kind" | "auth">;
+type Credential = Pick<CredentialInfo, "kind" | "auth" | "linkModels">;
 
 /**
  * What an organization's credentials let it run, by the same rules the generation and
- * evaluation forms apply. Generation authors and verifies in Pi, so a Claude sign-in (Claude
- * Code only) cannot generate, and its sandboxes are Modal, Vercel, or E2B; evaluation runs any
- * model credential on E2B, Modal, or Daytona. Managed access, where offered, covers either half.
+ * evaluation forms apply. Generation runs Pi, so a Dari connection generates with any model it
+ * serves for any app (a Claude or Muse plan's models run only their own agent, and do not count);
+ * its sandboxes are Modal, Vercel, or E2B. Evaluation runs any model credential on E2B, Modal, or
+ * Daytona. Managed access, where offered, covers either half.
  */
 export function setupCoverage(
   credentials: readonly Credential[],
@@ -27,7 +29,11 @@ export function setupCoverage(
     generate: {
       model:
         !!managed.models ||
-        has((credential) => catalog.some((model) => generationCredentialRuns(model, credential))),
+        has((credential) =>
+          [...catalog, ...linkedCatalogModels(catalog, [credential])].some((model) =>
+            generationCredentialRuns(model, credential),
+          ),
+        ),
       sandbox:
         !!managed.sandbox ||
         has(
@@ -37,7 +43,14 @@ export function setupCoverage(
         ),
     },
     evaluate: {
-      model: !!managed.models || has((credential) => !isSandbox(credential.kind)),
+      // A provider sign-in saved before Connect with Dari runs nothing.
+      model:
+        !!managed.models ||
+        has(
+          (credential) =>
+            !isSandbox(credential.kind) &&
+            (credential.auth === "api-key" || credential.auth === "dari-link"),
+        ),
       sandbox:
         !!managed.sandbox ||
         has((credential) => (hostedSandboxes as readonly string[]).includes(credential.kind)),

@@ -124,7 +124,6 @@ beforeAll(async () => {
       find: async (orgId, id) => (orgId === 7 && id === CREDENTIAL ? credential : undefined),
       secret: async (orgId, id) =>
         orgId === 7 && id === CREDENTIAL ? { value: "router-key" } : undefined,
-      renew: async () => {},
     },
     servedModelCost: (model, tokens) => {
       priced.push({ model, usage: tokens });

@@ -210,7 +210,7 @@ export function GenerateBatch({
                   <SetupCallout
                     coverage={coverage}
                     action="generate tasks"
-                    hint="A ChatGPT sign-in or a model API key runs generation. A Claude sign-in only runs evaluations."
+                    hint="A ChatGPT or OpenCode Go plan connected with Dari, or any model API key, runs generation. A Claude or Muse plan only runs evaluations."
                     onOpen={() => setOpen(false)}
                   />
                 ) : (

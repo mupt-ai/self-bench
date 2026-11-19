@@ -68,7 +68,6 @@ describe("the platform a trial key resolves to", () => {
       credentials: {
         find: async () => found,
         secret: async () => ({ value: "byok-secret" }),
-        renew: async () => {},
       },
       recordUsage: () => {},
       captureError: () => {},
@@ -192,7 +191,6 @@ describe("the platform a trial key resolves to", () => {
       credentials: {
         find: async (_orgId, id) => ({ ...credential("openai"), id }),
         secret: async (_orgId, id) => ({ value: keys[id] ?? "" }),
-        renew: async () => {},
       },
     });
     const apiKey = judgeKey();
@@ -227,19 +225,18 @@ describe("the platform a trial key resolves to", () => {
       ).toBeUndefined();
   });
 
-  test("a sign-in is served on the plan the platform supplies, never as an API key", async () => {
+  test("a provider sign-in saved before Connect with Dari is never served", async () => {
     const claude = platform({ ...credential("anthropic"), auth: "claude-login" } as never);
     const apiKey = trialKey({ model: "anthropic/claude-x" });
-    expect(await claude.resolveProviderCredential({ apiKey, model: "anthropic/claude-x" })).toEqual(
-      { apiKey: "byok-secret", subscription: "anthropic_claude_code" },
-    );
+    await expect(
+      claude.resolveProviderCredential({ apiKey, model: "anthropic/claude-x" }),
+    ).rejects.toThrow("The trial's credential");
   });
 
   test("the managed model credential is SelfBench's own OpenRouter key, when it is set", async () => {
     const vault = {
       find: async () => undefined,
       secret: async () => undefined,
-      renew: async () => {},
     };
     const managed = withManagedModel(vault, "platform-key");
     expect(await managed.find(7, MANAGED_MODEL_CREDENTIAL)).toMatchObject({ kind: "openrouter" });
@@ -268,7 +265,6 @@ describe("a custom endpoint's protocol", () => {
               endpoint: "https://approved.example/v1",
             }) as CredentialInfo,
           secret: async () => ({ value: "byok-secret" }),
-          renew: async () => {},
         },
         recordUsage: () => {},
         captureError: () => {},

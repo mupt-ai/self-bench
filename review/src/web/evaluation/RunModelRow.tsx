@@ -2,12 +2,8 @@ import { thinkingLevels } from "../../../../src/contracts/models";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
 import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
-import {
-  credentialRunsHarness,
-  defaultThinking,
-  routeFor,
-  thinkingOptions,
-} from "../../../../src/evaluation/models";
+import { credentialRoute } from "../../../../src/evaluation/link-routes";
+import { defaultThinking, thinkingOptions } from "../../../../src/evaluation/models";
 import type { SavedHarness } from "../harnesses/harness-api";
 import { ModelPicker } from "../ModelPicker";
 import { Input, Select } from "../ui";
@@ -45,21 +41,17 @@ export function RunModelRow({
     return same ? { ...rest, harness: selected.harness } : rest;
   };
   const credential = credentials.find((entry) => entry.id === selected.credentialId);
-  const route = credential ? routeFor(model, credential.kind) : undefined;
+  const route = credential ? credentialRoute(model, credential) : undefined;
   const levels = thinkingOptions(route ?? model, selected.harnesses);
   const thinking = selected.thinking ?? defaultThinking(levels);
   const selectCredential = (credentialId: string) => {
     const nextCredential = credentials.find((entry) => entry.id === credentialId);
-    const nextRoute = nextCredential ? routeFor(model, nextCredential.kind) : undefined;
-    const harnesses = selected.harnesses.filter(
-      (harness) =>
-        nextRoute?.harnesses.includes(harness) &&
-        credentialRunsHarness(nextCredential?.auth ?? "api-key", harness),
+    const nextRoute = nextCredential ? credentialRoute(model, nextCredential) : undefined;
+    // The picker offers only credentials that run (credentialRuns).
+    const harnesses = selected.harnesses.filter((harness) =>
+      nextRoute?.harnesses.includes(harness),
     );
-    const available = nextRoute?.harnesses.filter((harness) =>
-      credentialRunsHarness(nextCredential?.auth ?? "api-key", harness),
-    );
-    const nextHarnesses = harnesses.length ? harnesses : (available?.slice(0, 1) ?? []);
+    const nextHarnesses = harnesses.length ? harnesses : (nextRoute?.harnesses.slice(0, 1) ?? []);
     onChange(keepingSaved({ ...selected, credentialId, harnesses: nextHarnesses }));
   };
   const current = selected.harnesses.length === 1 ? selected.harnesses[0] : undefined;
@@ -95,8 +87,10 @@ export function RunModelRow({
                 credentialId: "",
                 harnesses: [],
               };
-            const nextKind = credentials.find((entry) => entry.id === next.credentialId)?.kind;
-            const nextRoute = nextKind ? routeFor(nextModel, nextKind) : undefined;
+            const nextCredential = credentials.find((entry) => entry.id === next.credentialId);
+            const nextRoute = nextCredential
+              ? credentialRoute(nextModel, nextCredential)
+              : undefined;
             if (
               selected.thinking &&
               thinkingOptions(nextRoute ?? nextModel, next.harnesses).includes(selected.thinking)
@@ -127,7 +121,7 @@ export function RunModelRow({
             Select Credential
           </option>
           {credentials
-            .filter((entry) => routeFor(model, entry.kind))
+            .filter((entry) => credentialRoute(model, entry))
             .map((entry) => (
               <option key={entry.id} value={entry.id}>
                 {entry.name}

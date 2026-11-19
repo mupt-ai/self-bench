@@ -131,7 +131,7 @@ describe("add a PR", () => {
       runId: "pr-mupt-ai-self-bench-46",
       repository: { url: "https://github.com/Mupt-AI/self-bench", commit: MERGE },
       candidateCounts: { easy: 0, medium: 0, hard: 1 },
-      authoring: { provider: "openai-codex" },
+      authoring: { provider: "openai" },
     });
     expect(input?.candidate).toMatchObject({
       candidateId: "self-bench-pr-46",
