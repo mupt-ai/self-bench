@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { DaytonaForbiddenError } from "@daytonaio/sdk";
+import { SandboxCapacityError } from "../../../../src/sandbox/contracts.js";
 import {
   type DaytonaClient,
   DaytonaSandboxExecutor,
@@ -85,4 +87,21 @@ test("a Daytona run stages files, keeps secrets off the command line, and delete
   expect(daytona.commands.join("\n")).not.toContain("sk-secret");
   expect([...daytona.files.values()].join("\n")).toContain("export OPENAI_API_KEY='sk-secret'");
   expect(daytona.deleted).toEqual(["sbx-1"]);
+});
+
+test("a Daytona quota refusal waits for a slot instead of failing the stage", async () => {
+  const client = {
+    create: async () => {
+      throw new DaytonaForbiddenError("Total CPU limit exceeded. Maximum allowed: 10", 403);
+    },
+    get: async () => undefined,
+  } as unknown as DaytonaClient;
+  const executor = new DaytonaSandboxExecutor(config, client);
+  const run = executor.run({
+    runId: "run-2",
+    stage: "author",
+    command: ["true"],
+    timeoutMs: 60_000,
+  });
+  await expect(run).rejects.toBeInstanceOf(SandboxCapacityError);
 });

@@ -1,12 +1,19 @@
 import { posix } from "node:path";
-import { Daytona, Image, type Sandbox } from "@daytonaio/sdk";
+import {
+  Daytona,
+  DaytonaForbiddenError,
+  DaytonaRateLimitError,
+  Image,
+  type Sandbox,
+} from "@daytonaio/sdk";
 import type { SelfBenchWorkerConfig } from "../../../contracts/config/index.js";
 import { raceAbort, shellQuote, sleep } from "../../../lib/util.js";
-import type {
-  SandboxExecutor,
-  SandboxRequest,
-  SandboxRunOptions,
-  StartedSandbox,
+import {
+  SandboxCapacityError,
+  type SandboxExecutor,
+  type SandboxRequest,
+  type SandboxRunOptions,
+  type StartedSandbox,
 } from "../../contracts.js";
 import { parseSandboxDockerfile, readSandboxDockerfile } from "../../runtime-dockerfile.js";
 import { runSandbox, type SandboxSession, startSandbox } from "../../session.js";
@@ -67,25 +74,29 @@ export class DaytonaSandboxExecutor implements SandboxExecutor {
   private async open(request: SandboxRequest): Promise<SandboxSession> {
     this.#image ??= sandboxImage();
     const name = `selfbench-${`${request.runId}-${request.stage}`.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 40)}-${crypto.randomUUID().slice(0, 12)}`;
-    const sandbox = await this.#daytona.create(
-      {
-        image: this.#image,
-        name,
-        labels: {
-          selfbench_run: request.runId.slice(0, 256),
-          selfbench_stage: request.stage.slice(0, 256),
+    const sandbox = await this.#daytona
+      .create(
+        {
+          image: this.#image,
+          name,
+          labels: {
+            selfbench_run: request.runId.slice(0, 256),
+            selfbench_stage: request.stage.slice(0, 256),
+          },
+          resources: {
+            cpu: request.cpu ?? 4,
+            memory: Math.ceil((request.memoryMiB ?? 8192) / 1024),
+            disk: DISK_GIB,
+          },
+          ephemeral: true,
+          autoStopInterval: 0,
+          ttlMinutes: Math.ceil(request.timeoutMs / 60_000),
         },
-        resources: {
-          cpu: request.cpu ?? 4,
-          memory: Math.ceil((request.memoryMiB ?? 8192) / 1024),
-          disk: DISK_GIB,
-        },
-        ephemeral: true,
-        autoStopInterval: 0,
-        ttlMinutes: Math.ceil(request.timeoutMs / 60_000),
-      },
-      { timeout: Math.ceil(Math.min(CREATE_TIMEOUT_MS, request.timeoutMs) / 1000) },
-    );
+        { timeout: Math.ceil(Math.min(CREATE_TIMEOUT_MS, request.timeoutMs) / 1000) },
+      )
+      .catch((error: unknown) => {
+        throw atQuota(error) ? new SandboxCapacityError(error.message, { cause: error }) : error;
+      });
     const launch = async (
       command: readonly string[],
       environment: Readonly<Record<string, string>>,
@@ -137,6 +148,17 @@ export class DaytonaSandboxExecutor implements SandboxExecutor {
       destroy: () => sandbox.delete(DELETE_TIMEOUT_S),
     };
   }
+}
+
+/**
+ * Daytona refuses a sandbox past the organization's CPU, memory, or disk quota with a 403 saying
+ * which limit was exceeded, and throttles with a 429; either way the stage waits for a slot.
+ */
+function atQuota(error: unknown): error is Error {
+  return (
+    error instanceof DaytonaRateLimitError ||
+    (error instanceof DaytonaForbiddenError && /limit exceeded|quota/i.test(error.message))
+  );
 }
 
 function sandboxImage(): Image {
