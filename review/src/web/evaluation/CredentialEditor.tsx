@@ -8,12 +8,12 @@ import { CustomEndpointFields } from "./CustomEndpointFields";
 import { isSandbox, providers, sandboxes } from "./credential-presentation";
 import { DariRouterField } from "./DariRouterField";
 
-/** Provider and gateway keys: for judges, and for models Dari does not connect. */
+/** Provider and gateway keys, which a saved one is replaced with. */
 const keyProviders = providers.filter((entry) => entry.id !== "custom" && entry.id !== "dari-link");
 
 /**
- * Adds a sandbox account, a provider or gateway API key, or a custom endpoint, or replaces one
- * with a new one. Plans connect with Connect with Dari, never here.
+ * Adds a sandbox account or a custom endpoint, or replaces one (or a saved provider or gateway API
+ * key) with a new one. Plans and keys connect with Connect with Dari, never here.
  */
 export function CredentialEditor({
   previous,
@@ -60,15 +60,7 @@ export function CredentialEditor({
       aria-describedby="credential-description"
     >
       <DialogHeader
-        title={
-          previous
-            ? "Replace Credential"
-            : endpoint
-              ? "Add Endpoint"
-              : sandbox
-                ? "Add Sandbox"
-                : "Add API Key"
-        }
+        title={previous ? "Replace Credential" : endpoint ? "Add Endpoint" : "Add Sandbox"}
         titleId="credential-title"
         descriptionId="credential-description"
         description={<>Shared with {org}.</>}

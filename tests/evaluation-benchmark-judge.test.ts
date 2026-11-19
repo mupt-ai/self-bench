@@ -60,7 +60,9 @@ test("a benchmark graded by an LLM judge runs with the judge credential the user
     // A sandbox's key is no model credential, so it can't judge.
     expect(
       await refusal({ id: crypto.randomUUID(), judgeCredentialId: selection.sandboxCredentialId }),
-    ).toBe("The judge credential must be an API key for a model provider or a gateway");
+    ).toBe(
+      "The judge credential must be a Dari connection, or an API key for a model provider or a gateway",
+    );
     expect(fixture.starts).toHaveLength(0);
 
     const accepted = await fixture.request(

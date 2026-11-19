@@ -31,15 +31,22 @@ export function judgeEnvironment(
 }
 
 /**
- * Why `credential` can't call a task's LLM judge, if it can't: it must be an API key the gateway
- * serves its provider's models on, which gives the judge every variable it may read.
+ * Why `credential` can't call a task's LLM judge, if it can't: an API key the gateway serves its
+ * provider's models on, or a Dari connection the gateway forwards the judge's calls to
+ * (gateway/dari-link/judge.ts), which gives the judge every variable it may read. A connection
+ * must serve some model to any app: a Claude or Muse plan's models run only on its own agent.
  */
 export function judgeCredentialRefusal(
-  credential: Pick<CredentialInfo, "kind" | "auth">,
+  credential: Pick<CredentialInfo, "kind" | "auth" | "linkModels">,
 ): string | undefined {
+  if (credential.auth === "dari-link")
+    return credential.linkModels?.prefixes.length ||
+      credential.linkModels?.models.some((model) => !model.only)
+      ? undefined
+      : "The judge's Dari connection serves no model outside Claude Code or Muse Code";
   return credential.auth === "api-key" && JUDGE_PROVIDERS.has(credential.kind)
     ? undefined
-    : "The judge credential must be an API key for a model provider or a gateway";
+    : "The judge credential must be a Dari connection, or an API key for a model provider or a gateway";
 }
 
 /**

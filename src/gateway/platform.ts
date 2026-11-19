@@ -10,6 +10,7 @@ import { HttpError } from "@mupt-ai/dari-gateway/http/errors";
 import { dariEndpoint } from "../db/credential-endpoints.js";
 import type { CredentialInfo, CredentialSecret } from "../db/credentials.js";
 import type { TokenUsage } from "../evaluation/types.js";
+import type { DariLinkApp } from "./dari-link/link.js";
 import {
   customBaseUrl,
   endpointProvider,
@@ -79,6 +80,11 @@ export interface SelfBenchGatewayDeps {
    * call (validateEndpoint); throws when it is not.
    */
   readonly endpoint: (endpoint: string) => string;
+  /**
+   * SelfBench's Dari Link app, which forwards a judge's calls on a Dari connection to the user's
+   * Dari (dari-link/judge.ts). Undefined refuses them.
+   */
+  readonly dariLink?: DariLinkApp | undefined;
   /** Must not throw: the gateway calls it after the response is sent. */
   readonly recordUsage: (usage: GatewayUsage) => void;
   readonly captureError: (error: unknown) => void;
