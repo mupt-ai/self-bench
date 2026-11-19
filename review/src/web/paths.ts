@@ -6,9 +6,9 @@ import { EVAL_OWNER } from "../../../src/contracts/evals";
  * Benchmarks under `/public`, and Custom Benchmarks under `/custom`. A custom benchmark is stored
  * as a repository owned by `evals`, but its pages live at `/custom/<name>`.
  */
-export const REPOS_PATH = "/repos";
-export const PUBLIC_PATH = "/public";
-export const CUSTOM_PATH = "/custom";
+const REPOS_PATH = "/repos";
+const PUBLIC_PATH = "/public";
+const CUSTOM_PATH = "/custom";
 
 /** A repository's or a custom benchmark's pages, from its stored `owner/name`. */
 export function repoPagePath(fullName: string): string {

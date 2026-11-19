@@ -16,7 +16,7 @@ import { Button, controlStyles, fieldStyles, Input, Notice, Select } from "./ui"
 import { useGenerationSettings } from "./useGenerationSettings";
 
 /** Where the agent starts: the repository at a commit, or files the author writes. */
-export type ScenarioStart = "repository" | "workspace";
+type ScenarioStart = "repository" | "workspace";
 
 export interface AddScenarioSheetProps {
   org: SiteOrg;
