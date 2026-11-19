@@ -113,6 +113,14 @@ export async function connectDari(
     const replaced = (await vault.credentials.secret(orgId, current.id))?.value;
     // The new grant is saved last: once it is, nothing below fails.
     await vault.credentials.rename(orgId, current.id, draft.name);
+    // A plan caps the connection's sandboxes (an admin's lower cap stays); keys alone lift the cap.
+    const cap = draft.maxSandboxes;
+    const limit = cap
+      ? Math.min(current.maxSandboxes ?? cap, cap)
+      : current.maxSandboxes === CHATGPT_SIGN_IN_MAX_SANDBOXES
+        ? undefined
+        : current.maxSandboxes;
+    if (limit !== current.maxSandboxes) await vault.credentials.limit(orgId, current.id, limit);
     await vault.credentials.renew(orgId, current.id, draft.value);
     const previous = replaced ? readDariLinkSecret(replaced) : undefined;
     if (previous && previous.grant.grantId !== grantId)
@@ -178,7 +186,15 @@ export async function dariLinkStatus(
     };
   } catch (error) {
     if (!(error instanceof LinkError)) throw error;
-    return { error: dariRefusal(error) ?? error.message, unlinked: error.unlinked };
+    return {
+      error:
+        error.code === "not_configured"
+          ? "Dari Link is not configured here."
+          : error.unlinked
+            ? "This Dari connection was revoked or expired. Choose Update Plans to connect again."
+            : `Dari did not answer: ${error.message}`,
+      unlinked: error.unlinked,
+    };
   }
 }
 

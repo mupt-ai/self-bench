@@ -1,4 +1,6 @@
+import { ExternalLink } from "lucide-react";
 import React from "react";
+import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { DariLinkStatus } from "../../../../src/gateway/dari-link/connection";
 import { Skeleton } from "../LoadingSkeleton";
 import { cn } from "../primitives/cn";
@@ -13,8 +15,10 @@ type Plan = Extract<DariLinkStatus, { plans: unknown }>["plans"][number];
  * Each plan or key a Dari connection shares, as Dari reports it now: one row per plan with its
  * account, and a meter per usage limit with when it resets.
  */
-export function DariPlans({ org, credentialId }: { org: string; credentialId: string }) {
+export function DariPlans({ org, credential }: { org: string; credential: CredentialInfo }) {
+  const credentialId = credential.id;
   const [status, setStatus] = React.useState<DariLinkStatus>();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a reloaded list is new objects; Update Plans keeps the id.
   React.useEffect(() => {
     let live = true;
     evaluationRequest<DariLinkStatus>(
@@ -32,7 +36,7 @@ export function DariPlans({ org, credentialId }: { org: string; credentialId: st
     return () => {
       live = false;
     };
-  }, [org, credentialId]);
+  }, [org, credentialId, credential]);
   if (!status)
     return (
       <div role="status" aria-label="Loading Plans" className="border-t border-border px-4 py-3">
@@ -46,18 +50,31 @@ export function DariPlans({ org, credentialId }: { org: string; credentialId: st
       </p>
     );
   return (
-    <ul className="divide-y divide-border border-t border-border">
-      {status.plans.map((plan) => (
-        <PlanRow key={plan.id} plan={plan} />
-      ))}
-    </ul>
+    <>
+      <ul className="divide-y divide-border border-t border-border">
+        {status.plans.map((plan) => (
+          <PlanRow key={plan.id} plan={plan} />
+        ))}
+      </ul>
+      <div className="border-t border-border px-4 py-2">
+        <a
+          href={status.manageUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center text-xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+          Manage on Dari
+          <ExternalLink className="ml-1.5 size-3" aria-hidden="true" />
+        </a>
+      </div>
+    </>
   );
 }
 
 function PlanRow({ plan }: { plan: Plan }) {
   const key = plan.kind === "api_key";
   const displayName = key ? plan.plan : (plan.account_email ?? plan.title);
-  const details = [key ? null : plan.title].filter(Boolean);
+  const details = [key || displayName === plan.title ? null : plan.title].filter(Boolean);
   const limits = usageLimits(plan);
   return (
     <li className="px-4 py-3 transition-colors hover:bg-muted/30">
@@ -66,7 +83,9 @@ function PlanRow({ plan }: { plan: Plan }) {
           <span className="truncate text-sm font-medium text-foreground">{displayName}</span>
           {plan.state === "plan_limit" ? (
             <span className="rounded-sm border border-border px-1.5 py-px text-xs text-faint">
-              At Limit
+              {plan.available_at
+                ? `At Limit Until ${formatResetTime(plan.available_at)}`
+                : "At Limit"}
             </span>
           ) : null}
         </div>

@@ -120,7 +120,7 @@ function CredentialsContent({ org }: { org: string }) {
                     : "Connect with Dari"
               }
               onEdit={setChanging}
-              detail={(credential) => <DariPlans org={org} credentialId={credential.id} />}
+              detail={(credential) => <DariPlans org={org} credential={credential} />}
               {...(data?.dariLink ? { onAdd: dari.connect } : {})}
             />
             {dari.error && (
