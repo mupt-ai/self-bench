@@ -74,8 +74,6 @@ export interface EvaluationRoutesOptions {
   vault?: Vault;
   /** SelfBench's Dari Link app; defaults to the environment's, and null turns Dari Link off. */
   dariLinkApp?: DariLinkApp | null;
-  /** Reports what fails after a response is decided, such as ending a deleted grant on Dari. */
-  captureError?: (error: unknown) => void;
   /** Reads a sandbox account's per-sandbox limits from its provider (resource-inference.ts). */
   inferResourceLimits?: typeof inferResourceLimits;
 }

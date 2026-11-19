@@ -12,6 +12,7 @@ import {
   dariLinkApp,
   revokeDari,
 } from "../../gateway/dari-link/link.js";
+import { reportError } from "../../lib/telemetry/sentry.js";
 import { inferResourceLimits } from "../../sandbox/resource-inference.js";
 import { resourceLimitsSchema, savedResourceLimits } from "../../sandbox/resources.js";
 import { tenantFor } from "../auth/tenant.js";
@@ -118,7 +119,10 @@ export async function credentialRoutes(
           : undefined;
       await credentials.remove(org.id, credentialId);
       if (linked)
-        await revokeDari(dariLink, linked).catch((error) => options.captureError?.(error));
+        // The row is gone either way; a grant Dari kept is reported, and the user can end it on Dari.
+        await revokeDari(dariLink, linked).catch((error) =>
+          reportError(error, { tags: { route: "credentials", step: "dari-revoke" } }),
+        );
       sendJson(response, 200, { deleted: true });
     } else if (mutation) {
       const draft = credentialSchema.parse(
