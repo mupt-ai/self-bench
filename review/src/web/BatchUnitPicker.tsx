@@ -1,12 +1,22 @@
 import type { BatchUnit } from "./batch-api";
 import { cn } from "./primitives/cn";
 import { InfoTooltip } from "./primitives/tooltip";
-import { segmentedGroupStyles, segmentStyles } from "./ui";
 
 const UNITS = [
   { id: "feature", label: "Features" },
   { id: "pull_request", label: "Pull Requests" },
 ] as const;
+
+/** A row of mutually exclusive choices: the group is rounded, its segments are divided. */
+const segmentedGroupStyles =
+  "inline-flex overflow-hidden rounded-md border border-input divide-x divide-border text-[13px]";
+const segmentStyles = (selected: boolean) =>
+  cn(
+    "px-2.5 py-1 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring",
+    selected
+      ? "bg-foreground/15 text-foreground"
+      : "text-muted-foreground hover:bg-accent hover:text-foreground",
+  );
 
 /** What a batch builds tasks from: whole features (the default) or single PRs. */
 export function BatchUnitPicker({
