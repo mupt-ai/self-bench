@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { catalog } from "../src/evaluation/catalog.js";
+import { type CatalogModel, catalog } from "../src/evaluation/catalog.js";
 import { trialCost } from "../src/evaluation/cost.js";
 import { credentialRoute, linkedCatalogModels } from "../src/evaluation/link-routes.js";
 import { harnessIds, modelHarnesses, openHarnesses, routeFor } from "../src/evaluation/models.js";
@@ -47,6 +47,59 @@ test("a Dari connection runs what its grant serves: any harness, or a Claude or 
   expect(glm).toMatchObject({ id: "opencode-go/glm-5.3", label: "GLM 5.3" });
   expect(glm && credentialRoute(glm, plans)?.harnesses).toEqual([...openHarnesses]);
   expect(glm && credentialRoute(glm, linked({ models: [], prefixes: [] }))).toBeUndefined();
+});
+
+test("a Dari connection serves a model only gateways list by its vendor's id", () => {
+  // A model the curated catalog does not know yet comes in from the gateways' listings alone.
+  const listed = (id: string, gateways: Record<string, string>): CatalogModel => ({
+    id,
+    provider: "openrouter",
+    model: gateways.openrouter ?? id,
+    label: id,
+    harnesses: ["pi"],
+    source: "",
+    gateways,
+  });
+  const sol = listed("openai/gpt-6.2-sol", {
+    openrouter: "openai/gpt-6.2-sol",
+    "vercel-ai-gateway": "openai/gpt-6.2-sol",
+  });
+  const llama = listed("meta-llama/llama-5", {
+    openrouter: "meta-llama/llama-5",
+    "vercel-ai-gateway": "meta/llama-5",
+  });
+  const muse = listed("meta/muse-spark-2", { "vercel-ai-gateway": "meta/muse-spark-2" });
+  const plans = {
+    kind: "dari-link" as const,
+    linkModels: {
+      models: [{ id: "openai/gpt-6.2-sol" }, { id: "meta/llama-5" }, { id: "meta/muse-spark-2" }],
+      prefixes: [],
+    },
+  };
+  expect(credentialRoute(sol, plans)).toMatchObject({
+    provider: "dari-link",
+    model: "openai/gpt-6.2-sol",
+    harnesses: [...openHarnesses],
+  });
+  // Dari spells a vendor as one gateway does, not always as the catalog does.
+  // and Vercel's `meta/` Llama runs no Muse Code, which speaks only Meta's Muse API.
+  expect(credentialRoute(llama, plans)).toMatchObject({
+    model: "meta/llama-5",
+    harnesses: [...openHarnesses],
+  });
+  expect(credentialRoute(muse, plans)?.harnesses).toEqual([...openHarnesses, "muse-code"]);
+  // Served by the catalog's own row, so not offered again as a model of the connection's own.
+  expect(linkedCatalogModels([sol, llama, muse], [plans])).toEqual([]);
+  // A gateway key still serves it by the gateway's id.
+  const key = { kind: "dari-link" as const, linkModels: { models: [], prefixes: ["openrouter/"] } };
+  expect(credentialRoute(sol, key)?.model).toBe("openrouter/openai/gpt-6.2-sol");
+  // With a gateway key beside a vendor name, the vendor name wins, so the model is offered once.
+  const both = {
+    kind: "dari-link" as const,
+    linkModels: { models: [{ id: "meta/llama-5" }], prefixes: ["openrouter/"] },
+  };
+  expect(credentialRoute(llama, both)?.model).toBe("meta/llama-5");
+  expect(linkedCatalogModels([llama], [both])).toEqual([]);
 });
 
 test("a model offers, before a credential is chosen, every harness some route runs", () => {

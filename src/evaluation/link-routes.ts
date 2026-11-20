@@ -4,6 +4,7 @@ import {
   type DariLinkOnly,
   linkedModel,
 } from "../gateway/dari-link/connection.js";
+import { catalogModelId, isGateway } from "../gateways/index.js";
 import type { CatalogModel } from "./catalog.js";
 import { type Harness, modelRoutes, openHarnesses, routeFor } from "./models.js";
 
@@ -23,17 +24,45 @@ export function credentialRoute(
 }
 
 /**
- * Harnesses a model a Dari connection serves runs on: one only a Claude or Muse plan serves, that
- * plan's agent alone (Dari refuses it to any other app); any other, every harness that can call an
- * endpoint, since Dari serves each model in Chat Completions, Responses and Messages alike, and
- * Muse Code too for a Meta model (a Meta key's).
+ * The harnesses a model on a Dari connection runs on. A plan that serves only its vendor's agent
+ * runs on that agent alone. Otherwise every harness that calls an endpoint can, and a Muse model
+ * (`meta/muse-…`) adds Muse Code, the one agent that speaks Meta's Muse API.
  */
-const linkHarnesses = (id: string, only: DariLinkOnly | undefined): Harness[] =>
-  only ? [only] : [...openHarnesses, ...(id.startsWith("meta/") ? (["muse-code"] as const) : [])];
+function linkHarnesses(id: string, only: DariLinkOnly | undefined): Harness[] {
+  if (only) return [only];
+  if (id.startsWith("meta/muse-")) return [...openHarnesses, "muse-code"];
+  return [...openHarnesses];
+}
 
 /**
- * A model on a Dari connection: the first of its routes (its vendor's own, then each gateway's)
- * the connection serves by Dari's id, `provider/model`, with that route's levels and prices.
+ * The names a vendor's plan or key serves a route by. A gateway route's model is named as the
+ * gateway spells it and as the catalog does, since Dari spells a vendor either way
+ * (`meta/llama-5`, `meta-llama/llama-5`).
+ */
+function vendorNames(route: CatalogModel): string[] {
+  if (!isGateway(route.provider)) return [`${route.provider}/${route.model}`];
+  return [route.model, catalogModelId(route.provider, route.model)];
+}
+
+/**
+ * Each of the model's routes under each name Dari may know it by, in the order a connection is
+ * matched: every vendor name first, so a plan or vendor key wins, then each gateway route's
+ * gateway-prefixed name (`openrouter/openai/gpt-6-sol`), which a gateway key serves.
+ */
+function dariNames(model: CatalogModel): { route: CatalogModel; name: string }[] {
+  const routes = modelRoutes(model).filter(
+    (route) => route.provider !== "custom" && route.provider !== "dari",
+  );
+  const names: { route: CatalogModel; name: string }[] = [];
+  for (const route of routes) for (const name of vendorNames(route)) names.push({ route, name });
+  for (const route of routes)
+    if (isGateway(route.provider)) names.push({ route, name: `${route.provider}/${route.model}` });
+  return names;
+}
+
+/**
+ * A model on a Dari connection: its first route and name that the connection serves. The route
+ * keeps its levels and prices; its model becomes Dari's name for it.
  */
 function dariLinkRoute(
   model: CatalogModel,
@@ -43,16 +72,14 @@ function dariLinkRoute(
     const served = linkedModel(models, model.model);
     return served ? { ...model, harnesses: linkHarnesses(model.model, served.only) } : undefined;
   }
-  for (const route of modelRoutes(model)) {
-    if (route.provider === "custom" || route.provider === "dari") continue;
-    const id = `${route.provider}/${route.model}`;
-    const served = linkedModel(models, id);
+  for (const { route, name } of dariNames(model)) {
+    const served = linkedModel(models, name);
     if (served)
       return {
         ...route,
         provider: "dari-link",
-        model: id,
-        harnesses: linkHarnesses(id, served.only),
+        model: name,
+        harnesses: linkHarnesses(name, served.only),
       };
   }
   return undefined;
