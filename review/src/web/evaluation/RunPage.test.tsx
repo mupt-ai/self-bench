@@ -99,9 +99,16 @@ test("Run defaults fresh drafts to an offered managed sandbox without replacing 
     expect(sandbox()?.querySelector('option[value="managed"]')).toBeNull();
     // With no credentials and nothing managed, Run points to the setup popup.
     expect(container.textContent).toContain("Connect a model and a sandbox to run evaluations.");
-    expect(container.querySelector('section[aria-label="Setup Needed"] button')?.textContent).toBe(
-      "Finish Setup",
-    );
+    // The callout's hint is a tooltip button ahead of its action, so find the action by its label.
+    expect(
+      [
+        ...(container
+          .querySelector('section[aria-label="Setup Needed"]')
+          ?.querySelectorAll("button") ?? []),
+      ]
+        .map((button) => button.textContent)
+        .filter(Boolean),
+    ).toEqual(["Finish Setup"]);
 
     await reset();
     browser.sessionStorage.removeItem(key);

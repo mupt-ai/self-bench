@@ -234,15 +234,11 @@ cd /work/repo`
   const resume = request.resume ? ` --session ${RESUMED_SESSION}` : "";
   return `set -euo pipefail
 mkdir -p "$HOME/.pi/agent" ${SESSION_DIRECTORY}
-cleanup() { rm -f "$HOME/.pi/agent/auth.json" "$HOME/.git-credentials"; }
+cleanup() { rm -f "$HOME/.git-credentials"; }
 trap cleanup EXIT
-if [ -n "\${SELFBENCH_PI_AUTH_JSON:-}" ]; then
-  printf '%s' "$SELFBENCH_PI_AUTH_JSON" > "$HOME/.pi/agent/auth.json"
-  chmod 600 "$HOME/.pi/agent/auth.json"
-fi
 printf '%s\\n' '{"transport":"auto"}' > "$HOME/.pi/agent/settings.json"
 provider="\${AUTHOR_PROVIDER:-}"
-[ -n "$provider" ] || { [ -n "\${OPENAI_API_KEY:-}" ] && provider=openai || provider=openai-codex; }
+[ -n "$provider" ] || provider=openai
 if [ -n "\${AUTHOR_PI_MODELS:-}" ]; then
   if pi --list-models "$AUTHOR_MODEL" | awk -v p="$provider" -v m="$AUTHOR_MODEL" '$1 == p && $2 == m { found = 1 } END { exit !found }'; then
     [ -z "\${AUTHOR_PI_MODEL_OVERRIDES:-}" ] || printf '%s' "$AUTHOR_PI_MODEL_OVERRIDES" > "$HOME/.pi/agent/models.json"

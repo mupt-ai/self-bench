@@ -18,7 +18,8 @@ export function CredentialActions({
   name: string;
   /** Opens the credential's name and limits for editing. */
   onEdit?(): void;
-  onReplace(): void;
+  /** Replaces the secret; left out where a credential is no longer added this way. */
+  onReplace?(): void;
   onDelete(): void;
 }) {
   const trigger = useRef<HTMLButtonElement>(null);
@@ -51,7 +52,7 @@ export function CredentialActions({
           pending.current = null;
           trigger.current?.focus();
           if (action === "edit") onEdit?.();
-          else if (action === "replace") onReplace();
+          else if (action === "replace") onReplace?.();
           else onDelete();
         }}
       >
@@ -65,14 +66,16 @@ export function CredentialActions({
             Edit
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem
-          onSelect={() => {
-            pending.current = "replace";
-          }}
-        >
-          <RefreshCw aria-hidden="true" />
-          Replace
-        </DropdownMenuItem>
+        {onReplace && (
+          <DropdownMenuItem
+            onSelect={() => {
+              pending.current = "replace";
+            }}
+          >
+            <RefreshCw aria-hidden="true" />
+            Replace
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem
           className="text-destructive data-[highlighted]:text-destructive"
           onSelect={() => {

@@ -1,6 +1,7 @@
 import React from "react";
 import { Link, useSearchParams } from "react-router";
 import type { CredentialDraft, CredentialInfo } from "../../../../src/db/credentials";
+import type { DariLinkBrowserConfig } from "../../../../src/gateway/dari-link/connection";
 import { useOrg } from "../SiteLayout";
 import { useDocumentTitle } from "../session";
 import { useSetupStatus } from "../setup/SetupStatus";
@@ -10,14 +11,17 @@ import { CredentialEditor } from "./CredentialEditor";
 import { CredentialGroup } from "./CredentialGroup";
 import { EditCredentialDialog } from "./CredentialSettings";
 import { isSandbox } from "./credential-presentation";
+import { useDariConnect } from "./DariConnect";
+import { DariPlans } from "./DariPlans";
 import { DeleteCredentialDialog } from "./DeleteCredentialDialog";
 
-type Editor = {
-  previous?: CredentialInfo;
-  kind?: CredentialDraft["kind"];
-  auth?: CredentialDraft["auth"];
+type Editor = { previous?: CredentialInfo; kind?: CredentialDraft["kind"] };
+type Credentials = {
+  credentials: CredentialInfo[];
+  canManage: boolean;
+  /** What Connect with Dari needs; null when this deployment has no Dari Link. */
+  dariLink: DariLinkBrowserConfig | null;
 };
-type Credentials = { credentials: CredentialInfo[]; canManage: boolean };
 
 export function CredentialsPage() {
   const { org } = useOrg();
@@ -61,23 +65,23 @@ function CredentialsContent({ org }: { org: string }) {
       setError("Could not refresh credentials. Reload the list to try again.");
     }
   };
-  const saved = async () => {
+  const save = async (draft: CredentialDraft) => {
+    await evaluationRequest(url, draft);
     setEditing(undefined);
     setNotice("Credential saved.");
     await refresh();
   };
-  const save = async (draft: CredentialDraft) => {
-    await evaluationRequest(url, draft);
-    await saved();
-  };
+  const dari = useDariConnect(org, data?.dariLink, async () => {
+    setNotice("Dari connected.");
+    await refresh();
+  });
   const canManage = data?.canManage ?? false;
   const credentials = data?.credentials ?? [];
-  const groupProps = {
-    loading: !data && !error,
-    canManage,
-    onReplace: (previous: CredentialInfo) => setEditing({ previous }),
-    onDelete: setDeleting,
-  };
+  const groupProps = { loading: !data && !error, canManage, onDelete: setDeleting };
+  const endpoints = credentials.filter((entry) => entry.kind === "custom");
+  const keys = credentials.filter(
+    (entry) => !isSandbox(entry.kind) && entry.auth !== "dari-link" && entry.kind !== "custom",
+  );
   return (
     <PageFrame>
       <PageHeader title="Credentials" description={`Shared with ${org}.`}>
@@ -102,22 +106,59 @@ function CredentialsContent({ org }: { org: string }) {
         <p className="mb-6 text-sm text-muted-foreground">Only admins can manage credentials.</p>
       )}
       {(!error || data) && (
-        <div className="grid items-start gap-6 lg:grid-cols-2">
-          <CredentialGroup
-            {...groupProps}
-            title="Model Providers"
-            credentials={credentials.filter((entry) => !isSandbox(entry.kind))}
-            onEdit={setChanging}
-            onAdd={() => setEditing({})}
-          />
+        <div className="grid gap-10">
+          <div>
+            <CredentialGroup
+              {...groupProps}
+              title="AI Subscriptions"
+              credentials={credentials.filter((entry) => entry.auth === "dari-link")}
+              addLabel={
+                dari.connecting
+                  ? "Connecting…"
+                  : credentials.some((entry) => entry.auth === "dari-link")
+                    ? "Update Plans"
+                    : "Connect with Dari"
+              }
+              onEdit={setChanging}
+              detail={(credential) => <DariPlans org={org} credential={credential} />}
+              {...(data?.dariLink ? { onAdd: dari.connect } : {})}
+            />
+            {dari.error && (
+              <p role="alert" className="mt-3 text-sm text-destructive">
+                {dari.error}
+              </p>
+            )}
+          </div>
           <CredentialGroup
             {...groupProps}
             title="Sandboxes"
             credentials={credentials.filter((entry) => isSandbox(entry.kind))}
             sandbox
             onEdit={setChanging}
+            onReplace={(previous) => setEditing({ previous })}
             onAdd={() => setEditing({ kind: "modal" })}
           />
+          {/* Models Dari does not serve: an OpenAI-compatible router or inference host. */}
+          <CredentialGroup
+            {...groupProps}
+            title="Custom Endpoints"
+            credentials={endpoints}
+            addLabel="Add Endpoint"
+            onEdit={setChanging}
+            onReplace={(previous) => setEditing({ previous })}
+            onAdd={() => setEditing({ kind: "custom" })}
+          />
+          {/* Provider and gateway keys saved before Connect with Dari, which connects keys and
+              judges now; they stay listed to edit, replace or delete. */}
+          {keys.length > 0 && (
+            <CredentialGroup
+              {...groupProps}
+              title="Other Model Credentials"
+              credentials={keys}
+              onEdit={setChanging}
+              onReplace={(previous) => setEditing({ previous })}
+            />
+          )}
         </div>
       )}
       {editing && (
@@ -125,7 +166,6 @@ function CredentialsContent({ org }: { org: string }) {
           {...editing}
           org={org}
           onSave={save}
-          onSaved={saved}
           onCancel={() => setEditing(undefined)}
         />
       )}

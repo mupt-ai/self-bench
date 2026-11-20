@@ -196,64 +196,6 @@ test("credential validation rejects auth mixing and unsafe custom endpoints", as
   ).toBe("https://api.example/v1");
 });
 
-test("Codex sign-in is explicit, scoped, served through the gateway, never an API key", async () => {
-  const records = memoryVault();
-  const fixture = await evaluationServer(records);
-  const home = await mkdtemp(join(tmpdir(), "codex-auth-fixture-"));
-  try {
-    const auth = JSON.stringify({
-      tokens: { access_token: "fake-access", refresh_token: "fake-refresh" },
-    });
-    const model = await (
-      await fixture.request(
-        credentialsUrl,
-        post({ name: "Codex", kind: "openai", auth: "codex-login", value: auth }),
-      )
-    ).json();
-    const sandbox = await (
-      await fixture.request(
-        credentialsUrl,
-        post({ name: "Sandbox", kind: "e2b", value: "fake-sandbox" }),
-      )
-    ).json();
-    const draft = {
-      id: crypto.randomUUID(),
-      tasks: [{ runId: "run-one", taskId: "task-one" }],
-      models: [{ catalogId: "gpt-6.1-sol", credentialId: model.id, harnesses: ["pi"] }],
-      sandbox: "e2b",
-      sandboxCredentialId: sandbox.id,
-    };
-    expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(400);
-    draft.models[0] = {
-      ...draft.models[0],
-      catalogId: "gpt-6.1-sol",
-      credentialId: model.id,
-      harnesses: ["codex"],
-    };
-    expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);
-    const input = fixture.starts[0];
-    if (!input) throw new Error("Missing input");
-    expect(input.pricing).toMatchObject({ input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 });
-    // The sign-in type rides with the run so its cost can account for unreported cache writes.
-    expect(input.credentials?.auth).toBe("codex-login");
-    const execution = await credentialExecution(
-      input,
-      home,
-      { OPENAI_API_KEY: "do-not-use" },
-      records,
-      "codex",
-    );
-    // The gateway serves the sign-in's plan: its tokens never leave the vault for the sandbox.
-    expect(execution.route).toBe("gateway");
-    expect(execution.child.OPENAI_API_KEY).toBeUndefined();
-    expect(JSON.stringify(execution)).not.toContain("fake-refresh");
-    expect(execution.auth).toBe("codex-login");
-  } finally {
-    await fixture.close();
-    await rm(home, { recursive: true, force: true });
-  }
-});
-
 test("the credentials API still takes an OpenRouter management key from older clients, and drops it", async () => {
   const records = memoryVault();
   const fixture = await evaluationServer(records);

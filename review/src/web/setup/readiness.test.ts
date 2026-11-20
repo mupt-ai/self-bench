@@ -7,19 +7,39 @@ const credential = (kind: CredentialInfo["kind"], auth: CredentialInfo["auth"] =
   auth,
 });
 
+/** A Dari connection serving these Dari ids, as its grant lists them. */
+const dari = (...ids: { id: string; only?: "claude-code" | "muse-code" }[]) => ({
+  kind: "dari-link" as const,
+  auth: "dari-link" as const,
+  linkModels: { models: ids, prefixes: [] },
+});
+
 test("setup coverage follows what generation and evaluation each accept", () => {
   const cases: [string, ReturnType<typeof credential>[], object, string][] = [
     ["nothing", [], {}, "generate -- evaluate --"],
+    // A Claude plan serves only Claude Code, which generation never runs: it only evaluates.
     [
-      "ChatGPT sign-in and Modal",
-      [credential("openai", "codex-login"), credential("modal")],
+      "Claude plan via Dari and E2B",
+      [dari({ id: "anthropic/claude-sonnet-5-5", only: "claude-code" }), credential("e2b")],
+      {},
+      "generate -s evaluate ms",
+    ],
+    // Generation runs Pi, which any model a ChatGPT or OpenCode Go plan serves can run.
+    [
+      "ChatGPT plan via Dari and E2B",
+      [dari({ id: "openai/gpt-6-astra" }), credential("e2b")],
       {},
       "generate ms evaluate ms",
     ],
-    // Generation authors in Pi, so a Claude Code sign-in only runs evaluations.
     [
-      "Claude sign-in and E2B",
-      [credential("anthropic", "claude-login"), credential("e2b")],
+      "OpenCode Go plan via Dari and Modal",
+      [dari({ id: "opencode-go/glm-5.3" }), credential("modal")],
+      {},
+      "generate ms evaluate ms",
+    ],
+    [
+      "Muse plan via Dari and E2B",
+      [dari({ id: "meta/muse-spark-1.3", only: "muse-code" }), credential("e2b")],
       {},
       "generate -s evaluate ms",
     ],

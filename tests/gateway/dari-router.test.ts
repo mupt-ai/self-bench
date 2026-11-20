@@ -56,7 +56,6 @@ beforeAll(async () => {
       find: async (orgId, id) => (orgId === 7 && id === CREDENTIAL ? credential : undefined),
       secret: async (orgId, id) =>
         orgId === 7 && id === CREDENTIAL ? { value: "dari-key" } : undefined,
-      renew: async () => {},
     },
     recordUsage: (entry) => usage.push(entry),
     captureError: () => {},

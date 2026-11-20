@@ -1,6 +1,10 @@
 import type { CredentialInfo } from "../db/credentials.js";
+import { type DariLinkGrants, recordDariLinkUsage } from "../gateway/dari-link/link.js";
+import type { GatewayUsage } from "../gateway/platform.js";
 import type { createGatewayUsageStore } from "../gateway/usage-store.js";
+import { servedModelCost } from "../gateways/catalog.js";
 import type { SandboxCallback } from "../generation/pipeline/sandbox-job.js";
+import { reportError } from "../lib/telemetry/sentry.js";
 import { trialCost } from "./cost.js";
 import { dariTrialCost } from "./dari/cost.js";
 import { gatewayModelId, gatewayTrialTag } from "./gateway-trial.js";
@@ -12,17 +16,21 @@ export interface TrialGateway {
   readonly api: SandboxCallback;
   /** What the gateway recorded each trial's calls cost, and the tokens they used on each model. */
   readonly usage: Pick<ReturnType<typeof createGatewayUsageStore>, "trialCost" | "trialModels">;
+  /** Dari Link grants: to mint a trial's child token, and read back what its calls used. */
+  readonly dariLink?: DariLinkGrants;
+  /** Saves a call's usage where `usage` reads it: a Dari Link trial's, read back from Dari. */
+  readonly recordUsage?: (usage: GatewayUsage) => Promise<void>;
 }
 
 /**
  * What the gateway recorded the trial's calls cost, which replaces any estimate: the provider's
  * own charge where it reports one (OpenRouter, Vercel AI Gateway), else the model's list price,
- * which on a sign-in's plan bills nothing. A trial with a call neither priced has no gateway cost;
+ * which on a plan bills nothing. A trial with a call neither priced has no gateway cost;
  * nor does one that made no call.
  *
  * The total covers every model the trial's key served, so a run with a subagent model is priced
  * call by call at each call's own model. It is also what was billed only when every call was on
- * an API key: with the run's model or its subagents' on a sign-in, part of the total is the list
+ * an API key: with the run's model or its subagents' on a plan, part of the total is the list
  * price of calls a plan covered, so no billed cost is recorded.
  */
 async function gatewayTrialCost(
@@ -92,14 +100,41 @@ export async function measureTrial(
   index: number,
   /** Harbor's transcripts and result, and the environment its process ran with. */
   harbor: { records: Map<string, string>; result: unknown; child: NodeJS.ProcessEnv },
-  /** The sign-in types of the run's credentials, and where the gateway recorded its calls. */
+  /** The auths of the run's credentials, and where the gateway recorded its calls. */
   route: {
     modelAuth: CredentialInfo["auth"];
     subagentAuth?: CredentialInfo["auth"] | undefined;
     gateway?: { at: TrialGateway; orgId: number } | undefined;
+    /** The Dari connection the trial's LLM judge called with, whose usage Dari reports. */
+    dariJudge?: { at: TrialGateway; orgId: number; credentialId: string } | undefined;
   },
 ): Promise<Partial<EvaluationTrial>> {
-  const { gateway } = route;
+  const { gateway, dariJudge } = route;
+  // Its judge's calls on a Dari connection are recorded as a judge's, outside the trial's cost.
+  if (dariJudge?.at.dariLink && dariJudge.at.recordUsage)
+    await recordDariLinkUsage(
+      dariJudge.at.dariLink,
+      {
+        orgId: dariJudge.orgId,
+        credentialId: dariJudge.credentialId,
+        tags: { trial: gatewayTrialTag(run, index) },
+        judge: true,
+      },
+      { record: dariJudge.at.recordUsage, listCost: servedModelCost },
+    ).catch((error: unknown) => reportError(error, { tags: { route: "dari-link-usage" } }));
+  // A Dari Link trial called Dari directly: its usage is Dari's to report, copied here first.
+  const { dariLink, recordUsage } = gateway?.at ?? {};
+  const credentialId = run.credentials?.modelCredentialId;
+  if (gateway && credentialId && route.modelAuth === "dari-link" && dariLink && recordUsage)
+    await recordDariLinkUsage(
+      dariLink,
+      {
+        orgId: gateway.orgId,
+        credentialId,
+        tags: { trial: gatewayTrialTag(run, index) },
+      },
+      { record: recordUsage, listCost: servedModelCost },
+    ).catch((error: unknown) => reportError(error, { tags: { route: "dari-link-usage" } }));
   const measured = run.subagent
     ? gateway
       ? await subagentTrialUsage(gateway.at, gateway.orgId, run, index)

@@ -11,7 +11,6 @@ import { createSandboxExecutor } from "../src/sandbox/index.js";
 import { providerEnvironment } from "../src/sandbox/provider-environment.js";
 import { E2BSandboxExecutor } from "../src/sandbox/providers/e2b/executor.js";
 import { fixture, ROOT } from "./support/batch-fixture.js";
-import { codexAuth } from "./support/codex-auth.js";
 import { memoryVault } from "./support/evaluation-vault.js";
 import { prFixture, pullRequest, REPO } from "./support/pr-fixture.js";
 
@@ -53,7 +52,7 @@ test.each(["batch", "pr"] as const)(
       }
       const model = await vault.credentials.create(
         ownerId,
-        { name: "ChatGPT", kind: "openai", auth: "codex-login", value: codexAuth },
+        { name: "OpenAI", kind: "openai", auth: "api-key", value: "openai-secret" },
         {},
       );
       const e2b = await vault.credentials.create(
@@ -180,7 +179,7 @@ test.each(["batch", "pr"] as const)(
             expect(harbor).toBe("e2b");
             expect(configured.version.sandboxImage).toBe("selfbench-test");
             expect(executionEnvironment().E2B_API_KEY).toBe("selected-e2b-secret");
-            expect((await loadPiModelAuth()).provider).toBe("openai-codex");
+            expect((await loadPiModelAuth()).provider).toBe("openai");
           },
         );
       }

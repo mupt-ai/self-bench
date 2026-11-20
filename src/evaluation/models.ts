@@ -1,5 +1,4 @@
 import type { ThinkingLevel } from "../contracts/models.js";
-import type { CredentialInfo } from "../db/credentials.js";
 import { type GatewayId, gatewayIds, gatewayModelId, isGateway } from "../gateways/index.js";
 import { type CatalogModel, withReferencePricing } from "./catalog.js";
 
@@ -82,33 +81,6 @@ export function evaluationTaskKey(runId: string, taskId: string): string {
 }
 
 /**
- * API keys drive any harness their route speaks. Each sign-in drives only its vendor's CLI, as its
- * plan allows: Codex, Claude Code (the gateway serves a Claude plan to nothing else) or Muse Code.
- */
-const signInHarnesses: Record<CredentialInfo["auth"], Harness | undefined> = {
-  "api-key": undefined,
-  "codex-login": "codex",
-  "claude-login": "claude-code",
-  "muse-login": "muse-code",
-};
-
-export function credentialRunsHarness(auth: CredentialInfo["auth"], harness: Harness): boolean {
-  const only = signInHarnesses[auth];
-  return !only || only === harness;
-}
-
-/** Why a credential's sign-in cannot run these harnesses, if it cannot. */
-export function signInRefusal(
-  auth: CredentialInfo["auth"],
-  harnesses: readonly Harness[],
-): string | undefined {
-  const only = signInHarnesses[auth];
-  return only && harnesses.some((harness) => harness !== only)
-    ? `A ${harnessLabels[only]} sign-in can only run the ${harnessLabels[only]} harness`
-    : undefined;
-}
-
-/**
  * Harnesses a direct provider key can drive: those that speak its API. OpenAI serves no
  * Anthropic Messages for Claude Code, and Anthropic no Responses for Codex; Meta serves both, so a
  * Meta key drives every harness through the gateway. Muse Code speaks only Meta's API. Dari's
@@ -125,6 +97,8 @@ const providerHarnesses: Partial<Record<CatalogModel["provider"], Harness[]>> = 
 
 /** Every credential route for a model: its native provider (if any) and each gateway serving it. */
 export function modelRoutes(model: CatalogModel): CatalogModel[] {
+  // A model only a Dari connection lists (linkedCatalogModels) has that one route.
+  if (model.provider === "dari-link") return [model];
   const native = providerHarnesses[model.provider] ?? providerHarnesses.openai ?? [];
   const { pricing: _pricing, ...gatewayModel } = model;
   return [

@@ -133,11 +133,12 @@ export type PiModelsFiles = z.infer<typeof piModelsSchema>;
  * One stage's model as submission resolved it. The gateways can drop a model while a run is
  * underway, so the run keeps what it was accepted with: the Pi provider and model id, Pi's
  * models.json from the gateway's listing, and OpenRouter's rates, which billing falls back to
- * when the model no longer has live ones.
+ * when the model no longer has live ones. A Dari connection's route keeps no models.json: the
+ * run mints its gateway's address with each stage's token (generation/settings/dari-link.ts).
  */
 const generationRouteSchema = z
   .object({
-    provider: z.enum(["openai", "openai-codex", "anthropic", ...gatewayIds]),
+    provider: z.enum(["openai", "openai-codex", "anthropic", "dari-link", ...gatewayIds]),
     model: z.string().min(1),
     piModels: piModelsSchema.optional(),
     rates: modelRatesSchema.optional(),

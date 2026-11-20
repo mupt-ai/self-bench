@@ -187,4 +187,23 @@ test("a retry offers the run's own model credential first, then others that run 
   ]);
   // Before the catalog loads, only the run's own.
   expect(ids(retryModelCredentials(finishedRun(), "pi", saved))).toEqual([MODEL_CREDENTIAL]);
+  // A run whose sign-in is gone retries on a Dari connection that serves its model.
+  const gpt = { ...dariRouter, id: "gpt-x", provider: "openai" as const, model: "gpt-x" };
+  const dari = {
+    ...key("dari-connection", "dari-link", "dari-link"),
+    linkModels: { models: [{ id: "openai/gpt-x" }], prefixes: [] },
+  };
+  const signedIn = finishedRun((run) => {
+    run.model = "gpt-x";
+  });
+  expect(ids(retryModelCredentials(signedIn, "pi", [dari], [gpt]))).toEqual(["dari-connection"]);
+  // A model only Dari connections list: another connection serving it is offered.
+  const glm = finishedRun((run) => {
+    run.model = "opencode-go/glm-5.3";
+  });
+  const other = {
+    ...key("other-connection", "dari-link", "dari-link"),
+    linkModels: { models: [{ id: "opencode-go/glm-5.3" }], prefixes: [] },
+  };
+  expect(ids(retryModelCredentials(glm, "pi", [dari, other], [gpt]))).toEqual(["other-connection"]);
 });

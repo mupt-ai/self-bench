@@ -107,9 +107,6 @@ function credentialEditor(kind?: CredentialInfo["kind"], previous?: CredentialIn
       org="mupt-ai"
       kind={kind}
       previous={previous}
-      onSaved={async () => {
-        throw new Error("Render must not finish sign-in");
-      }}
       onSave={async () => {
         throw new Error("Render must not save a credential");
       }}
@@ -123,26 +120,6 @@ function credentialEditor(kind?: CredentialInfo["kind"], previous?: CredentialIn
 function options(html: string) {
   return [...html.matchAll(/<option value="([^"]+)"/g)].map((match) => match[1]);
 }
-
-test("Add Provider offers only model providers and keeps secrets hidden", () => {
-  const html = credentialEditor();
-  expect(html).toContain("API Key");
-  expect(html).toContain("Add Provider");
-  expect(html).toContain("Save");
-  expect(html).toContain('type="password"');
-  // A model key's limit counts the sandboxes whose agent calls it.
-  expect(html).toContain("Max Concurrent Sandboxes");
-  expect(html).toContain("Lower it if the provider rate-limits you.");
-  expect(options(html)).toEqual([
-    "dari",
-    "openai",
-    "anthropic",
-    "meta",
-    "openrouter",
-    "vercel-ai-gateway",
-    "custom",
-  ]);
-});
 
 test.each([false, true])("credential add action names its group (sandbox: %s)", (sandbox) => {
   const html = renderToStaticMarkup(
@@ -221,10 +198,9 @@ test("Add Sandbox offers only hosted sandboxes and the fields for its selected s
   // Only E2B counts template builds apart from sandboxes.
   expect(html).not.toContain("Max Concurrent Builds");
   expect(options(html)).toEqual(["e2b", "modal", "daytona", "vercel"]);
-  expect(html).not.toContain("ChatGPT Sign-In");
 });
 
-test("replacement keeps the original credential category regardless of the default kind", () => {
+test("a replacement starts from the original sandbox credential's limits", () => {
   const previous: CredentialInfo = {
     id: "credential",
     name: "Team",
@@ -240,16 +216,6 @@ test("replacement keeps the original credential category regardless of the defau
   expect(sandbox).toMatch(/id="credential-max-sandboxes"[^>]*value="20"/);
   expect(sandbox).toMatch(/id="credential-max-builds"[^>]*value="10"/);
   expect(options(sandbox)).toEqual(["e2b", "modal", "daytona", "vercel"]);
-  const provider = credentialEditor("modal", { ...previous, kind: "anthropic" });
-  expect(options(provider)).toEqual([
-    "dari",
-    "openai",
-    "anthropic",
-    "meta",
-    "openrouter",
-    "vercel-ai-gateway",
-    "custom",
-  ]);
 });
 
 test("harness dropdown follows the selected credential's route", () => {
@@ -262,7 +228,13 @@ test("harness dropdown follows the selected credential's route", () => {
     source: "",
   };
   const credentials = [
-    { id: "login", name: "ChatGPT", kind: "openai", auth: "codex-login" },
+    {
+      id: "login",
+      name: "Dari",
+      kind: "dari-link",
+      auth: "dari-link",
+      linkModels: { models: [{ id: "openai/gpt-6-astra" }], prefixes: [] },
+    },
     { id: "key", name: "OpenAI", kind: "openai", auth: "api-key" },
     { id: "gateway", name: "OpenRouter", kind: "openrouter", auth: "api-key" },
   ] as CredentialInfo[];
@@ -273,7 +245,14 @@ test("harness dropdown follows the selected credential's route", () => {
       undefined,
       undefined,
     ).map((option) => option.id);
-  expect(harnesses("login")).toEqual(["codex"]);
+  // A Dari connection serves an OpenAI model to every harness, a ChatGPT plan's included.
+  expect(harnesses("login")).toEqual([
+    "codex",
+    "claude-code",
+    "pi",
+    "mini-swe-agent",
+    "terminus-2",
+  ]);
   expect(harnesses("key")).toEqual(["codex", "pi", "mini-swe-agent", "terminus-2"]);
   expect(harnesses("gateway")).toEqual([
     "codex",

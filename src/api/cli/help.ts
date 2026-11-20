@@ -42,11 +42,11 @@ const SECTIONS: Section[] = [
   {
     nouns: ["credential"],
     text: `Credentials (workspace admins)
-  credential list                            saved keys and sign-ins, with the IDs flags take
-  credential add                             pick a provider, then paste a key or sign in
+  credential list                            saved credentials, with the IDs flags take
+  credential add                             pick a provider, then paste a key; plans connect in the
+                                             app, with Connect with Dari
   credential add --kind KIND (--value-env VAR | --value-stdin) [--name NAME]
       [--token-id ID] [--team-id ID --project-id ID] [--endpoint URL]
-  credential add --sign-in chatgpt|claude|meta [--name NAME]
   credential rename ID NAME | credential remove ID`,
   },
   {

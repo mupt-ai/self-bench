@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { z } from "zod";
 import { isSandboxKind } from "../../db/credential-kinds.js";
@@ -5,9 +6,15 @@ import { credentialSchema, maxSandboxesSchema, savedModelsSchema } from "../../d
 import { RecordStoreError } from "../../db/encrypted-records.js";
 import type { User } from "../../db/users.js";
 import { assertCredentialUnused } from "../../evaluation/comparisons.js";
-import { claudeLogins } from "../../harnesses/claude-code/login.js";
-import { codexLogins } from "../../harnesses/codex/login.js";
-import { museLogins } from "../../harnesses/muse-code/login.js";
+import {
+  connectDari,
+  DARI_LINK_CALLBACK_PATH,
+  dariLinkApp,
+  dariLinkGrants,
+  revokeDari,
+} from "../../gateway/dari-link/link.js";
+import { dariLinkStatus } from "../../gateway/dari-link/status.js";
+import { reportError } from "../../lib/telemetry/sentry.js";
 import { inferResourceLimits } from "../../sandbox/resource-inference.js";
 import { resourceLimitsSchema, savedResourceLimits } from "../../sandbox/resources.js";
 import { tenantFor } from "../auth/tenant.js";
@@ -15,9 +22,11 @@ import { readBody, sendJson, trustedMutation } from "../http.js";
 import type { EvaluationRoutesOptions } from "./evaluations.js";
 
 const pattern =
-  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/credentials(?:\/(codex-login|claude-login|muse-login)(?:\/([a-f0-9-]{36})(?:\/(cancel|complete))?)?|\/([a-f0-9-]{36})\/(delete|limit|update|infer-limits))?$/;
-const loginStartSchema = z.object({ name: z.string().trim().min(1).max(80) }).strict();
-const claudeCompleteSchema = z.object({ code: z.string().trim().min(1).max(4096) }).strict();
+  /^\/api\/orgs\/([A-Za-z0-9_.-]+)\/credentials(?:\/([a-f0-9-]{36})\/(delete|limit|update|infer-limits|dari-status)|\/(dari-link))?$/;
+/** What `DariLink.open` resolved with in the browser. */
+const dariLinkSchema = z
+  .object({ code: z.string().min(1).max(2048), codeVerifier: z.string().min(43).max(128) })
+  .strict();
 // Each field left out stays as it is; a null limit clears it. (`limit` is the old name of `update`.)
 const updateSchema = z
   .object({
@@ -48,50 +57,43 @@ export async function credentialRoutes(
     sendJson(response, 404, { error: "Organization not found" });
     return true;
   }
-  const login = match[2];
+  const dariLink =
+    options.dariLinkApp === undefined
+      ? dariLinkApp(options.env ?? process.env)
+      : options.dariLinkApp;
   const mutation = request.method !== "GET";
   if (
-    ((mutation || login) && org.role !== "admin") ||
+    (mutation && org.role !== "admin") ||
     (mutation && (request.method !== "POST" || !trustedMutation(request, options.publicUrl, user)))
   ) {
     sendJson(response, 403, { error: "Organization admin and same-origin JSON request required" });
     return true;
   }
-  const [loginId, loginAction, credentialId, action] = [match[3], match[4], match[5], match[6]];
+  const [credentialId, action] = [match[2], match[3]];
+  const linking = match[4] !== undefined;
   const infer = options.inferResourceLimits ?? inferResourceLimits;
   try {
     if (!options.vault) throw new RecordStoreError(503);
     const vault = options.vault;
     const { credentials, comparisons } = vault;
-    if (login) {
-      const codex = options.codexLogins ?? codexLogins;
-      const claude = options.claudeLogins ?? claudeLogins;
-      const muse = options.museLogins ?? museLogins;
-      const logins = login === "codex-login" ? codex : login === "muse-login" ? muse : claude;
-      const body = async (limit: number) => JSON.parse((await readBody(request, limit)).toString());
-      // Codex and Muse poll their device sign-ins for the approval; Claude is completed with the
-      // code Anthropic shows.
-      if (login !== "claude-login" && !mutation && loginId && !loginAction)
-        sendJson(
-          response,
-          200,
-          await (login === "muse-login" ? muse : codex).status(vault, org.id, user.id, loginId),
-        );
-      else if (login === "claude-login" && mutation && loginId && loginAction === "complete") {
-        const { code } = claudeCompleteSchema.parse(await body(8192));
-        sendJson(response, 200, await claude.complete(vault, org.id, user.id, loginId, code));
-      } else if (mutation && !loginId) {
-        const { name } = loginStartSchema.parse(await body(1024));
-        sendJson(response, 202, await logins.start(vault, org.id, user.id, name));
-      } else if (mutation && loginId && loginAction === "cancel") {
-        await logins.cancel(vault, org.id, user.id, loginId);
-        sendJson(response, 200, { cancelled: true });
-      } else sendJson(response, 405, { error: "Method not allowed" });
-    } else if (!mutation && !credentialId) {
+    if (linking && mutation) {
+      // Connect with Dari: the browser's approved code and its PKCE verifier, redeemed here.
+      if (!dariLink) throw new RecordStoreError(503, "Dari Link is not configured here.");
+      const approved = dariLinkSchema.parse(JSON.parse((await readBody(request, 4096)).toString()));
+      sendJson(response, 201, await connectDari(vault, org.id, dariLink, approved));
+    } else if (!mutation && !credentialId && !linking) {
+      const { gatewayUrl, clientId, redirectUri } = dariLink ?? {};
       sendJson(response, 200, {
         credentials: await credentials.list(org.id),
         canManage: org.role === "admin",
+        // What the browser's Connect with Dari needs; null when this deployment has no Dari Link.
+        dariLink:
+          gatewayUrl && clientId && redirectUri ? { gatewayUrl, clientId, redirectUri } : null,
       });
+    } else if (!mutation && credentialId && action === "dari-status") {
+      // Each plan's state and usage now, from Dari: never stored here.
+      const grants = dariLinkGrants(credentials, dariLink ?? undefined);
+      sendJson(response, 200, await dariLinkStatus(grants, org.id, credentialId));
     } else if (mutation && credentialId && (action === "update" || action === "limit")) {
       const { name, maxSandboxes, maxBuilds, models, resourceLimits } = updateSchema.parse(
         JSON.parse((await readBody(request, 8192)).toString()),
@@ -113,14 +115,26 @@ export async function credentialRoutes(
       if (!isSandboxKind(credential.kind)) throw new Error("Only sandbox providers have limits");
       sendJson(response, 200, await infer(credential.kind, secret));
     } else if (mutation && credentialId) {
-      if (!(await credentials.find(org.id, credentialId))) throw new Error("Credential not found");
+      const credential = await credentials.find(org.id, credentialId);
+      if (!credential) throw new Error("Credential not found");
       await assertCredentialUnused(comparisons, options.artifacts, org.id, credentialId);
+      // A Dari Link grant is ended on Dari too, so Dari no longer lists SelfBench.
+      const linked =
+        credential.auth === "dari-link"
+          ? (await credentials.secret(org.id, credentialId))?.value
+          : undefined;
       await credentials.remove(org.id, credentialId);
+      if (linked)
+        // The row is gone either way; a grant Dari kept is reported, and the user can end it on Dari.
+        await revokeDari(dariLink, linked).catch((error) =>
+          reportError(error, { tags: { route: "credentials", step: "dari-revoke" } }),
+        );
       sendJson(response, 200, { deleted: true });
     } else if (mutation) {
       const draft = credentialSchema.parse(
         JSON.parse((await readBody(request, 40_000)).toString()),
       );
+      if (draft.auth === "dari-link") throw new Error("Connect Dari plans with Connect with Dari");
       // A new sandbox account starts with its plan's limits, where its provider shares them.
       if (isSandboxKind(draft.kind) && !savedResourceLimits(draft.resourceLimits)) {
         const inferred = await infer(draft.kind, draft).catch(() => undefined);
@@ -130,15 +144,64 @@ export async function credentialRoutes(
     } else sendJson(response, 405, { error: "Method not allowed" });
   } catch (error) {
     sendJson(response, error instanceof RecordStoreError ? error.status : 400, {
-      error: login
-        ? error instanceof RecordStoreError
+      error: linking
+        ? error instanceof Error && error.name !== "ZodError"
           ? error.message
-          : "Invalid sign-in request"
+          : "Invalid Dari Link request"
         : error instanceof Error && error.name !== "ZodError"
           ? error.message
           : "Invalid credential fields",
     });
   }
   request.resume();
+  return true;
+}
+
+/**
+ * Dari Link's redirect URI. Connect with Dari's popup normally posts its result straight to the
+ * SelfBench window that opened it; when the popup lost its opener (a sign-in on the way can do
+ * that), Dari sends the popup here instead, and this page does what `DariLink.callback()` does:
+ * hands the code to that window over a same-origin BroadcastChannel and closes itself. The window
+ * that opened the popup holds the PKCE verifier, so only it can redeem the code.
+ */
+const CALLBACK_SCRIPT = `(() => {
+  const params = new URLSearchParams(location.search);
+  const state = params.get("state"), code = params.get("code"), error = params.get("error");
+  history.replaceState(null, "", location.pathname);
+  if (state && (code || error) && "BroadcastChannel" in window) {
+    const channel = new BroadcastChannel("dari-link");
+    channel.postMessage(code
+      ? { type: "dari-link", state, code }
+      : { type: "dari-link", state, error, error_description: params.get("error_description") || undefined });
+    channel.close();
+    window.close();
+  }
+  document.getElementById("status").textContent = "You can close this window and return to SelfBench.";
+})();`;
+const CALLBACK_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Connect with Dari</title>
+<style>body{font-family:system-ui,sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem;line-height:1.5}</style>
+</head><body><h1>Connect with Dari</h1><p id="status">Returning to SelfBench…</p>
+<script>${CALLBACK_SCRIPT}</script></body></html>`;
+const CALLBACK_CSP = `default-src 'none'; style-src 'unsafe-inline'; script-src 'sha256-${createHash("sha256").update(CALLBACK_SCRIPT).digest("base64")}'`;
+
+export function dariLinkCallbackRoute(
+  request: IncomingMessage,
+  url: URL,
+  response: ServerResponse,
+): boolean {
+  if (url.pathname !== DARI_LINK_CALLBACK_PATH) return false;
+  request.resume();
+  if (request.method !== "GET") {
+    sendJson(response, 405, { error: "Method not allowed" });
+    return true;
+  }
+  response.writeHead(200, {
+    "content-type": "text/html; charset=utf-8",
+    "cache-control": "no-store",
+    "content-security-policy": CALLBACK_CSP,
+    "referrer-policy": "no-referrer",
+  });
+  response.end(CALLBACK_PAGE);
   return true;
 }

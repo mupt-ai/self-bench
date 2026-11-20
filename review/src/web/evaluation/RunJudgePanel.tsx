@@ -6,7 +6,10 @@ import type { JudgeNeeds } from "../../../../src/harnesses/harbor/host-variables
 import { InfoTooltip } from "../primitives/tooltip";
 import { fieldStyles, Select } from "../ui";
 
-/** The org's credentials that can call a benchmark's LLM judge (judgeCredentialRefusal). */
+/**
+ * The org's credentials that can call a benchmark's LLM judge (judgeCredentialRefusal): a Dari
+ * connection, or a provider or gateway key saved before Connect with Dari.
+ */
 export function judgeCredentials(credentials: readonly CredentialInfo[]): CredentialInfo[] {
   return credentials.filter(
     (credential) => credential.id !== "managed-model" && !judgeCredentialRefusal(credential),
@@ -43,7 +46,7 @@ export function RunJudgePanel({
               LLM Judge
             </h2>
             <InfoTooltip
-              label={`These tasks are graded by a model, which reads ${needs.variables.join(", ")}. Its calls use the key you pick here, and cost extra on that key.`}
+              label={`These tasks are graded by a model, which reads ${needs.variables.join(", ")}. Its calls use the credential you pick here, and cost extra on it.`}
             />
           </div>
         </div>
@@ -74,9 +77,9 @@ export function RunJudgePanel({
             className="font-medium underline underline-offset-4"
             to={`/settings/credentials?return=${encodeURIComponent(`${pages}/run`)}`}
           >
-            Add an API Key
+            Connect with Dari
           </Link>{" "}
-          for its provider, or for OpenRouter or Vercel AI Gateway.
+          with an API key or a plan any app can use, such as ChatGPT.
         </p>
       )}
     </section>

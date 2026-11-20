@@ -54,6 +54,10 @@ variable "stripe_price_id" {
   type    = string
   default = null
 }
+variable "dari_link_client_id" {
+  type    = string
+  default = null
+}
 variable "managed_offering" {
   type    = bool
   default = false

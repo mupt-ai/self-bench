@@ -10,14 +10,34 @@ const credentials = [
   { id: "claude", name: "Claude Sign-In", kind: "anthropic", auth: "claude-login", createdAt: "" },
   { id: "router", name: "OpenRouter", kind: "openrouter", auth: "api-key", createdAt: "" },
   { id: "managed-model", name: "Managed", kind: "openrouter", auth: "api-key", createdAt: "" },
+  {
+    id: "dari",
+    name: "Dari · ChatGPT",
+    kind: "dari-link",
+    auth: "dari-link",
+    createdAt: "",
+    linkModels: { models: [{ id: "openai/gpt-5.5" }], prefixes: [] },
+  },
+  {
+    id: "dari-claude",
+    name: "Dari · Claude",
+    kind: "dari-link",
+    auth: "dari-link",
+    createdAt: "",
+    linkModels: {
+      models: [{ id: "anthropic/claude-sonnet-5-5", only: "claude-code" }],
+      prefixes: [],
+    },
+  },
 ] as CredentialInfo[];
 
-test("any provider's or gateway's API key can call the judge, through the gateway", () => {
-  // A sign-in and the platform's managed key never call a judge.
+test("a Dari connection or any provider's or gateway's API key can call the judge", () => {
+  // A sign-in, the platform's managed key, and a Claude plan alone never call a judge.
   expect(judgeCredentials(credentials).map((entry) => entry.id)).toEqual([
     "openai",
     "anthropic",
     "router",
+    "dari",
   ]);
 });
 
@@ -40,7 +60,8 @@ test("the judge panel says what the judge reads, and offers the keys that can ca
   expect(html).toContain("ANTHROPIC_API_KEY");
   expect(html).toContain('<option value="anthropic">Anthropic</option>');
   expect(html).not.toContain("Claude Sign-In");
-  expect(render(credentials.slice(2, 3))).toContain(
-    "None of your credentials can call this judge.",
-  );
+  expect(html).toContain('<option value="dari">Dari · ChatGPT</option>');
+  const none = render(credentials.slice(2, 3));
+  expect(none).toContain("None of your credentials can call this judge.");
+  expect(none).toContain("Connect with Dari");
 });

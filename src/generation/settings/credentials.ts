@@ -9,7 +9,6 @@ import type { CredentialStore } from "../../db/credentials.js";
 import { type EncryptedRecordStore, orgRecords } from "../../db/encrypted-records.js";
 import type { Vault } from "../../db/vault.js";
 import { gateways, modelApiKeyVariable } from "../../gateways/index.js";
-import { generationSubscriptionAuth } from "../../harnesses/codex/subscription.js";
 import {
   providerCredentialEnvironment,
   WORKER_PROVIDER_CREDENTIALS,
@@ -138,9 +137,9 @@ export async function checkGenerationCredentials(
     const model = await credentials.find(orgId, settings.modelCredentialId ?? "");
     const usable =
       model &&
-      (model.kind === "openai"
-        ? ["api-key", "codex-login"].includes(model.auth)
-        : !["custom", "meta"].includes(model.kind) && model.auth === "api-key");
+      (model.auth === "api-key"
+        ? !["custom", "meta"].includes(model.kind)
+        : model.auth === "dari-link" && model.kind === "dari-link");
     if (!usable)
       throw new Error(
         "Choose a model credential that can run both the author and verifier models.",
@@ -171,7 +170,7 @@ export async function generationRoutes(
   if (settings.modelAccess !== "managed" && !credential)
     throw new Error("Model credential is unavailable.");
   const route = (id: string): GenerationRoute => {
-    const model = generationModel(id);
+    const model = generationModel(id, credential);
     if (!model) throw new Error(`${id} is not an available model.`);
     if (!credential && !managedRuns(model))
       throw new Error(`${model.label} is not available with managed models.`);
@@ -240,7 +239,6 @@ export async function generationEnvironment(
   delete env.ANTHROPIC_API_KEY;
   delete env.META_API_KEY;
   for (const { keyVariable } of Object.values(gateways)) delete env[keyVariable];
-  delete env.SELFBENCH_PI_AUTH_JSON;
   // The platform OpenRouter key is not a run credential: managed runs re-inject it under
   // its sandbox name below, and credential runs must resolve their own subscription auth.
   delete env.SELFBENCH_MANAGED_OPENROUTER_API_KEY;
@@ -253,11 +251,15 @@ export async function generationEnvironment(
     env.OPENROUTER_API_KEY = managedModelKey(base);
   } else {
     const credential = await credentials.find(orgId, settings.modelCredentialId ?? "");
-    const secret = credential && (await credentials.secret(orgId, credential.id))?.value;
-    if (!credential || !secret) throw new Error("Model credential is unavailable.");
-    if (credential.auth === "codex-login")
-      env.SELFBENCH_PI_AUTH_JSON = generationSubscriptionAuth(secret);
-    else env[modelApiKeyVariable(credential.kind)] = secret;
+    if (!credential) throw new Error("Model credential is unavailable.");
+    if (credential.auth === "api-key") {
+      const secret = (await credentials.secret(orgId, credential.id))?.value;
+      if (!secret) throw new Error("Model credential is unavailable.");
+      env[modelApiKeyVariable(credential.kind)] = secret;
+    } else if (credential.auth !== "dari-link" || credential.kind !== "dari-link")
+      throw new Error("Model credential is unavailable.");
+    // A Dari connection's token is minted for each stage's model where the stage runs
+    // (runtime.ts), since the grant's own tokens never enter a run's environment.
   }
   // Sandbox: the platform's managed E2B account, or one credential per role.
   if (settings.sandbox === "managed") {

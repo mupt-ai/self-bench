@@ -1,5 +1,3 @@
-import { writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { dariEndpoint, validateEndpoint } from "../db/credential-endpoints.js";
 import type { Vault } from "../db/vault.js";
@@ -13,7 +11,6 @@ import {
 import { providerCredentialEnvironment } from "../sandbox/provider-environment.js";
 import { type TrialRoute, trialRoute } from "./gateway-trial.js";
 import { judgeCredentialRefusal } from "./judge.js";
-import { signInRefusal } from "./models.js";
 import { refuseTrial } from "./refusal.js";
 import { sameScope } from "./scope.js";
 import { SUBAGENT_NEEDS_GATEWAY, subagentRefusal } from "./subagents.js";
@@ -27,9 +24,8 @@ export function evaluationCredentialOrg(
 
 /**
  * Resolves the comparison's saved credentials into a clean Harbor process environment for one
- * harness's trial. A gateway route (an API key or a ChatGPT or Claude sign-in) leaves the secret in
- * the vault: the gateway reads it itself, so the worker puts a model credential in the environment
- * only on a direct route, and none without a harness (building task images calls no model). A
+ * harness's trial. A gateway route (an API key) leaves the secret in the vault: the gateway reads
+ * it itself, so the worker puts a model credential in the environment only on a direct route, and none without a harness (building task images calls no model). A
  * judge's key stays in the vault too.
  */
 export async function credentialExecution(
@@ -69,9 +65,7 @@ export async function credentialExecution(
     info.kind !== input.credentials.provider
   )
     throw refuseTrial("Credential unavailable");
-  const refusal = signInRefusal(info.auth, input.harnesses);
-  if (refusal) throw refuseTrial(refusal);
-  const route = harness ? trialRoute(input, harness, info.auth) : undefined;
+  const route = harness ? trialRoute(input, harness) : undefined;
   const subagent = input.subagent
     ? await subagentCredential(input, input.subagent, orgId, credentials, route)
     : undefined;
@@ -99,13 +93,7 @@ export async function credentialExecution(
   const secrets = [modelSecret ?? "", sandboxSecret.value, sandboxSecret.tokenId ?? ""].filter(
     Boolean,
   );
-  if (modelSecret && info.auth === "muse-login") {
-    // Muse Code mints its subscription key from the sign-in's token at startup (harbor_muse.py).
-    const authPath = join(home, "muse-auth.json");
-    await writeFile(authPath, modelSecret, { mode: 0o600 });
-    child.MUSE_AUTH_JSON_PATH = authPath;
-    secrets.push(JSON.parse(modelSecret).providers.meta.access_token);
-  } else if (modelSecret) {
+  if (modelSecret) {
     // A direct API key: Dari's router (or a custom endpoint serving it), or Muse Code's Meta key.
     child[modelApiKeyVariable(info.kind)] = modelSecret;
     const endpoint = "endpoint" in info ? info.endpoint : undefined;
@@ -156,7 +144,9 @@ async function subagentCredential(
     throw refuseTrial("Subagent model credential unavailable");
   const refusal =
     subagentRefusal(input.harnesses, input.credentials?.provider ?? "", info.kind) ??
-    signInRefusal(info.auth, input.harnesses) ??
+    (info.auth === "dari-link"
+      ? "A Dari Link connection cannot serve subagent models"
+      : undefined) ??
     (route === "direct" ? SUBAGENT_NEEDS_GATEWAY : undefined);
   if (refusal) throw refuseTrial(refusal);
   return info;

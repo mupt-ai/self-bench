@@ -1,4 +1,5 @@
 import { Plus } from "lucide-react";
+import type React from "react";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import { Skeleton } from "../LoadingSkeleton";
 import { Button, SectionHeader } from "../ui";
@@ -11,21 +12,27 @@ export function CredentialGroup({
   loading,
   canManage,
   sandbox = false,
+  addLabel = sandbox ? "Add Sandbox" : "Add Provider",
   onAdd,
   onEdit,
   onReplace,
   onDelete,
+  detail,
 }: {
   title: string;
   credentials: CredentialInfo[];
   loading: boolean;
   canManage: boolean;
   sandbox?: boolean;
-  onAdd(): void;
+  addLabel?: string;
+  /** Adds one; left out where credentials of this group are no longer added here. */
+  onAdd?(): void;
   /** Opens a credential's name and limits for editing. */
   onEdit?(credential: CredentialInfo): void;
-  onReplace(credential: CredentialInfo): void;
+  onReplace?(credential: CredentialInfo): void;
   onDelete(credential: CredentialInfo): void;
+  /** More about a credential, under its row: a Dari connection's plans. */
+  detail?(credential: CredentialInfo): React.ReactNode;
 }) {
   return (
     <section className="min-w-0" aria-label={title}>
@@ -41,10 +48,10 @@ export function CredentialGroup({
           </>
         }
       >
-        {canManage && (
+        {canManage && onAdd && (
           <Button size="small" onClick={onAdd}>
             <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
-            {sandbox ? "Add Sandbox" : "Add Provider"}
+            {addLabel}
           </Button>
         )}
         {loading && <Skeleton className="h-8 w-28" />}
@@ -62,33 +69,36 @@ export function CredentialGroup({
       ) : credentials.length ? (
         <ul className="panel divide-y divide-border">
           {credentials.map((credential) => (
-            <li key={credential.id} className="flex items-center gap-4 px-4 py-3.5">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium" title={credential.name}>
-                  {credential.name}
-                </p>
-                <p
-                  className="mt-1 truncate text-xs text-muted-foreground"
-                  title={credential.endpoint}
-                >
-                  {credentialProvider(credential)} · {credentialAccess(credential)}
-                  {credential.endpoint && <> · {credential.endpoint}</>}
-                  {credential.maxSandboxes && <> · Up to {credential.maxSandboxes} at once</>}
-                  {credential.maxBuilds && <> · Up to {credential.maxBuilds} builds at once</>}
-                  {credential.resourceLimits && (
-                    <> · {resourceSummary(credential.resourceLimits)}</>
-                  )}
-                  {credential.models?.length && <> · {credential.models.join(", ")}</>}
-                </p>
+            <li key={credential.id}>
+              <div className="flex items-center gap-4 px-4 py-3.5">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium" title={credential.name}>
+                    {credential.name}
+                  </p>
+                  <p
+                    className="mt-1 truncate text-xs text-muted-foreground"
+                    title={credential.endpoint}
+                  >
+                    {credentialProvider(credential)} · {credentialAccess(credential)}
+                    {credential.endpoint && <> · {credential.endpoint}</>}
+                    {credential.maxSandboxes && <> · Up to {credential.maxSandboxes} at once</>}
+                    {credential.maxBuilds && <> · Up to {credential.maxBuilds} builds at once</>}
+                    {credential.resourceLimits && (
+                      <> · {resourceSummary(credential.resourceLimits)}</>
+                    )}
+                    {credential.models?.length && <> · {credential.models.join(", ")}</>}
+                  </p>
+                </div>
+                {canManage && (
+                  <CredentialActions
+                    name={credential.name}
+                    {...(onEdit ? { onEdit: () => onEdit(credential) } : {})}
+                    {...(onReplace ? { onReplace: () => onReplace(credential) } : {})}
+                    onDelete={() => onDelete(credential)}
+                  />
+                )}
               </div>
-              {canManage && (
-                <CredentialActions
-                  name={credential.name}
-                  {...(onEdit ? { onEdit: () => onEdit(credential) } : {})}
-                  onReplace={() => onReplace(credential)}
-                  onDelete={() => onDelete(credential)}
-                />
-              )}
+              {detail?.(credential)}
             </li>
           ))}
         </ul>

@@ -5,6 +5,7 @@ import type { Vault } from "../db/vault.js";
 import { gatewayModelPrice, listedModelConfig, servedModelCost } from "../gateways/catalog.js";
 import { platformModelKey } from "../generation/billing/managed.js";
 import { reportError } from "../lib/telemetry/sentry.js";
+import { dariLinkApp } from "./dari-link/link.js";
 import { gatewayRoute } from "./mount.js";
 import { withManagedModel } from "./platform.js";
 import { createGatewayUsageStore } from "./usage-store.js";
@@ -29,6 +30,7 @@ export function selfBenchGateway(
     modelPrice: gatewayModelPrice,
     servedModelCost,
     endpoint: (endpoint) => validateEndpoint(endpoint, env),
+    dariLink: dariLinkApp(env),
     recordUsage: (entry) => {
       usage.record(entry).catch((error) => reportError(error, { tags: { route: "gateway" } }));
     },

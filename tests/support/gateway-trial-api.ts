@@ -30,14 +30,12 @@ export const ORG = 1;
 export const SECRET = "s".repeat(40);
 const VAULT_KEY = "a".repeat(64);
 
-/** Each credential the trials run on: its kind, sign-in, and a real catalog model it serves. */
+/** Each credential the trials run on: its kind, auth, and a real catalog model it serves. */
 export const CREDENTIALS = {
   openai: { kind: "openai", auth: "api-key", model: "openai/gpt-6-luna" },
   anthropic: { kind: "anthropic", auth: "api-key", model: "anthropic/claude-sonnet-5-5" },
   openrouter: { kind: "openrouter", auth: "api-key", model: "openrouter/openai/gpt-4o-mini" },
   meta: { kind: "meta", auth: "api-key", model: "meta/muse-spark-1.3" },
-  "codex-login": { kind: "openai", auth: "codex-login", model: "openai/gpt-6-luna" },
-  "claude-login": { kind: "anthropic", auth: "claude-login", model: "anthropic/claude-sonnet-5-5" },
 } as const;
 export type Credential = keyof typeof CREDENTIALS;
 
@@ -133,7 +131,6 @@ export async function startTrialApi(
         return info && name ? ({ ...info, endpoint: upstream.base[name] } as CredentialInfo) : info;
       },
       secret: (orgId, id) => vault.secret(orgId, id),
-      renew: (orgId, id, value) => vault.renew(orgId, id, value),
     },
     endpoint: (endpoint) => endpoint,
     modelConfig,

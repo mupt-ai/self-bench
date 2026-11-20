@@ -99,8 +99,21 @@ test("a judge reaches any model of its credential's provider through the gateway
   // only its own CLI.
   for (const credential of [key("custom"), key("dari"), key("anthropic", "claude-login")])
     expect(judgeCredentialRefusal(credential)).toBe(
-      "The judge credential must be an API key for a model provider or a gateway",
+      "The judge credential must be a Dari connection, or an API key for a model provider or a gateway",
     );
+  // A Dari connection judges when it serves any app a model: a ChatGPT plan's, or a gateway key's.
+  const link = (linkModels: object) =>
+    ({ kind: "dari-link", auth: "dari-link", linkModels }) as never;
+  expect(
+    judgeCredentialRefusal(link({ models: [{ id: "openai/gpt-5.5" }], prefixes: [] })),
+  ).toBeUndefined();
+  expect(judgeCredentialRefusal(link({ models: [], prefixes: ["openrouter/"] }))).toBeUndefined();
+  // A Claude plan alone serves only Claude Code, which no judge is.
+  expect(
+    judgeCredentialRefusal(
+      link({ models: [{ id: "anthropic/claude-sonnet-5-5", only: "claude-code" }], prefixes: [] }),
+    ),
+  ).toBe("The judge's Dari connection serves no model outside Claude Code or Muse Code");
 });
 
 test("a trial gives the judge its key without touching the solver's own", () => {
@@ -177,15 +190,25 @@ test("a trial names its judge credential for the gateway, and never reads its ke
   const execution = await credentialExecution(input, "/home", { PATH: "/bin" }, vault);
   expect(execution.judge).toEqual({ credentialId: judgeKey.id, provider: "anthropic" });
   expect(JSON.stringify(execution)).not.toContain("judge-secret");
-  const signIn = await vault.credentials.create(
+});
+
+test("a Dari connection judges through the gateway, which forwards its calls to Dari", async () => {
+  const vault = memoryVault();
+  const grant = { grantId: "grant-1", plans: [], models: [{ id: "openai/gpt-5.5" }] };
+  const link = await vault.credentials.create(
     1,
-    { name: "Claude", kind: "anthropic", auth: "claude-login", value: "sk-ant-oat01-token" },
+    {
+      name: "Dari",
+      kind: "dari-link",
+      auth: "dari-link",
+      value: JSON.stringify({ refreshToken: "dlk_rt_judge", grant }),
+    },
     {},
   );
-  const refused = await credentialedInput(vault, (draft) => {
-    if (draft.credentials) draft.credentials.judgeCredentialId = signIn.id;
+  const input = await credentialedInput(vault, (draft) => {
+    if (draft.credentials) draft.credentials.judgeCredentialId = link.id;
   });
-  await expect(credentialExecution(refused, "/home", {}, vault)).rejects.toThrow(
-    "Judge credential unavailable",
-  );
+  const execution = await credentialExecution(input, "/home", { PATH: "/bin" }, vault);
+  expect(execution.judge).toEqual({ credentialId: link.id, provider: "dari-link" });
+  expect(JSON.stringify(execution)).not.toContain("dlk_rt_judge");
 });
