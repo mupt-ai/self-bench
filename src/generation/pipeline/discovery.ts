@@ -10,10 +10,14 @@ import {
 } from "../../contracts/index.js";
 import type { SandboxExecutor } from "../../sandbox/index.js";
 import type { SandboxJobOutcome } from "../../sandbox/jobs.js";
-import { assertProvenanceMatchesPullRequest } from "../../third_party/github/provenance.js";
+import {
+  assertProvenanceMatchesPullRequest,
+  type ProvenanceMessage,
+} from "../../third_party/github/provenance.js";
 import { assertPullRequestBelongsToRepository } from "../../third_party/github/repository.js";
-import { difficultyThresholds } from "../task/audit.js";
+import { tierSummary } from "../task/audit.js";
 import { finishAgent, startAgent } from "./agent.js";
+import { featureCandidates, featureDiscoveryPrompt, featureRun } from "./feature-discovery.js";
 import { parseProvenance, readAsset } from "./helpers.js";
 import { renderPrompt } from "./prompts.js";
 import type { SandboxCallback } from "./sandbox-job.js";
@@ -56,15 +60,14 @@ export interface FinishDiscoveryShardInput extends DiscoveryShardInput {
 /** The discovery agent's instructions for one shard, with the requester's focus when set. */
 export function discoveryPrompt(input: DiscoveryShardInput, count: number): string {
   const { run } = input;
+  if (featureRun(run)) return featureDiscoveryPrompt(input, count);
   return renderPrompt("discovery", {
     repositoryUrl: run.repository.url,
     easy: input.targetCounts.easy,
     medium: input.targetCounts.medium,
     hard: input.targetCounts.hard,
     count,
-    tiers: Object.entries(difficultyThresholds)
-      .map(([tier, t]) => `${tier} ≥${t.changedLines} lines across ≥${t.implementationFiles} files`)
-      .join(", "),
+    tiers: tierSummary(),
     inspect: run.focus
       ? "Shortlist PRs matching the focus below from their titles and bodies (jq over /work/provenance.jsonl), then inspect only the shortlist's diffs with gh and git."
       : "Inspect each PR's diff with gh and git.",
@@ -115,7 +118,7 @@ export async function startDiscoveryShard(
     logName: LOG,
     workspace: { kind: "clone", commit: run.repository.commit },
     extension: "/work/discovery.ts",
-    tools: "read,bash,grep,find,ls,submit_discovery",
+    tools: `read,bash,grep,find,ls,${featureRun(run) ? "submit_features" : "submit_discovery"}`,
     prompt: discoveryPrompt(input, shard.length),
     files: [
       {
@@ -146,11 +149,29 @@ export async function finishDiscoveryShard(
   sandbox: SandboxExecutor,
   input: FinishDiscoveryShardInput,
 ): Promise<DiscoveryResult> {
-  const { run, wave, shardIndex } = input;
+  const { run } = input;
   const result = await finishAgent(store, sandbox, input.outcome, LOG);
   const shard = await shardProvenance(store, input);
   const prefix = input.outcome.prefix;
-  const plan = planSchema.parse(result.inline[OUTPUT]);
+  const candidates = featureRun(run)
+    ? await featureCandidates(store, input, shard, result.inline[OUTPUT])
+    : await pullRequestCandidates(store, input, shard, result.inline[OUTPUT]);
+  const report = await store.put(
+    `${prefix}/report.json`,
+    Buffer.from(`${JSON.stringify({ candidates, logs: result.log }, null, 2)}\n`),
+    "application/json",
+  );
+  return { candidates, report };
+}
+
+async function pullRequestCandidates(
+  store: ArtifactStore,
+  input: DiscoveryShardInput,
+  shard: readonly ProvenanceMessage[],
+  output: unknown,
+): Promise<PullRequestCandidate[]> {
+  const { run, wave, shardIndex } = input;
+  const plan = planSchema.parse(output);
   const excluded = new Set(input.excludedSourcePrs);
   const seen = new Set<number>();
   const candidates: PullRequestCandidate[] = [];
@@ -192,10 +213,5 @@ export async function finishDiscoveryShard(
       }),
     );
   }
-  const report = await store.put(
-    `${prefix}/report.json`,
-    Buffer.from(`${JSON.stringify({ candidates, logs: result.log }, null, 2)}\n`),
-    "application/json",
-  );
-  return { candidates, report };
+  return candidates;
 }

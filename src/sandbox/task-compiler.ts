@@ -1,6 +1,10 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { PullRequestCandidate, ScenarioCandidate } from "../contracts/index.js";
+import type {
+  FeatureCandidate,
+  PullRequestCandidate,
+  ScenarioCandidate,
+} from "../contracts/index.js";
 import { compileHarborTask } from "../generation/task/compiler.js";
 import { pinBaseImages } from "../generation/task/dockerfile.js";
 import type { RegistryOptions } from "../generation/task/image-registry.js";
@@ -39,7 +43,10 @@ export type CompileCandidate =
   | (Pick<PullRequestCandidate, "sourcePr" | "baseCommit" | "difficulty"> & {
       readonly kind?: "pull_request";
     })
-  | Pick<ScenarioCandidate, "kind" | "title" | "difficulty" | "baseCommit">;
+  | Pick<ScenarioCandidate, "kind" | "title" | "difficulty" | "baseCommit">
+  | (Pick<FeatureCandidate, "kind" | "title" | "difficulty" | "baseCommit"> & {
+      readonly sourcePrs: readonly number[];
+    });
 
 export interface SubmissionCompileInput {
   readonly repositoryUrl: string;
@@ -75,7 +82,7 @@ export async function compileSubmission(
   const check = checkSubmission(
     submission,
     candidate.difficulty,
-    scenario ? "scenario" : "pull_request",
+    candidate.kind === "scenario" || candidate.kind === "feature" ? candidate.kind : "pull_request",
   );
   const workspace = join(input.directory, WORKSPACE_DIRECTORY);
   const errors = [
@@ -114,7 +121,9 @@ export async function compileSubmission(
           repo,
           ...(candidate.kind === "scenario"
             ? { scenario: { title: candidate.title, baseCommit } }
-            : { baseCommit, sourcePr: candidate.sourcePr }),
+            : candidate.kind === "feature"
+              ? { baseCommit, feature: { title: candidate.title, sourcePrs: candidate.sourcePrs } }
+              : { baseCommit, sourcePr: candidate.sourcePr }),
         };
         await services
           .cloneRepository(input.repositoryUrl, baseCommit, repository, input.token, input.signal)

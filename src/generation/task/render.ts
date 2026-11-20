@@ -4,8 +4,9 @@ import { LIVE_APT_SOURCES } from "./live-apt.js";
 
 /**
  * A compiled task besides its files: its candidate's identity, and its tier (audit.ts). A pull
- * request's task names its base commit and PR; a workspace scenario's, the workspace commit its
- * snapshot is; a repository scenario's, the repository commit it starts from.
+ * request's task names its base commit and PR; a feature's, its base commit and every PR it was
+ * built from; a workspace scenario's, the workspace commit its snapshot is; a repository
+ * scenario's, the repository commit it starts from.
  */
 export type TaskIdentity = {
   readonly taskId: string;
@@ -13,6 +14,10 @@ export type TaskIdentity = {
   readonly repo: string;
 } & (
   | { readonly baseCommit: string; readonly sourcePr: number }
+  | {
+      readonly baseCommit: string;
+      readonly feature: { readonly title: string; readonly sourcePrs: readonly number[] };
+    }
   | {
       readonly scenario: { readonly title: string } & (
         | { readonly workspaceCommit: string }
@@ -53,8 +58,34 @@ function tomlString(value: string): string {
   return JSON.stringify(value);
 }
 
-function tomlValue(value: string | number): string {
+function tomlValue(value: string | number | readonly number[]): string {
+  if (Array.isArray(value)) return `[${value.join(", ")}]`;
   return typeof value === "string" ? tomlString(value) : String(value);
+}
+
+/** What the task was built from, as its metadata records it. */
+function sourceMetadata(task: TaskIdentity) {
+  if ("scenario" in task) return scenarioMetadata(task.scenario);
+  if ("feature" in task)
+    return {
+      source: "feature",
+      feature_title: task.feature.title,
+      base_commit: task.baseCommit,
+      source_prs: task.feature.sourcePrs,
+    };
+  return { base_commit: task.baseCommit, source_pr: task.sourcePr };
+}
+
+function taskDescription(task: TaskIdentity): string {
+  if ("scenario" in task) return `Handle the scenario: ${task.scenario.title}`;
+  if ("feature" in task) return `Build the feature: ${task.feature.title}`;
+  return `Reproduce ${task.taskId} from its authentic engineer request.`;
+}
+
+function taskKeywords(task: TaskIdentity): string[] {
+  if ("scenario" in task) return ["scenario", "selfbench"];
+  if ("feature" in task) return ["software-engineering", "feature", "private-swe", "selfbench"];
+  return ["software-engineering", "private-swe", "selfbench"];
 }
 
 export function taskToml(task: TaskIdentity): string {
@@ -62,9 +93,7 @@ export function taskToml(task: TaskIdentity): string {
     selfbench_task_id: task.taskId,
     difficulty: task.difficulty,
     repo: task.repo,
-    ...("scenario" in task
-      ? scenarioMetadata(task.scenario)
-      : { base_commit: task.baseCommit, source_pr: task.sourcePr }),
+    ...sourceMetadata(task),
     compiler_revision: COMPILER_REVISION,
   };
   const limits = [
@@ -80,8 +109,8 @@ export function taskToml(task: TaskIdentity): string {
     "[task]",
     `name = ${tomlString(`selfbench/${task.taskId}`)}`,
     'version = "1.0.0"',
-    `description = ${tomlString("scenario" in task ? `Handle the scenario: ${task.scenario.title}` : `Reproduce ${task.taskId} from its authentic engineer request.`)}`,
-    `keywords = [${("scenario" in task ? ["scenario", "selfbench"] : ["software-engineering", "private-swe", "selfbench"]).map(tomlString).join(", ")}, ${tomlString(task.difficulty)}]`,
+    `description = ${tomlString(taskDescription(task))}`,
+    `keywords = [${taskKeywords(task).map(tomlString).join(", ")}, ${tomlString(task.difficulty)}]`,
     "",
     "[metadata]",
     ...Object.entries(metadata).map(([key, value]) => `${key} = ${tomlValue(value)}`),

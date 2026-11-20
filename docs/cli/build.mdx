@@ -17,6 +17,7 @@ A task is built into a [benchmark](/cli/overview#benchmarks): a **repo benchmark
 | `custom show\|delete NAME` · `custom update NAME --agent-minutes N` | Read, delete, or set its agent time |
 | `pr list R [--page N]` | Merged pull requests a batch can draw on |
 | `batch create R --easy N --medium N --hard N [--focus TEXT]` | Pick merged PRs and write a task from each |
+| `batch create R --features --hard N [--focus FEATURE]` | Find features built over several merged PRs, or the one `--focus` describes, and write an end-to-end task from each |
 | `batch list R` · `batch show\|cancel BATCH R` | Follow or stop batches |
 | `task create R --pr NUMBER\|URL` | A task from one merged PR |
 | `task create B --title TEXT --description TEXT` | A custom task, written from your description |
@@ -47,6 +48,13 @@ Starts a batch that picks merged PRs and writes one task from each, in three dif
 self-bench batch create --repo acme/app --easy 2 --medium 4 --hard 2 --focus "billing and invoices"
 # Started batch 6f1c2e9a.
 self-bench batch show 6f1c2e9a --repo acme/app
+```
+
+With `--features`, each task is a whole feature built over several merged PRs, graded by end-to-end tests ([Feature Tasks](/concepts/how-it-works#feature-tasks)). Without `--focus`, discovery finds features among recent PRs; with it, `--focus` describes the feature to find, and discovery searches the repository's whole history for its PRs.
+
+```bash
+self-bench batch create --repo acme/app --features --hard 3
+self-bench batch create --repo acme/app --features --hard 1 --focus "saved searches: save, list, and rerun a search"
 ```
 
 Its tasks appear in `task list` as they finish, in `needs_review`. See [How It Works](/concepts/how-it-works) for what makes a task valid.

@@ -100,8 +100,12 @@ export function createBatchActivities(options: {
             runId,
             candidateId: candidate.candidateId,
             taskId: candidate.candidateId,
-            sourcePr: candidate.sourcePr,
-            sourceUrl: candidate.sourceUrl,
+            ...(candidate.kind === "feature"
+              ? {
+                  title: candidate.title,
+                  sourcePrs: candidate.pullRequests.map((pr) => pr.number),
+                }
+              : { sourcePr: candidate.sourcePr, sourceUrl: candidate.sourceUrl }),
             baseCommit: candidate.baseCommit,
             difficulty: candidate.difficulty,
             stage: "queued",

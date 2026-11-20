@@ -5,9 +5,12 @@ import {
   MAX_CANDIDATES_PER_RUN,
   MAX_FOCUS_LENGTH,
 } from "../../../src/contracts/config/execution-limits";
+import { FEATURE_TIER_PRS } from "../../../src/contracts/feature-tiers";
+import { BatchUnitPicker } from "./BatchUnitPicker";
 import {
   type BatchRepoId,
   BatchRequestError,
+  type BatchUnit,
   type CandidateCounts,
   startBatch,
   validCandidateCounts,
@@ -45,6 +48,9 @@ export interface GenerateBatchProps {
   onStarted?: (runId: string, warning?: string) => void;
 }
 
+const TOTAL = `1–${MAX_CANDIDATES_PER_RUN} candidates total.`;
+const FEATURE_TIERS = `A feature's tier is how many PRs built it: easy ${FEATURE_TIER_PRS.easy}, medium ${FEATURE_TIER_PRS.medium}, hard ${FEATURE_TIER_PRS.hard}.`;
+
 /** One dialog: candidate counts and generation settings, submitted together. */
 export function GenerateBatch({
   repoId,
@@ -62,6 +68,8 @@ export function GenerateBatch({
   const { org, fullName } = repoId;
   const focusKey = `selfbench-batch-focus:${org}:${fullName}`;
   const [focus, setFocus] = React.useState(() => storedFocus(focusKey));
+  const [unit, setUnit] = React.useState<BatchUnit>("feature");
+  const features = unit === "feature";
   const {
     settings,
     setSettings,
@@ -81,7 +89,7 @@ export function GenerateBatch({
     setError(undefined);
     try {
       rememberFocus(focusKey, focus);
-      const result = await startBatch({ org, fullName }, counts, settings, focus);
+      const result = await startBatch({ org, fullName }, counts, settings, focus, unit);
       setOpen(false);
       onStarted?.(result.runId);
     } catch (cause) {
@@ -141,10 +149,11 @@ export function GenerateBatch({
             }}
           >
             <div className="px-4 pt-6 pb-6 sm:px-6">
+              <BatchUnitPicker unit={unit} disabled={busy} onChange={setUnit} />
               <fieldset className="m-0 min-w-0 border-0 p-0" aria-label="Candidates">
                 <legend className="mb-4 flex items-center gap-1.5 text-sm font-medium">
                   Candidates
-                  <InfoTooltip label={`1–${MAX_CANDIDATES_PER_RUN} candidates total.`} />
+                  <InfoTooltip label={features ? `${TOTAL} ${FEATURE_TIERS}` : TOTAL} />
                 </legend>
                 <div className="grid grid-cols-3 gap-3">
                   {(
@@ -179,15 +188,25 @@ export function GenerateBatch({
               </fieldset>
               <label htmlFor="batch-focus" className={cn(fieldStyles, "mt-8")}>
                 <span className="flex items-center gap-1.5">
-                  Focus
-                  <InfoTooltip label="Optional. Describe the PRs discovery should pick. With a focus, it searches further back and may return fewer candidates." />
+                  {features ? "Feature" : "Focus"}
+                  <InfoTooltip
+                    label={
+                      features
+                        ? "Optional. Describe the feature you want a task for; discovery searches the repository's whole history for the PRs that built it. Leave blank to have it find features in recent PRs."
+                        : "Optional. Describe the PRs discovery should pick. With a focus, it searches further back and may return fewer candidates."
+                    }
+                  />
                 </span>
                 <textarea
                   id="batch-focus"
-                  aria-label="Focus"
+                  aria-label={features ? "Feature" : "Focus"}
                   rows={3}
                   maxLength={MAX_FOCUS_LENGTH}
-                  placeholder="Complex Next.js features: App Router, server actions, middleware, caching"
+                  placeholder={
+                    features
+                      ? "Session replay network recording: capturing requests, filtering, and showing them in the player"
+                      : "Complex Next.js features: App Router, server actions, middleware, caching"
+                  }
                   className={cn(controlStyles, "h-auto resize-y py-2")}
                   value={focus}
                   disabled={busy}

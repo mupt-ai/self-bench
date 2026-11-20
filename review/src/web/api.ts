@@ -136,8 +136,10 @@ export interface TaskItem {
   reason?: string;
   sourcePr?: number;
   sourceUrl?: string;
-  /** A scenario task's title; scenario tasks have no PR. */
+  /** A scenario's or a feature's title; neither has a single PR. */
   title?: string;
+  /** A feature's merged pull requests, in merge order. */
+  sourcePrs?: readonly number[];
   review?: TaskReview;
   syncedAt: string;
   round?: number;

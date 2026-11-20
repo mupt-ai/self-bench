@@ -8,8 +8,8 @@ import { artifactFile } from "./helpers.js";
 
 export interface ExportInput {
   readonly run: RunRequest;
-  /** Each accepted task, with the pull request its candidate came from. */
-  readonly tasks: readonly { readonly task: AuthoredTask; readonly sourcePr: number }[];
+  /** Each accepted task, with the pull request its candidate came from (none for a feature). */
+  readonly tasks: readonly { readonly task: AuthoredTask; readonly sourcePr?: number }[];
 }
 
 const EXPORT_UPLOAD_TTL_MS = 60 * 60_000;
@@ -21,7 +21,11 @@ export async function buildExport(
   attempt: string | number = Context.current().info.attempt,
 ): Promise<ArtifactRef> {
   const { kept, dropped } = dedupeBySourcePr(
-    input.tasks.map(({ task, sourcePr }) => ({ task, taskId: task.taskId, sourcePr })),
+    input.tasks.map(({ task, sourcePr }) => ({
+      task,
+      taskId: task.taskId,
+      ...(sourcePr === undefined ? {} : { sourcePr }),
+    })),
   );
   const files: SandboxFile[] = [];
   // The sandbox pulls each bundle itself; buffering them all would hold GBs in the worker.

@@ -2,9 +2,9 @@ import {
   type ArtifactRef,
   type CandidateWorkflowInput,
   type CandidateWorkflowResult,
+  candidatePullRequests,
   candidateWorkflowId,
   type DiscoveryResult,
-  type PullRequestCandidate,
 } from "../../contracts/index.js";
 import { type GenerationBatch, isFinished, settled } from "./types.js";
 
@@ -65,8 +65,9 @@ export function recordShard(
 
 /**
  * Shards take turns by rank, newest PR window first, so no one window fills a tier. The first
- * claim on a PR wins, no candidate is dispatched twice, and no tier gets more than requested. The
- * plan commits before any author workflow starts.
+ * claim on a PR wins (a feature claims all of its PRs, and loses if any is taken), no candidate is
+ * dispatched twice, and no tier gets more than requested. The plan commits before any author
+ * workflow starts.
  */
 export function planCandidates(batch: GenerationBatch): boolean {
   if (batch.phase === "cancelling") return finishCancel(batch);
@@ -78,8 +79,10 @@ export function planCandidates(batch: GenerationBatch): boolean {
   for (let rank = 0; rank < depth; rank += 1)
     for (const list of lists) {
       const candidate = list[rank];
-      if (!candidate || seen.has(candidate.sourcePr)) continue;
-      seen.add(candidate.sourcePr);
+      if (!candidate) continue;
+      const prs = candidatePullRequests(candidate);
+      if (prs.some((pr) => seen.has(pr))) continue;
+      for (const pr of prs) seen.add(pr);
       if (candidates.some((item) => item.candidate.candidateId === candidate.candidateId))
         return fail(batch, "Duplicate candidate ID across discovery shards");
       const tier = candidates.filter(
@@ -100,7 +103,7 @@ export function planCandidates(batch: GenerationBatch): boolean {
 /** The author workflows a planned batch starts, one per candidate. */
 export function plannedCandidates(
   batch: GenerationBatch,
-): { workflowId: string; input: CandidateWorkflowInput & { candidate: PullRequestCandidate } }[] {
+): { workflowId: string; input: CandidateWorkflowInput & { candidate: Candidate["candidate"] } }[] {
   if (batch.phase !== "authoring") return [];
   return batch.candidates.map((item) => ({
     workflowId: item.workflowId,

@@ -61,7 +61,14 @@ export async function exportBatch(
             run: batch.run,
             tasks: batch.candidates.flatMap((item) =>
               item.result?.task
-                ? [{ task: item.result.task, sourcePr: item.candidate.sourcePr }]
+                ? [
+                    {
+                      task: item.result.task,
+                      ...(item.candidate.kind === "feature"
+                        ? {}
+                        : { sourcePr: item.candidate.sourcePr }),
+                    },
+                  ]
                 : [],
             ),
           },

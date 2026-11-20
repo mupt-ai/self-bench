@@ -108,7 +108,11 @@ export async function prCommand(args: string[]): Promise<void> {
   );
 }
 
-/** `batch create` (once `generate`): a batch that picks merged PRs and turns them into tasks. */
+/**
+ * `batch create` (once `generate`): a batch that picks merged PRs and turns them into tasks, or
+ * with --features, features built over several merged PRs, each tested end to end. With
+ * --features, --focus names the feature to find.
+ */
 async function createBatch(args: string[]): Promise<void> {
   const { values } = parse(args, {
     ...GENERATION,
@@ -116,6 +120,7 @@ async function createBatch(args: string[]): Promise<void> {
     medium: { type: "string" },
     hard: { type: "string" },
     focus: { type: "string" },
+    features: { type: "boolean" },
   });
   const repository = repositoryPath(values);
   const count = (name: string) => Number(flag(values, name) ?? 0);
@@ -126,6 +131,7 @@ async function createBatch(args: string[]): Promise<void> {
   const reply = await requestJson(`${repository}/batches`, "POST", {
     candidateCounts,
     ...(focus ? { focus } : {}),
+    ...(values.features ? { unit: "feature" } : {}),
     ...(await generation(values, repository)),
   });
   print(values, reply, () => `Started batch ${String(reply.runId)}.`);

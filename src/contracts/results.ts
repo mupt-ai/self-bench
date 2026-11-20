@@ -1,6 +1,12 @@
 import type { ArtifactRef, Difficulty } from "./common.js";
 import type { RunRequest } from "./run.js";
-import type { AuthoredTask, AuthoredTaskDraft, Candidate, PullRequestCandidate } from "./task.js";
+import type {
+  AuthoredTask,
+  AuthoredTaskDraft,
+  Candidate,
+  FeatureCandidate,
+  PullRequestCandidate,
+} from "./task.js";
 import type { PipelineStage } from "./verify.js";
 
 type RunPhase =
@@ -119,7 +125,8 @@ export interface CandidateWorkflowResult {
   readonly report?: ArtifactRef;
 }
 
+/** What a discovery shard found: merged PRs, or for a feature batch, features built over several. */
 export interface DiscoveryResult {
-  readonly candidates: readonly PullRequestCandidate[];
+  readonly candidates: readonly (PullRequestCandidate | FeatureCandidate)[];
   readonly report: ArtifactRef;
 }

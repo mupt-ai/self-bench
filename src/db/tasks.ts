@@ -27,8 +27,10 @@ export interface TaskRecord {
   readonly sourcePr?: number;
   readonly sourceUrl?: string;
   readonly baseCommit?: string;
-  /** A scenario's title (scenario tasks have no PR). */
+  /** A scenario's or a feature's title (neither has a single PR). */
   readonly title?: string;
+  /** A feature's merged pull requests, in merge order. */
+  readonly sourcePrs?: readonly number[];
   readonly difficulty: "easy" | "medium" | "hard";
   readonly pipelineStatus: PipelineStatus;
   readonly stage: string;
@@ -158,6 +160,7 @@ export function createTaskStore(db: Database, options: { now?: () => Date } = {}
           sourceUrl: row.sourceUrl ?? null,
           baseCommit: row.baseCommit ?? null,
           title: row.title ?? null,
+          sourcePrs: row.sourcePrs ? [...row.sourcePrs] : null,
           difficulty: row.difficulty,
           pipelineStatus: "in_progress",
           stage: row.stage,

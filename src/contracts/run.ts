@@ -40,6 +40,8 @@ const runVersionSchema = z
     },
   );
 
+const TASK_UNITS = ["pull_request", "feature"] as const;
+
 const runIdSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{2,62}$/);
 
 const authoringSchema = z.object({
@@ -61,11 +63,17 @@ export const runRequestSchema = z.object({
   provenance: artifactRefSchema,
   candidateCounts: candidateCountsSchema,
   excludeRuns: excludeRunsSchema.optional(),
-  /** The requester's description of which PRs discovery should pick. */
+  /** The requester's description of which PRs (or, for features, which feature) to pick. */
   focus: z.string().trim().min(1).max(MAX_FOCUS_LENGTH).optional(),
+  /**
+   * What discovery turns into one task: a merged pull request (the default), or a feature built
+   * over several merged pull requests.
+   */
+  unit: z.enum(TASK_UNITS).optional(),
   authoring: authoringSchema,
   generation: generationReferenceSchema.optional(),
   version: runVersionSchema,
 });
 
 export type RunRequest = z.infer<typeof runRequestSchema>;
+export type TaskUnit = (typeof TASK_UNITS)[number];

@@ -3,7 +3,12 @@ import { z } from "zod";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import { buildCommit } from "../../contracts/config/build-metadata.js";
 import type { SelfBenchConfig } from "../../contracts/config/index.js";
-import { commitSchema, type RunRequest, runRequestSchema } from "../../contracts/index.js";
+import {
+  commitSchema,
+  type RunRequest,
+  runRequestSchema,
+  type TaskUnit,
+} from "../../contracts/index.js";
 import type { ConnectedRepo } from "../../db/repos.js";
 import { apiHeaders, GitHubOAuthError } from "../../third_party/github/oauth.js";
 import { buildRunRequest, configureGenerationRun } from "../settings/run.js";
@@ -13,6 +18,7 @@ export const batchSubmissionSchema = z
   .object({
     candidateCounts: runRequestSchema.shape.candidateCounts,
     focus: runRequestSchema.shape.focus,
+    unit: runRequestSchema.shape.unit,
     generation: generationSettingsSchema.optional(),
   })
   .strict();
@@ -28,6 +34,7 @@ export async function prepareBatch(options: {
   githubApiUrl: string;
   candidateCounts: RunRequest["candidateCounts"];
   focus?: string;
+  unit?: TaskUnit;
   fetchImpl?: typeof fetch;
   generation?: GenerationReference;
 }): Promise<RunRequest> {
@@ -58,6 +65,7 @@ export async function prepareBatch(options: {
     selfbenchCommit: buildCommit,
   });
   if (options.focus) run.focus = options.focus;
+  if (options.unit === "feature") run.unit = "feature";
   if (options.generation) configureGenerationRun(run, options.generation, config);
   return run;
 }

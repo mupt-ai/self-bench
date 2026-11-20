@@ -8,10 +8,12 @@ import {
 } from "../../third_party/github/batch-pull-requests.js";
 import {
   discoveryPrsPerShard,
+  FEATURE_PRS_PER_SHARD,
   FOCUSED_PRS_PER_SHARD,
   FOCUSED_SHARD_SURPLUS,
   MAX_FOCUSED_DISCOVERY_SHARDS,
   partitionPullRequests,
+  REQUESTED_FEATURE_INDEX,
   takeNewestShards,
 } from "./shards.js";
 import type { GenerationBatch } from "./types.js";
@@ -34,6 +36,7 @@ export async function prepareGenerationBatch(options: {
   fetchImpl?: (url: string, init: RequestInit) => Promise<Response>;
 }): Promise<GenerationBatch["shards"]> {
   const { run, artifacts } = options;
+  if (run.unit === "feature") return await prepareFeatureBatch(options);
   // One discovery agent can fill a small request from a single PR window. Larger
   // requests widen each window rather than exceeding the workflow shard bound.
   const requested = Object.values(run.candidateCounts).reduce((total, count) => total + count, 0);
@@ -73,6 +76,66 @@ export async function prepareGenerationBatch(options: {
         run.focus
           ? Math.min(count, FOCUSED_SHARD_SURPLUS * Math.ceil(count / selected.length))
           : Math.floor(count / selected.length) + (shardIndex < count % selected.length ? 1 : 0),
+      ]),
+    ) as RunRequest["candidateCounts"];
+  const input = `runs/${run.runId}/input/attempt-${options.attempt}`;
+  return await Promise.all(
+    selected.map(async (chunk, index) => {
+      const provenance = await artifacts.put(
+        `${input}/shard-${index}.jsonl`,
+        Buffer.from(`${chunk.map((message) => JSON.stringify(message)).join("\n")}\n`),
+        "application/x-ndjson",
+      );
+      return {
+        workflowId: `${run.runId}/discovery/${index}`,
+        input: {
+          run: { ...run, provenance },
+          partitioned: true,
+          wave: 0,
+          shardIndex: index,
+          shardCount: selected.length,
+          targetCounts: targetCountsForShard(index),
+          excludedSourcePrs: [],
+        },
+      };
+    }),
+  );
+}
+
+/**
+ * A feature batch's shards. A requested feature (a focus) is one agent's search through the whole
+ * history, starting from an index of recent PRs; otherwise each shard groups the PRs of one wide
+ * window of recent ones into features, so a feature's PRs mostly share a window.
+ */
+async function prepareFeatureBatch(options: {
+  run: RunRequest;
+  token: string;
+  artifacts: ArtifactStore;
+  attempt: number;
+  fetchImpl?: (url: string, init: RequestInit) => Promise<Response>;
+}): Promise<GenerationBatch["shards"]> {
+  const { run, artifacts } = options;
+  const needed = Math.max(1, Math.max(...Object.values(run.candidateCounts)));
+  const shardCount = run.focus ? 1 : Math.min(MAX_DISCOVERY_SHARDS, needed);
+  const prsPerShard = run.focus ? REQUESTED_FEATURE_INDEX : FEATURE_PRS_PER_SHARD;
+  const github = await fetchBatchPullRequests({
+    repositoryUrl: run.repository.url,
+    token: options.token,
+    // Twice the windows, since drafts, bots, and tiny PRs drop out after the fetch.
+    limit: Math.min(
+      MAX_PR_FETCH_LIMIT,
+      Math.max(DEFAULT_PR_FETCH_LIMIT, 2 * shardCount * prsPerShard),
+    ),
+    ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+  });
+  const chunks = partitionPullRequests(github.filter((message) => message.sourcePr !== undefined));
+  if (!chunks.length) throw new NoEligiblePullRequestsError();
+  const selected = takeNewestShards(chunks, shardCount, prsPerShard);
+  const targetCountsForShard = (shardIndex: number): RunRequest["candidateCounts"] =>
+    Object.fromEntries(
+      Object.entries(run.candidateCounts).map(([tier, count]) => [
+        tier,
+        Math.floor(count / selected.length) + (shardIndex < count % selected.length ? 1 : 0),
       ]),
     ) as RunRequest["candidateCounts"];
   const input = `runs/${run.runId}/input/attempt-${options.attempt}`;

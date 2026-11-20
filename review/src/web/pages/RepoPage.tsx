@@ -126,6 +126,8 @@ function RepoTasksPage() {
       (!needle ||
         task.taskId.toLowerCase().includes(needle) ||
         String(task.sourcePr ?? "").includes(needle) ||
+        (task.title ?? "").toLowerCase().includes(needle) ||
+        (task.sourcePrs ?? []).some((pr) => String(pr).includes(needle)) ||
         task.runId.toLowerCase().includes(needle)),
   );
 

@@ -46,8 +46,12 @@ function roundPrefix({ run, candidate, round }: ReviewRoundInput): string {
   return `runs/${run.runId}/review/${candidate.candidateId}/round-${round}`;
 }
 
-/** A PR's brief, a workspace scenario's, or a repository scenario's, which reviews code as a PR's does. */
+/**
+ * A PR's brief, a feature's, a workspace scenario's, or a repository scenario's, which reviews code
+ * as a PR's does.
+ */
 function reviewPrompt(candidate: Candidate): string {
+  if (candidate.kind === "feature") return "feature-review";
   if (candidate.kind !== "scenario") return "review";
   return candidate.baseCommit ? "repository-scenario-review" : "scenario-review";
 }

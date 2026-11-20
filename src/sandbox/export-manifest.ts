@@ -18,15 +18,20 @@ export interface ExportManifest {
 
 /**
  * Keeps the first accepted task per source pull request, in input order, and records every later
- * task that shares one so the manifest can name both task IDs.
+ * task that shares one so the manifest can name both task IDs. A feature's task has no single PR
+ * (planning already gave each feature PRs of its own), so it is always kept.
  */
-export function dedupeBySourcePr<T extends { readonly taskId: string; readonly sourcePr: number }>(
+export function dedupeBySourcePr<T extends { readonly taskId: string; readonly sourcePr?: number }>(
   tasks: readonly T[],
 ): { kept: T[]; dropped: DroppedDuplicate[] } {
   const keptBySourcePr = new Map<number, string>();
   const kept: T[] = [];
   const dropped: DroppedDuplicate[] = [];
   for (const task of tasks) {
+    if (task.sourcePr === undefined) {
+      kept.push(task);
+      continue;
+    }
     const keptTaskId = keptBySourcePr.get(task.sourcePr);
     if (keptTaskId !== undefined) {
       dropped.push({ taskId: task.taskId, sourcePr: task.sourcePr, keptTaskId });

@@ -35,8 +35,10 @@ export interface TaskListItem {
   readonly reason?: string;
   readonly sourcePr?: number;
   readonly sourceUrl?: string;
-  /** A scenario's title; scenario tasks have no sourcePr. */
+  /** A scenario's or a feature's title; neither has a sourcePr. */
   readonly title?: string;
+  /** A feature's merged pull requests, in merge order. */
+  readonly sourcePrs?: readonly number[];
   readonly review?: TaskRecord["review"];
   readonly syncedAt: string;
   readonly round?: number;
@@ -243,6 +245,7 @@ export function taskItem(task: TaskRecord, cost?: GenerationCost): TaskListItem 
     ...(task.sourcePr !== undefined ? { sourcePr: task.sourcePr } : {}),
     ...(task.sourceUrl ? { sourceUrl: task.sourceUrl } : {}),
     ...(task.title ? { title: task.title } : {}),
+    ...(task.sourcePrs?.length ? { sourcePrs: task.sourcePrs } : {}),
     ...(task.review ? { review: task.review } : {}),
     syncedAt: task.syncedAt,
     ...(task.round !== undefined ? { round: task.round } : {}),

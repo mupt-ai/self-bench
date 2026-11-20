@@ -13,6 +13,8 @@ export interface CandidateCounts {
   medium: number;
   hard: number;
 }
+/** What each task is built from: one merged PR, or a feature built over several. */
+export type BatchUnit = "pull_request" | "feature";
 export interface BatchRun {
   runId: string;
   attachedAt: string;
@@ -48,12 +50,14 @@ export const startBatch = (
   candidateCounts: CandidateCounts,
   generation: GenerationSettings,
   focus = "",
+  unit: BatchUnit = "pull_request",
 ) =>
   request<{ runId: string }>(root(repo), {
     method: "POST",
     body: JSON.stringify({
       candidateCounts,
       ...(focus.trim() ? { focus: focus.trim() } : {}),
+      ...(unit === "feature" ? { unit } : {}),
       generation,
     }),
   });
