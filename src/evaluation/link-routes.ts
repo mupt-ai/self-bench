@@ -4,6 +4,7 @@ import {
   type DariLinkOnly,
   linkedModel,
 } from "../gateway/dari-link/connection.js";
+import { catalogModelId, isGateway } from "../gateways/index.js";
 import type { CatalogModel } from "./catalog.js";
 import { type Harness, modelRoutes, openHarnesses, routeFor } from "./models.js";
 
@@ -32,8 +33,11 @@ const linkHarnesses = (id: string, only: DariLinkOnly | undefined): Harness[] =>
   only ? [only] : [...openHarnesses, ...(id.startsWith("meta/") ? (["muse-code"] as const) : [])];
 
 /**
- * A model on a Dari connection: the first of its routes (its vendor's own, then each gateway's)
- * the connection serves by Dari's id, `provider/model`, with that route's levels and prices.
+ * A model on a Dari connection: the first of its routes the connection serves by Dari's id, with
+ * that route's levels and prices. Its vendor's id comes first (`openai/gpt-6-sol`, which a plan or
+ * the vendor's key serves), from its native route or, for a model only gateways list, from each
+ * gateway's id for it, as the gateway spells the vendor and as the catalog does (`meta/` and
+ * `meta-llama/`); then each gateway's own (`openrouter/openai/gpt-6-sol`, a gateway key's).
  */
 function dariLinkRoute(
   model: CatalogModel,
@@ -43,9 +47,20 @@ function dariLinkRoute(
     const served = linkedModel(models, model.model);
     return served ? { ...model, harnesses: linkHarnesses(model.model, served.only) } : undefined;
   }
-  for (const route of modelRoutes(model)) {
-    if (route.provider === "custom" || route.provider === "dari") continue;
-    const id = `${route.provider}/${route.model}`;
+  const routes = modelRoutes(model).filter(
+    (route) => route.provider !== "custom" && route.provider !== "dari",
+  );
+  const candidates = [
+    ...routes.flatMap((route) =>
+      isGateway(route.provider)
+        ? [route.model, catalogModelId(route.provider, route.model)].map((id) => ({ route, id }))
+        : [{ route, id: `${route.provider}/${route.model}` }],
+    ),
+    ...routes
+      .filter((route) => isGateway(route.provider))
+      .map((route) => ({ route, id: `${route.provider}/${route.model}` })),
+  ];
+  for (const { route, id } of candidates) {
     const served = linkedModel(models, id);
     if (served)
       return {
