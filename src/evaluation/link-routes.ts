@@ -27,14 +27,13 @@ export function credentialRoute(
  * Harnesses a model a Dari connection serves runs on: one only a Claude or Muse plan serves, that
  * plan's agent alone (Dari refuses it to any other app); any other, every harness that can call an
  * endpoint, since Dari serves each model in Chat Completions, Responses and Messages alike, and
- * Muse Code too for a model Meta's API serves (`muse`): a catalog model's Meta route says so, and
- * a model only the connection lists is taken at its `meta/` id.
+ * Muse Code too for a Muse model (`meta/muse-…`). Dari and Vercel spell Llama `meta/` as well,
+ * and Muse Code speaks only Meta's Muse API.
  */
-const linkHarnesses = (
-  id: string,
-  only: DariLinkOnly | undefined,
-  muse = id.startsWith("meta/"),
-): Harness[] => (only ? [only] : [...openHarnesses, ...(muse ? (["muse-code"] as const) : [])]);
+const linkHarnesses = (id: string, only: DariLinkOnly | undefined): Harness[] =>
+  only
+    ? [only]
+    : [...openHarnesses, ...(id.startsWith("meta/muse-") ? (["muse-code"] as const) : [])];
 
 /**
  * A model on a Dari connection: the first of its routes the connection serves by Dari's id, with
@@ -71,8 +70,7 @@ function dariLinkRoute(
         ...route,
         provider: "dari-link",
         model: id,
-        // Vercel spells Llama `meta/` too, but only Meta's own route serves Muse Code.
-        harnesses: linkHarnesses(id, served.only, route.harnesses.includes("muse-code")),
+        harnesses: linkHarnesses(id, served.only),
       };
   }
   return undefined;

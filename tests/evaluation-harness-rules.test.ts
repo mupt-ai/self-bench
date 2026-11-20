@@ -68,9 +68,13 @@ test("a Dari connection serves a model only gateways list by its vendor's id", (
     openrouter: "meta-llama/llama-5",
     "vercel-ai-gateway": "meta/llama-5",
   });
+  const muse = listed("meta/muse-spark-2", { "vercel-ai-gateway": "meta/muse-spark-2" });
   const plans = {
     kind: "dari-link" as const,
-    linkModels: { models: [{ id: "openai/gpt-6.2-sol" }, { id: "meta/llama-5" }], prefixes: [] },
+    linkModels: {
+      models: [{ id: "openai/gpt-6.2-sol" }, { id: "meta/llama-5" }, { id: "meta/muse-spark-2" }],
+      prefixes: [],
+    },
   };
   expect(credentialRoute(sol, plans)).toMatchObject({
     provider: "dari-link",
@@ -83,8 +87,9 @@ test("a Dari connection serves a model only gateways list by its vendor's id", (
     model: "meta/llama-5",
     harnesses: [...openHarnesses],
   });
+  expect(credentialRoute(muse, plans)?.harnesses).toEqual([...openHarnesses, "muse-code"]);
   // Served by the catalog's own row, so not offered again as a model of the connection's own.
-  expect(linkedCatalogModels([sol, llama], [plans])).toEqual([]);
+  expect(linkedCatalogModels([sol, llama, muse], [plans])).toEqual([]);
   // A gateway key still serves it by the gateway's id.
   const key = { kind: "dari-link" as const, linkModels: { models: [], prefixes: ["openrouter/"] } };
   expect(credentialRoute(sol, key)?.model).toBe("openrouter/openai/gpt-6.2-sol");
