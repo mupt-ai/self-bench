@@ -12,6 +12,12 @@ export interface E2BCredentials {
   readonly domain?: string;
 }
 
+export interface DaytonaCredentials {
+  readonly apiKey: string;
+  readonly apiUrl?: string;
+  readonly target?: string;
+}
+
 export function vercelCredentials(environment: NodeJS.ProcessEnv): VercelCredentials {
   const token = environment.VERCEL_TOKEN?.trim();
   const teamId = environment.VERCEL_TEAM_ID?.trim();
@@ -29,4 +35,14 @@ export function e2bCredentials(environment: NodeJS.ProcessEnv): E2BCredentials {
   }
   const domain = normalizeE2BDomain(environment.E2B_DOMAIN);
   return { apiKey, ...(domain ? { domain } : {}) };
+}
+
+export function daytonaCredentials(environment: NodeJS.ProcessEnv): DaytonaCredentials {
+  const apiKey = environment.DAYTONA_API_KEY?.trim();
+  if (!apiKey) {
+    fail("DAYTONA_API_KEY is required for Daytona execution");
+  }
+  const apiUrl = environment.DAYTONA_API_URL?.trim();
+  const target = environment.DAYTONA_TARGET?.trim();
+  return { apiKey, ...(apiUrl ? { apiUrl } : {}), ...(target ? { target } : {}) };
 }

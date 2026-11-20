@@ -71,14 +71,14 @@ export function Status({ coverage }: { coverage: ReturnType<typeof setupCoverage
       ready: covered(coverage.generate),
       missing: !coverage.generate.model
         ? "Needs a model that can write tasks, such as a ChatGPT plan or an API key connected with Dari. Claude and Muse plans only run evaluations."
-        : "Needs a Modal, E2B, or Vercel sandbox.",
+        : "Needs a Modal, E2B, Daytona, or Vercel sandbox.",
     },
     {
       label: "Run Evaluations",
       ready: covered(coverage.evaluate),
       missing: !coverage.evaluate.model
         ? "Needs a plan or an API key, connected with Dari."
-        : "Needs a Modal, E2B, or Daytona sandbox.",
+        : "Needs a Modal, E2B, Daytona, or Vercel sandbox.",
     },
   ];
   return (

@@ -137,6 +137,44 @@ test("durable comparison, scoped credentials, frozen tasks, partial dispatch and
   }
 });
 
+test("a Vercel evaluation hands its trials the whole Vercel credential", async () => {
+  const records = memoryVault();
+  const fixture = await evaluationServer(records);
+  const home = await mkdtemp(join(tmpdir(), "vercel-execution-"));
+  try {
+    const create = async (value: Record<string, string>) =>
+      (await (await fixture.request(credentialsUrl, post(value))).json()).id as string;
+    const modelKey = await create({ name: "Model", kind: "openai", value: "model-secret" });
+    const vercel = await create({
+      name: "Vercel",
+      kind: "vercel",
+      value: "vercel-token",
+      teamId: "team_eval",
+      projectId: "prj_eval",
+    });
+    const draft: ComparisonDraft = {
+      id: crypto.randomUUID(),
+      tasks: [{ runId: "run-one", taskId: "task-one" }],
+      models: [{ catalogId: "gpt-6-sol", credentialId: modelKey, harnesses: ["codex"] }],
+      sandbox: "vercel",
+      sandboxCredentialId: vercel,
+    };
+    expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);
+    const input = fixture.starts[0];
+    if (!input) throw new Error("Missing input");
+    expect(input.sandbox).toBe("vercel");
+    const execution = await credentialExecution(input, home, { PATH: "/bin" }, records, "codex");
+    expect(execution.child).toMatchObject({
+      VERCEL_TOKEN: "vercel-token",
+      VERCEL_TEAM_ID: "team_eval",
+      VERCEL_PROJECT_ID: "prj_eval",
+    });
+  } finally {
+    await fixture.close();
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
 test("credential validation rejects auth mixing and unsafe custom endpoints", async () => {
   expect(
     credentialSchema.safeParse({

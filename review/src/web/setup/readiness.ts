@@ -16,9 +16,8 @@ type Credential = Pick<CredentialInfo, "kind" | "auth" | "linkModels">;
 /**
  * What an organization's credentials let it run, by the same rules the generation and
  * evaluation forms apply. Generation runs Pi, so a Dari connection generates with any model it
- * serves for any app (a Claude or Muse plan's models run only their own agent, and do not count);
- * its sandboxes are Modal, Vercel, or E2B. Evaluation runs any model credential on E2B, Modal, or
- * Daytona. Managed access, where offered, covers either half.
+ * serves for any app (a Claude or Muse plan's models run only their own agent, and do not count).
+ * Both run on any hosted sandbox. Managed access, where offered, covers either half.
  */
 export function setupCoverage(
   credentials: readonly Credential[],

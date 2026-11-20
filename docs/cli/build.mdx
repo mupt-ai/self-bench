@@ -81,6 +81,6 @@ Follow it with `task list`, or send it notes while it is written with [`feedback
 | `--model ID` · `--verifier-model ID` | The model that writes tasks, and the one that checks them. Default: `gpt-6.1-sol` for both |
 | `--reasoning LEVEL` | Their reasoning level. Default: `high` |
 | `--model-credential ID` | A saved model credential, in place of the managed model |
-| `--sandbox KIND` · `--sandbox-credential ID` | Where tasks are built and checked. Default: `managed` |
-| `--harbor ENV` · `--harbor-credential ID` | The Harbor environment that checks tasks, and its credential |
+| `--sandbox KIND` · `--sandbox-credential ID` | Where tasks are built and checked: `managed`, `modal`, `e2b`, `daytona`, or `vercel` (which also needs a `sandboxImage`, so pass it in `--generation`). Default: `managed` |
+| `--harbor ENV` · `--harbor-credential ID` | The Harbor environment that checks tasks (`modal`, `e2b`, `daytona`, or `vercel`), and its credential |
 | `--generation JSON\|@FILE` | The whole [`generation`](/api/overview#conventions) object, in place of the flags |

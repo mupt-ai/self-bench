@@ -30,7 +30,7 @@ const grantSchema = z.object({
     rates: z
       .object({
         model: z.string().optional(),
-        sandboxProvider: z.enum(["docker", "e2b", "modal", "vercel"]).optional(),
+        sandboxProvider: z.enum(["docker", "e2b", "modal", "vercel", "daytona"]).optional(),
       })
       .optional(),
   }),

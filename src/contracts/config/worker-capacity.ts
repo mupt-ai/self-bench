@@ -6,6 +6,7 @@ const DEFAULT_ACTIVITY_CONCURRENCY = {
   modal: 20,
   vercel: 4,
   e2b: 4,
+  daytona: 4,
 } as const satisfies Record<ExecutionBackend, number>;
 
 export function defaultActivityConcurrency(backend: ExecutionBackend): number {

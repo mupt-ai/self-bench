@@ -1,6 +1,6 @@
 import React from "react";
 import type { CredentialInfo } from "../../../../src/db/credentials";
-import type { CatalogModel, HostedSandbox } from "../../../../src/evaluation/catalog";
+import { type CatalogModel, hostedSandboxes } from "../../../../src/evaluation/catalog";
 import { Notice, PageContent, PageHeader } from "../ui";
 import { type RunDraft, RunExecution } from "./RunExecution";
 import { RunModelTable } from "./RunModelTable";
@@ -45,7 +45,7 @@ const models: CatalogModel[] = [
     thinking: ["low", "high", "max"],
   },
 ];
-const sandboxes: HostedSandbox[] = ["e2b", "modal", "daytona"];
+const sandboxes = [...hostedSandboxes];
 const tasks = [
   { runId: "sample-pr-184", taskId: "fix-retry-backoff", difficulty: "medium" },
   { runId: "sample-pr-207", taskId: "preserve-query-state", difficulty: "hard" },

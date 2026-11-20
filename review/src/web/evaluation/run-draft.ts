@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { MAX_PICKED } from "../../../../src/contracts/conditions";
 import { thinkingLevels } from "../../../../src/contracts/models";
+import { hostedSandboxes } from "../../../../src/evaluation/catalog";
 import { harnessIds } from "../../../../src/evaluation/models";
 import { evaluationRequestId } from "./api";
 
@@ -28,7 +29,7 @@ const draftStateSchema = z.object({
         }),
       )
       .max(12),
-    sandbox: z.enum(["managed", "e2b", "modal", "daytona"]),
+    sandbox: z.enum(["managed", ...hostedSandboxes]),
     sandboxCredentialId: z.string().max(36),
     skipCompleted: z.boolean().optional(),
     judgeCredentialId: z.string().max(36).optional(),

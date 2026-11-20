@@ -18,6 +18,7 @@ export const generationSandboxLabels: Record<GenerationSandbox, string> = {
   modal: "Modal",
   vercel: "Vercel",
   e2b: "E2B",
+  daytona: "Daytona",
 };
 
 /** The execution backend a sandbox choice runs on; managed sandboxes run on our E2B account. */

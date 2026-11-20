@@ -15,12 +15,8 @@ import { type Choice, Choices, Status } from "./SetupRows";
 const sandboxes = [
   { id: "modal", title: "Modal", detail: "Generates tasks and runs evaluations." },
   { id: "e2b", title: "E2B", detail: "Generates tasks and runs evaluations." },
-  { id: "vercel", title: "Vercel", detail: "Generates tasks. Evaluations need another sandbox." },
-  {
-    id: "daytona",
-    title: "Daytona",
-    detail: "Runs evaluations. Generating tasks needs another sandbox.",
-  },
+  { id: "vercel", title: "Vercel", detail: "Generates tasks and runs evaluations." },
+  { id: "daytona", title: "Daytona", detail: "Generates tasks and runs evaluations." },
 ] as const;
 
 /**
