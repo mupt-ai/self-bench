@@ -78,7 +78,11 @@ test("a Dari connection serves a model only gateways list by its vendor's id", (
     harnesses: [...openHarnesses],
   });
   // Dari spells a vendor as one gateway does, not always as the catalog does.
-  expect(credentialRoute(llama, plans)?.model).toBe("meta/llama-5");
+  // and Vercel's `meta/` Llama runs no Muse Code, which speaks only Meta's Muse API.
+  expect(credentialRoute(llama, plans)).toMatchObject({
+    model: "meta/llama-5",
+    harnesses: [...openHarnesses],
+  });
   // Served by the catalog's own row, so not offered again as a model of the connection's own.
   expect(linkedCatalogModels([sol, llama], [plans])).toEqual([]);
   // A gateway key still serves it by the gateway's id.
