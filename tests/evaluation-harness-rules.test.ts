@@ -93,6 +93,13 @@ test("a Dari connection serves a model only gateways list by its vendor's id", (
   // A gateway key still serves it by the gateway's id.
   const key = { kind: "dari-link" as const, linkModels: { models: [], prefixes: ["openrouter/"] } };
   expect(credentialRoute(sol, key)?.model).toBe("openrouter/openai/gpt-6.2-sol");
+  // With a gateway key beside a vendor name, the vendor name wins, so the model is offered once.
+  const both = {
+    kind: "dari-link" as const,
+    linkModels: { models: [{ id: "meta/llama-5" }], prefixes: ["openrouter/"] },
+  };
+  expect(credentialRoute(llama, both)?.model).toBe("meta/llama-5");
+  expect(linkedCatalogModels([llama], [both])).toEqual([]);
 });
 
 test("a model offers, before a credential is chosen, every harness some route runs", () => {
