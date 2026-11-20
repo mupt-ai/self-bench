@@ -20,11 +20,6 @@ export default function discoveryExtension(pi: ExtensionAPI): void {
           Type.Object(
             {
               candidateId: Type.String({ pattern: CANDIDATE_ID.source }),
-              difficulty: Type.Union([
-                Type.Literal("easy"),
-                Type.Literal("medium"),
-                Type.Literal("hard"),
-              ]),
               title: Type.String({ minLength: 1, maxLength: 120 }),
               summary: Type.String({ minLength: 1, maxLength: 8000 }),
               pullRequests: Type.Array(

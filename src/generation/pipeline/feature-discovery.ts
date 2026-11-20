@@ -17,26 +17,23 @@ import { renderPrompt } from "./prompts.js";
 export const featureRun = (run: RunRequest) => run.unit === "feature";
 
 const sha = z.string().regex(/^[0-9a-f]{40}$/i);
-const featurePlanSchema = z.object({
-  features: z.array(
-    z.object({
-      candidateId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/),
-      title: z.string().trim().min(1).max(120),
-      summary: z.string().trim().min(1),
-      pullRequests: z
-        .array(
-          z.object({
-            number: z.number().int().positive(),
-            url: z.string().url(),
-            title: z.string().trim().min(1),
-            mergeCommit: sha,
-          }),
-        )
-        .min(1),
-      baseCommit: sha,
-      completedCommit: sha,
-    }),
-  ),
+const featurePlanSchema = z.object({ features: z.array(z.unknown()) });
+const plannedFeatureSchema = z.object({
+  candidateId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/),
+  title: z.string().trim().min(1).max(120),
+  summary: z.string().trim().min(1),
+  pullRequests: z
+    .array(
+      z.object({
+        number: z.number().int().positive(),
+        url: z.string().url(),
+        title: z.string().trim().min(1),
+        mergeCommit: sha,
+      }),
+    )
+    .min(1),
+  baseCommit: sha,
+  completedCommit: sha,
 });
 
 /**
@@ -93,9 +90,9 @@ export async function featureCandidates(
   const plan = featurePlanSchema.parse(output);
   const taken = new Set<number>(input.excludedSourcePrs);
   const candidates: FeatureCandidate[] = [];
-  for (const raw of plan.features) {
-    for (const pr of raw.pullRequests)
-      assertPullRequestBelongsToRepository(run.repository.url, pr.url, pr.number);
+  for (const proposed of plan.features) {
+    const raw = validFeature(run.repository.url, proposed);
+    if (!raw) continue;
     const numbers = raw.pullRequests.map((pr) => pr.number);
     const difficulty = featureDifficulty(numbers.length);
     const perTier = candidates.filter((candidate) => candidate.difficulty === difficulty);
@@ -107,11 +104,7 @@ export async function featureCandidates(
       continue;
     for (const number of numbers) taken.add(number);
     const candidateId = `w${wave}s${shardIndex}-${raw.candidateId}`;
-    const pullRequests = raw.pullRequests.map((pr) => ({
-      ...pr,
-      title: pr.title.slice(0, 500),
-      mergeCommit: pr.mergeCommit.toLowerCase(),
-    }));
+    const pullRequests = raw.pullRequests;
     const request = featureRequest(raw.summary, pullRequests, shard);
     const source = {
       sourceType: "feature",
@@ -143,6 +136,31 @@ export async function featureCandidates(
     );
   }
   return candidates;
+}
+
+/**
+ * A proposed feature in the shape a candidate takes, or undefined when it can't be one (a PR
+ * from another repository, a URL that doesn't match its number, too many PRs): the agent's other
+ * features still stand.
+ */
+function validFeature(repositoryUrl: string, proposed: unknown) {
+  const raw = plannedFeatureSchema.safeParse(proposed);
+  if (!raw.success) return undefined;
+  const pullRequests = featureCandidateSchema.shape.pullRequests.safeParse(
+    raw.data.pullRequests.map((pr) => ({
+      ...pr,
+      title: pr.title.slice(0, 500),
+      mergeCommit: pr.mergeCommit.toLowerCase(),
+    })),
+  );
+  if (!pullRequests.success) return undefined;
+  try {
+    for (const pr of pullRequests.data)
+      assertPullRequestBelongsToRepository(repositoryUrl, pr.url, pr.number);
+  } catch {
+    return undefined;
+  }
+  return { ...raw.data, pullRequests: pullRequests.data };
 }
 
 /** The summary, then each PR's title and, when the index holds it, its body; within the limit. */

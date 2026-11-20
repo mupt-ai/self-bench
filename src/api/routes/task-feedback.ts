@@ -182,8 +182,11 @@ export async function startRevision<Row extends { readonly runId: string }>(
   if (task.sourcePr === undefined) {
     // A feature's or a repository scenario's run clones the repository with the person's token,
     // as a PR's does; a feature keeps its PRs, a scenario its scenario.
+    const feature = Boolean(task.sourcePrs?.length);
     const token = task.baseCommit ? await options.users.gitHubToken(user.githubId) : undefined;
-    const revise = task.sourcePrs?.length ? reviseFeature : reviseScenario;
+    // A feature's author reads its PRs with gh, so it can't start without the token.
+    if (feature && !token) throw new GitHubOAuthError("no GitHub token stored for this user", 401);
+    const revise = feature ? reviseFeature : reviseScenario;
     const row = await revise({
       ...options,
       repository: repo,

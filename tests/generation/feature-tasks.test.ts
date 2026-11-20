@@ -1,4 +1,8 @@
 import { expect, test } from "bun:test";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { LocalArtifactStore } from "../../src/artifacts/index.js";
 import {
   type FeatureCandidate,
   featureCandidateSchema,
@@ -9,7 +13,10 @@ import { planCandidates } from "../../src/generation/batches/record.js";
 import type { GenerationBatch } from "../../src/generation/batches/types.js";
 import { authoringPrompt } from "../../src/generation/pipeline/authoring.js";
 import { discoveryPrompt } from "../../src/generation/pipeline/discovery.js";
-import { featureRequest } from "../../src/generation/pipeline/feature-discovery.js";
+import {
+  featureCandidates,
+  featureRequest,
+} from "../../src/generation/pipeline/feature-discovery.js";
 import { taskSourceEnvironment } from "../../src/generation/pipeline/task-source.js";
 import { auditFeaturePatches, auditPatches } from "../../src/generation/task/audit.js";
 import { taskToml } from "../../src/generation/task/render.js";
@@ -191,4 +198,48 @@ test("a feature task's metadata names its title and every PR", () => {
   expect(toml).toContain('feature_title = "Saved Searches"');
   expect(toml).toContain("source_prs = [10, 14, 21]");
   expect(toml).toContain('description = "Build the feature: Saved Searches"');
+});
+
+test("a feature that can't be a task is dropped, and the shard's other features stand", async () => {
+  const store = new LocalArtifactStore(await mkdtemp(join(tmpdir(), "feature-plan-")));
+  const repo = "https://github.com/example/repo";
+  const pr = (number: number, url = `${repo}/pull/${number}`) => ({
+    number,
+    url,
+    title: `PR ${number}`,
+    mergeCommit: "a".repeat(40),
+  });
+  const planned = (candidateId: string, pullRequests: unknown[]) => ({
+    candidateId,
+    title: candidateId,
+    summary: "Does a thing.",
+    pullRequests,
+    baseCommit: "b".repeat(40),
+    completedCommit: "c".repeat(40),
+  });
+  const candidates = await featureCandidates(
+    store,
+    {
+      run: { ...run, unit: "feature" },
+      wave: 0,
+      shardIndex: 0,
+      shardCount: 1,
+      targetCounts: { easy: 5, medium: 5, hard: 5 },
+      excludedSourcePrs: [],
+    },
+    [],
+    {
+      features: [
+        planned("wrong-url", [pr(1, `${repo}/pull/2`)]),
+        planned("other-repo", [pr(3, "https://github.com/someone/else/pull/3")]),
+        planned(
+          "too-many",
+          Array.from({ length: 26 }, (_, i) => pr(100 + i)),
+        ),
+        planned("no-prs", []),
+        planned("good", [pr(10), pr(11), pr(12), pr(13)]),
+      ],
+    },
+  );
+  expect(candidates.map((c) => [c.candidateId, c.difficulty])).toEqual([["w0s0-good", "medium"]]);
 });
