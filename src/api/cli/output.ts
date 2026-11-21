@@ -67,7 +67,7 @@ function scalar(key: string, value: unknown): string {
  * Any API reply laid out for reading: fields as aligned `Label  value` lines, nested objects
  * indented under their label, and lists of objects as tables.
  */
-export function details(reply: unknown, indent = ""): string {
+function details(reply: unknown, indent = ""): string {
   if (Array.isArray(reply)) return list("", reply, indent);
   if (!isRecord(reply)) return `${indent}${scalar("", reply)}`;
   const entries = Object.entries(reply).filter(([, value]) => value !== undefined);

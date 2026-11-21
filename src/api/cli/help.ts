@@ -83,7 +83,7 @@ function verbHelp(path: string[], verb: Verb): string {
 }
 
 /** Older top-level nouns, now nested or renamed, so `self-bench pr --help` still finds its help. */
-export const MOVED: Record<string, string[]> = {
+const MOVED: Record<string, string[]> = {
   pr: ["repo", "pr"],
   batch: ["repo", "batch"],
   environment: ["repo", "environment"],
