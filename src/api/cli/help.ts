@@ -1,3 +1,5 @@
+import { out } from "./style.js";
+
 /**
  * `self-bench help`, laid out like `dari --help`: a short top level that lists each command with
  * one line, grouped, and `self-bench NOUN --help` (or `NOUN VERB --help`) for the detail.
@@ -538,56 +540,64 @@ const GLOBAL_FLAGS: Flag[] = [
 
 const DOCS = "Docs: https://docs.selfbench.dev/cli/overview";
 
-function columns(rows: [string, string][]): string {
+/** Aligned `name  summary` rows; names painted after padding, so color never shifts columns. */
+function columns(rows: [string, string][], paint: (text: string) => string = out.accent): string {
   const width = Math.max(...rows.map(([left]) => left.length)) + 2;
-  return rows.map(([left, right]) => `  ${left.padEnd(width)}${right}`).join("\n");
+  return rows.map(([left, right]) => `  ${paint(left.padEnd(width))}${right}`).join("\n");
 }
+
+const heading = (text: string) => out.bold(text);
+const flags = (rows: Flag[]) => columns(rows, out.cyan);
+const footer = (name: string) =>
+  out.dim(`Use "${name} [command] --help" for more information about a command.`);
+
+const TAGLINE = "Build coding-agent benchmarks, run models on them, and publish results.";
 
 function root(): string {
   return [
-    "Build coding-agent benchmarks, run models on them, and publish results.",
-    "Usage:\n  self-bench [command]",
+    `${out.accent("◆")} ${out.bold("selfbench")}  ${out.dim(TAGLINE)}`,
+    `${heading("Usage")}\n  self-bench ${out.dim("[command]")}`,
     ...GROUPS.map(
-      (group) => `${group.title}\n${columns(group.nouns.map((noun) => [noun.name, noun.summary]))}`,
+      (group) =>
+        `${heading(group.title)}\n${columns(group.nouns.map((noun) => [noun.name, noun.summary]))}`,
     ),
-    `Additional Commands\n${columns([
+    `${heading("Additional Commands")}\n${columns([
       [OPERATOR.name, OPERATOR.summary],
       ["help", "Help about any command"],
     ])}`,
-    `Flags\n${columns(GLOBAL_FLAGS)}`,
-    'Use "self-bench [command] --help" for more information about a command.',
-    DOCS,
+    `${heading("Flags")}\n${flags(GLOBAL_FLAGS)}`,
+    footer("self-bench"),
+    out.dim(DOCS),
   ].join("\n\n");
 }
 
 function nounHelp(path: string[], noun: Noun): string {
   const name = `self-bench ${path.join(" ")}`;
+  const argText = noun.args ? ` ${out.dim(noun.args)}` : "";
   const rows: [string, string][] = [
     ...(noun.verbs ?? []).map((verb): [string, string] => [verb.name, verb.summary]),
     ...(noun.nouns ?? []).map((sub): [string, string] => [sub.name, sub.summary]),
   ];
   const usage = [
-    ...(rows.length === 0 || noun.args ? [`${name}${noun.args ? ` ${noun.args}` : ""}`] : []),
-    ...(rows.length ? [`${name} [command]`] : []),
+    ...(rows.length === 0 || noun.args ? [`${name}${argText}`] : []),
+    ...(rows.length ? [`${name} ${out.dim("[command]")}`] : []),
   ];
   return [
     noun.long ?? noun.summary,
-    `Usage:\n${usage.map((line) => `  ${line}`).join("\n")}`,
-    ...(rows.length ? [`Available Commands:\n${columns(rows)}`] : []),
-    ...(noun.flags ? [`Flags:\n${columns(noun.flags)}`] : []),
-    `Global Flags:\n${columns(GLOBAL_FLAGS)}`,
-    ...(rows.length
-      ? [`Use "${name} [command] --help" for more information about a command.`]
-      : []),
+    `${heading("Usage")}\n${usage.map((line) => `  ${line}`).join("\n")}`,
+    ...(rows.length ? [`${heading("Commands")}\n${columns(rows)}`] : []),
+    ...(noun.flags ? [`${heading("Flags")}\n${flags(noun.flags)}`] : []),
+    `${heading("Global Flags")}\n${flags(GLOBAL_FLAGS)}`,
+    ...(rows.length ? [footer(name)] : []),
   ].join("\n\n");
 }
 
 function verbHelp(path: string[], verb: Verb): string {
   return [
     verb.long ?? verb.summary,
-    `Usage:\n  self-bench ${[...path, verb.name].join(" ")}${verb.args ? ` ${verb.args}` : ""}`,
-    ...(verb.flags ? [`Flags:\n${columns(verb.flags)}`] : []),
-    `Global Flags:\n${columns(GLOBAL_FLAGS)}`,
+    `${heading("Usage")}\n  self-bench ${[...path, verb.name].join(" ")}${verb.args ? ` ${out.dim(verb.args)}` : ""}`,
+    ...(verb.flags ? [`${heading("Flags")}\n${flags(verb.flags)}`] : []),
+    `${heading("Global Flags")}\n${flags(GLOBAL_FLAGS)}`,
   ].join("\n\n");
 }
 
