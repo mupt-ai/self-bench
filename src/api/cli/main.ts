@@ -95,17 +95,30 @@ const ALIASES: Record<string, Command> = {
   grant: grantCommand,
 };
 
+/** Commands nested under a noun (`repo batch create`), each also reachable by its older name. */
+const NESTED: Record<string, Record<string, Command>> = {
+  repo: { pr: prCommand, batch: batchCommand, environment: environmentCommand },
+  workspace: { member: memberCommand, credential: credentialCommand },
+  task: { feedback: feedbackCommand },
+  comparison: { run: evaluationCommand, models: catalogCommand },
+  results: { summary: summaryCommand },
+};
+
 export async function runCli(args: string[]): Promise<void> {
   const [command, ...rest] = args;
-  if (command === "help" || command === "--help" || command === "-h") return printHelp(rest[0]);
+  if (command === "help" || command === "--help" || command === "-h") return printHelp(rest);
   // Bare `self-bench` signs in first, as `dari` does, then shows what it can do.
   if (command === undefined) return await welcome();
-  const run = COMMANDS[command] ?? ALIASES[command];
-  if (!run) throw new Error(`unknown command: ${command} (see self-bench help)`);
-  // `self-bench task` alone, or `self-bench task create --help`, shows that noun's help.
-  const asked = rest.includes("--help") || rest.includes("-h");
-  if (asked || (rest.length === 0 && ACTION_NOUNS.has(command))) return printHelp(command);
-  await run(rest);
+  const nested = NESTED[command]?.[rest[0] ?? ""];
+  const run = nested ?? COMMANDS[command] ?? ALIASES[command];
+  if (!run) throw new Error(`unknown command: ${command} (see self-bench --help)`);
+  const words = nested ? [command, rest[0] ?? ""] : [command];
+  const after = nested ? rest.slice(1) : rest;
+  // `self-bench task` alone, or `self-bench task create --help`, shows that command's help.
+  const asked = after.includes("--help") || after.includes("-h");
+  const bare = after.length === 0 && (nested ? run !== catalogCommand : ACTION_NOUNS.has(command));
+  if (asked || bare) return printHelp([...words, ...after.filter((word) => !word.startsWith("-"))]);
+  await run(after);
 }
 
 async function welcome(): Promise<void> {
