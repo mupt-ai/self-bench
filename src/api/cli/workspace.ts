@@ -94,7 +94,8 @@ export async function repoCommand(args: string[]): Promise<void> {
 /** `pr list`: a repository's merged pull requests, which `task create --pr` and batches draw on. */
 export async function prCommand(args: string[]): Promise<void> {
   const [action, ...rest] = args[0] === "list" ? args : ["list", ...args];
-  if (action !== "list") throw new Error("usage: self-bench repo pr list --repo OWNER/NAME [--page N]");
+  if (action !== "list")
+    throw new Error("usage: self-bench repo pr list --repo OWNER/NAME [--page N]");
   const { values } = parse(rest, { page: { type: "string" } });
   const page = flag(values, "page") ?? "1";
   const reply = await requestJson(`${repositoryPath(values)}/pull-requests?page=${page}`);

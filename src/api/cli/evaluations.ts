@@ -203,7 +203,9 @@ export async function evaluationCommand(args: string[]): Promise<void> {
   if (action === "show") return print(values, await requestJson(path));
   if (action === "cancel" || action === "delete")
     return print(values, await requestJson(`${path}/${action}`, "POST"));
-  throw new Error("usage: self-bench comparison run list S | comparison run show|cancel|delete ID S");
+  throw new Error(
+    "usage: self-bench comparison run list S | comparison run show|cancel|delete ID S",
+  );
 }
 
 /** `results`: each configuration's score on the tasks results count on. */
@@ -274,7 +276,11 @@ export async function summaryCommand(args: string[]): Promise<void> {
     summary: { credentialId, model },
   });
   if (values.wait !== true)
-    return print(values, started, () => "Summarizing. Run `self-bench results summary show` to read it.");
+    return print(
+      values,
+      started,
+      () => "Summarizing. Run `self-bench results summary show` to read it.",
+    );
   await waitFor("model summaries", async () => {
     const state = await requestJson(path);
     return (state.running as unknown[]).length ? undefined : true;
