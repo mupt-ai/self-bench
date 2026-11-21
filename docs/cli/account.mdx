@@ -23,10 +23,10 @@ A workspace is SelfBench's own: its name, members, and roles live here, not on G
 | `workspace create NAME [--name TEXT]` | A shared workspace you administer. `NAME` can't be a GitHub account's login |
 | `workspace connect GITHUB_ORG` | Move a GitHub organization here from its current workspace (admins of both) |
 | `workspace rename TEXT` | Set the display name; `NAME` never changes |
-| `member list` | People, roles, how each joined, and connected GitHub organizations |
-| `member invite LOGIN [--role admin\|member]` | Invite a GitHub user; they join at their next sign-in |
-| `member invites` · `member revoke ID` | Pending invites, and withdraw one |
-| `member role LOGIN admin\|member` · `member remove LOGIN` | Change a role, or remove an invited member |
+| `workspace member list` | People, roles, how each joined, and connected GitHub organizations |
+| `workspace member invite LOGIN [--role admin\|member]` | Invite a GitHub user; they join at their next sign-in |
+| `workspace member invites` · `workspace member revoke ID` | Pending invites, and withdraw one |
+| `workspace member role LOGIN admin\|member` · `workspace member remove LOGIN` | Change a role, or remove an invited member |
 
 ## Credentials
 
@@ -34,14 +34,14 @@ Workspace admins connect the model access and sandboxes runs use. Secrets never 
 
 | Command | Does |
 | --- | --- |
-| `credential list` | Saved credentials, with the IDs flags take (`--credential ID`) |
-| `credential add` | Pick a provider, then paste its key (masked). Plans connect in the app, with Connect with Dari |
-| `credential add --kind KIND (--value-env VAR \| --value-stdin) [--name NAME]` | Add a key without prompts |
-| `credential rename ID NAME` · `credential remove ID` | Rename or remove one |
+| `workspace credential list` | Saved credentials, with the IDs flags take (`--credential ID`) |
+| `workspace credential add` | Pick a provider, then paste its key (masked). Plans connect in the app, with Connect with Dari |
+| `workspace credential add --kind KIND (--value-env VAR \| --value-stdin) [--name NAME]` | Add a key without prompts |
+| `workspace credential rename ID NAME` · `workspace credential remove ID` | Rename or remove one |
 
 `KIND` is `openai`, `anthropic`, `meta`, `openrouter`, `vercel-ai-gateway`, `dari`, `custom` (with `--endpoint`), `e2b`, `modal` (with `--token-id`), `daytona`, or `vercel` (with `--team-id` and `--project-id`). See [Credentials](/concepts/credentials).
 
 ```bash
-self-bench credential add --kind anthropic --value-env ANTHROPIC_API_KEY --name "Team Anthropic"
-self-bench credential add --sign-in claude
+self-bench workspace credential add --kind anthropic --value-env ANTHROPIC_API_KEY --name "Team Anthropic"
+self-bench workspace credential add --sign-in claude
 ```

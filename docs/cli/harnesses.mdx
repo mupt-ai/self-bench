@@ -28,7 +28,7 @@ A saved harness is a workspace's named change to one agent: its skills, instruct
 | `--subagent-thinking LEVEL` | The thinking level every subagent call is served at: `low`, `high`, … Default: the model's default level. |
 | `--body JSON\|@FILE` | A full [harness body](/api/harnesses#request-body) in place of the flags |
 
-`catalog S --harness AGENT` lists the options an agent takes. The older `conditions` and `condition` commands still work.
+`comparison models S --harness AGENT` lists the options an agent takes. The older `conditions` and `condition` commands still work.
 
 ```bash
 self-bench harness create --name "Haiku Subagents" --agent claude-code \

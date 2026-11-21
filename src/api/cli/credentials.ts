@@ -56,6 +56,6 @@ export async function credentialCommand(args: string[]): Promise<void> {
       return print(values, await requestJson(`${base}/${id}/delete`, "POST"), () => "Removed.");
     }
     default:
-      throw new Error("usage: self-bench credential list|add | credential rename|remove ID");
+      throw new Error("usage: self-bench workspace credential list|add | workspace credential rename|remove ID");
   }
 }

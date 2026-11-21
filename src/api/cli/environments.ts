@@ -72,7 +72,7 @@ export async function environmentCommand(args: string[]): Promise<void> {
       return print(values, await requestJson(one(), "DELETE"));
     default:
       throw new Error(
-        "usage: self-bench environment list|create --repo R | environment show|build|delete ID --repo R",
+        "usage: self-bench repo environment list|create --repo R | repo environment show|build|delete ID --repo R",
       );
   }
 }
