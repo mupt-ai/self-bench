@@ -22,6 +22,12 @@ export const GET_STARTED: Group = {
       summary: "Show or change the workspace commands act in",
       long: "Show the workspace commands act in; `org use` changes it. --org NAME overrides it once.",
     },
+    {
+      name: "update",
+      summary: "Update the CLI to the newest release",
+      long: "Download the newest CLI release, check its SHA-256, and replace this one.\n\n`self-bench --version` prints the version you have.",
+      flags: [["--check", "only say whether a newer release exists"]],
+    },
   ],
 };
 
