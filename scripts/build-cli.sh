@@ -8,7 +8,8 @@ out_dir=dist/cli
 rm -rf "$out_dir"
 mkdir -p "$out_dir"
 
-bun build src/api/cli/bin.ts --target node --outfile "$out_dir/self-bench.js" >/dev/null
+version=$(node -p "require('./package.json').version")
+bun build src/api/cli/bin.ts --target node --define "SELFBENCH_CLI_VERSION=\"$version\"" --outfile "$out_dir/self-bench.js" >/dev/null
 chmod +x "$out_dir/self-bench.js"
 
 (cd "$out_dir" && shasum -a 256 self-bench.js > self-bench.js.sha256)

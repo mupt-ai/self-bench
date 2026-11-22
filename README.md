@@ -61,7 +61,27 @@ Everything happens in the web app at [app.selfbench.dev](https://app.selfbench.d
 5. **Results**: compare accuracy against cost, and open any trial's transcript and scores.
 6. **Releases**: publish a public repository's results to [selfbench.dev](https://selfbench.dev).
 
-Models and sandboxes run on your organization's own keys under **Credentials**. Automate the same workflows with the [CLI](https://docs.selfbench.dev/cli/overview) or the [API](https://docs.selfbench.dev/api/overview). Read released results without a key through the [Public API](https://docs.selfbench.dev/api/public).
+Models and sandboxes run on your organization's own keys under **Credentials**. Automate the same workflows with the [CLI](#cli) or the [API](https://docs.selfbench.dev/api/overview). Read released results without a key through the [Public API](https://docs.selfbench.dev/api/public).
+
+## CLI
+
+Every step above also runs from the terminal. Install the CLI (needs Node.js 22+) and sign in:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mupt-ai/self-bench/main/scripts/install-cli.sh | sh
+self-bench login
+```
+
+The installer puts `self-bench` in `~/.local/bin`. Update it with `self-bench update`, and print your version with `self-bench --version`.
+
+```bash
+self-bench repo connect acme/app
+self-bench repo batch create --repo acme/app --easy 2 --medium 4 --hard 2
+self-bench comparison create --repo acme/app --model gpt-6.1-sol --harness pi
+self-bench results --repo acme/app
+```
+
+`self-bench --help` lists every command. See the [CLI docs](https://docs.selfbench.dev/cli/overview).
 
 ## Self-hosting
 

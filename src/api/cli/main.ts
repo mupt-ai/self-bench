@@ -20,6 +20,7 @@ import { savedHarnessCommand } from "./saved-harnesses.js";
 import { scenarioCommand } from "./task-create.js";
 import { taskCommand } from "./tasks.js";
 import { interactive } from "./tui.js";
+import { cliVersion, updateCommand } from "./update.js";
 import { batchCommand, prCommand, repoCommand, whoamiCommand } from "./workspace.js";
 
 type Command = (args: string[]) => Promise<void>;
@@ -50,6 +51,7 @@ const COMMANDS: Record<string, Command> = {
   summary: summaryCommand,
   release: releaseCommand,
   operator: operatorCommand,
+  update: (args) => updateCommand(args),
 };
 
 /** `NOUN …` as `NOUN VERB …`. */
@@ -107,6 +109,10 @@ const NESTED: Record<string, Record<string, Command>> = {
 export async function runCli(args: string[]): Promise<void> {
   const [command, ...rest] = args;
   if (command === "help" || command === "--help" || command === "-h") return printHelp(rest);
+  if (command === "--version" || command === "-v" || command === "version") {
+    console.log(cliVersion() ?? "development build");
+    return;
+  }
   // Bare `self-bench` signs in first, as `dari` does, then shows what it can do.
   if (command === undefined) return await welcome();
   const nested = NESTED[command]?.[rest[0] ?? ""];
