@@ -36,7 +36,7 @@ async function listMembers(args: string[]): Promise<void> {
 
 const MEMBER_ACTIONS = ["list", "invites", "invite", "revoke", "role", "remove"];
 const MEMBER_USAGE =
-  "usage: self-bench member list|invites | member invite|role|remove LOGIN | member revoke ID";
+  "usage: self-bench workspace member list|invites | workspace member invite|role|remove LOGIN | workspace member revoke ID";
 
 /** `member list`, `member invite|role|remove LOGIN`, `member invites`, `member revoke ID` (admins). */
 export async function memberCommand(args: string[]): Promise<void> {

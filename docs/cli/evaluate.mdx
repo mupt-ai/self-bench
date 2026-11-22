@@ -9,11 +9,11 @@ icon: "play"
 
 | Command | Does |
 | --- | --- |
-| `catalog S` | Models an evaluation can use |
-| `catalog S --harness AGENT` | Options a [saved harness](/cli/harnesses) can set on `AGENT` |
+| `comparison models S` | Models an evaluation can use |
+| `comparison models S --harness AGENT` | Options a [saved harness](/cli/harnesses) can set on `AGENT` |
 | `comparison create S --model ID [--model ID ...]` | Run each model on every approved task |
 | `comparison list S` · `comparison show\|resume\|cancel ID S` | Follow, resume, or stop comparisons |
-| `evaluation list S` · `evaluation show\|cancel\|delete ID S` | One model's run in a comparison, with every trial |
+| `comparison run list S` · `comparison run show\|cancel\|delete ID S` | One model's run in a comparison, with every trial |
 
 A **comparison** starts one **evaluation** per model, and each evaluation runs every task on each harness as a **trial**. For scores, read [`results`](/cli/inspect) rather than adding up trials.
 
@@ -29,7 +29,7 @@ self-bench comparison create --repo acme/app \
 
 | Flag | Default |
 | --- | --- |
-| `--model ID` (repeatable): a model `catalog` lists | required |
+| `--model ID` (repeatable): a model `comparison models` lists | required |
 | `--harness AGENT` (repeatable): `pi`, `codex`, `claude-code`, `mini-swe-agent`, `terminus-2`, `muse-code` | `pi` |
 | `--thinking LEVEL`: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max` | the model's default |
 | `--credential ID`: a [saved credential](/cli/account#credentials) | the managed model |
@@ -48,9 +48,9 @@ A harness with a subagent model runs each model as the orchestrator and the suba
 
 ## Following a Comparison
 
-`comparison show ID` prints each evaluation's progress. If the reply names a submission error, `comparison resume ID` starts what didn't start, with the same evaluation IDs. `comparison cancel ID` stops every evaluation in it; `evaluation cancel ID` stops one.
+`comparison show ID` prints each evaluation's progress. If the reply names a submission error, `comparison resume ID` starts what didn't start, with the same evaluation IDs. `comparison cancel ID` stops every evaluation in it; `comparison run cancel ID` stops one.
 
 ```bash
 self-bench comparison list --repo acme/app
-self-bench evaluation show EVALUATION_ID --repo acme/app --json
+self-bench comparison run show EVALUATION_ID --repo acme/app --json
 ```

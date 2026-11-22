@@ -15,10 +15,10 @@ A task is built into a [benchmark](/cli/overview#benchmarks): a **repo benchmark
 | `custom list` | The workspace's custom benchmarks |
 | `custom create NAME` | A new custom benchmark |
 | `custom show\|delete NAME` · `custom update NAME --agent-minutes N` | Read, delete, or set its agent time |
-| `pr list R [--page N]` | Merged pull requests a batch can draw on |
-| `batch create R --easy N --medium N --hard N [--focus TEXT]` | Pick merged PRs and write a task from each |
-| `batch create R --features --hard N [--focus FEATURE]` | Find features built over several merged PRs, or the one `--focus` describes, and write an end-to-end task from each |
-| `batch list R` · `batch show\|cancel BATCH R` | Follow or stop batches |
+| `repo pr list R [--page N]` | Merged pull requests a batch can draw on |
+| `repo batch create R --easy N --medium N --hard N [--focus TEXT]` | Pick merged PRs and write a task from each |
+| `repo batch create R --features --hard N [--focus FEATURE]` | Find features built over several merged PRs, or the one `--focus` describes, and write an end-to-end task from each |
+| `repo batch list R` · `repo batch show\|cancel BATCH R` | Follow or stop batches |
 | `task create R --pr NUMBER\|URL` | A task from one merged PR |
 | `task create B --title TEXT --description TEXT` | A custom task, written from your description |
 
@@ -40,21 +40,21 @@ self-bench custom create "Data Import Bugs"
 # Created data-import-bugs; pass it as --custom data-import-bugs.
 ```
 
-## `batch create`
+## `repo batch create`
 
 Starts a batch that picks merged PRs and writes one task from each, in three difficulty tiers. The counts are how many candidates each tier tries (1 to 300 in all). A candidate that fails review three times is rejected and not backfilled, so a batch can end with fewer tasks. `--focus` steers which PRs it picks.
 
 ```bash
-self-bench batch create --repo acme/app --easy 2 --medium 4 --hard 2 --focus "billing and invoices"
+self-bench repo batch create --repo acme/app --easy 2 --medium 4 --hard 2 --focus "billing and invoices"
 # Started batch 6f1c2e9a.
-self-bench batch show 6f1c2e9a --repo acme/app
+self-bench repo batch show 6f1c2e9a --repo acme/app
 ```
 
 With `--features`, each task is a whole feature built over several merged PRs, graded by end-to-end tests ([Feature Tasks](/concepts/how-it-works#feature-tasks)). Without `--focus`, discovery finds features among recent PRs; with it, `--focus` describes the feature to find, and discovery searches the repository's whole history for its PRs.
 
 ```bash
-self-bench batch create --repo acme/app --features --hard 3
-self-bench batch create --repo acme/app --features --hard 1 --focus "saved searches: save, list, and rerun a search"
+self-bench repo batch create --repo acme/app --features --hard 3
+self-bench repo batch create --repo acme/app --features --hard 1 --focus "saved searches: save, list, and rerun a search"
 ```
 
 Its tasks appear in `task list` as they finish, in `needs_review`. See [How It Works](/concepts/how-it-works) for what makes a task valid.
@@ -78,11 +78,11 @@ self-bench task create --custom data-import-bugs --title "Rows Lost on Re-Import
 # Started scn-evals-data-import-bugs-3f9a1c2b7d4e/scenario-rows-lost-on-re-import (in_progress).
 ```
 
-Follow it with `task list`, or send it notes while it is written with [`feedback`](/cli/review#feedback).
+Follow it with `task list`, or send it notes while it is written with [`task feedback`](/cli/review#feedback).
 
 ## Generation Options
 
-`batch create`, `task create`, `task revise`, `feedback`, and `environment create|build` choose the models and sandbox that write tasks. Without these flags, they use the managed models and sandbox.
+`repo batch create`, `task create`, `task revise`, `task feedback`, and `repo environment create|build` choose the models and sandbox that write tasks. Without these flags, they use the managed models and sandbox.
 
 | Flag | Does |
 | --- | --- |

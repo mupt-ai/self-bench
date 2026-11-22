@@ -13,7 +13,7 @@ export async function operatorCommand(args: string[]): Promise<void> {
   const [noun, ...rest] = args;
   if (noun === "run") return await runCommand(rest);
   if (noun === "grant") return await grantCommand(rest);
-  throw new Error("usage: self-bench operator run|grant … (see self-bench help operator)");
+  throw new Error("usage: self-bench operator run|grant … (see self-bench operator --help)");
 }
 
 /** `operator run list|show|cancel|download`: generation runs, and a batch's Harbor export. */

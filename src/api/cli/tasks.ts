@@ -53,7 +53,7 @@ export async function taskCommand(args: string[]): Promise<void> {
   if (action === "create") return await createTask(rest);
   if (action === "add-pr") return await createTask(rest, true);
   if (!action || !ACTIONS.split("|").includes(action))
-    throw new Error(`usage: self-bench task ${ACTIONS} (see self-bench help task)`);
+    throw new Error(`usage: self-bench task ${ACTIONS} (see self-bench task --help)`);
   const { values, positionals } = parse(rest, TASK_FLAGS);
   const repository = repositoryPath(values);
   if (action === "list") return await listTasks(values, repository);

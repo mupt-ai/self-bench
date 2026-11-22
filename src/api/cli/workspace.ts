@@ -94,7 +94,8 @@ export async function repoCommand(args: string[]): Promise<void> {
 /** `pr list`: a repository's merged pull requests, which `task create --pr` and batches draw on. */
 export async function prCommand(args: string[]): Promise<void> {
   const [action, ...rest] = args[0] === "list" ? args : ["list", ...args];
-  if (action !== "list") throw new Error("usage: self-bench pr list --repo OWNER/NAME [--page N]");
+  if (action !== "list")
+    throw new Error("usage: self-bench repo pr list --repo OWNER/NAME [--page N]");
   const { values } = parse(rest, { page: { type: "string" } });
   const page = flag(values, "page") ?? "1";
   const reply = await requestJson(`${repositoryPath(values)}/pull-requests?page=${page}`);
@@ -158,6 +159,6 @@ export async function batchCommand(args: string[]): Promise<void> {
   if (action === "show") return print(values, await requestJson(path));
   if (action === "cancel") return print(values, await requestJson(`${path}/cancel`, "POST"));
   throw new Error(
-    "usage: self-bench batch create|list --repo R | batch show|cancel BATCH --repo R",
+    "usage: self-bench repo batch create|list --repo R | repo batch show|cancel BATCH --repo R",
   );
 }

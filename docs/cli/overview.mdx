@@ -5,7 +5,7 @@ description: "Sign in, the conventions every command shares, and where each comm
 icon: "terminal"
 ---
 
-Install and first steps are in the [Quickstart](/quickstart). `self-bench help` lists every command; `self-bench help NOUN` (or `self-bench NOUN` alone) shows one section, as in `self-bench help task`.
+Install and first steps are in the [Quickstart](/quickstart). `self-bench --help` lists the top-level commands, one line each. Add `--help` to any command for its subcommands and flags: `self-bench task --help`, `self-bench repo batch create --help`.
 
 ## Sign In and CI
 
@@ -41,13 +41,13 @@ SelfBench has three kinds of benchmark, plus repo groups. A command that reads o
 
 | Page | Commands |
 | --- | --- |
-| [Account and Credentials](/cli/account) | `login`, `logout`, `whoami`, `org`, `workspace`, `member`, `credential` |
-| [Build Tasks](/cli/build) | `repo`, `custom`, `pr list`, `batch`, `task create` |
-| [Review Tasks](/cli/review) | **`feedback`**, `task list\|show\|pull\|revise\|steer\|approve\|reject` |
-| [Repo Ablations](/cli/environments) | `environment` |
+| [Account and Credentials](/cli/account) | `login`, `logout`, `whoami`, `org`, `workspace`, `workspace member`, `workspace credential` |
+| [Build Tasks](/cli/build) | `repo`, `custom`, `repo pr list`, `repo batch`, `task create` |
+| [Review Tasks](/cli/review) | **`task feedback`**, `task list\|show\|pull\|revise\|steer\|approve\|reject` |
+| [Repo Ablations](/cli/environments) | `repo environment` |
 | [Harnesses](/cli/harnesses) | `harness` |
-| [Evaluate](/cli/evaluate) | `catalog`, `comparison`, `evaluation` |
-| [Inspect Results](/cli/inspect) | `results`, `task results\|explain\|audit`, `summary` |
+| [Evaluate](/cli/evaluate) | `comparison`, `comparison models`, `comparison run` |
+| [Inspect Results](/cli/inspect) | `results`, `task results\|explain\|audit`, `results summary` |
 | [Publish](/cli/publish) | `release` |
 | [Public Benchmarks and Groups](/cli/benchmarks-and-groups) | `public`, `group` |
 | [Operator](/cli/operator) | `operator run`, `operator grant` |
@@ -62,7 +62,12 @@ Commands renamed when benchmarks got their three kinds still work, so existing s
 | `repo set` | `repo update` |
 | `eval create NAME` · `--repo evals/NAME` | `custom create NAME` · `--custom NAME` |
 | `benchmarks` · `benchmark add\|show\|tasks\|remove` · `--benchmark` | `public list` · `public add\|show\|tasks\|remove` · `--public` |
-| `prs` | `pr list` |
+| `member` · `credential` | `workspace member` · `workspace credential` |
+| `pr` · `batch` · `environment` | `repo pr` · `repo batch` · `repo environment` |
+| `feedback` | `task feedback` |
+| `catalog` · `evaluation` | `comparison models` · `comparison run` |
+| `summary` | `results summary` |
+| `prs` | `repo pr list` |
 | `generate` | `batch create` |
 | `task add-pr --pr N` | `task create --pr N` |
 | `scenario create --scenario TEXT` | `task create --title TEXT --description TEXT` |

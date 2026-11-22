@@ -9,18 +9,18 @@ An environment runs one script in every approved task's image and builds each ta
 
 | Command | Does |
 | --- | --- |
-| `environment list R` | Each environment and how many of its tasks are ready |
-| `environment create R --name N (--script TEXT \| --script-file F)` | Run the script in every approved task's image and build each |
-| `environment show ID R` | Each task's build and check |
-| `environment build ID R` | Build the tasks approved since, or that failed |
-| `environment delete ID R` | Delete it |
+| `repo environment list R` | Each environment and how many of its tasks are ready |
+| `repo environment create R --name N (--script TEXT \| --script-file F)` | Run the script in every approved task's image and build each |
+| `repo environment show ID R` | Each task's build and check |
+| `repo environment build ID R` | Build the tasks approved since, or that failed |
+| `repo environment delete ID R` | Delete it |
 
 The script is Bash, run in `/app` as the image is built, before the agent starts. It stops at the first command that fails, and that task's build fails with it.
 
 It takes the [generation options](/cli/build#generation-options) for the checks.
 
 ```bash
-self-bench environment create --repo acme/app --name "No AGENTS.md, Next.js 15.5" \
+self-bench repo environment create --repo acme/app --name "No AGENTS.md, Next.js 15.5" \
   --script 'rm -f AGENTS.md CLAUDE.md
 pnpm add next@15.5.0'
 self-bench comparison create --repo acme/app --model gpt-6.1-sol --environment 4

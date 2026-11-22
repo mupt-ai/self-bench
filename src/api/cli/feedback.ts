@@ -14,7 +14,7 @@ import { GENERATION, generation } from "./generation.js";
 import { print } from "./output.js";
 
 const USAGE =
-  'usage: self-bench feedback TASK_URL "TEXT" | feedback OWNER/NAME RUN_ID TASK_ID "TEXT"';
+  'usage: self-bench task feedback TASK_URL "TEXT" | task feedback OWNER/NAME RUN_ID TASK_ID "TEXT"';
 
 interface Task {
   runId: string;

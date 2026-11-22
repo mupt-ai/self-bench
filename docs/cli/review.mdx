@@ -9,7 +9,7 @@ icon: "list-check"
 
 | Command | Does |
 | --- | --- |
-| `feedback TASK_URL "TEXT"` | Tell a task what to change. Steers it while it is written, or revises it once it is done |
+| `task feedback TASK_URL "TEXT"` | Tell a task what to change. Steers it while it is written, or revises it once it is done |
 | `task list B [--state STATE]` | A benchmark's tasks, with their state, difficulty, and source |
 | `task show TASK B` | A task, its review, cost, and revisions |
 | `task pull TASK [DIR] B` | Download its files: instruction, Dockerfile, patches, scripts, `workspace/` |
@@ -21,10 +21,10 @@ icon: "list-check"
 
 ## Feedback
 
-`feedback` is the quickest way to fix a task. Copy the task's address from the app and say what is wrong:
+`task feedback` is the quickest way to fix a task. Copy the task's address from the app and say what is wrong:
 
 ```bash
-self-bench feedback https://app.selfbench.dev/repos/acme/app/tasks/6f1c2e9a/fix-invoice-rounding \
+self-bench task feedback https://app.selfbench.dev/repos/acme/app/tasks/6f1c2e9a/fix-invoice-rounding \
   "The hidden test pins the error message; check the status code instead."
 # Revising as pr-acme-app-482-r9c1d2e3f4a5b/fix-invoice-rounding (in_progress).
 # https://app.selfbench.dev/repos/acme/app/tasks/pr-acme-app-482-r9c1d2e3f4a5b/fix-invoice-rounding
@@ -32,7 +32,7 @@ self-bench feedback https://app.selfbench.dev/repos/acme/app/tasks/6f1c2e9a/fix-
 
 It reads the task first and does the right thing for its state:
 
-| Task | `feedback` |
+| Task | `task feedback` |
 | --- | --- |
 | Still being written (`in_progress`) | Sends a note its author reads at its next turn, as `task steer` does |
 | Finished (any other state) | Starts a revision from the feedback, as `task revise` does, and prints the revision's page |
@@ -45,13 +45,13 @@ It reads the task first and does the right thing for its state:
 | `--feedback-file FILE` | Read the feedback from a file |
 | `--from-audit` | Send the task's latest [fairness audit](/cli/inspect#task-audit), after any text of your own |
 
-`feedback` takes the [generation options](/cli/build#generation-options) for a revision. Use `task revise --draft` to send edited files as well.
+`task feedback` takes the [generation options](/cli/build#generation-options) for a revision. Use `task revise --draft` to send edited files as well.
 
 ```bash
 # Hand the audit's findings to the author, with a note of your own.
-self-bench feedback https://app.selfbench.dev/custom/data-import-bugs/tasks/scn-evals-data-import-bugs-3f9a1c2b7d4e/scenario-rows-lost \
+self-bench task feedback https://app.selfbench.dev/custom/data-import-bugs/tasks/scn-evals-data-import-bugs-3f9a1c2b7d4e/scenario-rows-lost \
   "Keep the CSV header." --from-audit
-pbpaste | self-bench feedback acme/app 6f1c2e9a fix-invoice-rounding -
+pbpaste | self-bench task feedback acme/app 6f1c2e9a fix-invoice-rounding -
 ```
 
 ## `task list`
