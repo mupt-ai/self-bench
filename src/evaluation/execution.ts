@@ -13,6 +13,7 @@ import { type TrialRoute, trialRoute } from "./gateway-trial.js";
 import { judgeCredentialRefusal } from "./judge.js";
 import { refuseTrial } from "./refusal.js";
 import { sameScope } from "./scope.js";
+import { withBatchId } from "./store.js";
 import { SUBAGENT_NEEDS_GATEWAY, subagentRefusal } from "./subagents.js";
 import type { EvaluationInput, Harness } from "./types.js";
 /** The organization whose credentials an evaluation uses. */
@@ -29,12 +30,14 @@ export function evaluationCredentialOrg(
  * judge's key stays in the vault too.
  */
 export async function credentialExecution(
-  input: EvaluationInput,
+  workflowInput: EvaluationInput,
   home: string,
   env: NodeJS.ProcessEnv,
   { credentials, batches }: Pick<Vault, "credentials" | "batches">,
   harness?: Harness,
 ) {
+  // Workflows started before batches were named carry the batch's id as `comparisonId`.
+  const input = withBatchId(workflowInput);
   const orgId = evaluationCredentialOrg(input);
   if (!input.credentials || !orgId || !input.batchId)
     throw refuseTrial("Credential references missing");

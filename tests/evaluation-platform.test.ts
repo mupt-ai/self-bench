@@ -112,6 +112,12 @@ test("durable batch, scoped credentials, frozen tasks, partial dispatch and dele
       expect(execution.child.E2B_API_KEY).toBe("sandbox-secret");
       expect(execution.child.GITHUB_TOKEN).toBeUndefined();
       expect(execution.child.SELFBENCH_BAO_TOKEN).toBeUndefined();
+      // A workflow started before batches were named still carries `comparisonId`.
+      const { batchId, ...unnamed } = first;
+      const legacy = { ...unnamed, comparisonId: batchId } as typeof first;
+      expect(
+        (await credentialExecution(legacy, home, { PATH: "/bin" }, records, "codex")).route,
+      ).toBe("gateway");
       await expect(
         credentialExecution({ ...first, modelName: "openai/tampered" }, home, {}, records),
       ).rejects.toThrow("reserved batch");
