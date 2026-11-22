@@ -100,7 +100,7 @@ export interface EvaluationInput extends EvaluationScope {
   explainFailures?: boolean;
   credentialOwnerId?: number;
   credentialOrgId?: number;
-  comparisonId?: string;
+  batchId?: string;
   credentials?: {
     modelCredentialId: string;
     sandboxCredentialId: string;

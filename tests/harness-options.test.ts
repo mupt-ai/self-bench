@@ -5,8 +5,8 @@ import { join } from "node:path";
 import { harnessOptionsFromFlags } from "../src/api/cli/harness-flags.js";
 import { conditionSchema } from "../src/contracts/conditions.js";
 import { harnessOptionsSchema } from "../src/contracts/harness-options.js";
-import type { ComparisonDraft } from "../src/evaluation/comparisons.js";
 import { conditionArguments, runCondition } from "../src/evaluation/conditions.js";
+import type { RunBatchDraft } from "../src/evaluation/run-batches.js";
 import { evaluationServer } from "./support/evaluation-fixture.js";
 
 const problem = (options: unknown) =>
@@ -169,7 +169,7 @@ test("a condition with harness options runs only on the harnesses it names", asy
     const credentialId = await save("openrouter");
     const sandboxCredentialId = await save("e2b");
     const condition = { name: "30 Turns", harnessOptions: { "claude-code": { max_turns: 30 } } };
-    const draft: ComparisonDraft = {
+    const draft: RunBatchDraft = {
       id: crypto.randomUUID(),
       tasks: [{ runId: "run-one", taskId: "task-one" }],
       sandbox: "e2b",
@@ -177,7 +177,7 @@ test("a condition with harness options runs only on the harnesses it names", asy
       models: [{ catalogId: "gpt-6-sol", credentialId, harnesses: ["pi", "claude-code"] }],
       conditions: [condition as never],
     };
-    const started = await fixture.request(`${fixture.base}/comparisons`, post(draft));
+    const started = await fixture.request(`${fixture.base}/batches`, post(draft));
     expect(started.status).toBe(202);
     expect(
       fixture.starts.map((input) => [input.condition?.name ?? "Baseline", input.harnesses]),
@@ -190,7 +190,7 @@ test("a condition with harness options runs only on the harnesses it names", asy
     });
 
     const unmatched = await fixture.request(
-      `${fixture.base}/comparisons`,
+      `${fixture.base}/batches`,
       post({
         ...draft,
         id: crypto.randomUUID(),
@@ -201,7 +201,7 @@ test("a condition with harness options runs only on the harnesses it names", asy
       error: "30 Turns is for Claude Code, which no picked model runs",
     });
     const invalid = await fixture.request(
-      `${fixture.base}/comparisons`,
+      `${fixture.base}/batches`,
       post({
         ...draft,
         id: crypto.randomUUID(),

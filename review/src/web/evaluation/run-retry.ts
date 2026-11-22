@@ -7,7 +7,7 @@ import type { EvaluationRun, Harness } from "./api";
 import { isSandbox } from "./credential-presentation";
 import { outcomeOf } from "./results-model";
 
-/** A comparison request that runs a finished run's errored or cancelled tasks again, as it ran them. */
+/** A batch request that runs a finished run's errored or cancelled tasks again, as it ran them. */
 export interface RetrySelection {
   id: string;
   models: {
@@ -38,7 +38,7 @@ export interface RetrySelection {
 }
 
 /**
- * The tasks a run's harness errored on or that were cancelled before they finished, and the comparison that runs them again with the run's
+ * The tasks a run's harness errored on or that were cancelled before they finished, and the batch that runs them again with the run's
  * model, reasoning, credentials and sandbox, in its repository or benchmark alike. None while the
  * run is live, when it is deleted, when it recorded no credentials (runs from before they did), or
  * when nothing errored or was cancelled.

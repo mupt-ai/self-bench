@@ -50,7 +50,7 @@ function changes(harness: Saved): string {
 
 /**
  * `harness list|create|show|update|delete [ID]`: the workspace's saved harnesses
- * (routes/saved-harnesses.ts), which `comparison create --saved-harness ID` runs. `conditions` and
+ * (routes/saved-harnesses.ts), which `run create --saved-harness ID` runs. `conditions` and
  * `condition`, their older names, run the same commands.
  */
 export async function savedHarnessCommand(args: string[]): Promise<void> {

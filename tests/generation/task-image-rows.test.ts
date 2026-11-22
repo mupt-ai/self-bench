@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { comparisons, orgs, releases, repos, tasks, users } from "../../src/db/schema.js";
+import { orgs, releases, repos, runBatches, tasks, users } from "../../src/db/schema.js";
 import { taskImageRows } from "../../src/generation/tasks/task-images.js";
 import { type TestDatabase, testDatabase } from "../support/test-database.js";
 
@@ -80,7 +80,7 @@ test("a removal saves only when the row still matches what was reconciled", asyn
   expect(saved?.images).toBeNull();
 });
 
-test("an image is pinned while a comparison or release names its digest", async () => {
+test("an image is pinned while a batch or release names its digest", async () => {
   const { db, rows, org, user, task } = await seeded();
   expect(await rows.referenced([digest], task.id)).toBe(false);
   // Another row naming the digest pins it; the task's own row does not.
@@ -111,7 +111,7 @@ test("an image is pinned while a comparison or release names its digest", async 
   });
   expect(await rows.referenced([`sha256:${"c".repeat(64)}`, digest], task.id)).toBe(true);
   await db.delete(releases);
-  await db.insert(comparisons).values({
+  await db.insert(runBatches).values({
     id: randomUUID(),
     orgId: org.id,
     repoId: 1,

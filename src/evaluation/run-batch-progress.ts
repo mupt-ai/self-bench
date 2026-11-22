@@ -1,11 +1,8 @@
-import type { ComparisonRecord } from "../db/comparisons.js";
+import type { RunBatchRecord } from "../db/run-batches.js";
 import type { EvaluationRun } from "./types.js";
 
-/** A comparison's progress, from each of its runs' records or summaries: `runs`, by run id. */
-export function comparisonProgress(
-  record: ComparisonRecord,
-  runs: ReadonlyMap<string, EvaluationRun>,
-) {
+/** A batch's progress, from each of its runs' records or summaries: `runs`, by run id. */
+export function runBatchProgress(record: RunBatchRecord, runs: ReadonlyMap<string, EvaluationRun>) {
   return {
     id: record.id,
     createdAt: record.createdAt,

@@ -2,26 +2,26 @@ import { createHash } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ArtifactStore } from "../../artifacts/index.js";
 import { harborAgentOptions } from "../../contracts/harbor-agent-options.js";
-import type { ComparisonRecord } from "../../db/comparisons.js";
 import { RecordStoreError } from "../../db/encrypted-records.js";
+import type { RunBatchRecord } from "../../db/run-batches.js";
 import type { User } from "../../db/users.js";
-import { cancelComparison, cancelEvaluation, deleteEvaluation } from "../../evaluation/cancel.js";
+import { cancelEvaluation, cancelRunBatch, deleteEvaluation } from "../../evaluation/cancel.js";
 import {
   catalogVersion,
   evaluationCatalog,
   hostedSandboxes,
   withReferencePricing,
 } from "../../evaluation/catalog.js";
-import { comparisonProgress } from "../../evaluation/comparison-progress.js";
-import {
-  type ComparisonOwner,
-  comparisonSchema,
-  comparisonStatus,
-  createComparison,
-  dispatchComparison,
-} from "../../evaluation/comparisons.js";
 import type { EvaluationDataset } from "../../evaluation/dataset.js";
 import { evaluationTaskKey } from "../../evaluation/models.js";
+import { runBatchProgress } from "../../evaluation/run-batch-progress.js";
+import {
+  createRunBatch,
+  dispatchRunBatch,
+  type RunBatchOwner,
+  runBatchSchema,
+  runBatchStatus,
+} from "../../evaluation/run-batches.js";
 import { listRuns } from "../../evaluation/run-list.js";
 import { sameScope } from "../../evaluation/scope.js";
 import { runScope, scopedRun, scopedRuns } from "../../evaluation/scoped-runs.js";
@@ -39,7 +39,7 @@ import { resultsRoute } from "./results.js";
 const SECTIONS = new Set([
   "options",
   "catalog",
-  "comparisons",
+  "batches",
   "audit",
   "summaries",
   "results",
@@ -48,11 +48,11 @@ const SECTIONS = new Set([
 
 /**
  * What follows a repository or benchmark for its evaluations: the catalog, the tasks to pick from,
- * comparisons, task audits, model summaries, results, customer exports (a repository's only), and runs with
+ * batches, task audits, model summaries, results, customer exports (a repository's only), and runs with
  * their artifacts and actions.
  */
 export const EVALUATIONS_PATH =
-  /^\/evaluations(?:\/(options|catalog|comparisons|audit|summaries|results|exports|[a-f0-9-]{36}))?(?:\/(artifacts|[a-f0-9-]{36}))?(?:\/(resume|cancel|delete|explain|download|revoke))?$/;
+  /^\/evaluations(?:\/(options|catalog|batches|audit|summaries|results|exports|[a-f0-9-]{36}))?(?:\/(artifacts|[a-f0-9-]{36}))?(?:\/(resume|cancel|delete|explain|download|revoke))?$/;
 
 /** A request under a repository's evaluations or a benchmark's. */
 export interface ScopedRequest {
@@ -60,7 +60,7 @@ export interface ScopedRequest {
   url: URL;
   response: ServerResponse;
   user: User;
-  owner: ComparisonOwner;
+  owner: RunBatchOwner;
   tenant: { id: number; login: string };
   /** What the scope's evaluations run on: the only way a repository's differ from a benchmark's. */
   dataset: EvaluationDataset;
@@ -68,14 +68,14 @@ export interface ScopedRequest {
   section: string | undefined;
   id: string | undefined;
   action: string | undefined;
-  /** What a started comparison's telemetry adds, such as the benchmark's name. */
+  /** What a started batch's telemetry adds, such as the benchmark's name. */
   properties?: Record<string, string>;
 }
 
 /**
  * Serves one repository's or benchmark's evaluations, the same way for both: the catalog, the
- * tasks to pick from, comparisons (create, list, status, resume, cancel), task audits, model
- * summaries, failure explanations, and runs with their artifacts. Only what a comparison runs on
+ * tasks to pick from, batches (create, list, status, resume, cancel), task audits, model
+ * summaries, failure explanations, and runs with their artifacts. Only what a batch runs on
  * differs, and `dataset` says that.
  */
 export async function handleScopedEvaluations(
@@ -120,7 +120,7 @@ export async function handleScopedEvaluations(
     request.resume();
     return;
   }
-  if (section === "comparisons") {
+  if (section === "batches") {
     if (
       request.method !== "GET" &&
       (request.method !== "POST" || !trustedMutation(request, options.publicUrl, user))
@@ -131,25 +131,25 @@ export async function handleScopedEvaluations(
     try {
       if (!options.vault) throw new RecordStoreError(503);
       const vault = options.vault;
-      const resume = async (record: ComparisonRecord, message: string) => {
+      const resume = async (record: RunBatchRecord, message: string) => {
         let submissionError: string | undefined;
         try {
-          await dispatchComparison(artifacts, record, options.start);
+          await dispatchRunBatch(artifacts, record, options.start);
         } catch {
           submissionError = message;
         }
         sendJson(response, 202, {
-          ...(await comparisonStatus(artifacts, record)),
+          ...(await runBatchStatus(artifacts, record)),
           submissionError,
-          // Every evaluation of a comparison carries the same list (assertTasksFitSandbox).
+          // Every evaluation of a batch carries the same list (assertTasksFitSandbox).
           resourceWarnings: record.inputs[0]?.resourceWarnings ?? [],
         });
         return !submissionError;
       };
       if (request.method === "POST" && !id) {
         const body = JSON.parse((await readBody(request, 30_000)).toString());
-        const draft = comparisonSchema.parse(body);
-        const record = await createComparison(
+        const draft = runBatchSchema.parse(body);
+        const record = await createRunBatch(
           vault,
           dataset,
           artifacts,
@@ -160,11 +160,11 @@ export async function handleScopedEvaluations(
         );
         const submitted = await resume(
           record,
-          "Comparison saved. Some submissions were not confirmed; resume safely using this comparison.",
+          "Batch saved. Some submissions were not confirmed; resume safely using this batch.",
         );
         track(
           user,
-          scope.repoId !== undefined ? "comparison started" : "benchmark started",
+          scope.repoId !== undefined ? "batch started" : "benchmark started",
           {
             tasks: new Set(
               record.inputs.flatMap((input) =>
@@ -181,24 +181,24 @@ export async function handleScopedEvaluations(
           tenant,
         );
       } else if (request.method === "GET" && !id) {
-        const records = await vault.comparisons.listForScope(scope);
-        // One read of the scope's run summaries serves every comparison.
+        const records = await vault.batches.listForScope(scope);
+        // One read of the scope's run summaries serves every batch.
         const { runs = [] } = records.length ? await listRuns(artifacts, scope) : {};
         const byId = new Map(runs.map((run) => [run.id, run]));
         sendJson(response, 200, {
-          comparisons: records.map((record) => comparisonProgress(record, byId)),
+          batches: records.map((record) => runBatchProgress(record, byId)),
         });
       } else {
-        const record = id ? await vault.comparisons.find(id) : undefined;
+        const record = id ? await vault.batches.find(id) : undefined;
         if (!record || record.orgId !== tenant.id || !sameScope(record.scope, scope))
-          sendJson(response, 404, { error: "Comparison not found" });
+          sendJson(response, 404, { error: "Batch not found" });
         else if (request.method === "GET" && !action)
-          sendJson(response, 200, await comparisonStatus(artifacts, record));
+          sendJson(response, 200, await runBatchStatus(artifacts, record));
         else if (request.method === "POST" && action === "resume")
           await resume(record, "Submission not confirmed. Resume uses the same run IDs.");
         else if (request.method === "POST" && action === "cancel") {
-          await cancelComparison(artifacts, record, user.login, options.stop);
-          sendJson(response, 200, await comparisonStatus(artifacts, record));
+          await cancelRunBatch(artifacts, record, user.login, options.stop);
+          sendJson(response, 200, await runBatchStatus(artifacts, record));
         } else sendJson(response, 405, { error: "Method not allowed" });
       }
     } catch (error) {

@@ -117,10 +117,6 @@ export function WebApp() {
                     <Route path="results" element={<EvaluationPage />} />
                     <Route path="releases" element={<GroupReleasesPage />} />
                     <Route path="settings" element={<GroupSettingsPage />} />
-                    <Route
-                      path="comparisons/:comparisonId"
-                      element={<Navigate to="../results" replace />}
-                    />
                   </Route>
                   <Route path="public" element={<BenchmarksPage />} />
                   <Route path="public/:owner/:name" element={<BenchmarkLayout />}>
@@ -128,10 +124,6 @@ export function WebApp() {
                     <Route path="run" element={<RunPage />} />
                     <Route path="results" element={<EvaluationPage />} />
                     <Route path="releases" element={<BenchmarkReleasesPage />} />
-                    <Route
-                      path="comparisons/:comparisonId"
-                      element={<Navigate to="../results" replace />}
-                    />
                   </Route>
                   <Route path="repos/:owner/:name" element={<RepoLayout />}>
                     {repoRoutes()}
@@ -183,7 +175,6 @@ function repoRoutes() {
         path="settings/credentials"
         element={<Navigate to="/settings/credentials" replace />}
       />
-      <Route path="comparisons/:comparisonId" element={<Navigate to="../results" replace />} />
     </>
   );
 }

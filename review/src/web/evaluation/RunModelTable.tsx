@@ -2,14 +2,14 @@ import { X } from "lucide-react";
 import { useState } from "react";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
-import type { ComparisonSelection } from "../../../../src/evaluation/comparisons";
+import type { RunBatchSelection } from "../../../../src/evaluation/run-batches";
 import type { SavedHarness } from "../harnesses/harness-api";
 import { Notice } from "../ui";
 import { evaluationRequestId } from "./api";
 import { hasDuplicateModelSelections } from "./model-selection";
 import { RunModelRow } from "./RunModelRow";
 
-export function RunModelTable<D extends ComparisonSelection>({
+export function RunModelTable<D extends RunBatchSelection>({
   models,
   credentials,
   draft,
@@ -23,7 +23,7 @@ export function RunModelTable<D extends ComparisonSelection>({
   saved?: SavedHarness[];
   onChange(value: NoInfer<D>): void;
 }) {
-  const [rowKeys] = useState(() => new WeakMap<ComparisonSelection["models"][number], string>());
+  const [rowKeys] = useState(() => new WeakMap<RunBatchSelection["models"][number], string>());
   return (
     <div className="divide-y divide-border">
       {hasDuplicateModelSelections(models, draft.models, credentials) && (

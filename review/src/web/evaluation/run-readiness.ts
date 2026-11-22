@@ -1,12 +1,12 @@
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
-import type { ComparisonSelection } from "../../../../src/evaluation/comparisons";
 import { credentialRoute, linkedCatalogModels } from "../../../../src/evaluation/link-routes";
 import { thinkingOptions } from "../../../../src/evaluation/models";
+import type { RunBatchSelection } from "../../../../src/evaluation/run-batches";
 import { credentialRunsAll, customModel, hasDuplicateModelSelections } from "./model-selection";
 
 /**
- * Whether a Run page's models and sandbox can start a comparison: every row has a model, a
+ * Whether a Run page's models and sandbox can start a batch: every row has a model, a
  * credential that runs its harnesses, and a thinking level it offers, no row repeats another, and
  * the sandbox has its credential. The tasks, harnesses, and repo ablations are each page's own to check.
  */
@@ -16,7 +16,7 @@ export function selectionReady({
   credentials,
   managedSandbox,
 }: {
-  draft: Pick<ComparisonSelection, "models" | "sandbox" | "sandboxCredentialId">;
+  draft: Pick<RunBatchSelection, "models" | "sandbox" | "sandboxCredentialId">;
   models: CatalogModel[];
   credentials: CredentialInfo[];
   managedSandbox: boolean;

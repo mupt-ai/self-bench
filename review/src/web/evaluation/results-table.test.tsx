@@ -136,7 +136,7 @@ test("the table starts closed, opening to batches and then to tasks", () => {
 
 test("an open configuration lists its five newest runs, then more", () => {
   const runs = Array.from({ length: 7 }, (_, index) =>
-    run(`run-${index}`, { comparisonId: `c${index}`, createdAt: at(700 - index * 60) }, [
+    run(`run-${index}`, { batchId: `c${index}`, createdAt: at(700 - index * 60) }, [
       passed("task-1"),
     ]),
   );
@@ -180,12 +180,12 @@ test("an open configuration lists its five newest runs, then more", () => {
 });
 
 test("a task accepted before a re-run of old tasks, but after the last new ones, was added later", () => {
-  const full = run("full", { comparisonId: "c1", createdAt: at(300) }, [
+  const full = run("full", { batchId: "c1", createdAt: at(300) }, [
     passed("task-1"),
     errored("task-2", "Harbor exited with code 137"),
   ]);
-  const retry = run("retry", { comparisonId: "c2", createdAt: at(100) }, [passed("task-2")]);
-  const pick = run("pick", { comparisonId: "c3", createdAt: at(50) }, [passed("task-3")]);
+  const retry = run("retry", { batchId: "c2", createdAt: at(100) }, [passed("task-2")]);
+  const pick = run("pick", { batchId: "c3", createdAt: at(50) }, [passed("task-3")]);
   const accepted = (taskId: string, minutesAgo: number) => ({
     runId: "batch-1",
     taskId,

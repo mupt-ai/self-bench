@@ -68,7 +68,7 @@ test("Run Missing starts every setting's missing tasks, as each ran before, in o
           },
         ],
       });
-    if (endpoint === `${url}/comparisons` && init?.method === "POST") {
+    if (endpoint === `${url}/batches` && init?.method === "POST") {
       const body = JSON.parse(String(init.body));
       posted.push(body);
       return Response.json({ id: body.id, runs: [] });

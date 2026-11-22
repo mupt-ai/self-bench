@@ -63,10 +63,10 @@ test.each([false, true])(
           { headers: { etag: submitted ? '"retry"' : '"finished"' } },
         );
       }
-      if (endpoint === `${url}/comparisons` && init?.method === "POST") {
+      if (endpoint === `${url}/batches` && init?.method === "POST") {
         submitted = true;
-        retried.comparisonId = JSON.parse(String(init.body)).id;
-        return Response.json({ id: retried.comparisonId });
+        retried.batchId = JSON.parse(String(init.body)).id;
+        return Response.json({ id: retried.batchId });
       }
       throw new Error(`Unexpected request: ${endpoint}`);
     }) as typeof globalThis.fetch);
@@ -105,7 +105,7 @@ test.each([false, true])(
       if (!confirm) throw new Error("Missing retry confirmation");
       expect(confirm.disabled).toBe(false);
       await act(async () => confirm.click());
-      // Navigation stays on Results: a newly submitted comparison must still refresh its list.
+      // Navigation stays on Results: a newly submitted batch must still refresh its list.
       expect(router.state.location.pathname).toBe(path);
       expect(container.querySelector("dialog")).toBeNull();
       if (delayedRecord) {

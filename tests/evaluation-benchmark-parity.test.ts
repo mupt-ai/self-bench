@@ -46,14 +46,14 @@ test("a benchmark picks tasks and audits them as a repository does", async () =>
       expect(
         (
           await fixture.request(
-            `${base}/comparisons`,
+            `${base}/batches`,
             post({ ...selection, id: crypto.randomUUID(), tasks }),
           )
         ).status,
       ).toBe(400);
     // Picking some tasks, as Retry Errored Tasks does, runs only those.
     const picked = await fixture.request(
-      `${base}/comparisons`,
+      `${base}/batches`,
       post({ ...selection, id: crypto.randomUUID(), tasks: [second] }),
     );
     expect(picked.status).toBe(202);

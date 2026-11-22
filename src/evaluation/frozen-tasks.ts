@@ -65,7 +65,7 @@ export async function repositoryTasks(
 
 /**
  * Freezes the Harbor registry tasks and datasets `references` name into task bundles, so a
- * comparison runs them as it runs a repository's tasks. Each task is downloaded once, checked as
+ * batch runs them as it runs a repository's tasks. Each task is downloaded once, checked as
  * published (checkRegistryTask), and stored unchanged as `harbor-task/` in a bundle: its trials
  * unpack exactly what was checked, however the registry changes, and run it with its own limits
  * (`minutes` bounds the run). Nothing is stored unless every task passes. A

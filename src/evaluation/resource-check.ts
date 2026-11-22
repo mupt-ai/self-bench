@@ -4,7 +4,7 @@ import type { EvaluationInput } from "./types.js";
 
 /**
  * Checks what each task asks for against the sandbox credential's per-sandbox limits before a
- * comparison is saved. A task over a limit refuses the whole comparison, naming each such task;
+ * batch is saved. A task over a limit refuses the whole batch, naming each such task;
  * warnings (rounding, little headroom) are returned for the requester to see.
  */
 export function assertTasksFitSandbox(

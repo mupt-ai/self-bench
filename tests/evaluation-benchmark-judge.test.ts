@@ -48,7 +48,7 @@ test("a benchmark graded by an LLM judge runs with the judge credential the user
       sandbox: "e2b",
       sandboxCredentialId: await credential("e2b"),
     };
-    const path = `${fixture.benchmarks}/law/lab/evaluations/comparisons`;
+    const path = `${fixture.benchmarks}/law/lab/evaluations/batches`;
     const refusal = async (body: object) => {
       const response = await fixture.request(path, post({ ...selection, ...body }));
       expect(response.status).toBe(400);
@@ -76,14 +76,14 @@ test("a benchmark graded by an LLM judge runs with the judge credential the user
       modelCredentialId: openai,
       judgeCredentialId: anthropic,
     });
-    // The judge's credential can't be deleted while the comparison has runs to start.
+    // The judge's credential can't be deleted while the batch has runs to start.
     const deletion = await fixture.request(
       `/api/orgs/avyay/credentials/${anthropic}/delete`,
       post({}),
     );
     expect(deletion.status).toBe(400);
     expect((await deletion.json()).error).toBe(
-      "Credential is needed by an active or pending comparison",
+      "Credential is needed by an active or pending batch",
     );
     expect(input?.tasks[0]?.judge).toEqual({
       variables: ["ANTHROPIC_API_KEY"],

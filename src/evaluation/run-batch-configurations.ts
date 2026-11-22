@@ -1,8 +1,8 @@
 import type { SubagentThinking } from "../contracts/conditions.js";
 import type { CredentialInfo } from "../db/credentials.js";
 import type { CatalogModel } from "./catalog.js";
-import type { ComparisonSelection } from "./comparisons.js";
 import { defaultThinking, type Harness, routeFor } from "./models.js";
+import type { RunBatchSelection } from "./run-batches.js";
 import { routerPart, subagentPart } from "./setting.js";
 import { subagentCredentials, subagentRefusal, subagentThinkingLevels } from "./subagents.js";
 import type { EvaluationRun, SubagentModel } from "./types.js";
@@ -75,7 +75,7 @@ const MANAGED_CREDENTIAL = {
  * one (subagentRefusal).
  */
 export function selectedSubagent(
-  selected: NonNullable<ComparisonSelection["models"][number]["subagent"]> & {
+  selected: NonNullable<RunBatchSelection["models"][number]["subagent"]> & {
     thinking?: SubagentThinking | undefined;
   },
   harnesses: readonly Harness[],
@@ -126,7 +126,7 @@ export function selectedSubagent(
 
 /**
  * The subagent model a condition's runs of one row use, with its delegation prompt and the
- * thinking level it picked: on the credential the comparison picked for it, or else the first of
+ * thinking level it picked: on the credential the batch picked for it, or else the first of
  * the workspace's (then the managed one) that can serve it so beside this row. Throws why none can.
  */
 export function conditionSubagent(

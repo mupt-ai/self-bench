@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { validateEndpoint } from "../src/db/credential-endpoints.js";
 import { credentialSchema } from "../src/db/credentials.js";
-import type { ComparisonDraft } from "../src/evaluation/comparisons.js";
 import { credentialExecution } from "../src/evaluation/execution.js";
+import type { RunBatchDraft } from "../src/evaluation/run-batches.js";
 import { initialEvaluation, saveEvaluation } from "../src/evaluation/store.js";
 import { evaluationServer } from "./support/evaluation-fixture.js";
 import { memoryVault } from "./support/evaluation-vault.js";
@@ -36,7 +36,7 @@ test("catalog is populated without keys and only exposes supported provider fami
   }
 });
 
-test("durable comparison, scoped credentials, frozen tasks, partial dispatch and deletion protection", async () => {
+test("durable batch, scoped credentials, frozen tasks, partial dispatch and deletion protection", async () => {
   const records = memoryVault();
   const fixture = await evaluationServer(records);
   try {
@@ -49,7 +49,7 @@ test("durable comparison, scoped credentials, frozen tasks, partial dispatch and
     };
     const modelKey = await create("openai", "model-secret");
     const sandboxKey = await create("e2b", "sandbox-secret");
-    const draft: ComparisonDraft = {
+    const draft: RunBatchDraft = {
       id: crypto.randomUUID(),
       tasks: [{ runId: "run-one", taskId: "task-one" }],
       models: [
@@ -66,39 +66,35 @@ test("durable comparison, scoped credentials, frozen tasks, partial dispatch and
     };
     await fixture.repos.update(fixture.repo.orgId, fixture.repo.fullName, { agentMinutes: 75 });
     fixture.failStart(true);
-    const saved = await fixture.request(`${fixture.base}/comparisons`, post(draft));
+    const saved = await fixture.request(`${fixture.base}/batches`, post(draft));
     expect(saved.status).toBe(202);
     expect((await saved.json()).submissionError).toBeDefined();
-    const comparisons = await records.comparisons.listForScope({ repoId: fixture.repo.id });
-    expect(comparisons).toHaveLength(1);
-    const comparison = comparisons[0];
-    if (!comparison) throw new Error("Missing comparison");
-    expect(comparison.inputs[0]?.tasks).toEqual(comparison.inputs[1]?.tasks);
-    expect(comparison.inputs[0]?.thinking).toBe("xhigh");
+    const batches = await records.batches.listForScope({ repoId: fixture.repo.id });
+    expect(batches).toHaveLength(1);
+    const batch = batches[0];
+    if (!batch) throw new Error("Missing batch");
+    expect(batch.inputs[0]?.tasks).toEqual(batch.inputs[1]?.tasks);
+    expect(batch.inputs[0]?.thinking).toBe("xhigh");
     // The repo's agent limit is frozen with the tasks; changing it later leaves this run alone.
-    expect(comparison.inputs.map((input) => input.agentMinutes)).toEqual([75, 75]);
+    expect(batch.inputs.map((input) => input.agentMinutes)).toEqual([75, 75]);
     await fixture.repos.update(fixture.repo.orgId, fixture.repo.fullName, { agentMinutes: 20 });
-    expect(JSON.stringify(comparison)).not.toContain("model-secret");
+    expect(JSON.stringify(batch)).not.toContain("model-secret");
     const deletion = await fixture.request(`${credentialsUrl}/${modelKey}/delete`, post({}));
     expect(deletion.status).toBe(400);
-    expect((await fixture.request(`${fixture.base}/comparisons/${draft.id}`, {}, 2)).status).toBe(
-      404,
-    );
+    expect((await fixture.request(`${fixture.base}/batches/${draft.id}`, {}, 2)).status).toBe(404);
     const otherRepo = fixture.base.replace("/repo/", "/other/");
-    expect((await fixture.request(`${otherRepo}/comparisons/${draft.id}`)).status).toBe(404);
+    expect((await fixture.request(`${otherRepo}/batches/${draft.id}`)).status).toBe(404);
     fixture.failStart(false);
-    await fixture.request(`${fixture.base}/comparisons/${draft.id}/resume`, post({}));
+    await fixture.request(`${fixture.base}/batches/${draft.id}/resume`, post({}));
     expect(fixture.starts).toHaveLength(2);
-    expect(fixture.starts.map((input) => input.id)).toEqual(
-      comparison.inputs.map((input) => input.id),
-    );
+    expect(fixture.starts.map((input) => input.id)).toEqual(batch.inputs.map((input) => input.id));
     expect(fixture.starts.map((input) => input.agentMinutes)).toEqual([75, 75]);
     const changed = await fixture.request(
-      `${fixture.base}/comparisons`,
+      `${fixture.base}/batches`,
       post({ ...draft, sandbox: "modal" }),
     );
     expect(changed.status).toBe(400);
-    const first = comparison.inputs[0];
+    const first = batch.inputs[0];
     if (!first) throw new Error("Missing input");
     const home = await mkdtemp(join(tmpdir(), "credential-execution-"));
     try {
@@ -118,11 +114,11 @@ test("durable comparison, scoped credentials, frozen tasks, partial dispatch and
       expect(execution.child.SELFBENCH_BAO_TOKEN).toBeUndefined();
       await expect(
         credentialExecution({ ...first, modelName: "openai/tampered" }, home, {}, records),
-      ).rejects.toThrow("reserved comparison");
+      ).rejects.toThrow("reserved batch");
     } finally {
       await rm(home, { recursive: true, force: true });
     }
-    for (const input of comparison.inputs) {
+    for (const input of batch.inputs) {
       const run = initialEvaluation(input, input.modelName);
       run.status = "completed";
       await saveEvaluation(fixture.artifacts, run);
@@ -130,7 +126,7 @@ test("durable comparison, scoped credentials, frozen tasks, partial dispatch and
     expect((await fixture.request(`${credentialsUrl}/${modelKey}/delete`, post({}))).status).toBe(
       200,
     );
-    await fixture.request(`${fixture.base}/comparisons/${draft.id}/resume`, post({}));
+    await fixture.request(`${fixture.base}/batches/${draft.id}/resume`, post({}));
     expect(fixture.starts).toHaveLength(2);
   } finally {
     await fixture.close();
@@ -152,14 +148,14 @@ test("a Vercel evaluation hands its trials the whole Vercel credential", async (
       teamId: "team_eval",
       projectId: "prj_eval",
     });
-    const draft: ComparisonDraft = {
+    const draft: RunBatchDraft = {
       id: crypto.randomUUID(),
       tasks: [{ runId: "run-one", taskId: "task-one" }],
       models: [{ catalogId: "gpt-6-sol", credentialId: modelKey, harnesses: ["codex"] }],
       sandbox: "vercel",
       sandboxCredentialId: vercel,
     };
-    expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);
+    expect((await fixture.request(`${fixture.base}/batches`, post(draft))).status).toBe(202);
     const input = fixture.starts[0];
     if (!input) throw new Error("Missing input");
     expect(input.sandbox).toBe("vercel");

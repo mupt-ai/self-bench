@@ -8,7 +8,6 @@ All commands default to a dry run. Inspect the report before passing `--apply`:
 node dist/maintenance/recompute-cost.js <repoId> <evaluationId> [--apply] [--auth=codex-login|api-key]
 node dist/maintenance/reprice-dari-router.js <repoId> <evaluationId> [--apply]
 node dist/maintenance/backfill-timeouts.js <repoId | benchmark:<id>>... [--apply] [--auth=codex-login|api-key]
-node dist/maintenance/records-migration.js [--apply]
 node dist/maintenance/compact-task-bundles.js <runId>... | --all [--apply]
 ```
 
@@ -76,7 +75,7 @@ repository dozens of times. When a candidate finishes, the worker now compacts i
 Readers of the snapshot (Modal trials, the run viewer) follow the pointer; the viewer and public
 downloads already read the gate task. `compact-task-bundles` applies the same to finished
 candidates of existing runs. It keeps every bundle an accepted task row (deleted ones included),
-saved comparison or release names, and the compiled bundle beside an execution bundle; candidates
+saved batch or release names, and the compiled bundle beside an execution bundle; candidates
 without a row or still in progress are skipped. The dry run reports what applying frees.
 `--apply` needs the artifact store and `SELFBENCH_DATABASE_URL`, and streams each full bundle it
 deletes once. The bucket is versioned: deleted objects stay noncurrent and recoverable for 30

@@ -3,7 +3,7 @@ import type { EvaluationRun } from "../../../../src/evaluation/types";
 import type { JudgeNeeds } from "../../../../src/harnesses/harbor/host-variables";
 
 export type { EvaluationRun, EvaluationTrial, Harness } from "../../../../src/evaluation/types";
-/** The tasks a scope's comparisons pick from, and what their LLM judge reads (EvaluationDataset). */
+/** The tasks a scope's batches pick from, and what their LLM judge reads (EvaluationDataset). */
 export interface EvaluationOptions {
   tasks: DatasetTask[];
   judge?: JudgeNeeds;

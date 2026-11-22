@@ -1,6 +1,6 @@
 import { Button, Notice } from "../ui";
 
-/** A started comparison's tasks close to the sandbox's resource limits, or that it rounds. */
+/** A started batch's tasks close to the sandbox's resource limits, or that it rounds. */
 export function ResourceWarnings({
   warnings,
   onContinue,

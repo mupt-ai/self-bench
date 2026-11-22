@@ -3,7 +3,7 @@ import { evaluationServer } from "./support/evaluation-fixture.js";
 import { memoryVault } from "./support/evaluation-vault.js";
 import { seedTasks } from "./support/task-rows.js";
 
-test("comparisons accept eleven scoped approved tasks without truncation", async () => {
+test("batches accept eleven scoped approved tasks without truncation", async () => {
   const fixture = await evaluationServer(memoryVault());
   const post = (body: unknown) => ({ method: "POST", body: JSON.stringify(body) });
   try {
@@ -38,7 +38,7 @@ test("comparisons accept eleven scoped approved tasks without truncation", async
     };
     const modelKey = await credential("openai");
     const sandboxKey = await credential("e2b");
-    const path = `${fixture.base}/comparisons`;
+    const path = `${fixture.base}/batches`;
     const body = {
       models: [{ catalogId: "gpt-6-sol", credentialId: modelKey, harnesses: ["codex"] }],
       sandbox: "e2b",

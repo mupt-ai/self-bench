@@ -57,7 +57,7 @@ test("harnesses of one model share an entry, and a gone credential's settings ar
   expect(work?.trials).toBe(4);
 });
 
-test("nothing is missing once every setting completed every task, and twelve models fill a comparison", () => {
+test("nothing is missing once every setting completed every task, and twelve models fill a batch", () => {
   expect(
     missingWork(
       [run("sol", "codex", { t1: "completed", t2: "completed", t3: "completed" })],
@@ -72,7 +72,7 @@ test("nothing is missing once every setting completed every task, and twelve mod
   expect(new Set(work?.selections.map((selection) => selection.id)).size).toBe(2);
 });
 
-test("settings with different gaps go in different comparisons, so a running trial is not started again", () => {
+test("settings with different gaps go in different batches, so a running trial is not started again", () => {
   const work = missingWork(
     [
       // Sol misses t2 and t3; Luna is running t3 and misses only t2.

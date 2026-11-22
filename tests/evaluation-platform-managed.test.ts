@@ -38,13 +38,13 @@ test("managed evaluations use the platform model and sandbox credentials", async
       sandbox: "managed",
       sandboxCredentialId: "managed-sandbox",
     };
-    expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);
+    expect((await fixture.request(`${fixture.base}/batches`, post(draft))).status).toBe(202);
     const input = fixture.starts[0];
     if (!input) throw new Error("Missing managed evaluation input");
     expect(
       (
         await fixture.request(
-          `${fixture.base}/comparisons`,
+          `${fixture.base}/batches`,
           post({
             ...draft,
             id: crypto.randomUUID(),
@@ -86,7 +86,7 @@ test("managed evaluation requires Modal even when managed E2B is configured", as
     const catalog = await (await fixture.request(`${fixture.base}/catalog`)).json();
     expect(catalog.managed.sandbox).toBe(false);
     const result = await fixture.request(
-      `${fixture.base}/comparisons`,
+      `${fixture.base}/batches`,
       post({
         id: crypto.randomUUID(),
         tasks: [{ runId: "run-one", taskId: "task-one" }],

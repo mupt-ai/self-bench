@@ -6,12 +6,12 @@ import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
 import { InfoTooltip } from "../primitives/tooltip";
 import { Button, fieldStyles, Notice, Select } from "../ui";
 import { type EvaluationRun, evaluationRequest, evaluationRequestId, type Harness } from "./api";
-import { submitComparison } from "./comparison-submission";
 import { credentialProvider } from "./credential-presentation";
+import { submitRunBatch } from "./run-batch-submission";
 import { retryModelCredentials, retrySandboxes, retrySelection } from "./run-retry";
 
 /**
- * Runs a finished run's errored and cancelled tasks again after confirmation, as a new comparison with the
+ * Runs a finished run's errored and cancelled tasks again after confirmation, as a new batch with the
  * run's model, reasoning and model credential, on the run's sandbox or another the org saved. The
  * setting's score takes the new results.
  */
@@ -29,9 +29,9 @@ export function RetryErroredTasks({
   harness: Harness;
   /** The scope's evaluations API. */
   url: string;
-  /** Where the scope's pages live, for the comparison this starts. */
+  /** Where the scope's pages live, for the batch this starts. */
   pages: string;
-  onStarted?(comparisonId: string): void;
+  onStarted?(batchId: string): void;
 }) {
   const navigate = useNavigate();
   const [open, setOpen] = React.useState(false);
@@ -196,7 +196,7 @@ export function RetryErroredTasks({
                 setBusy(true);
                 setError(undefined);
                 try {
-                  const result = await submitComparison(url, retry.selection);
+                  const result = await submitRunBatch(url, retry.selection);
                   if (result.submissionError) {
                     setError(
                       result.submissionError ??

@@ -108,13 +108,13 @@ export const EVALUATE: Group = {
   title: "Evaluate",
   nouns: [
     {
-      name: "comparison",
-      summary: "Run models on a benchmark's approved tasks",
+      name: "run",
+      summary: "Run models on a benchmark's approved tasks; one run per model",
       verbs: [
         {
           name: "create",
           args: `${S} --model ID [--model ID ...]`,
-          summary: "Run each model on every approved task",
+          summary: "Run each model on every approved task, as one batch",
           flags: [
             ["--harness AGENT", "the agent harness (repeatable)"],
             ["--thinking LEVEL", "thinking level"],
@@ -130,26 +130,26 @@ export const EVALUATE: Group = {
             ["--selection JSON|@FILE", "the whole selection as one object"],
           ],
         },
-        { name: "list", args: S, summary: "List comparisons" },
-        { name: "show", args: `ID ${S}`, summary: "Show a comparison" },
-        { name: "resume", args: `ID ${S}`, summary: "Resume a stopped comparison" },
-        { name: "cancel", args: `ID ${S}`, summary: "Cancel a comparison" },
+        { name: "list", args: S, summary: "List runs" },
+        { name: "show", args: `ID ${S}`, summary: "Show a run and its trials" },
+        { name: "cancel", args: `ID ${S}`, summary: "Cancel a run" },
+        { name: "delete", args: `ID ${S}`, summary: "Delete a run" },
         {
           name: "models",
           args: S,
-          summary: "List models an evaluation can use",
+          summary: "List models a run can use",
           flags: [["--harness AGENT", "list the options a saved harness can set on AGENT"]],
         },
       ],
       nouns: [
         {
-          name: "run",
-          summary: "One model's run in a comparison, with its trials",
+          name: "batch",
+          summary: "Runs started together by one `run create`",
           verbs: [
-            { name: "list", args: S, summary: "List runs" },
-            { name: "show", args: `ID ${S}`, summary: "Show a run and its trials" },
-            { name: "cancel", args: `ID ${S}`, summary: "Cancel a run" },
-            { name: "delete", args: `ID ${S}`, summary: "Delete a run" },
+            { name: "list", args: S, summary: "List batches" },
+            { name: "show", args: `ID ${S}`, summary: "Show a batch's runs" },
+            { name: "resume", args: `ID ${S}`, summary: "Start a batch's runs that did not start" },
+            { name: "cancel", args: `ID ${S}`, summary: "Cancel a batch's runs" },
           ],
         },
       ],

@@ -67,11 +67,11 @@ test("saved credentials reach the solver; host auth and the vault's API key neve
   expect(JSON.stringify(child)).not.toContain(testModelSecret);
   await expect(
     credentialExecution({ ...input, sandbox: "modal" }, "/tmp", {}, vault),
-  ).rejects.toThrow("reserved comparison");
+  ).rejects.toThrow("reserved batch");
   const foreign = { runId: "run-one", taskId: "not-reserved", bundleKey: "tasks/other.tar.gz" };
   await expect(
     credentialExecution({ ...input, tasks: [foreign] }, "/tmp", {}, vault),
-  ).rejects.toThrow("reserved comparison");
+  ).rejects.toThrow("reserved batch");
 });
 test("mocked Harbor persists live output, structured tool results and final scores without secrets", async () => {
   const { store, input, vault } = await runnerFixture();

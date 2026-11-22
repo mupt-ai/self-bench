@@ -5,7 +5,7 @@ import { isSandboxKind } from "../../db/credential-kinds.js";
 import { credentialSchema, maxSandboxesSchema, savedModelsSchema } from "../../db/credentials.js";
 import { RecordStoreError } from "../../db/encrypted-records.js";
 import type { User } from "../../db/users.js";
-import { assertCredentialUnused } from "../../evaluation/comparisons.js";
+import { assertCredentialUnused } from "../../evaluation/run-batches.js";
 import {
   connectDari,
   DARI_LINK_CALLBACK_PATH,
@@ -75,7 +75,7 @@ export async function credentialRoutes(
   try {
     if (!options.vault) throw new RecordStoreError(503);
     const vault = options.vault;
-    const { credentials, comparisons } = vault;
+    const { credentials, batches } = vault;
     if (linking && mutation) {
       // Connect with Dari: the browser's approved code and its PKCE verifier, redeemed here.
       if (!dariLink) throw new RecordStoreError(503, "Dari Link is not configured here.");
@@ -117,7 +117,7 @@ export async function credentialRoutes(
     } else if (mutation && credentialId) {
       const credential = await credentials.find(org.id, credentialId);
       if (!credential) throw new Error("Credential not found");
-      await assertCredentialUnused(comparisons, options.artifacts, org.id, credentialId);
+      await assertCredentialUnused(batches, options.artifacts, org.id, credentialId);
       // A Dari Link grant is ended on Dari too, so Dari no longer lists SelfBench.
       const linked =
         credential.auth === "dari-link"

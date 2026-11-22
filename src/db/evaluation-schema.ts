@@ -36,7 +36,7 @@ export const evaluationSummaries = pgTable(
 /**
  * A Harbor registry dataset an org added to run models on, apart from any repository: a box on the
  * Benchmarks page, with its own runs and results. A worker downloads, checks and freezes `name` at
- * `ref` when it is added, and every comparison runs those frozen tasks.
+ * `ref` when it is added, and every batch runs those frozen tasks.
  */
 export const benchmarks = pgTable(
   "benchmarks",

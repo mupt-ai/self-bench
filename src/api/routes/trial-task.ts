@@ -12,7 +12,7 @@ export async function frozenTrialBundle(
   run: EvaluationRun,
   index: number,
 ): Promise<string | undefined> {
-  const record = run.comparisonId ? await vault?.comparisons.find(run.comparisonId) : undefined;
+  const record = run.batchId ? await vault?.batches.find(run.batchId) : undefined;
   const frozen =
     record && sameScope(record.scope, owner.scope) && record.orgId === owner.orgId
       ? record.inputs.find((input) => input.id === run.id)

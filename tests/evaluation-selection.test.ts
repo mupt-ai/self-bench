@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { ComparisonDraft } from "../src/evaluation/comparisons.js";
+import type { RunBatchDraft } from "../src/evaluation/run-batches.js";
 import { initialEvaluation, saveEvaluation } from "../src/evaluation/store.js";
 import { setGatewayListing } from "../src/gateways/index.js";
 import { evaluationServer } from "./support/evaluation-fixture.js";
@@ -31,7 +31,7 @@ test("one model row resolves its saved route and rejects unsupported thinking be
       sandbox: "e2b",
       sandboxCredentialId: sandbox,
     };
-    expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(400);
+    expect((await fixture.request(`${fixture.base}/batches`, post(draft))).status).toBe(400);
     expect(fixture.starts).toHaveLength(0);
     draft.models = [
       {
@@ -41,12 +41,12 @@ test("one model row resolves its saved route and rejects unsupported thinking be
         thinking: "default",
       },
     ];
-    expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(400);
+    expect((await fixture.request(`${fixture.base}/batches`, post(draft))).status).toBe(400);
     expect(fixture.starts).toHaveLength(0);
     draft.models = [
       { catalogId: "gpt-6-sol", credentialId: router, harnesses: ["pi"], thinking: "xhigh" },
     ];
-    expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);
+    expect((await fixture.request(`${fixture.base}/batches`, post(draft))).status).toBe(202);
     expect(fixture.starts[0]).toMatchObject({
       model: "gpt-6-sol",
       modelName: "openrouter/openai/gpt-6-sol",
@@ -59,7 +59,7 @@ test("one model row resolves its saved route and rejects unsupported thinking be
       { catalogId: "gpt-6-sol", credentialId: router, harnesses: ["codex"], thinking: "xhigh" },
     ];
     draft.id = crypto.randomUUID();
-    expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);
+    expect((await fixture.request(`${fixture.base}/batches`, post(draft))).status).toBe(202);
     expect(fixture.starts).toHaveLength(2);
   } finally {
     await fixture.close();
@@ -90,7 +90,7 @@ test("a Meta key runs any harness; an OpenAI key cannot run Claude Code", async 
     });
     const harnesses = ["muse-code", "codex", "claude-code", "pi", "mini-swe-agent", "terminus-2"];
     const accepted = await fixture.request(
-      `${fixture.base}/comparisons`,
+      `${fixture.base}/batches`,
       post(draft("muse-spark-1.3", meta, harnesses)),
     );
     expect(accepted.status).toBe(202);
@@ -101,7 +101,7 @@ test("a Meta key runs any harness; an OpenAI key cannot run Claude Code", async 
     });
     // OpenAI serves no Anthropic Messages API for Claude Code to speak.
     const refused = await fixture.request(
-      `${fixture.base}/comparisons`,
+      `${fixture.base}/batches`,
       post(draft("gpt-6-sol", openai, ["claude-code"])),
     );
     expect(refused.status).toBe(400);
@@ -124,7 +124,7 @@ test("missing-task runs skip only completed model, harness, thinking and task pa
     };
     const credentialId = await save("openrouter");
     const sandboxCredentialId = await save("e2b");
-    const draft: ComparisonDraft = {
+    const draft: RunBatchDraft = {
       id: crypto.randomUUID(),
       tasks: [{ runId: "run-one", taskId: "task-one" }],
       sandbox: "e2b",
@@ -139,7 +139,7 @@ test("missing-task runs skip only completed model, harness, thinking and task pa
         },
       ],
     };
-    expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);
+    expect((await fixture.request(`${fixture.base}/batches`, post(draft))).status).toBe(202);
     const input = fixture.starts[0];
     if (!input) throw new Error("Missing evaluation input");
     const completed = initialEvaluation(input, "GPT-6 Sol");
@@ -161,7 +161,7 @@ test("missing-task runs skip only completed model, harness, thinking and task pa
       if (key.includes("/snapshots/")) throw new Error("API must not expand full run snapshots");
       return read(key);
     };
-    const duplicate = await fixture.request(`${fixture.base}/comparisons`, post(draft));
+    const duplicate = await fixture.request(`${fixture.base}/batches`, post(draft));
     expect(duplicate.status).toBe(400);
     expect(await duplicate.json()).toEqual({
       error: "Every selected configuration and task already has a completed result.",
@@ -172,7 +172,7 @@ test("missing-task runs skip only completed model, harness, thinking and task pa
     const selected = draft.models[0];
     if (!selected) throw new Error("Missing model selection");
     draft.models[0] = { ...selected, thinking: "xhigh" };
-    expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);
+    expect((await fixture.request(`${fixture.base}/batches`, post(draft))).status).toBe(202);
     expect(fixture.starts).toHaveLength(2);
   } finally {
     await fixture.close();
@@ -205,7 +205,7 @@ test("OpenRouter credentials allow separate harnesses for one model and reject r
         { ...selection, harnesses: ["mini-swe-agent"], thinking: "high" },
       ],
     };
-    expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);
+    expect((await fixture.request(`${fixture.base}/batches`, post(draft))).status).toBe(202);
     expect(fixture.starts).toHaveLength(2);
     expect(fixture.starts[1]).toMatchObject({
       modelName: "openrouter/openai/gpt-6-sol",
@@ -219,10 +219,10 @@ test("OpenRouter credentials allow separate harnesses for one model and reject r
       harnesses: ["codex"],
       thinking: "low",
     };
-    expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(400);
+    expect((await fixture.request(`${fixture.base}/batches`, post(draft))).status).toBe(400);
     expect(fixture.starts).toHaveLength(2);
     draft.models[1] = { ...selection, harnesses: ["codex"], thinking: "high" };
-    expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);
+    expect((await fixture.request(`${fixture.base}/batches`, post(draft))).status).toBe(202);
     expect(fixture.starts).toHaveLength(4);
   } finally {
     await fixture.close();
@@ -259,9 +259,9 @@ test.each([
         sandboxCredentialId: await save("e2b"),
         models: [{ catalogId: "vendor/unlisted", credentialId, harnesses: ["pi"] }],
       };
-      expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(400);
+      expect((await fixture.request(`${fixture.base}/batches`, post(draft))).status).toBe(400);
       draft.models = [{ catalogId: id, credentialId, harnesses: ["pi"] }];
-      expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);
+      expect((await fixture.request(`${fixture.base}/batches`, post(draft))).status).toBe(202);
       expect(fixture.starts[0]).toMatchObject({
         model: id,
         modelName: `${gateway}/${listedId}`,

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { conditionSchema, skillSource } from "../src/contracts/conditions.js";
-import type { ComparisonDraft } from "../src/evaluation/comparisons.js";
 import { conditionArguments, runCondition } from "../src/evaluation/conditions.js";
+import type { RunBatchDraft } from "../src/evaluation/run-batches.js";
 import { solverArguments } from "../src/evaluation/solver-arguments.js";
 import { initialEvaluation, saveEvaluation } from "../src/evaluation/store.js";
 import type { EvaluationRun } from "../src/evaluation/types.js";
@@ -69,7 +69,7 @@ test("a condition's id follows what it changes, and Harbor gets its skills and i
   expect(conditionArguments(undefined, "pi")).toEqual([]);
 });
 
-test("a comparison runs every model under the baseline and each condition, kept apart", async () => {
+test("a batch runs every model under the baseline and each condition, kept apart", async () => {
   const fixture = await evaluationServer();
   const post = (body: unknown) => ({ method: "POST", body: JSON.stringify(body) });
   try {
@@ -85,7 +85,7 @@ test("a comparison runs every model under the baseline and each condition, kept 
     const credentialId = await save("openrouter");
     const sandboxCredentialId = await save("e2b");
     const meta = await save("meta");
-    const draft: ComparisonDraft = {
+    const draft: RunBatchDraft = {
       id: crypto.randomUUID(),
       tasks: [{ runId: "run-one", taskId: "task-one" }],
       sandbox: "e2b",
@@ -93,7 +93,7 @@ test("a comparison runs every model under the baseline and each condition, kept 
       models: [{ catalogId: "gpt-6-sol", credentialId, harnesses: ["pi"], thinking: "high" }],
       conditions: [{ name: "With Skills", skills: ["vercel/next.js"] }],
     };
-    const started = await fixture.request(`${fixture.base}/comparisons`, post(draft));
+    const started = await fixture.request(`${fixture.base}/batches`, post(draft));
     expect(started.status).toBe(202);
     expect(fixture.starts.map((input) => input.condition?.name)).toEqual([
       undefined,
@@ -132,7 +132,7 @@ test("a comparison runs every model under the baseline and each condition, kept 
       await saveEvaluation(fixture.artifacts, run);
     }
     const missing = await fixture.request(
-      `${fixture.base}/comparisons`,
+      `${fixture.base}/batches`,
       post({ ...draft, id: crypto.randomUUID(), skipCompleted: true }),
     );
     expect(missing.status).toBe(202);
@@ -140,20 +140,20 @@ test("a comparison runs every model under the baseline and each condition, kept 
 
     // Only the conditions, and never skills on a harness that can't load them.
     const only = await fixture.request(
-      `${fixture.base}/comparisons`,
+      `${fixture.base}/batches`,
       post({ ...draft, id: crypto.randomUUID(), baseline: false }),
     );
     expect(only.status).toBe(202);
     expect(fixture.starts.slice(3).map((input) => input.condition?.name)).toEqual(["With Skills"]);
     const nothing = await fixture.request(
-      `${fixture.base}/comparisons`,
+      `${fixture.base}/batches`,
       post({ ...draft, id: crypto.randomUUID(), baseline: false, conditions: [] }),
     );
     expect(await nothing.json()).toEqual({
       error: "Run the tasks as they are, or pick a harness or an environment",
     });
     const muse = await fixture.request(
-      `${fixture.base}/comparisons`,
+      `${fixture.base}/batches`,
       post({
         ...draft,
         id: crypto.randomUUID(),
@@ -164,7 +164,7 @@ test("a comparison runs every model under the baseline and each condition, kept 
       error: "With Skills adds skills, which only Claude Code, Codex, and Pi load",
     });
     const path = await fixture.request(
-      `${fixture.base}/comparisons`,
+      `${fixture.base}/batches`,
       post({
         ...draft,
         id: crypto.randomUUID(),
@@ -218,7 +218,7 @@ test("a condition with an environment runs each ready task from its variant, as 
       conditions: [{ name: "No AGENTS.md", environment: environment.id }],
     };
     // Nothing is ready yet, so the condition has nothing to run.
-    const early = await fixture.request(`${fixture.base}/comparisons`, post(draft));
+    const early = await fixture.request(`${fixture.base}/batches`, post(draft));
     expect(await early.json()).toEqual({
       error: "No AGENTS.md: no picked task is ready in No AGENTS.md yet",
     });
@@ -228,7 +228,7 @@ test("a condition with an environment runs each ready task from its variant, as 
       bundleKey: "runs/scn-variant/harbor-task.tar.gz",
     });
     const started = await fixture.request(
-      `${fixture.base}/comparisons`,
+      `${fixture.base}/batches`,
       post({ ...draft, id: crypto.randomUUID() }),
     );
     expect(started.status).toBe(202);
@@ -246,7 +246,7 @@ test("a condition with an environment runs each ready task from its variant, as 
       }),
     ]);
     const unknown = await fixture.request(
-      `${fixture.base}/comparisons`,
+      `${fixture.base}/batches`,
       post({ ...draft, id: crypto.randomUUID(), conditions: [{ name: "Gone", environment: 999 }] }),
     );
     expect(await unknown.json()).toEqual({ error: "Gone: no such environment in this repository" });

@@ -141,7 +141,7 @@ export async function groupRoutes(
     if (section === "exports") return send([404, { error: "Not found" }]);
     // A group's tasks get as long as its most generous member gives its own.
     const agentMinutes = Math.max(...members.map((repo) => repo.agentMinutes));
-    const starting = section === "comparisons" && !id && method === "POST";
+    const starting = section === "batches" && !id && method === "POST";
     await handleScopedEvaluations(options, {
       request,
       url,

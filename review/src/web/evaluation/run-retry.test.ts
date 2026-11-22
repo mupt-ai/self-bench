@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import { dariRouter } from "../../../../src/evaluation/catalog";
-import { comparisonSchema } from "../../../../src/evaluation/comparisons";
+import { runBatchSchema } from "../../../../src/evaluation/run-batches";
 import { initialEvaluation } from "../../../../src/evaluation/store";
 import type { EvaluationRun } from "../../../../src/evaluation/types";
 import { evaluationInput } from "../../../../tests/support/evaluation-fixture";
@@ -52,8 +52,8 @@ test("a finished run retries only its errored and cancelled tasks, as it ran the
     ],
     skipCompleted: true,
   });
-  // The API accepts it as a repository's comparison.
-  expect(() => comparisonSchema.parse(retry?.selection)).not.toThrow();
+  // The API accepts it as a repository's batch.
+  expect(() => runBatchSchema.parse(retry?.selection)).not.toThrow();
 });
 
 test("a custom model retries under its typed name, whatever route reached it", () => {
@@ -85,7 +85,7 @@ test("a benchmark's run retries its errored tasks with the judge credential it r
     ID,
   );
   expect(retry?.selection.judgeCredentialId).toBe(judgeCredentialId);
-  expect(() => comparisonSchema.parse(retry?.selection)).not.toThrow();
+  expect(() => runBatchSchema.parse(retry?.selection)).not.toThrow();
 });
 
 test("live, deleted, uncredentialed and error-free runs offer no retry", () => {
@@ -119,7 +119,7 @@ const SAVED = [
 test("a retry may move to another saved sandbox, which sets its provider", () => {
   const retry = retrySelection(finishedRun(), "pi", ID, E2B_KEY, SAVED);
   expect(retry?.selection).toMatchObject({ sandbox: "e2b", sandboxCredentialId: E2B_KEY });
-  expect(() => comparisonSchema.parse(retry?.selection)).not.toThrow();
+  expect(() => runBatchSchema.parse(retry?.selection)).not.toThrow();
 });
 
 test("the sandbox choices are the run's own first, then the org's saved sandboxes", () => {
@@ -161,7 +161,7 @@ test("a retry may run on another model credential, keeping everything else as it
   expect(retry?.selection.models).toEqual([
     { catalogId: "dari/routing", credentialId: other, harnesses: ["pi"] },
   ]);
-  expect(comparisonSchema.safeParse(retry?.selection).success).toBe(true);
+  expect(runBatchSchema.safeParse(retry?.selection).success).toBe(true);
   expect(retrySelection(finishedRun(), "pi", ID)?.selection.models[0]?.credentialId).toBe(
     MODEL_CREDENTIAL,
   );

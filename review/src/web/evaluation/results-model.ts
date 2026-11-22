@@ -42,7 +42,7 @@ export interface TaskResult {
 }
 
 /**
- * One run of a configuration and its results. A comparison that ran the configuration twice, by
+ * One run of a configuration and its results. A batch that ran the configuration twice, by
  * two routes, has two.
  */
 export interface Batch {

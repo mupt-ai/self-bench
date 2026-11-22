@@ -35,9 +35,9 @@ function renderExecution(ready: boolean, pairs: number) {
   );
 }
 
-/** The Full Comparison button's opening tag; placeholder options are disabled too. */
+/** The Run All Tasks button's opening tag; placeholder options are disabled too. */
 function fullButton(html: string): string {
-  return html.match(/<button[^>]*>(?=(?:(?!<\/button>)[\s\S])*Run Full Comparison)/)?.[0] ?? "";
+  return html.match(/<button[^>]*>(?=(?:(?!<\/button>)[\s\S])*Run All Tasks)/)?.[0] ?? "";
 }
 
 test("the run page explains why a run is unavailable, once tasks load", () => {
@@ -93,5 +93,5 @@ test("ready execution shows the trial total and enables the run action", () => {
   expect(html).toContain(">2</dd>");
   expect(fullButton(html)).toMatch(/^<button/);
   expect(fullButton(html)).not.toContain('disabled=""');
-  expect(html.indexOf("Run Missing Tasks")).toBeLessThan(html.indexOf("Run Full Comparison"));
+  expect(html.indexOf("Run Missing Tasks")).toBeLessThan(html.indexOf("Run All Tasks"));
 });

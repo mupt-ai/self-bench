@@ -1,7 +1,7 @@
 /**
  * Compacts the compile attempts of finished candidates, as the worker now does when a candidate
  * finishes (compactCandidate): each repository snapshot moves to one shared copy per content, and
- * each full bundle that no task row, saved comparison or release delivers goes once its gate task
+ * each full bundle that no task row, saved batch or release delivers goes once its gate task
  * and snapshot are shown to hold exactly its files.
  *
  *   node dist/maintenance/compact-task-bundles.js <runId>... | --all            # dry run
@@ -14,7 +14,7 @@
 import { createArtifactStore } from "../src/artifacts/index.js";
 import { loadConfig } from "../src/contracts/config/index.js";
 import { openDatabase } from "../src/db/client.js";
-import { comparisons, releases, tasks } from "../src/db/schema.js";
+import { runBatches, releases, tasks } from "../src/db/schema.js";
 import { type Compaction, compactCandidate, keptBundles } from "../src/generation/runs/compact.js";
 
 const BUNDLE_KEY = /runs\/[A-Za-z0-9._/-]+?\.tar\.gz/g;
@@ -40,12 +40,12 @@ export async function main() {
         pipelineStatus: tasks.pipelineStatus,
       })
       .from(tasks);
-    // Accepted rows, deleted ones included: a deleted task's comparisons and releases still run it.
+    // Accepted rows, deleted ones included: a deleted task's batches and releases still run it.
     const delivered = rows.flatMap((row) =>
       row.pipelineStatus === "accepted" && row.bundleKey ? [row.bundleKey] : [],
     );
     const saved = [
-      ...(await database.db.select({ text: comparisons.inputs }).from(comparisons)),
+      ...(await database.db.select({ text: runBatches.inputs }).from(runBatches)),
       ...(await database.db.select({ text: releases.payload }).from(releases)),
       ...(await database.db.select({ text: releases.detail }).from(releases)),
     ].flatMap(({ text }) => JSON.stringify(text).match(BUNDLE_KEY) ?? []);

@@ -1,11 +1,11 @@
-import { type ComparisonCondition, conditionRunsOn, MAX_PAIRS } from "../contracts/conditions.js";
+import { conditionRunsOn, MAX_PAIRS, type RunBatchCondition } from "../contracts/conditions.js";
 import type { SavedHarness } from "../db/saved-harnesses.js";
 import { conditionUnmatched, type RunCondition, runCondition } from "./conditions.js";
 import type { EvaluationDataset } from "./dataset.js";
 import type { Harness } from "./models.js";
 import type { EvaluationInput } from "./types.js";
 
-/** One thing a comparison runs every configuration under: the baseline, or a pair. */
+/** One thing a batch runs every configuration under: the baseline, or a pair. */
 export interface ConditionRuns {
   /** None for the baseline, the tasks as they are. */
   condition?: RunCondition;
@@ -24,7 +24,7 @@ export const NOTHING_TO_RUN = "Run the tasks as they are, or pick a harness or a
 function pairs(selection: {
   harnesses?: readonly number[] | undefined;
   environments?: readonly number[] | undefined;
-}): ComparisonCondition[] {
+}): RunBatchCondition[] {
   const harnesses = [undefined, ...(selection.harnesses ?? [])];
   const environments = [undefined, ...(selection.environments ?? [])];
   return environments.flatMap((environment) =>
@@ -42,7 +42,7 @@ function pairs(selection: {
 }
 
 /**
- * What a comparison runs every configuration under: the baseline, unless it was left out, and
+ * What a batch runs every configuration under: the baseline, unless it was left out, and
  * each pair of its harnesses and environments, frozen as they are now. A saved harness is read
  * from the workspace and named with the environment beside it; a pair with an environment runs
  * each task that environment has ready, from its variant.
@@ -51,11 +51,11 @@ function pairs(selection: {
  * are, unless they were left out, and in each environment. Rows that pick none run the baseline
  * and the environments alone.
  */
-export async function comparisonConditions(
+export async function runBatchConditions(
   selection: {
     harnesses?: readonly number[] | undefined;
     environments?: readonly number[] | undefined;
-    conditions?: readonly ComparisonCondition[] | undefined;
+    conditions?: readonly RunBatchCondition[] | undefined;
     baseline?: boolean | undefined;
   },
   frozen: EvaluationInput["tasks"],
@@ -70,7 +70,7 @@ export async function comparisonConditions(
 ): Promise<ConditionRuns[]> {
   const original = selection.baseline !== false;
   const runs: ConditionRuns[] = original && row === undefined ? [{ tasks: frozen }] : [];
-  const picks: ComparisonCondition[] =
+  const picks: RunBatchCondition[] =
     row === undefined
       ? [...pairs(selection), ...(selection.conditions ?? [])]
       : [
@@ -142,7 +142,7 @@ export async function comparisonConditions(
  * a harness with a subagent model needs a row on another model to work beside.
  */
 export async function rowConditions(
-  selection: Parameters<typeof comparisonConditions>[0] & {
+  selection: Parameters<typeof runBatchConditions>[0] & {
     models: readonly {
       catalogId: string;
       harnesses: readonly Harness[];
@@ -150,12 +150,12 @@ export async function rowConditions(
     }[];
   },
   frozen: EvaluationInput["tasks"],
-  known: Parameters<typeof comparisonConditions>[2],
+  known: Parameters<typeof runBatchConditions>[2],
 ): Promise<Map<number | undefined, ConditionRuns[]>> {
   const byRow = new Map<number | undefined, ConditionRuns[]>();
   for (const row of new Set(selection.models.map((model) => model.harness))) {
     const rows = selection.models.filter((model) => model.harness === row);
-    const conditions = await comparisonConditions(selection, frozen, known, row);
+    const conditions = await runBatchConditions(selection, frozen, known, row);
     byRow.set(row, conditions);
     const picked = rows.flatMap((model) => model.harnesses);
     for (const { condition } of conditions) {

@@ -32,7 +32,7 @@ test("commands act on a repo, custom, or public benchmark, or a group, in the na
   expect(() => scopePath({})).toThrow("--repo");
 });
 
-test("compare flags become one comparison of every model on the same harnesses", () => {
+test("compare flags become one batch of every model on the same harnesses", () => {
   const selection = selectionFromFlags({
     model: ["gpt-6.1-sol", "claude-fable-5"],
     harness: ["pi", "codex"],

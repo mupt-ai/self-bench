@@ -107,7 +107,7 @@ test("keys reject a secondary model on judge keys and repeated or malformed mode
   ).toBeUndefined();
 });
 
-test("comparisons freeze a subagent model, and refuse one the gateway cannot serve and price", async () => {
+test("batches freeze a subagent model, and refuse one the gateway cannot serve and price", async () => {
   const fixture = await evaluationServer();
   const post = (body: unknown) => ({ method: "POST", body: JSON.stringify(body) });
   try {
@@ -137,7 +137,7 @@ test("comparisons freeze a subagent model, and refuse one the gateway cannot ser
         sandbox: "e2b",
         sandboxCredentialId: sandbox,
       };
-      const response = await fixture.request(`${fixture.base}/comparisons`, post(body));
+      const response = await fixture.request(`${fixture.base}/batches`, post(body));
       return { status: response.status, text: await response.text() };
     };
     expect((await compare()).status).toBe(202);
