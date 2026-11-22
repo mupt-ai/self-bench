@@ -66,10 +66,9 @@ chmod +x "$INSTALL_DIR/self-bench"
 
 # Guard against a build without sign-in.
 help_output=$("$INSTALL_DIR/self-bench" help 2>&1) || die "installed self-bench failed to run: $help_output"
-case "$help_output" in
-  *"self-bench login"*) ;;
-  *) die "the installed build ($tag) has no sign-in command." ;;
-esac
+# Help lists each command as "  login  Sign in ..." (older builds: "self-bench login").
+printf '%s\n' "$help_output" | grep -Eq '(^|[[:space:]])login([[:space:]]|$)' \
+  || die "the installed build ($tag) has no sign-in command."
 
 say "self-bench installed to $INSTALL_DIR/self-bench"
 case ":$PATH:" in
