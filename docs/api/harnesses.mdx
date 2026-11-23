@@ -5,7 +5,7 @@ description: "Save a change to an agent once, then run any tasks with and withou
 icon: "sliders"
 ---
 
-A saved harness is a workspace's named change to one agent: its skills, instructions, options, and subagent model. Pick it by `id` in `harnesses` when you [start a comparison](/api/evaluate#harnesses-and-environments) in any repository, benchmark, or group.
+A saved harness is a workspace's named change to one agent: its skills, instructions, options, and subagent model. Pick it by `id` in `harnesses` when you [start a batch](/api/evaluate#harnesses-and-environments) in any repository, benchmark, or group.
 
 | Method | Route | Does |
 | --- | --- | --- |
@@ -32,6 +32,6 @@ A saved harness is a workspace's named change to one agent: its skills, instruct
 | `subagent.credentialId` | A saved credential that serves the subagent model, or `managed-model`. Left out, the first of the workspace's that can, when the run starts. |
 | `subagent.thinking` | The thinking level every subagent call is served at: one the model offers (`thinking` in the catalog), such as `low` or `high`. Left out, the model's default: `high` where it has one. |
 
-A harness needs at least one of `skills`, `instructions`, `harnessOptions`, or `subagent`. Names are unique in a workspace, whatever their case (`409`). A harness names no environment: a comparison picks those beside it.
+A harness needs at least one of `skills`, `instructions`, `harnessOptions`, or `subagent`. Names are unique in a workspace, whatever their case (`409`). A harness names no environment: a batch picks those beside it.
 
-Replacing or deleting a harness changes no run that already used it. A comparison freezes what it picked.
+Replacing or deleting a harness changes no run that already used it. A batch freezes what it picked.

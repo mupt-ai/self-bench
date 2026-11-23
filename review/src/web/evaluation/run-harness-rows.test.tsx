@@ -3,7 +3,7 @@ import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { catalog } from "../../../../src/evaluation/catalog";
-import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
+import type { RunBatchDraft } from "../../../../src/evaluation/run-batches";
 import { hasDuplicateModelSelections } from "./model-selection";
 import { RunModelTable } from "./RunModelTable";
 import { codexOnly, delegating, inBrowser, key, row, skills } from "./run-harness-fixture";
@@ -11,7 +11,7 @@ import { codexOnly, delegating, inBrowser, key, row, skills } from "./run-harnes
 const sol = catalog.find((model) => model.id === "gpt-6-sol");
 if (!sol) throw new Error("Missing catalog model");
 const credentials = [key("router", "openrouter")];
-const drafted = (models: ComparisonDraft["models"]): ComparisonDraft => ({
+const drafted = (models: RunBatchDraft["models"]): RunBatchDraft => ({
   id: "draft",
   models,
   sandbox: "e2b",
@@ -19,7 +19,7 @@ const drafted = (models: ComparisonDraft["models"]): ComparisonDraft => ({
 });
 
 test("a row's Harness offers the saved harnesses it can run, and picking one sets the row's", async () => {
-  let latest: ComparisonDraft["models"] = [];
+  let latest: RunBatchDraft["models"] = [];
   function Table() {
     const [value, setValue] = useState(drafted([row("pi")]));
     latest = value.models;
@@ -107,7 +107,7 @@ test("a row's Harness offers the saved harnesses it can run, and picking one set
 });
 
 test("the same model on an agent as it is and on a saved harness are two configurations", () => {
-  const repeats = (...rows: ComparisonDraft["models"]) =>
+  const repeats = (...rows: RunBatchDraft["models"]) =>
     hasDuplicateModelSelections([sol], rows, credentials);
   expect(repeats(row("codex"), row("codex", { harness: 3 }))).toBe(false);
   expect(repeats(row("codex", { harness: 1 }), row("codex", { harness: 3 }))).toBe(false);

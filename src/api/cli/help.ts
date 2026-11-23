@@ -90,8 +90,8 @@ const MOVED: Record<string, string[]> = {
   member: ["workspace", "member"],
   credential: ["workspace", "credential"],
   feedback: ["task", "feedback"],
-  evaluation: ["comparison", "run"],
-  catalog: ["comparison", "models"],
+  evaluation: ["run"],
+  catalog: ["run", "models"],
   summary: ["results", "summary"],
 };
 

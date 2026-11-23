@@ -77,12 +77,12 @@ export function ResultGroupRows({
   onOpenTask(result: TaskResult): void;
   run?: EvaluationRun | undefined;
   baseUrl?: string;
-  /** Where the scope's pages live, for the comparison a retry starts. */
+  /** Where the scope's pages live, for the batch a retry starts. */
   pages?: string;
   /** The org's saved credentials, for a retry's sandbox. */
   credentials?: readonly CredentialInfo[];
   onChanged?(run: EvaluationRun): void;
-  onRetryStarted?(comparisonId: string): void;
+  onRetryStarted?(batchId: string): void;
 }) {
   const totals = tally(results);
   const blocked = blockedNote(results);

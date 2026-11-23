@@ -23,14 +23,14 @@ const replies = {
   [`POST ${repo}/batches`]: { runId: "b-1" },
   [`POST ${repo}/tasks/from-pr`]: { task: { runId: "r", taskId: "t", state: "in_progress" } },
   [`POST ${repo}/tasks/from-scenario`]: { task: { runId: "r", taskId: "t", state: "in_progress" } },
-  [`POST ${repo}/evaluations/comparisons`]: { id: "c", createdAt: "", runs: [] },
+  [`POST ${repo}/evaluations/batches`]: { id: "c", createdAt: "", runs: [] },
   [`GET ${repo}/evaluations`]: { runs: [] },
   [`GET ${org}/benchmarks/harbor/swe`]: { benchmark: { name: "harbor/swe" } },
   [`GET ${repo}/evaluations/summaries`]: { running: [] },
   [`GET ${repo}/evaluations/results`]: { tasks: 0, configurations: [], taskResults: [] },
 };
 
-/** What a command sent, without the fresh ids a comparison makes up. */
+/** What a command sent, without the fresh ids a batch makes up. */
 async function requests(args: string[]): Promise<Sent[]> {
   const { sent } = await cli([...args, "--org", "acme"], replies);
   return sent.map(({ body, ...request }) => {
@@ -58,10 +58,6 @@ test("each command's older name sends what its new name sends", async () => {
     [
       ["scenario", "create", "--repo", "acme/app", "--title", "T", "--scenario", "Rows are lost."],
       ["task", "create", "--repo", "acme/app", "--title", "T", "--description", "Rows are lost."],
-    ],
-    [
-      ["compare", "--repo", "acme/app", "--model", "m"],
-      ["comparison", "create", "--repo", "acme/app", "--model", "m"],
     ],
     [
       ["runs", "--repo", "acme/app"],

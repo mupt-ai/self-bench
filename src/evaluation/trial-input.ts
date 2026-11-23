@@ -21,7 +21,7 @@ export function preparesTaskImages(sandbox: EvaluationInput["sandbox"]): boolean
 
 /**
  * Sets each evaluation's maxTrials from the limits (maxSandboxes) of the credentials its trials
- * hold a slot of. A comparison's evaluations start together, so they split the sandbox account's
+ * hold a slot of. A batch's evaluations start together, so they split the sandbox account's
  * limit, and those calling one model credential split its limit too. Each runs at least one trial,
  * so more evaluations than slots go over; their trials wait for a slot.
  */

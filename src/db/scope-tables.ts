@@ -2,16 +2,16 @@ import { type EvaluationScope, scopeOf } from "../evaluation/scope.js";
 import {
   benchmarkSummaries,
   benchmarks,
-  comparisons,
   evaluationSummaries,
   groupSummaries,
   repos,
   repositoryGroups,
+  runBatches,
 } from "./schema.js";
 
 /**
  * Where each kind of evaluation scope lives in the database: the table that owns it (and its
- * org), the table its run summaries are kept in, and the column of `comparisons` naming it. The
+ * org), the table its run summaries are kept in, and the column of `batches` naming it. The
  * three kinds' tables have the same shape, so stores branch here, once, rather than each its own.
  */
 export function scopeTables(scope: EvaluationScope) {
@@ -23,7 +23,7 @@ export function scopeTables(scope: EvaluationScope) {
       summaries: evaluationSummaries,
       summaryOwner: evaluationSummaries.repoId,
       summaryKey: "repoId" as const,
-      comparison: comparisons.repoId,
+      batch: runBatches.repoId,
     };
   if (benchmarkId !== undefined)
     return {
@@ -32,7 +32,7 @@ export function scopeTables(scope: EvaluationScope) {
       summaries: benchmarkSummaries,
       summaryOwner: benchmarkSummaries.benchmarkId,
       summaryKey: "benchmarkId" as const,
-      comparison: comparisons.benchmarkId,
+      batch: runBatches.benchmarkId,
     };
   return {
     id: groupId ?? 0,
@@ -40,6 +40,6 @@ export function scopeTables(scope: EvaluationScope) {
     summaries: groupSummaries,
     summaryOwner: groupSummaries.groupId,
     summaryKey: "groupId" as const,
-    comparison: comparisons.groupId,
+    batch: runBatches.groupId,
   };
 }

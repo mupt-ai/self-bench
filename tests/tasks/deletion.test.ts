@@ -55,7 +55,7 @@ test("task tombstones retain history, exclude all public reads and cannot be ove
     });
     await database.db
       .insert(evaluationRecords)
-      .values({ path: "comparisons/history", version: 1, sealed: "test-only-record" });
+      .values({ path: "batches/history", version: 1, sealed: "test-only-record" });
 
     expect(await store.deleteTask(other.id, row.runId, row.taskId)).toBe("missing");
     expect(await store.deleteTask(repo.id, row.runId, row.taskId)).toBe("deleted");
@@ -89,7 +89,7 @@ test("task tombstones retain history, exclude all public reads and cannot be ove
       reviewNote: "Historical review",
     });
     expect(await database.db.select().from(evaluationRecords)).toEqual([
-      { path: "comparisons/history", version: 1, sealed: "test-only-record" },
+      { path: "batches/history", version: 1, sealed: "test-only-record" },
     ]);
 
     // A running task cannot be deleted until its workflow settles it.

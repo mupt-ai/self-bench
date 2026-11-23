@@ -5,7 +5,7 @@ description: "Change every approved task's files once, then run the tasks as bui
 icon: "box"
 ---
 
-An environment runs one script in every approved task's image and builds each task with the change. Run it with `comparison create --environment ID`, alone or with each [saved harness](/cli/harnesses) picked by `--saved-harness ID` ([Evaluate](/cli/evaluate)). `R` is `--repo OWNER/NAME`.
+An environment runs one script in every approved task's image and builds each task with the change. Run it with `run create --environment ID`, alone or with each [saved harness](/cli/harnesses) picked by `--saved-harness ID` ([Evaluate](/cli/evaluate)). `R` is `--repo OWNER/NAME`.
 
 | Command | Does |
 | --- | --- |
@@ -23,5 +23,5 @@ It takes the [generation options](/cli/build#generation-options) for the checks.
 self-bench repo environment create --repo acme/app --name "No AGENTS.md, Next.js 15.5" \
   --script 'rm -f AGENTS.md CLAUDE.md
 pnpm add next@15.5.0'
-self-bench comparison create --repo acme/app --model gpt-6.1-sol --environment 4
+self-bench run create --repo acme/app --model gpt-6.1-sol --environment 4
 ```

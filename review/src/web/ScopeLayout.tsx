@@ -42,7 +42,7 @@ export function ScopeLayout({
           className={cn("shrink-0 overflow-y-hidden pt-8 [scrollbar-gutter:stable]", pageGutter)}
         >
           <div className={cn(pageContainer, "relative")}>
-            {/* The model comparison, in the corner on the Results page; it opens to the full chart. */}
+            {/* The model batch, in the corner on the Results page; it opens to the full chart. */}
             <div className="absolute top-0 right-0 hidden md:block">
               <ChartPreview pages={pages} />
             </div>

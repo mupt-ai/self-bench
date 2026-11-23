@@ -23,7 +23,7 @@ import type { EvaluationRun } from "./types.js";
  * failed) is rebuilt from the run's record, and saved for the next read. A summary is trusted to
  * come from this bucket: a database belongs to one bucket, whose records are never rewritten.
  *
- * Deleted runs are listed too, for the comparisons that started them; lists people see filter them
+ * Deleted runs are listed too, for the batches that started them; lists people see filter them
  * out (`live` in store.ts).
  */
 export interface RunList {

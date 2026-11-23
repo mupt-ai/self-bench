@@ -192,7 +192,7 @@ export async function getEvaluation(
   );
   const latest = entries.sort((left, right) => right.key.localeCompare(left.key))[0];
   const bytes = latest ? await store.getByKey(latest.key) : undefined;
-  return bytes ? (JSON.parse(Buffer.from(bytes).toString("utf8")) as EvaluationRun) : undefined;
+  return bytes ? parseRun(bytes) : undefined;
 }
 /** The scope's runs, newest first, leaving out deleted ones. */
 export async function listEvaluations(
@@ -232,6 +232,18 @@ export async function* iterateEvaluations(
   }
   for (const key of latest.values()) {
     const bytes = await store.getByKey(key);
-    if (bytes) yield JSON.parse(Buffer.from(bytes).toString("utf8")) as EvaluationRun;
+    if (bytes) yield parseRun(bytes);
   }
+}
+
+function parseRun(bytes: Uint8Array): EvaluationRun {
+  return withBatchId(JSON.parse(Buffer.from(bytes).toString("utf8")) as EvaluationRun);
+}
+
+/** Runs saved before batches had their name carry the batch's id as `comparisonId`. */
+export function withBatchId<T extends { batchId?: string }>(run: T): T {
+  const legacy = (run as { comparisonId?: string }).comparisonId;
+  if (legacy === undefined) return run;
+  const { comparisonId: _, ...rest } = run as T & { comparisonId?: string };
+  return { ...rest, batchId: run.batchId ?? legacy } as T;
 }

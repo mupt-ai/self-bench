@@ -1,22 +1,22 @@
 import { z } from "zod";
 import type { ArtifactStore } from "../artifacts/index.js";
-import { comparisonConditionSchema, MAX_CONDITIONS, MAX_PICKED } from "../contracts/conditions.js";
+import { MAX_CONDITIONS, MAX_PICKED, runBatchConditionSchema } from "../contracts/conditions.js";
 import { modelIdPattern, thinkingLevels } from "../contracts/models.js";
-import type { ComparisonRecord } from "../db/comparisons.js";
 import type { CredentialInfo } from "../db/credentials.js";
+import type { RunBatchRecord } from "../db/run-batches.js";
 import type { Vault } from "../db/vault.js";
 import type { ManagedOffer } from "../generation/billing/managed.js";
 import { mergeJudgeNeeds } from "../harnesses/harbor/host-variables.js";
 import { hostedSandboxes } from "./catalog.js";
-import { comparisonProgress } from "./comparison-progress.js";
-import { type ComparisonOwner, saveComparison } from "./comparison-save.js";
 import type { EvaluationDataset } from "./dataset.js";
 import { judgeCredentialRefusal } from "./judge.js";
 import { harnessIds } from "./models.js";
+import { runBatchProgress } from "./run-batch-progress.js";
+import { type RunBatchOwner, saveRunBatch } from "./run-batch-save.js";
 import { getEvaluation } from "./store.js";
 import type { EvaluationInput } from "./types.js";
 
-/** What every comparison selects besides its tasks: models, harnesses, and where they run. */
+/** What every batch selects besides its tasks: models, harnesses, and where they run. */
 const selectionFields = {
   id: z.uuid(),
   models: z
@@ -64,21 +64,21 @@ const selectionFields = {
    * Pairs named one by one (conditions.ts): a saved harness and environment, or the changes
    * written out, as a retry repeats a run. What older clients send in place of the two lists.
    */
-  conditions: z.array(comparisonConditionSchema).max(MAX_CONDITIONS).optional(),
+  conditions: z.array(runBatchConditionSchema).max(MAX_CONDITIONS).optional(),
   /**
    * Whether the tasks also run as they are, in no environment: with no harness change, or with a
    * row's saved harness. Default true.
    */
   baseline: z.boolean().optional(),
 };
-const comparisonSelection = z.object(selectionFields).strict();
-export type ComparisonSelection = z.infer<typeof comparisonSelection>;
+const runBatchSelection = z.object(selectionFields).strict();
+export type RunBatchSelection = z.infer<typeof runBatchSelection>;
 
 /**
- * A comparison: models over the tasks it picks from its repository or benchmark (every task when
+ * A batch: models over the tasks it picks from its repository or benchmark (every task when
  * it names none), and the credential their LLM judge calls with when they have one.
  */
-export const comparisonSchema = z
+export const runBatchSchema = z
   .object({
     ...selectionFields,
     tasks: z
@@ -92,25 +92,25 @@ export const comparisonSchema = z
     judgeCredentialId: z.uuid().optional(),
   })
   .strict();
-export type ComparisonDraft = z.infer<typeof comparisonSchema>;
+export type RunBatchDraft = z.infer<typeof runBatchSchema>;
 
-export type { ComparisonOwner } from "./comparison-save.js";
+export type { RunBatchOwner } from "./run-batch-save.js";
 
 /**
- * Saves a comparison of the draft's models over the tasks it picks from `dataset`, frozen as the
+ * Saves a batch of the draft's models over the tasks it picks from `dataset`, frozen as the
  * dataset gives them now.
  */
-export async function createComparison(
-  vault: Pick<Vault, "credentials" | "comparisons" | "harnesses">,
+export async function createRunBatch(
+  vault: Pick<Vault, "credentials" | "batches" | "harnesses">,
   dataset: Pick<EvaluationDataset, "select" | "environment">,
   store: ArtifactStore,
   managed: ManagedOffer,
-  owner: ComparisonOwner,
-  draft: ComparisonDraft,
+  owner: RunBatchOwner,
+  draft: RunBatchDraft,
   environment: NodeJS.ProcessEnv = process.env,
-): Promise<ComparisonRecord> {
-  const selection = comparisonSchema.parse(draft);
-  return saveComparison(
+): Promise<RunBatchRecord> {
+  const selection = runBatchSchema.parse(draft);
+  return saveRunBatch(
     vault,
     store,
     managed,
@@ -146,18 +146,18 @@ function judgeCredential(
   return credential.id;
 }
 
-export async function comparisonStatus(store: ArtifactStore, record: ComparisonRecord) {
+export async function runBatchStatus(store: ArtifactStore, record: RunBatchRecord) {
   const runs = await Promise.all(
     record.inputs.map((input) => getEvaluation(store, record.scope, input.id)),
   );
-  return comparisonProgress(
+  return runBatchProgress(
     record,
     new Map(runs.flatMap((run) => (run ? [[run.id, run] as const] : []))),
   );
 }
-export async function dispatchComparison(
+export async function dispatchRunBatch(
   store: ArtifactStore,
-  record: ComparisonRecord,
+  record: RunBatchRecord,
   start: (input: EvaluationInput) => Promise<void>,
 ) {
   for (const input of record.inputs) {
@@ -167,35 +167,35 @@ export async function dispatchComparison(
 }
 
 /**
- * A credential cannot be deleted while a comparison that uses it (for its model, its sandbox, or
+ * A credential cannot be deleted while a batch that uses it (for its model, its sandbox, or
  * its LLM judge) still has runs to start.
  */
 export async function assertCredentialUnused(
-  comparisons: Vault["comparisons"],
+  batches: Vault["batches"],
   store: ArtifactStore,
   orgId: number,
   id: string,
 ) {
-  for (const comparison of await comparisons.listForOrg(orgId)) {
-    const uses = comparison.inputs.filter(
+  for (const batch of await batches.listForOrg(orgId)) {
+    const uses = batch.inputs.filter(
       ({ credentials, subagent }) =>
         subagent?.credentialId === id ||
         credentials?.modelCredentialId === id ||
         credentials?.sandboxCredentialId === id ||
         credentials?.judgeCredentialId === id,
     );
-    if (await unfinished(store, { ...comparison, inputs: uses }))
-      throw new Error("Credential is needed by an active or pending comparison");
+    if (await unfinished(store, { ...batch, inputs: uses }))
+      throw new Error("Credential is needed by an active or pending batch");
   }
 }
 
-/** Whether any of a comparison's runs has yet to start or finish (one never started counts). */
+/** Whether any of a batch's runs has yet to start or finish (one never started counts). */
 export async function unfinished(
   store: ArtifactStore,
-  comparison: Pick<ComparisonRecord, "scope" | "inputs">,
+  batch: Pick<RunBatchRecord, "scope" | "inputs">,
 ): Promise<boolean> {
-  for (const input of comparison.inputs) {
-    const run = await getEvaluation(store, comparison.scope, input.id);
+  for (const input of batch.inputs) {
+    const run = await getEvaluation(store, batch.scope, input.id);
     if (!run || run.status === "queued" || run.status === "running") return true;
   }
   return false;

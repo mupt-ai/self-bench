@@ -3,14 +3,14 @@ import { Dialog, DialogBody, DialogFooter, DialogHeader } from "../Dialog";
 import { Button, Notice } from "../ui";
 import { evaluationRequest } from "./api";
 
-/** Stops a live run or comparison after confirmation; finished trials keep their results. */
+/** Stops a live run or batch after confirmation; finished trials keep their results. */
 export function CancelEvaluation<Result>({
   endpoint,
   subject,
   onCancelled,
 }: {
   endpoint: string;
-  subject: "Run" | "Comparison";
+  subject: "Run";
   onCancelled(result: Result): void;
 }) {
   const [open, setOpen] = React.useState(false);

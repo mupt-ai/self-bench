@@ -21,7 +21,7 @@ type ServerEvent =
   | "pull request task started"
   | "scenario task started"
   | "task revision started"
-  | "comparison started"
+  | "batch started"
   | "benchmark started"
   | "release published"
   | "repository group created"

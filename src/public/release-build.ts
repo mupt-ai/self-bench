@@ -251,7 +251,7 @@ export function buildRelease(
                 : {}),
               evaluationId: result?.run.id,
               trialIndex: result?.index,
-              comparisonId: result?.run.comparisonId,
+              batchId: result?.run.batchId,
             },
           ];
         }),

@@ -69,7 +69,7 @@ export function subagentThinkingLevels(model: CatalogModel, provider: string): S
  * The credentials, of `credentials`, that can serve `model` to the subagents of `harnesses`: a kind
  * that serves models by name and routes this one to each harness (through its own API or a
  * gateway that lists it), on a sign-in that runs them, and that offers the model at `thinking`
- * when the subagents are to run at a picked level. A comparison, the Run page, and the harness
+ * when the subagents are to run at a picked level. A batch, the Run page, and the harness
  * editor all pick a subagent credential from these, so `model` must come from the served catalog
  * (evaluationCatalog), which knows every gateway's listings.
  */
@@ -95,7 +95,7 @@ export function subagentCredentials<Credential extends Pick<CredentialInfo, "kin
 /**
  * Why a run on `provider`'s credential cannot give the subagents of `harnesses` a model on
  * `subagentProvider`'s, if it cannot. Trials that do not reach their model through the gateway
- * (trialRoute) are refused where the trial's route is known (comparison-save.ts, execution.ts).
+ * (trialRoute) are refused where the trial's route is known (batch-save.ts, execution.ts).
  */
 export function subagentRefusal(
   harnesses: readonly Harness[],

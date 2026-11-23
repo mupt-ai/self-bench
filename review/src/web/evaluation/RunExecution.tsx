@@ -4,7 +4,7 @@ import { Link } from "react-router";
 import { harborEnvironmentLabels } from "../../../../src/contracts/config/providers";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { HostedSandbox } from "../../../../src/evaluation/catalog";
-import type { ComparisonSelection } from "../../../../src/evaluation/comparisons";
+import type { RunBatchSelection } from "../../../../src/evaluation/run-batches";
 import { cn } from "../primitives/cn";
 import { InfoTooltip } from "../primitives/tooltip";
 import type { Coverage } from "../setup/readiness";
@@ -15,12 +15,12 @@ import { Button, buttonStyles, fieldStyles, Notice, Select } from "../ui";
  * What the Run page edits: the tasks, models, and sandbox, the LLM judge's credential, and the
  * workspace's saved harnesses and the repository's repo ablations picked to run beside them.
  */
-export type RunDraft = Omit<ComparisonSelection, "conditions"> & {
+export type RunDraft = Omit<RunBatchSelection, "conditions"> & {
   tasks: { runId: string; taskId: string }[];
   judgeCredentialId?: string;
 };
 
-/** Why the comparison can't run yet, for the notice above the task picker. Nothing while
+/** Why the batch can't run yet, for the notice above the task picker. Nothing while
  * the accepted tasks are still loading or once the request is submitted. */
 export function runBlocker({
   draft,
@@ -188,8 +188,8 @@ export function RunExecution({
           <InfoTooltip
             label={
               submitted
-                ? "Retry Same Comparison resubmits this request with the same ID."
-                : "Run Missing Tasks skips tasks that already have completed results for these model and harness pairs. Run Full Comparison runs every selected task."
+                ? "Retry Submission resubmits these runs with the same ID, so none starts twice."
+                : "Run Missing Tasks skips tasks that already have completed results for these model and harness pairs. Run All Tasks runs every selected task."
             }
           />
         </h3>
@@ -210,11 +210,7 @@ export function RunExecution({
           onClick={onSubmit}
         >
           <Play className="size-4" aria-hidden="true" />
-          {busy
-            ? "Saving Comparison…"
-            : submitted
-              ? "Retry Same Comparison"
-              : "Run Full Comparison"}
+          {busy ? "Starting Runs…" : submitted ? "Retry Submission" : "Run All Tasks"}
         </Button>
       </div>
     </aside>

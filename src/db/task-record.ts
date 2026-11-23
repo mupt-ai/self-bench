@@ -77,7 +77,7 @@ export function taskState(
 }
 
 /**
- * Accepted by the pipeline, bundled, and approved by a human: the only tasks a comparison may
+ * Accepted by the pipeline, bundled, and approved by a human: the only tasks a batch may
  * run and a release may publish.
  */
 export function runnable(

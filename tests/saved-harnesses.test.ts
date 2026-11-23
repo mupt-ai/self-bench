@@ -4,7 +4,7 @@ import { runCondition } from "../src/evaluation/conditions.js";
 import { HARNESSES as harnesses, harnessesWorkspace, send } from "./support/harnesses-fixture.js";
 
 // Saved harnesses: a workspace's named changes to an agent, with the credential that serves its
-// subagent model, which a comparison picks by id and runs in each repository environment picked.
+// subagent model, which a batch picks by id and runs in each repository environment picked.
 
 const DEEPSEEK = "deepseek-v4-pro-0813";
 let close: (() => Promise<void>) | undefined;

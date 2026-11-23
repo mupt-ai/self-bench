@@ -15,8 +15,8 @@ const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode
 
 /**
  * A saved harness: a workspace's named change to one agent (skills, instructions, options, a
- * subagent model with its delegation prompt and credential), which a comparison in any of its
- * repositories or benchmarks picks by id (contracts/saved-harnesses.ts). A comparison freezes what
+ * subagent model with its delegation prompt and credential), which a batch in any of its
+ * repositories or benchmarks picks by id (contracts/saved-harnesses.ts). A batch freezes what
  * it picked, so editing or deleting one changes no run that already used it.
  */
 export const savedHarnesses = pgTable(

@@ -21,7 +21,7 @@ test("a refused dataset fails its box with the reason, and adding it again tries
   const fixture = await evaluationServer(memoryVault(), { registryCommand: harbor.command });
   const post = (body: unknown) => ({ method: "POST", body: JSON.stringify(body) });
   try {
-    // Adding checks every task once on a worker: a dataset a comparison would refuse fails its
+    // Adding checks every task once on a worker: a dataset a batch would refuse fails its
     // box with the reason, runs on it are refused, and it can be removed.
     const refused = await fixture.request(
       fixture.benchmarks,
@@ -32,8 +32,7 @@ test("a refused dataset fails its box with the reason, and adding it again tries
     expect(failedBox).toMatchObject({ name: "attacker/dataset", status: "failed", tasks: 0 });
     expect(failedBox.error).toContain("unsafe/leak: task bundle refused");
     expect(
-      (await fixture.request(`${fixture.benchmarks}/attacker/dataset/evaluations/comparisons`))
-        .status,
+      (await fixture.request(`${fixture.benchmarks}/attacker/dataset/evaluations/batches`)).status,
     ).toBe(409);
     // Adding a failed box again tries again; once the dataset is fixed, it is added.
     liveRegistry["attacker/dataset@latest"] = [hello];

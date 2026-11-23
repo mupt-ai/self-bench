@@ -15,17 +15,17 @@ interface MissingSetting {
   missing: number;
 }
 
-/** What Run Missing would start: the settings with gaps, and the comparisons that fill them. */
+/** What Run Missing would start: the settings with gaps, and the batches that fill them. */
 export interface MissingWork {
   settings: MissingSetting[];
-  /** Trials the comparisons run: each setting's missing tasks. */
+  /** Trials the batches run: each setting's missing tasks. */
   trials: number;
   /** One per set of settings with the same gaps, of at most twelve models each. */
   selections: RetrySelection[];
 }
 
-/** The most models one comparison takes (comparisonSchema). */
-const MODELS_PER_COMPARISON = 12;
+/** The most models one batch takes (runBatchSchema). */
+const MODELS_PER_BATCH = 12;
 
 /** A setting among runs: model, its typed name if custom, reasoning and harness, and a credential. */
 interface Setting {
@@ -41,7 +41,7 @@ interface Setting {
 }
 
 /**
- * The comparisons that give every setting the scope has run a completed result on every task it
+ * The batches that give every setting the scope has run a completed result on every task it
  * can use now, as each setting ran before: its model, reasoning and model credential, on the
  * newest run's sandbox. A setting run with several model credentials uses its newest that still
  * exists, and one with none left is left out, as is a run before runs recorded credentials.
@@ -52,7 +52,7 @@ export function missingWork(
   tasks: readonly TaskKey[],
   credentials: readonly (Pick<CredentialInfo, "id" | "kind" | "endpoint"> &
     Partial<Pick<CredentialInfo, "name">>)[],
-  /** A fresh comparison id, asked for once per comparison. */
+  /** A fresh batch id, asked for once per batch. */
   newId: () => string,
   sandboxCredentialId?: string,
   /** Only the settings these runs ran on one harness, as one configuration's Run Missing does. */
@@ -69,7 +69,7 @@ export function missingWork(
     const credentialId = run.credentials?.modelCredentialId ?? "";
     const customModel = run.model === "custom" ? run.modelName.replace(/^[^/]+\//, "") : undefined;
     // A Dari router is a setting of its own. It is the router the credential names now, as the
-    // server derives it when the comparison saves, so runs before runs recorded routers group with
+    // server derives it when the batch saves, so runs before runs recorded routers group with
     // the newer ones on the same credential; the run's recorded name labels it when it has one.
     const credentialOf = credentials.find((credential) => credential.id === credentialId);
     const routerId =
@@ -128,7 +128,7 @@ export function missingWork(
   const sandboxId = sandboxCredentialId ?? newest?.credentials?.sandboxCredentialId ?? "";
   const kind = credentials.find((credential) => credential.id === sandboxId)?.kind;
   const judgeCredentialId = newest?.credentials?.judgeCredentialId;
-  // A comparison runs each of its models on all its tasks, and skips only completed trials, so
+  // A batch runs each of its models on all its tasks, and skips only completed trials, so
   // settings with the same gaps go together: none runs a task it has, or is still running.
   const byGaps = new Map<string, Map<string, RetrySelection["models"][number]>>();
   for (const { setting, missing } of gaps) {
@@ -165,10 +165,10 @@ export function missingWork(
     const missing = new Set(missingKeys.split("\n"));
     const entries = [...models.values()];
     return Array.from(
-      { length: Math.ceil(entries.length / MODELS_PER_COMPARISON) },
+      { length: Math.ceil(entries.length / MODELS_PER_BATCH) },
       (_, index): RetrySelection => ({
         id: newId(),
-        models: entries.slice(index * MODELS_PER_COMPARISON, (index + 1) * MODELS_PER_COMPARISON),
+        models: entries.slice(index * MODELS_PER_BATCH, (index + 1) * MODELS_PER_BATCH),
         sandbox: sandboxId === "managed-sandbox" ? "managed" : (kind ?? newest?.sandbox ?? ""),
         sandboxCredentialId: sandboxId,
         // Only the key: the server takes nothing else, such as a group task's repository.

@@ -54,9 +54,9 @@ test("a sandbox credential's resource limits refuse tasks over them before anyth
 
     await fixture.request(fixture.benchmarks, post({ reference: "heavy/dataset" }));
     const base = `${fixture.benchmarks}/heavy/dataset/evaluations`;
-    const comparison = () =>
+    const batch = () =>
       fixture.request(
-        `${base}/comparisons`,
+        `${base}/batches`,
         post({
           id: crypto.randomUUID(),
           models: [{ catalogId: "gpt-6-sol", credentialId: model.id, harnesses: ["codex"] }],
@@ -64,7 +64,7 @@ test("a sandbox credential's resource limits refuse tasks over them before anyth
           sandboxCredentialId: sandbox.id,
         }),
       );
-    const refused = await comparison();
+    const refused = await batch();
     expect(refused.status).toBe(400);
     expect((await refused.json()).error).toContain(
       "heavy/build asks for 16 CPUs; the limit is 8, asks for 32 GiB memory; the limit is 16 GiB",
@@ -77,7 +77,7 @@ test("a sandbox credential's resource limits refuse tasks over them before anyth
       post({ resourceLimits: { cpus: 17, memoryMb: 65536 } }),
     );
     expect((await update.json()).resourceLimits).toEqual({ cpus: 17, memoryMb: 65536 });
-    const accepted = await comparison();
+    const accepted = await batch();
     expect(accepted.status).toBe(202);
     expect((await accepted.json()).resourceWarnings).toEqual([
       "heavy/build asks for 16 CPUs, close to the limit of 17",

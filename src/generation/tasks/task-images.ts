@@ -5,7 +5,7 @@ import type { ArtifactStore } from "../../artifacts/index.js";
 import { isArtifactRegistry } from "../../contracts/config/task-images.js";
 import type { TaskImages } from "../../contracts/index.js";
 import type { Database } from "../../db/client.js";
-import { comparisons, releases, tasks } from "../../db/schema.js";
+import { releases, runBatches, tasks } from "../../db/schema.js";
 import { removeRegistryImage } from "../images/registry.js";
 
 const EXECUTION_BUNDLE = "/execution-task.tar.gz";
@@ -35,7 +35,7 @@ export interface TaskImageDependencies {
   /** Returns the row to `bundleKey` without images, unless the task changed meanwhile. */
   readonly save: (bundleKey: string) => Promise<boolean>;
   /**
-   * Whether a saved comparison, a release, or another approved task row names any of these
+   * Whether a saved batch, a release, or another approved task row names any of these
    * digests. The task's own row (`exceptTaskId`) does not count, nor do rows nobody approved.
    */
   readonly referenced: (digests: readonly string[], exceptTaskId: number) => Promise<boolean>;
@@ -66,7 +66,7 @@ export async function reconcileTaskImages(
   const named = [images.agent, images.verifier];
   const digests = named.map((image) => image.slice(image.indexOf("@") + 1));
   if (await deps.referenced(digests, task.id))
-    return { status: "kept", reason: "A comparison, a release or another task pins these images" };
+    return { status: "kept", reason: "A batch, a release or another task pins these images" };
   const bundleKey = compiledBundleKey(task.bundleKey as string);
   if (!(await store.stat(bundleKey))) throw new Error("Original compiled bundle is missing");
   for (const image of named) await deps.removeImage(image);
@@ -179,12 +179,12 @@ export function taskImageRows(db: Database) {
         )
         .limit(1);
       if (other) return true;
-      const [comparison] = await db
-        .select({ id: comparisons.id })
-        .from(comparisons)
-        .where(named(comparisons.inputs))
+      const [batch] = await db
+        .select({ id: runBatches.id })
+        .from(runBatches)
+        .where(named(runBatches.inputs))
         .limit(1);
-      if (comparison) return true;
+      if (batch) return true;
       const [release] = await db
         .select({ id: releases.id })
         .from(releases)

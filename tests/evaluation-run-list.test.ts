@@ -255,7 +255,7 @@ test("a store that keeps no summaries lists from the records, as before", async 
   expect((await listRuns(older, scope, tag)).runs).toBeUndefined();
 });
 
-test("saved comparisons take their progress from summaries, as their own pages do from records", async () => {
+test("saved batches take their progress from summaries, as their own pages do from records", async () => {
   const vault = memoryVault();
   const fixture = await evaluationServer(vault);
   try {
@@ -270,7 +270,7 @@ test("saved comparisons take their progress from summaries, as their own pages d
       signature: "test",
       inputs,
     };
-    await vault.comparisons.insert(record);
+    await vault.batches.insert(record);
     const finished = initialEvaluation(done, done.modelName);
     finished.status = "completed";
     passTrial(finished);
@@ -280,12 +280,12 @@ test("saved comparisons take their progress from summaries, as their own pages d
     running.status = "running";
     await saveEvaluation(new LocalArtifactStore(fixture.directory), running);
 
-    const { comparisons } = await (await fixture.request(`${fixture.base}/comparisons`)).json();
-    expect(comparisons).toEqual([
-      await (await fixture.request(`${fixture.base}/comparisons/${record.id}`)).json(),
+    const { batches } = await (await fixture.request(`${fixture.base}/batches`)).json();
+    expect(batches).toEqual([
+      await (await fixture.request(`${fixture.base}/batches/${record.id}`)).json(),
     ]);
     expect(
-      comparisons[0].runs.map((run: { status: string; completed: number }) => [
+      batches[0].runs.map((run: { status: string; completed: number }) => [
         run.status,
         run.completed,
       ]),

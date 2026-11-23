@@ -80,25 +80,24 @@ interface HarnessOption {
 }
 
 /**
- * `comparison create` (once `compare`): runs models on the scope's tasks (every approved task
- * unless `--task` names some), as Run Evaluation does in the app. `--selection` sends a full
- * comparison body instead.
+ * `run create`: starts one run per model on the scope's tasks (every approved task unless
+ * `--task` names some), together as one batch, as the app's Run page does. `--selection` sends
+ * a full batch body instead.
  */
-async function createComparison(args: string[]): Promise<void> {
+async function createRunBatch(args: string[]): Promise<void> {
   const { values } = parse(args, SELECTION);
   const scope = scopePath(values);
   const body = (await jsonOption(values, "selection")) ?? {
     ...selectionFromFlags(values),
     ...(await harnessesFromFlags(values)),
   };
-  const reply = await requestJson(`${scope}/evaluations/comparisons`, "POST", body);
-  print(values, reply, () => comparisonView(reply as unknown as Comparison));
+  const reply = await requestJson(`${scope}/evaluations/batches`, "POST", body);
+  print(values, reply, () => runBatchView(reply as unknown as Batch));
 }
 
 export function selectionFromFlags(values: Values): Record<string, unknown> {
   const models = list(values, "model");
-  if (models.length === 0)
-    throw new Error("comparison create needs --model (repeat it to compare several)");
+  if (models.length === 0) throw new Error("run create needs --model (repeat it to run several)");
   const harnesses = list(values, "harness");
   const thinking = flag(values, "thinking");
   const judge = flag(values, "judge-credential");
@@ -120,7 +119,7 @@ export function selectionFromFlags(values: Values): Record<string, unknown> {
   };
 }
 
-interface Comparison {
+interface Batch {
   id: string;
   createdAt: string;
   submissionError?: string;
@@ -136,8 +135,8 @@ interface Comparison {
   }[];
 }
 
-function comparisonView(comparison: Comparison): string {
-  const runs = table(comparison.runs, [
+function runBatchView(batch: Batch): string {
+  const runs = table(batch.runs, [
     ["EVALUATION", (run) => run.id],
     // A run with a subagent model names it after its own.
     ["MODEL", (run) => (run.subagent ? `${run.model} + ${run.subagent}` : run.model)],
@@ -146,34 +145,35 @@ function comparisonView(comparison: Comparison): string {
     ["STATUS", (run) => run.status],
     ["TRIALS", (run) => `${run.completed}/${run.trials}`],
   ]);
-  const error = comparison.submissionError ? `\n${comparison.submissionError}` : "";
-  return `Comparison ${comparison.id}\n${runs}${error}`;
+  const error = batch.submissionError ? `\n${batch.submissionError}` : "";
+  return `Batch ${batch.id}\n${runs}${error}`;
 }
 
-/** `comparison create|list|show|resume|cancel`. */
-export async function comparisonCommand(args: string[]): Promise<void> {
+/** `run create|list|show|cancel|delete`: starts runs (as a batch), or follows one run. */
+export const evaluationRunCommand = (args: string[]): Promise<void> =>
+  args[0] === "create" ? createRunBatch(args.slice(1)) : evaluationCommand(args);
+
+/** `run batch list|show|resume|cancel`: the runs started together. */
+export async function runBatchCommand(args: string[]): Promise<void> {
   const [action, ...rest] = args;
-  if (action === "create") return await createComparison(rest);
   const { values, positionals } = parse(rest);
-  const base = `${scopePath(values)}/evaluations/comparisons`;
+  const base = `${scopePath(values)}/evaluations/batches`;
   if (action === "list") {
     const reply = await requestJson(base);
-    const comparisons = reply.comparisons as Comparison[];
-    return print(values, reply, () => comparisons.map(comparisonView).join("\n\n") || "(none)");
+    const batches = reply.batches as Batch[];
+    return print(values, reply, () => batches.map(runBatchView).join("\n\n") || "(none)");
   }
   if (action !== "show" && action !== "resume" && action !== "cancel")
-    throw new Error(
-      "usage: self-bench comparison create|list S | comparison show|resume|cancel ID S",
-    );
-  const path = `${base}/${encodeURIComponent(positional(positionals, 0, "comparison ID"))}`;
+    throw new Error("usage: self-bench run batch list S | run batch show|resume|cancel ID S");
+  const path = `${base}/${encodeURIComponent(positional(positionals, 0, "batch ID"))}`;
   const reply = await requestJson(
     action === "show" ? path : `${path}/${action}`,
     action === "show" ? "GET" : "POST",
   );
-  print(values, reply, () => comparisonView(reply as unknown as Comparison));
+  print(values, reply, () => runBatchView(reply as unknown as Batch));
 }
 
-/** `evaluation list|show|cancel|delete ID` (once `runs` and `run`): one model's runs of the tasks. */
+/** `evaluation list|show|cancel|delete ID` (now `run …`): one model's runs of the tasks. */
 export async function evaluationCommand(args: string[]): Promise<void> {
   const [action, ...rest] = args;
   const { values, positionals } = parse(rest);
@@ -203,7 +203,7 @@ export async function evaluationCommand(args: string[]): Promise<void> {
   if (action === "show") return print(values, await requestJson(path));
   if (action === "cancel" || action === "delete")
     return print(values, await requestJson(`${path}/${action}`, "POST"));
-  throw new Error("usage: self-bench comparison run list|show|cancel|delete [ID] S");
+  throw new Error("usage: self-bench run create|list S | run show|cancel|delete ID S");
 }
 
 /** `results`: each configuration's score on the tasks results count on. */

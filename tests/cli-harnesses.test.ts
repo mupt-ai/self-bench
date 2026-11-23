@@ -57,7 +57,16 @@ test("the CLI saves a harness and runs it, as the app does", async () => {
   expect(((await cli("conditions")).harnesses as unknown[]).length).toBe(1);
 
   await cli(
-    ...["compare", "--repo", "avyay/repo", "--model", "gpt-6-sol", "--harness", "claude-code"],
+    ...[
+      "run",
+      "create",
+      "--repo",
+      "avyay/repo",
+      "--model",
+      "gpt-6-sol",
+      "--harness",
+      "claude-code",
+    ],
     ...["--credential", router, "--sandbox", "e2b", "--sandbox-credential", sandbox],
     ...["--task", "run-one/task-one", "--saved-harness", id, "--no-baseline"],
   );

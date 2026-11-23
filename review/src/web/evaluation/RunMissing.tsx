@@ -10,9 +10,9 @@ import {
   evaluationRequestId,
   type Harness,
 } from "./api";
-import { submitComparison } from "./comparison-submission";
 import { useRepoRuns } from "./RepoRuns";
 import { BATCH_INDENT, Elbow } from "./ResultsTree";
+import { submitRunBatch } from "./run-batch-submission";
 import { missingWork } from "./run-missing";
 import { retrySandboxes } from "./run-retry";
 
@@ -159,7 +159,7 @@ export function RunMissing({
             setError(undefined);
             try {
               for (const selection of work.selections) {
-                const result = await submitComparison(url, selection);
+                const result = await submitRunBatch(url, selection);
                 if (result.submissionError) throw new Error(result.submissionError);
                 refresh(result.id);
               }

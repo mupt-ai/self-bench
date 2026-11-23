@@ -44,7 +44,7 @@ export interface RunnerOptions {
   pollMs?: number;
   /** The least time between saves of a running trial's live output; scales with trial count. */
   progressMs?: number;
-  vault?: Pick<Vault, "credentials" | "comparisons">;
+  vault?: Pick<Vault, "credentials" | "batches">;
   /** Signs the snapshot links Modal image builds fetch; see unpackTrialTask. */
   snapshotLink?: SandboxCallback;
   gateway?: TrialGateway;

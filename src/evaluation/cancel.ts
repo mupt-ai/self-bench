@@ -1,5 +1,5 @@
 import type { ArtifactStore } from "../artifacts/index.js";
-import type { ComparisonRecord } from "../db/comparisons.js";
+import type { RunBatchRecord } from "../db/run-batches.js";
 import type { EvaluationScope } from "./scope.js";
 import { getEvaluation, initialEvaluation, saveEvaluation, updateEvaluation } from "./store.js";
 import type { EvaluationRun } from "./types.js";
@@ -63,10 +63,10 @@ export async function deleteEvaluation(
   return run;
 }
 
-/** Cancels every unfinished run of a comparison, including runs never submitted. */
-export async function cancelComparison(
+/** Cancels every unfinished run of a batch, including runs never submitted. */
+export async function cancelRunBatch(
   store: ArtifactStore,
-  record: ComparisonRecord,
+  record: RunBatchRecord,
   login: string,
   stop: StopEvaluation,
 ): Promise<void> {

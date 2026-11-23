@@ -75,7 +75,7 @@ test("a rejected task's images go before its row returns to the compiled bundle"
 test("pinned images stay; a failed or raced removal throws for the next review", async () => {
   expect(await reconcileTaskImages(store, task, deps({ referenced: async () => true }))).toEqual({
     status: "kept",
-    reason: "A comparison, a release or another task pins these images",
+    reason: "A batch, a release or another task pins these images",
   });
   const saves: string[] = [];
   await expect(

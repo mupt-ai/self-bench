@@ -23,10 +23,10 @@ export interface DatasetTask extends TaskKey {
 /**
  * What a scope's evaluations run on: a repository's approved tasks, or the tasks a benchmark froze
  * from Harbor's registry when it was added. It is the only way the two scopes differ; everything
- * built on it (the Run page's task list, comparisons, retries, summaries) is the same for both.
+ * built on it (the Run page's task list, batches, retries, summaries) is the same for both.
  */
 export interface EvaluationDataset {
-  /** The tasks a comparison may pick from, and what their LLM judge reads. */
+  /** The tasks a batch may pick from, and what their LLM judge reads. */
   options(): Promise<{ tasks: DatasetTask[]; judge: JudgeNeeds }>;
   /** The picked tasks as evaluations run them; every task when none are named. */
   select(picked?: readonly TaskKey[]): Promise<EvaluationTask[]>;
@@ -110,7 +110,7 @@ export function repositoryDataset(tasks: TaskStore, repoId: number): EvaluationD
 }
 
 /**
- * A benchmark's tasks, as frozen when it was added, so every comparison matches its Dataset tab,
+ * A benchmark's tasks, as frozen when it was added, so every batch matches its Dataset tab,
  * task files, and judge requirements however the registry changes.
  */
 export function benchmarkDataset(frozen: () => Promise<FrozenTask[]>): EvaluationDataset {

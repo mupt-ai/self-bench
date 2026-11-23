@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
-import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
+import type { RunBatchDraft } from "../../../../src/evaluation/run-batches";
 import {
   hasModelSelection,
   nextModelSelection,
@@ -47,7 +47,7 @@ test("duplicates match model, effective thinking level, and harness, not credent
     provider: "openai",
     thinking: ["low", "medium", "high", "xhigh", "max"],
   };
-  const selection: ComparisonDraft["models"][number] = {
+  const selection: RunBatchDraft["models"][number] = {
     catalogId: astra.id,
     credentialId: "first",
     harnesses: ["codex"],
@@ -85,7 +85,7 @@ test("Dari keys naming different routers are different rows; the default router 
     provider: "dari",
     harnesses: ["pi"],
   };
-  const selection: ComparisonDraft["models"][number] = {
+  const selection: RunBatchDraft["models"][number] = {
     catalogId: router.id,
     credentialId: "jev",
     harnesses: ["pi"],
@@ -198,7 +198,7 @@ test("selection uses Claude Code for a model only a Claude plan connected with D
 });
 
 test("an empty inline row offers the model picker and disables dependent controls", () => {
-  const draft: ComparisonDraft = {
+  const draft: RunBatchDraft = {
     id: "draft",
     tasks: [],
     models: [{ catalogId: "", credentialId: "", harnesses: [] }],

@@ -1,9 +1,9 @@
 import { dariRouterId } from "../../../../src/db/credential-endpoints";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
-import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
 import { credentialRoute, type RouteCredential } from "../../../../src/evaluation/link-routes";
 import { defaultThinking, thinkingOptions } from "../../../../src/evaluation/models";
+import type { RunBatchDraft } from "../../../../src/evaluation/run-batches";
 import type { Harness } from "./api";
 
 export const customModel: CatalogModel = {
@@ -40,7 +40,7 @@ export function savedSelection(
   model: CatalogModel,
   credentials: CredentialInfo[],
   requestedHarness?: Harness,
-): ComparisonDraft["models"][number] | undefined {
+): RunBatchDraft["models"][number] | undefined {
   if (!model.id.startsWith(SAVED)) return undefined;
   const credentialId = model.id.slice(SAVED.length, model.id.indexOf(":", SAVED.length));
   const credential = credentials.find((entry) => entry.id === credentialId);
@@ -57,7 +57,7 @@ export function savedSelection(
 }
 
 /** The picker entry a selection shows: its saved custom model when it is one. */
-export function pickerValue(selection: ComparisonDraft["models"][number]): string {
+export function pickerValue(selection: RunBatchDraft["models"][number]): string {
   return selection.catalogId === customModel.id && selection.customModel && selection.credentialId
     ? `${SAVED}${selection.credentialId}:${selection.customModel}`
     : selection.catalogId;
@@ -67,7 +67,7 @@ export function nextModelSelection(
   model: CatalogModel,
   credentials: CredentialInfo[],
   requestedHarness?: Harness,
-): ComparisonDraft["models"][number] | undefined {
+): RunBatchDraft["models"][number] | undefined {
   for (const credential of credentials) {
     const harness = credentialRoute(model, credential)?.harnesses.find(
       (candidate) => !requestedHarness || requestedHarness === candidate,
@@ -94,19 +94,19 @@ export function credentialRunsAll(
  */
 export function hasModelSelection(
   model: CatalogModel,
-  selections: ComparisonDraft["models"],
-  candidate: ComparisonDraft["models"][number],
+  selections: RunBatchDraft["models"],
+  candidate: RunBatchDraft["models"][number],
   credentials: readonly (Pick<CredentialInfo, "id" | "endpoint"> & RouteCredential)[],
 ): boolean {
   // Each Dari router is a configuration of its own, so two Dari keys naming different routers
   // are two rows; the default router is one, whichever key serves it.
-  const routerOf = (selection: ComparisonDraft["models"][number]) => {
+  const routerOf = (selection: RunBatchDraft["models"][number]) => {
     const credential = credentials.find((entry) => entry.id === selection.credentialId);
     if (credential?.kind !== "dari") return "";
     // The default router is one whether its credential leaves the endpoint blank or names /v1.
     return dariRouterId(credential.endpoint) ?? "";
   };
-  const effectiveThinking = (selection: ComparisonDraft["models"][number]) => {
+  const effectiveThinking = (selection: RunBatchDraft["models"][number]) => {
     const credential = credentials.find((entry) => entry.id === selection.credentialId);
     const route = credential ? credentialRoute(model, credential) : undefined;
     return (
@@ -128,7 +128,7 @@ export function hasModelSelection(
 
 export function hasDuplicateModelSelections(
   models: CatalogModel[],
-  selections: ComparisonDraft["models"],
+  selections: RunBatchDraft["models"],
   credentials: readonly (Pick<CredentialInfo, "id" | "endpoint"> & RouteCredential)[],
 ): boolean {
   return selections.some((selection, index) => {

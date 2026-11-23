@@ -15,7 +15,7 @@ In CI, skip `login` and set `SELFBENCH_API_KEY` (from **Settings → API Keys**)
 
 ## Command Shape
 
-Every command is `self-bench NOUN VERB [ARGS] [FLAGS]`: `repo connect`, `task create`, `comparison list`. The verbs mean the same thing everywhere: `list`, `show`, `create`, `update`, and `delete` (or `remove`, `disconnect`, or `cancel` where those say more). A plural is short for `list`: `self-bench tasks` is `self-bench task list`.
+Every command is `self-bench NOUN VERB [ARGS] [FLAGS]`: `repo connect`, `task create`, `run batch list`. The verbs mean the same thing everywhere: `list`, `show`, `create`, `update`, and `delete` (or `remove`, `disconnect`, or `cancel` where those say more). A plural is short for `list`: `self-bench tasks` is `self-bench task list`.
 
 ## Benchmarks
 
@@ -46,7 +46,7 @@ SelfBench has three kinds of benchmark, plus repo groups. A command that reads o
 | [Review Tasks](/cli/review) | **`task feedback`**, `task list\|show\|pull\|revise\|steer\|approve\|reject` |
 | [Repo Ablations](/cli/environments) | `repo environment` |
 | [Harnesses](/cli/harnesses) | `harness` |
-| [Evaluate](/cli/evaluate) | `comparison`, `comparison models`, `comparison run` |
+| [Evaluate](/cli/evaluate) | `run`, `run models`, `run batch` |
 | [Inspect Results](/cli/inspect) | `results`, `task results\|explain\|audit`, `results summary` |
 | [Publish](/cli/publish) | `release` |
 | [Public Benchmarks and Groups](/cli/benchmarks-and-groups) | `public`, `group` |
@@ -65,13 +65,12 @@ Commands renamed when benchmarks got their three kinds still work, so existing s
 | `member` · `credential` | `workspace member` · `workspace credential` |
 | `pr` · `batch` · `environment` | `repo pr` · `repo batch` · `repo environment` |
 | `feedback` | `task feedback` |
-| `catalog` · `evaluation` | `comparison models` · `comparison run` |
+| `catalog` · `evaluation` | `run models` · `run` |
 | `summary` | `results summary` |
 | `prs` | `repo pr list` |
 | `generate` | `batch create` |
 | `task add-pr --pr N` | `task create --pr N` |
 | `scenario create --scenario TEXT` | `task create --title TEXT --description TEXT` |
-| `compare` | `comparison create` |
 | `runs` · `run show\|cancel\|delete` | `evaluation list` · `evaluation show\|cancel\|delete` |
 | `summaries` · `summaries create` | `summary show` · `summary create` |
 | `conditions` · `condition` | `harness list` · `harness` |

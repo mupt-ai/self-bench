@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { ComparisonDraft } from "../src/evaluation/comparisons.js";
+import type { RunBatchDraft } from "../src/evaluation/run-batches.js";
 import { getEvaluation, initialEvaluation, saveEvaluation } from "../src/evaluation/store.js";
 import type { EvaluationInput } from "../src/evaluation/types.js";
 import { evaluationInput, evaluationServer } from "./support/evaluation-fixture.js";
@@ -91,7 +91,7 @@ test("deleting a run stops it and takes it out of the list, keeping its record",
   }
 });
 
-test("cancelling a comparison stops its runs and keeps resume from submitting the rest", async () => {
+test("cancelling a batch stops its runs and keeps resume from submitting the rest", async () => {
   const records = memoryVault();
   const fixture = await evaluationServer(records);
   try {
@@ -103,7 +103,7 @@ test("cancelling a comparison stops its runs and keeps resume from submitting th
       return (await response.json()).id as string;
     };
     const modelKey = await credential("openai", "model-secret");
-    const draft: ComparisonDraft = {
+    const draft: RunBatchDraft = {
       id: crypto.randomUUID(),
       tasks: [{ runId: "run-one", taskId: "task-one" }],
       models: [
@@ -114,19 +114,16 @@ test("cancelling a comparison stops its runs and keeps resume from submitting th
       sandboxCredentialId: await credential("e2b", "sandbox-secret"),
     };
     fixture.failStart(true);
-    expect((await fixture.request(`${fixture.base}/comparisons`, post(draft))).status).toBe(202);
+    expect((await fixture.request(`${fixture.base}/batches`, post(draft))).status).toBe(202);
     fixture.failStart(false);
-    const [live, unsubmitted] = (await records.comparisons.find(draft.id))?.inputs ?? [];
-    if (!live || !unsubmitted) throw new Error("Missing comparison inputs");
+    const [live, unsubmitted] = (await records.batches.find(draft.id))?.inputs ?? [];
+    if (!live || !unsubmitted) throw new Error("Missing batch inputs");
     // The first run reached a worker; the second was never submitted.
     const running = initialEvaluation(live, live.modelName);
     running.status = "running";
     await saveEvaluation(fixture.artifacts, running);
 
-    const response = await fixture.request(
-      `${fixture.base}/comparisons/${draft.id}/cancel`,
-      post({}),
-    );
+    const response = await fixture.request(`${fixture.base}/batches/${draft.id}/cancel`, post({}));
     expect(response.status).toBe(200);
     expect((await response.json()).runs.map((run: { status: string }) => run.status)).toEqual([
       "failed",
@@ -135,7 +132,7 @@ test("cancelling a comparison stops its runs and keeps resume from submitting th
     expect(
       (await getEvaluation(fixture.artifacts, { repoId: fixture.repo.id }, live.id))?.error,
     ).toBe("Cancelled by avyay.");
-    await fixture.request(`${fixture.base}/comparisons/${draft.id}/resume`, post({}));
+    await fixture.request(`${fixture.base}/batches/${draft.id}/resume`, post({}));
     expect(fixture.starts).toEqual([]);
   } finally {
     await fixture.close();

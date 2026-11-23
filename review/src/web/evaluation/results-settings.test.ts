@@ -45,13 +45,10 @@ const crash = (taskId: string) => errored(taskId, "Harbor exited with code 137")
 test("a model's routes are one configuration, as in a release, and each run says its route", () => {
   const configurations = configurationsOf(
     [
-      viaKey("key", { comparisonId: "c1", createdAt: at(300) }, [
-        passed("task-1"),
-        passed("task-2"),
-      ]),
-      viaOpenRouter("router", { comparisonId: "c2", createdAt: at(200) }, [crash("task-1")]),
-      // One comparison may run a model two ways; each run keeps its own row.
-      viaSignIn("sign-in", { comparisonId: "c2", createdAt: at(100) }, [
+      viaKey("key", { batchId: "c1", createdAt: at(300) }, [passed("task-1"), passed("task-2")]),
+      viaOpenRouter("router", { batchId: "c2", createdAt: at(200) }, [crash("task-1")]),
+      // One batch may run a model two ways; each run keeps its own row.
+      viaSignIn("sign-in", { batchId: "c2", createdAt: at(100) }, [
         { ...passed("task-2"), finishedAt: at(50) },
       ]),
     ],

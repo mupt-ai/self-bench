@@ -17,7 +17,7 @@ afterAll(async () => {
 test("evaluation routes require a session and current tenant membership", async () => {
   expect((await server.request(`${server.base}/options`, {}, null)).status).toBe(401);
   expect((await server.request(`${server.base}/options`, {}, 2)).status).toBe(404);
-  expect((await server.request(`${server.base}/comparisons`, {}, 2)).status).toBe(404);
+  expect((await server.request(`${server.base}/batches`, {}, 2)).status).toBe(404);
 });
 
 test("options expose only this repository's approved tasks", async () => {
@@ -32,7 +32,7 @@ test("options expose only this repository's approved tasks", async () => {
   expect(response.headers.get("cache-control")).toBe("no-store");
 });
 
-test("runs start only through comparisons", async () => {
+test("runs start only through batches", async () => {
   const body = JSON.stringify({ id: crypto.randomUUID() });
   expect((await server.request(server.base, { method: "POST", body })).status).toBe(405);
   expect(server.starts).toHaveLength(0);
@@ -107,7 +107,7 @@ test("failures are explained only for a repository GitHub confirms is still publ
         sandboxCredentialId: await create("e2b", "e2b-own-key"),
       };
       const body = JSON.stringify(draft);
-      const response = await fixture.request(`${fixture.base}/comparisons`, {
+      const response = await fixture.request(`${fixture.base}/batches`, {
         method: "POST",
         body,
       });
@@ -139,10 +139,10 @@ test("Explain Failure starts one explanation for a trial that failed its tests",
       ...evaluationInput(),
       repoId: fixture.repo.id,
       harnesses: ["codex", "pi"],
-      comparisonId: crypto.randomUUID(),
+      batchId: crypto.randomUUID(),
     };
-    await vault.comparisons.insert({
-      id: input.comparisonId ?? "",
+    await vault.batches.insert({
+      id: input.batchId ?? "",
       orgId: fixture.repo.orgId,
       scope: { repoId: fixture.repo.id },
       createdAt: input.createdAt,
@@ -257,7 +257,7 @@ test("Explain Failure needs the bundle or retained material the trial ran", asyn
     SELFBENCH_MANAGED_OPENROUTER_API_KEY: "sk-or-platform",
   };
   for (const env of [evaluationEnv, managed]) {
-    // A run whose comparison was never recorded, so its bundle is unknown.
+    // A run whose batch was never recorded, so its bundle is unknown.
     const fixture = await evaluationServer(undefined, {}, env);
     try {
       const input = { ...evaluationInput(), repoId: fixture.repo.id };

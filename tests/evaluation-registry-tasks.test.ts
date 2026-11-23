@@ -169,11 +169,11 @@ test("an org adds registry datasets as benchmarks and runs each apart from its r
       sandbox: "e2b",
       sandboxCredentialId: await credential("e2b"),
     };
-    // A benchmark's comparison runs its own dataset; a repository's runs only its own tasks.
+    // A benchmark's batch runs its own dataset; a repository's runs only its own tasks.
     for (const [path, invalid] of [
-      [`${base}/comparisons`, { registry: ["hello-world/hello-world"] }],
-      [`${base}/comparisons`, { tasks: [{ runId: "run-one", taskId: "task-one" }] }],
-      [`${fixture.base}/comparisons`, { tasks: [], registry: ["hello-world/hello-world"] }],
+      [`${base}/batches`, { registry: ["hello-world/hello-world"] }],
+      [`${base}/batches`, { tasks: [{ runId: "run-one", taskId: "task-one" }] }],
+      [`${fixture.base}/batches`, { tasks: [], registry: ["hello-world/hello-world"] }],
     ] as const)
       expect(
         (await fixture.request(path, post({ ...selection, id: crypto.randomUUID(), ...invalid })))
@@ -189,7 +189,7 @@ test("an org adds registry datasets as benchmarks and runs each apart from its r
     ];
     const downloads = harbor.calls.length;
     const id = crypto.randomUUID();
-    const accepted = await fixture.request(`${base}/comparisons`, post({ ...selection, id }));
+    const accepted = await fixture.request(`${base}/batches`, post({ ...selection, id }));
     expect(harbor.calls).toHaveLength(downloads);
     expect(accepted.status).toBe(202);
     const input = fixture.starts[0];
@@ -215,19 +215,19 @@ test("an org adds registry datasets as benchmarks and runs each apart from its r
       `evaluations/benchmarks/${input.benchmarkId}/`,
     );
 
-    // Each benchmark lists its own comparisons and runs; other boxes and the repository list none.
-    const listed = await (await fixture.request(`${base}/comparisons`)).json();
-    expect(listed.comparisons.map((comparison: { id: string }) => comparison.id)).toEqual([id]);
+    // Each benchmark lists its own batches and runs; other boxes and the repository list none.
+    const listed = await (await fixture.request(`${base}/batches`)).json();
+    expect(listed.batches.map((batch: { id: string }) => batch.id)).toEqual([id]);
     const other = `${fixture.benchmarks}/hello-world/hello-world/evaluations`;
-    expect((await (await fixture.request(`${other}/comparisons`)).json()).comparisons).toEqual([]);
+    expect((await (await fixture.request(`${other}/batches`)).json()).batches).toEqual([]);
     expect((await (await fixture.request(fixture.base)).json()).runs).toEqual([]);
     expect(
       (await (await fixture.request(base)).json()).runs.map((run: { id: string }) => run.id),
     ).toEqual([input.id]);
     expect((await fixture.request(`${base}/${input.id}`)).status).toBe(200);
     expect((await fixture.request(`${other}/${input.id}`)).status).toBe(404);
-    expect((await fixture.request(`${other}/comparisons/${id}`)).status).toBe(404);
-    expect((await fixture.request(`${base}/comparisons/${id}`, {}, 2)).status).toBe(404);
+    expect((await fixture.request(`${other}/batches/${id}`)).status).toBe(404);
+    expect((await fixture.request(`${base}/batches/${id}`, {}, 2)).status).toBe(404);
     const boxesNow = (await (await fixture.request(fixture.benchmarks)).json()).benchmarks;
     expect(boxesNow[0].runs).toBe(1);
 
@@ -259,7 +259,7 @@ test("an org adds registry datasets as benchmarks and runs each apart from its r
       method: "DELETE",
     });
     expect(busy.status).toBe(409);
-    const cancelled = await fixture.request(`${base}/comparisons/${id}/cancel`, post({}));
+    const cancelled = await fixture.request(`${base}/batches/${id}/cancel`, post({}));
     expect(cancelled.status).toBe(200);
     expect(fixture.stops).toEqual([`evaluation/benchmark-${input.benchmarkId}/${input.id}`]);
 
@@ -268,7 +268,7 @@ test("an org adds registry datasets as benchmarks and runs each apart from its r
       method: "DELETE",
     });
     expect(removed.status).toBe(200);
-    expect((await fixture.request(`${base}/comparisons/${id}`)).status).toBe(404);
+    expect((await fixture.request(`${base}/batches/${id}`)).status).toBe(404);
     expect(
       (await (await fixture.request(fixture.benchmarks)).json()).benchmarks.map(
         (box: { name: string }) => box.name,

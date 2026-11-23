@@ -5,7 +5,7 @@ import { memoryVault } from "./support/evaluation-vault.js";
 const credentialsUrl = "/api/orgs/avyay/credentials";
 const post = (value: unknown): RequestInit => ({ method: "POST", body: JSON.stringify(value) });
 
-test("sandbox and model credential limits cap their evaluations' trials, split across a comparison", async () => {
+test("sandbox and model credential limits cap their evaluations' trials, split across a batch", async () => {
   const fixture = await evaluationServer(memoryVault());
   try {
     const create = async (body: Record<string, unknown>) =>
@@ -36,7 +36,7 @@ test("sandbox and model credential limits cap their evaluations' trials, split a
     expect((await update({ name: "" })).status).toBe(400);
     const compare = () =>
       fixture.request(
-        `${fixture.base}/comparisons`,
+        `${fixture.base}/batches`,
         post({
           id: crypto.randomUUID(),
           tasks: [{ runId: "run-one", taskId: "task-one" }],
@@ -48,7 +48,7 @@ test("sandbox and model credential limits cap their evaluations' trials, split a
           sandboxCredentialId: sandbox.id,
         }),
       );
-    // The comparison's two evaluations start together, so each gets half of the seven.
+    // The batch's two evaluations start together, so each gets half of the seven.
     expect((await compare()).status).toBe(202);
     expect(fixture.starts.map((input) => input.maxTrials)).toEqual([3, 3]);
     // Both evaluations call one model key, so they also split its four.

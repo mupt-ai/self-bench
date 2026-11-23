@@ -33,9 +33,9 @@ test("Dari runner persists response prices without transcript or telemetry looku
   if (!input.credentials) throw new Error("Fixture credentials missing");
   input.credentials.provider = "custom";
   input.credentials.modelCredentialId = credential.id;
-  input.comparisonId = crypto.randomUUID();
-  await vault.comparisons.insert({
-    id: input.comparisonId,
+  input.batchId = crypto.randomUUID();
+  await vault.batches.insert({
+    id: input.batchId,
     orgId: 1,
     scope: scopeOf(input),
     createdAt: input.createdAt,

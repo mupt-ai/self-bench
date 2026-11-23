@@ -27,7 +27,7 @@ export function RunSubmitted({
           {busy ? "Resuming…" : "Resume Submission"}
         </Button>
         <Button type="button" disabled={busy} onClick={onNew}>
-          New Comparison
+          New Run
         </Button>
       </div>
     </div>

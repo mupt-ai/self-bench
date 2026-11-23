@@ -4,7 +4,7 @@ import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
-import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
+import type { RunBatchDraft } from "../../../../src/evaluation/run-batches";
 import { hasDuplicateModelSelections } from "./model-selection";
 import { RunModelTable } from "./RunModelTable";
 
@@ -31,7 +31,7 @@ const credentials: CredentialInfo[] = [
 ];
 
 async function withEditor(
-  selections: ComparisonDraft["models"],
+  selections: RunBatchDraft["models"],
   verify: (browser: Window) => Promise<void>,
 ) {
   const browser = new Window({ url: "https://selfbench.test" });
@@ -50,7 +50,7 @@ async function withEditor(
   document.body.append(container);
   const root = createRoot(container);
   function Editor() {
-    const [draft, setDraft] = useState<ComparisonDraft>({
+    const [draft, setDraft] = useState<RunBatchDraft>({
       id: "draft",
       tasks: [],
       models: selections,

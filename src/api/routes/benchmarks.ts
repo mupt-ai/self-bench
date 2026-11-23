@@ -119,7 +119,7 @@ async function collection(context: Context): Promise<Reply> {
 /**
  * Adds a dataset, `org/name@ref` (`latest` when left out). The box is saved as `adding` and a
  * worker downloads, checks, and freezes every task (selfBenchBenchmarkAddWorkflow), so the API
- * never downloads a task; a dataset a comparison would refuse fails its box with the reason.
+ * never downloads a task; a dataset a batch would refuse fails its box with the reason.
  * Adding a failed box again tries again.
  */
 async function add({ options, store, tenant, user, request }: Context): Promise<Reply> {
@@ -185,7 +185,7 @@ async function member(context: Context, benchmark: Benchmark, rest: string): Pro
 }
 
 /**
- * Removes a benchmark once none of its comparisons is unfinished: its runs are followed and
+ * Removes a benchmark once none of its batches is unfinished: its runs are followed and
  * cancelled only through it. Its public results go with it, as a group's do: nothing would be
  * left to withdraw them from, and adding it again starts a new line.
  */

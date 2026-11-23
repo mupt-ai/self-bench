@@ -13,6 +13,7 @@ import { type TrialRoute, trialRoute } from "./gateway-trial.js";
 import { judgeCredentialRefusal } from "./judge.js";
 import { refuseTrial } from "./refusal.js";
 import { sameScope } from "./scope.js";
+import { withBatchId } from "./store.js";
 import { SUBAGENT_NEEDS_GATEWAY, subagentRefusal } from "./subagents.js";
 import type { EvaluationInput, Harness } from "./types.js";
 /** The organization whose credentials an evaluation uses. */
@@ -23,25 +24,27 @@ export function evaluationCredentialOrg(
 }
 
 /**
- * Resolves the comparison's saved credentials into a clean Harbor process environment for one
+ * Resolves the batch's saved credentials into a clean Harbor process environment for one
  * harness's trial. A gateway route (an API key) leaves the secret in the vault: the gateway reads
  * it itself, so the worker puts a model credential in the environment only on a direct route, and none without a harness (building task images calls no model). A
  * judge's key stays in the vault too.
  */
 export async function credentialExecution(
-  input: EvaluationInput,
+  workflowInput: EvaluationInput,
   home: string,
   env: NodeJS.ProcessEnv,
-  { credentials, comparisons }: Pick<Vault, "credentials" | "comparisons">,
+  { credentials, batches }: Pick<Vault, "credentials" | "batches">,
   harness?: Harness,
 ) {
+  // Workflows started before batches were named carry the batch's id as `comparisonId`.
+  const input = withBatchId(workflowInput);
   const orgId = evaluationCredentialOrg(input);
-  if (!input.credentials || !orgId || !input.comparisonId)
+  if (!input.credentials || !orgId || !input.batchId)
     throw refuseTrial("Credential references missing");
-  const comparison = await comparisons.find(input.comparisonId);
+  const batch = await batches.find(input.batchId);
   const saved =
-    comparison?.orgId === orgId && sameScope(comparison.scope, input)
-      ? comparison.inputs.find((entry) => entry.id === input.id)
+    batch?.orgId === orgId && sameScope(batch.scope, input)
+      ? batch.inputs.find((entry) => entry.id === input.id)
       : undefined;
   // A trial workflow carries only its own task (trialInput); the rest must match exactly.
   const reserved =
@@ -49,7 +52,7 @@ export async function credentialExecution(
       ? { ...saved, tasks: saved.tasks.filter((task) => isDeepStrictEqual(task, input.tasks[0])) }
       : saved;
   if (!reserved || !isDeepStrictEqual(reserved, input))
-    throw refuseTrial("Execution does not match the reserved comparison");
+    throw refuseTrial("Execution does not match the reserved batch");
   const managedModel = input.credentials.modelCredentialId === MANAGED_MODEL_CREDENTIAL;
   const managedSandbox = input.credentials.sandboxCredentialId === "managed-sandbox";
   const info = managedModel
@@ -125,7 +128,7 @@ export async function credentialExecution(
 }
 
 /**
- * The credential a run's subagent model is served on, checked as the comparison checked it when
+ * The credential a run's subagent model is served on, checked as the batch checked it when
  * it was saved: the trial must reach its models through the gateway, which alone can serve and
  * price a second one, on credentials that serve each by name.
  */

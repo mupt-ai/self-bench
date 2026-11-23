@@ -9,12 +9,6 @@ import { covered, setupCoverage } from "../setup/readiness";
 import { useOrgCredentials } from "../setup/SetupStatus";
 import { Notice, PageContent, PageHeader } from "../ui";
 import { type EvaluationOptions, evaluationRequest, evaluationRequestId } from "./api";
-import {
-  type ComparisonReceipt,
-  resumeComparison,
-  submitComparison,
-  UnsavedComparisonError,
-} from "./comparison-submission";
 import { ablationPick } from "./RepoAblations";
 import { ResourceWarnings } from "./ResourceWarnings";
 import {
@@ -29,6 +23,12 @@ import { RunMissing } from "./RunMissing";
 import { RunModelsPanel } from "./RunModelsPanel";
 import { RunSubmitted } from "./RunSubmitted";
 import { RunTaskPicker } from "./RunTaskPicker";
+import {
+  type RunBatchReceipt,
+  resumeRunBatch,
+  submitRunBatch,
+  UnsavedRunBatchError,
+} from "./run-batch-submission";
 import { restoreRunDraft } from "./run-draft";
 import { harnessesProblem } from "./run-harnesses";
 import { runModels as offered, runCredentials, selectionReady } from "./run-readiness";
@@ -167,7 +167,7 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
       : picks && !state.submitted
         ? picks
         : runBlocker({ draft, ready, submitted: state.submitted, tasksReady, pairs });
-  const finish = (result: ComparisonReceipt) => {
+  const finish = (result: RunBatchReceipt) => {
     if (result.submissionError) return setError(result.submissionError);
     sessionStorage.removeItem(key);
     if (result.resourceWarnings?.length) setWarnings(result.resourceWarnings);
@@ -190,9 +190,9 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
       sessionStorage.setItem(key, JSON.stringify(pending));
     } catch {}
     try {
-      finish(await submitComparison(url, frozen));
+      finish(await submitRunBatch(url, frozen));
     } catch (cause) {
-      if (cause instanceof UnsavedComparisonError) setState({ draft: frozen, submitted: false });
+      if (cause instanceof UnsavedRunBatchError) setState({ draft: frozen, submitted: false });
       setError(
         cause instanceof Error
           ? cause.message
@@ -206,7 +206,7 @@ function RunContent({ scope }: { scope: EvaluationScope }) {
     setBusy(true);
     setError("");
     try {
-      finish(await resumeComparison(url, draft.id));
+      finish(await resumeRunBatch(url, draft.id));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not resume submission");
     } finally {

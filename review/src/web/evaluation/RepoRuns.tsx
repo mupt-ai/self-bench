@@ -26,8 +26,8 @@ interface RepoRuns {
    * deleted run leaves the list.
    */
   update(run: EvaluationRun): void;
-  /** Refreshes after submission, polling until the comparison's run record appears. */
-  refresh(comparisonId: string): void;
+  /** Refreshes after submission, polling until the batch's run record appears. */
+  refresh(batchId: string): void;
 }
 
 /** A task runs can use, and when it was accepted, when the task list says. */
@@ -66,7 +66,7 @@ export function RepoRunsProvider({
   const onRun = /\/run\/?$/.test(pathname);
   const showing = React.useRef(onResults);
   showing.current = onResults;
-  const refreshNow = React.useRef<(comparisonId?: string) => void>(() => {});
+  const refreshNow = React.useRef<(batchId?: string) => void>(() => {});
   // Sign-ins and custom endpoints, for configurations and the chart. Pages work without them.
   React.useEffect(() => {
     let disposed = false;
@@ -109,7 +109,7 @@ export function RepoRunsProvider({
         setError("");
         setLoading(false);
         for (const run of listed.runs) {
-          if (run.comparisonId) awaiting.delete(run.comparisonId);
+          if (run.batchId) awaiting.delete(run.batchId);
         }
       } catch (cause) {
         if (!disposed && request === latest) {
@@ -128,8 +128,8 @@ export function RepoRunsProvider({
           }, 3000);
       }
     };
-    refreshNow.current = (comparisonId) => {
-      if (comparisonId) awaiting.add(comparisonId);
+    refreshNow.current = (batchId) => {
+      if (batchId) awaiting.add(batchId);
       void refresh();
     };
     return () => {
@@ -138,7 +138,7 @@ export function RepoRunsProvider({
     };
   }, [url]);
   // Opening the Results or Run page loads the runs, or refreshes them if they were loaded on an
-  // earlier visit, so a comparison started on the Run page shows at once.
+  // earlier visit, so a batch started on the Run page shows at once.
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new repository's refresh replaces refreshNow, and must run.
   React.useEffect(() => {
     if (onResults || onRun) refreshNow.current();
@@ -173,7 +173,7 @@ export function RepoRunsProvider({
       disposed = true;
     };
   }, [onResults, url, org, repo]);
-  const refresh = React.useCallback((comparisonId: string) => refreshNow.current(comparisonId), []);
+  const refresh = React.useCallback((batchId: string) => refreshNow.current(batchId), []);
   const update = React.useCallback(
     (run: EvaluationRun) =>
       setRuns((history) =>

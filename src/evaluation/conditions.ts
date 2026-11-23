@@ -16,7 +16,7 @@ import { type Harness, harnessLabels } from "./models.js";
 import { subagentSupport } from "./subagents.js";
 
 /**
- * A run condition: what a comparison changes for every task it picks. Skills are installed into the
+ * A run condition: what a batch changes for every task it picks. Skills are installed into the
  * agent's skills directory and instructions appended to each task's instruction, both by Harbor
  * (`--skill`, `--extra-instruction`); harness options set the agent's own options
  * (`--agent-kwarg`), and run only on the harnesses they name; an environment runs each task as a
@@ -50,7 +50,7 @@ export interface RunCondition {
   };
 }
 
-/** A condition as a comparison names it; `environment` is its environment's name, once found. */
+/** A condition as a batch names it; `environment` is its environment's name, once found. */
 export function runCondition(
   given: Omit<z.infer<typeof conditionSchema>, "subagent"> & {
     subagent?:

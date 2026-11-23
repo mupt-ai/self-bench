@@ -8,7 +8,7 @@ import type { RunDraft } from "./RunExecution";
 import type { EvaluationScope } from "./useEvaluationScope";
 
 /**
- * The tasks a comparison runs, picked from the scope's dataset: a repository's accepted tasks, or a
+ * The tasks a batch runs, picked from the scope's dataset: a repository's accepted tasks, or a
  * benchmark's frozen registry tasks. Every task starts picked.
  */
 export function RunTaskPicker({

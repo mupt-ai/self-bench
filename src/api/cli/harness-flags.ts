@@ -11,7 +11,7 @@ function ids(values: Values, name: string): number[] {
 }
 
 /**
- * What a comparison runs besides the tasks as they are: `--saved-harness ID` and `--environment
+ * What a batch runs besides the tasks as they are: `--saved-harness ID` and `--environment
  * ID`, both repeatable, and every pair of the two. `--no-baseline` leaves out the tasks as they
  * are. Older flags still work: `--saved-condition ID[:ENVIRONMENT_ID]` (with `--subagent-credential
  * ID` in place of the harness's own), `--condition JSON|@FILE` writing one pair out, and

@@ -33,7 +33,7 @@ function subagentModels(): CatalogModel[] {
 
 /**
  * A workspace's saved harnesses (saved-harness-schema.ts): named agent changes any member saves,
- * and any comparison in the workspace picks by id (`harnesses: [id]`).
+ * and any batch in the workspace picks by id (`harnesses: [id]`).
  *
  * - `GET harnesses`: every saved harness, by name.
  * - `POST harnesses {name, agent?, skills?, instructions?, harnessOptions?, subagent?}`: saves one.

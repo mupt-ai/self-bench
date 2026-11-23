@@ -1,4 +1,3 @@
-import type { ComparisonRecord, ComparisonStore } from "../../src/db/comparisons.js";
 import { credentialEndpoint } from "../../src/db/credential-endpoints.js";
 import {
   type CredentialInfo,
@@ -9,6 +8,7 @@ import {
   savedModelsSchema,
 } from "../../src/db/credentials.js";
 import { type EncryptedRecordStore, RecordStoreError } from "../../src/db/encrypted-records.js";
+import type { RunBatchRecord, RunBatchStore } from "../../src/db/run-batches.js";
 import type { Vault } from "../../src/db/vault.js";
 import { sameScope } from "../../src/evaluation/scope.js";
 import { linkModelsOf } from "../../src/gateway/dari-link/connection.js";
@@ -33,7 +33,7 @@ export class MemoryRecords implements EncryptedRecordStore {
 /** An in-memory Vault with the same contract as the Postgres stores. */
 export function memoryVault(records: EncryptedRecordStore = new MemoryRecords()): Vault {
   const rows = new Map<string, CredentialInfo & { orgId: number; secret?: CredentialSecret }>();
-  const saved = new Map<string, ComparisonRecord>();
+  const saved = new Map<string, RunBatchRecord>();
   const view = ({
     orgId: _org,
     secret: _secret,
@@ -130,7 +130,7 @@ export function memoryVault(records: EncryptedRecordStore = new MemoryRecords())
     },
     seal: () => "",
   };
-  const comparisons: ComparisonStore = {
+  const batches: RunBatchStore = {
     async find(id) {
       return structuredClone(saved.get(id));
     },
@@ -145,8 +145,8 @@ export function memoryVault(records: EncryptedRecordStore = new MemoryRecords())
     },
     async insert(record) {
       if (!saved.has(record.id)) saved.set(record.id, structuredClone(record));
-      return structuredClone(saved.get(record.id) as ComparisonRecord);
+      return structuredClone(saved.get(record.id) as RunBatchRecord);
     },
   };
-  return { records, credentials, comparisons };
+  return { records, credentials, batches };
 }

@@ -141,8 +141,8 @@ export function createEvaluationRoutes(options: EvaluationRoutesOptions) {
           orgId: tenant.id,
           tenant: tenant.login,
           login: user.login,
-          // Only a new comparison asks GitHub, to decide whether its failures may be explained.
-          ...(section === "comparisons" && !id && request.method === "POST"
+          // Only a new batch asks GitHub, to decide whether its failures may be explained.
+          ...(section === "batches" && !id && request.method === "POST"
             ? { privateRepo: await privateNow(repo, user) }
             : {}),
         };

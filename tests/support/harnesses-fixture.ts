@@ -8,7 +8,7 @@ export const send = (method: string, body?: unknown) => ({
 
 /**
  * An evaluation server with a gateway key and a sandbox key, and requests that save a harness
- * and start a comparison. The caller closes `server`.
+ * and start a batch. The caller closes `server`.
  */
 export async function harnessesWorkspace() {
   const server = await evaluationServer();
@@ -31,7 +31,7 @@ export async function harnessesWorkspace() {
     harnesses: [harness],
     thinking: "high",
   });
-  /** Starts a comparison, returning the runs it started or why it was refused. */
+  /** Starts a batch, returning the runs it started or why it was refused. */
   const compare = async (body: {
     models: unknown[];
     harnesses?: number[];
@@ -41,7 +41,7 @@ export async function harnessesWorkspace() {
   }) => {
     const before = server.starts.length;
     const response = await server.request(
-      `${server.base}/comparisons`,
+      `${server.base}/batches`,
       send("POST", {
         id: crypto.randomUUID(),
         tasks: [{ runId: "run-one", taskId: "task-one" }],

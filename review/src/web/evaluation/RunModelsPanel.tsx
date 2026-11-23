@@ -1,7 +1,7 @@
 import { Plus } from "lucide-react";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
-import type { ComparisonSelection } from "../../../../src/evaluation/comparisons";
+import type { RunBatchSelection } from "../../../../src/evaluation/run-batches";
 import type { SavedHarness } from "../harnesses/harness-api";
 import { InfoTooltip } from "../primitives/tooltip";
 import { Button } from "../ui";
@@ -9,7 +9,7 @@ import { customModel, savedCustomModels } from "./model-selection";
 import { RunModelTable } from "./RunModelTable";
 
 /** A Run page's models and harnesses, up to 12 configurations. */
-export function RunModelsPanel<D extends ComparisonSelection>({
+export function RunModelsPanel<D extends RunBatchSelection>({
   models,
   credentials,
   draft,

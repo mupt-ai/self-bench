@@ -16,7 +16,7 @@ const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode
 /**
  * An environment: a script that changes a repository's tasks' files (removes AGENTS.md, installs
  * another build of a package), run in each approved task's image as a variant of it. A run
- * condition names one, so a comparison runs every task as its environment built it.
+ * condition names one, so a batch runs every task as its environment built it.
  */
 export const taskEnvironments = pgTable(
   "task_environments",

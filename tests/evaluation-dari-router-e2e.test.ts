@@ -61,9 +61,9 @@ test("a Dari credential's router reaches the request and its returned price", as
   if (!input.credentials) throw new Error("Fixture credentials missing");
   input.credentials.provider = "dari";
   input.credentials.modelCredentialId = credential.id;
-  input.comparisonId = crypto.randomUUID();
-  await vault.comparisons.insert({
-    id: input.comparisonId,
+  input.batchId = crypto.randomUUID();
+  await vault.batches.insert({
+    id: input.batchId,
     orgId: 1,
     scope: scopeOf(input),
     createdAt: input.createdAt,

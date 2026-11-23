@@ -1,9 +1,9 @@
 import { thinkingLevels } from "../../../../src/contracts/models";
 import type { CredentialInfo } from "../../../../src/db/credentials";
 import type { CatalogModel } from "../../../../src/evaluation/catalog";
-import type { ComparisonDraft } from "../../../../src/evaluation/comparisons";
 import { credentialRoute } from "../../../../src/evaluation/link-routes";
 import { defaultThinking, thinkingOptions } from "../../../../src/evaluation/models";
+import type { RunBatchDraft } from "../../../../src/evaluation/run-batches";
 import type { SavedHarness } from "../harnesses/harness-api";
 import { ModelPicker } from "../ModelPicker";
 import { Input, Select } from "../ui";
@@ -12,7 +12,7 @@ import { rowHarnessOptions, savedHarnessOption } from "./row-harness-options";
 
 const mobileLabel = "mb-2 block text-xs font-medium text-muted-foreground xl:hidden";
 
-type ModelSelection = ComparisonDraft["models"][number];
+type ModelSelection = RunBatchDraft["models"][number];
 
 export function RunModelRow({
   model,

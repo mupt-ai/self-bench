@@ -77,7 +77,7 @@ The installer puts `self-bench` in `~/.local/bin`. Update it with `self-bench up
 ```bash
 self-bench repo connect acme/app
 self-bench repo batch create --repo acme/app --easy 2 --medium 4 --hard 2
-self-bench comparison create --repo acme/app --model gpt-6.1-sol --harness pi
+self-bench run create --repo acme/app --model gpt-6.1-sol --harness pi
 self-bench results --repo acme/app
 ```
 

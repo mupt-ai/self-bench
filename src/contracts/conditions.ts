@@ -5,7 +5,7 @@ import { harnessOptionsSchema } from "./harness-options.js";
 import { thinkingLevels } from "./models.js";
 
 /**
- * Run conditions (evaluation/conditions.ts) as a comparison names them: shared with the Run page,
+ * Run conditions (evaluation/conditions.ts) as a batch names them: shared with the Run page,
  * so nothing here may need Node.
  */
 
@@ -46,7 +46,7 @@ export function conditionRunsOn(
 export const MAX_CONDITIONS = 4;
 /** The most saved harnesses, and the most environments, one run picks; it runs every pair. */
 export const MAX_PICKED = 4;
-/** The most pairs one comparison runs beside the baseline, each a full run of every task. */
+/** The most pairs one batch runs beside the baseline, each a full run of every task. */
 export const MAX_PAIRS = 12;
 export const MAX_SKILLS = 10;
 /** The longest skill source a condition takes: a GitHub URL with a ref. */
@@ -170,7 +170,7 @@ export function harnessFits(
     });
 }
 
-/** A condition as a comparison names it; `runCondition` gives it its id. */
+/** A condition as a batch names it; `runCondition` gives it its id. */
 export const conditionSchema = z
   .object({
     ...harnessChanges,
@@ -186,10 +186,10 @@ export const conditionSchema = z
   .superRefine(harnessFits);
 
 /**
- * One pair a comparison runs, as older clients and retries name it: one of the workspace's saved
+ * One pair a batch runs, as older clients and retries name it: one of the workspace's saved
  * harnesses by id, the repository environment its tasks run in, or both. A credential named here
  * serves the saved harness's subagent model in place of its own. Newer clients send `harnesses`
- * and `environments` (comparisons.ts), which run every pair.
+ * and `environments` (batches.ts), which run every pair.
  */
 const pickedConditionSchema = z
   .object({
@@ -202,6 +202,6 @@ const pickedConditionSchema = z
     message: "pick a saved harness, an environment, or both",
   });
 
-/** One of a comparison's pairs: one picked from what is saved, or one written out (retries). */
-export const comparisonConditionSchema = z.union([pickedConditionSchema, conditionSchema]);
-export type ComparisonCondition = z.infer<typeof comparisonConditionSchema>;
+/** One of a batch's pairs: one picked from what is saved, or one written out (retries). */
+export const runBatchConditionSchema = z.union([pickedConditionSchema, conditionSchema]);
+export type RunBatchCondition = z.infer<typeof runBatchConditionSchema>;

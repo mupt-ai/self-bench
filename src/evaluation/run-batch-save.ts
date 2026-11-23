@@ -1,30 +1,26 @@
 import { randomUUID } from "node:crypto";
 import type { ArtifactStore } from "../artifacts/index.js";
 import { conditionRunsOn } from "../contracts/conditions.js";
-import type { ComparisonRecord } from "../db/comparisons.js";
 import { dariRouterId } from "../db/credential-endpoints.js";
 import type { CredentialInfo } from "../db/credentials.js";
+import type { RunBatchRecord } from "../db/run-batches.js";
 import type { Vault } from "../db/vault.js";
 import { type ManagedOffer, managedHarborEnvironment } from "../generation/billing/managed.js";
 import { type CatalogModel, evaluationCatalog } from "./catalog.js";
-import {
-  type comparisonConditions,
-  NOTHING_TO_RUN,
-  rowConditions,
-} from "./comparison-conditions.js";
+import { conditionRefusal } from "./conditions.js";
+import { trialRoute } from "./gateway-trial.js";
+import { credentialRoute, linkedOnly } from "./link-routes.js";
+import { defaultThinking, thinkingOptions } from "./models.js";
+import { assertTasksFitSandbox } from "./resource-check.js";
+import { NOTHING_TO_RUN, rowConditions, type runBatchConditions } from "./run-batch-conditions.js";
 import {
   completedConfigurationTasks,
   conditionSubagent,
   configurationIdentity,
   configurationTaskKey,
   selectedSubagent,
-} from "./comparison-configurations.js";
-import type { ComparisonSelection } from "./comparisons.js";
-import { conditionRefusal } from "./conditions.js";
-import { trialRoute } from "./gateway-trial.js";
-import { credentialRoute, linkedOnly } from "./link-routes.js";
-import { defaultThinking, thinkingOptions } from "./models.js";
-import { assertTasksFitSandbox } from "./resource-check.js";
+} from "./run-batch-configurations.js";
+import type { RunBatchSelection } from "./run-batches.js";
 import { listRuns } from "./run-list.js";
 import { type EvaluationScope, sameScope } from "./scope.js";
 import { live } from "./store.js";
@@ -32,8 +28,8 @@ import { SUBAGENT_NEEDS_GATEWAY } from "./subagents.js";
 import { splitCredentialLimits } from "./trial-input.js";
 import type { EvaluationInput } from "./types.js";
 
-/** Who a comparison is for: its repository's or org's evaluations, and who asked. */
-export interface ComparisonOwner {
+/** Who a batch is for: its repository's or org's evaluations, and who asked. */
+export interface RunBatchOwner {
   scope: EvaluationScope;
   /** A repository's agent time; a benchmark's tasks run with their own limits instead. */
   agentMinutes?: number;
@@ -45,22 +41,22 @@ export interface ComparisonOwner {
    * explained; unset for a benchmark and anything not confirmed public.
    */
   privateRepo?: boolean;
-  /** Other scopes whose finished results a "missing only" comparison skips too: a group's members. */
+  /** Other scopes whose finished results a "missing only" batch skips too: a group's members. */
   sources?: readonly EvaluationScope[];
 }
 
 /**
- * Saves a comparison of `selection`'s models over the tasks `freeze` returns, which it calls only
+ * Saves a batch of `selection`'s models over the tasks `freeze` returns, which it calls only
  * once the selection's sandbox checks out. `judge` picks the credential an LLM judge in those
  * tasks calls with, from the org's. A retried request (the same ID and selection) returns the saved
- * comparison; the same ID for anything else is refused.
+ * batch; the same ID for anything else is refused.
  */
-export async function saveComparison(
-  { credentials, comparisons }: Pick<Vault, "credentials" | "comparisons">,
+export async function saveRunBatch(
+  { credentials, batches }: Pick<Vault, "credentials" | "batches">,
   store: ArtifactStore,
   managed: ManagedOffer,
-  owner: ComparisonOwner,
-  selection: ComparisonSelection,
+  owner: RunBatchOwner,
+  selection: RunBatchSelection,
   signature: string,
   freeze: () => Promise<EvaluationInput["tasks"]>,
   environment: NodeJS.ProcessEnv,
@@ -69,18 +65,18 @@ export async function saveComparison(
     saved: ReadonlyMap<string, CredentialInfo>,
   ) => string | undefined,
   /** The workspace's saved harnesses and the scope's environments, for the pairs that name one. */
-  known: Parameters<typeof comparisonConditions>[2] = {},
-): Promise<ComparisonRecord> {
-  const owned = (record: ComparisonRecord) => {
+  known: Parameters<typeof runBatchConditions>[2] = {},
+): Promise<RunBatchRecord> {
+  const owned = (record: RunBatchRecord) => {
     if (
       record.orgId !== owner.orgId ||
       !sameScope(record.scope, owner.scope) ||
       record.signature !== signature
     )
-      throw new Error("Comparison ID belongs to a different selection");
+      throw new Error("Batch ID belongs to a different selection");
     return record;
   };
-  const previous = await comparisons.find(selection.id);
+  const previous = await batches.find(selection.id);
   if (previous) return owned(previous);
   const completed = selection.skipCompleted
     ? completedConfigurationTasks(
@@ -93,8 +89,8 @@ export async function saveComparison(
         ).flat(),
       )
     : new Set<string>();
-  if ((await comparisons.countForOrg(owner.orgId)) >= 500)
-    throw new Error("Comparison retention limit reached; contact an operator");
+  if ((await batches.countForOrg(owner.orgId)) >= 500)
+    throw new Error("Batch retention limit reached; contact an operator");
   const saved = new Map(
     (await credentials.list(owner.orgId)).map((credential) => [credential.id, credential]),
   );
@@ -266,7 +262,7 @@ export async function saveComparison(
             ? { explainFailures: true }
             : {}),
           credentialOrgId: owner.orgId,
-          comparisonId: selection.id,
+          batchId: selection.id,
           credentials: runCredentials,
         }),
       );
@@ -276,7 +272,7 @@ export async function saveComparison(
     throw new Error("Every selected configuration and task already has a completed result.");
   splitCredentialLimits(inputs, (id) => saved.get(id)?.maxSandboxes);
   return owned(
-    await comparisons.insert({
+    await batches.insert({
       id: selection.id,
       orgId: owner.orgId,
       scope: owner.scope,

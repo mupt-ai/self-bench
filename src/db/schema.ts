@@ -26,9 +26,9 @@ export const evaluationRecords = pgTable("evaluation_records", {
   sealed: text("sealed").notNull(),
 });
 
-/** A saved evaluation comparison: the expanded per-model inputs the worker runs. */
-export const comparisons = pgTable(
-  "comparisons",
+/** A batch of runs started together: the expanded per-model inputs the worker runs. */
+export const runBatches = pgTable(
+  "run_batches",
   {
     id: uuid("id").primaryKey(),
     orgId: bigint("org_id", { mode: "number" }).notNull(),
@@ -41,11 +41,11 @@ export const comparisons = pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
-    index("comparisons_repo").on(table.repoId),
-    index("comparisons_benchmark").on(table.benchmarkId),
-    index("comparisons_group").on(table.groupId),
+    index("run_batches_repo").on(table.repoId),
+    index("run_batches_benchmark").on(table.benchmarkId),
+    index("run_batches_group").on(table.groupId),
     check(
-      "comparisons_scope",
+      "run_batches_scope",
       sql`num_nonnulls(${table.repoId}, ${table.benchmarkId}, ${table.groupId}) = 1`,
     ),
   ],

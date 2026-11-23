@@ -26,7 +26,7 @@ export const evaluationEnv = {
 };
 export const testModelSecret = "test-model-secret-never-publish";
 
-/** A saved comparison input backed by an OpenAI key and an E2B key in organization 1. */
+/** A saved batch input backed by an OpenAI key and an E2B key in organization 1. */
 export async function credentialedInput(
   vault: Vault,
   change: (input: EvaluationInput) => void = () => {},
@@ -45,7 +45,7 @@ export async function credentialedInput(
     ...evaluationInput(),
     sandbox: "e2b",
     credentialOrgId: 1,
-    comparisonId: crypto.randomUUID(),
+    batchId: crypto.randomUUID(),
     credentials: {
       modelCredentialId: model.id,
       sandboxCredentialId: sandbox.id,
@@ -53,8 +53,8 @@ export async function credentialedInput(
     },
   };
   change(input);
-  await vault.comparisons.insert({
-    id: input.comparisonId ?? "",
+  await vault.batches.insert({
+    id: input.batchId ?? "",
     orgId: 1,
     scope: scopeOf(input),
     createdAt: input.createdAt,

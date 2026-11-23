@@ -125,12 +125,10 @@ export async function customerExportRoute(
   let picked: { id: string; createdAt: string; tasks: EvaluationInput["tasks"] } | undefined;
   for (const run of await listEvaluations(artifacts, scope)) {
     if (run.status !== "completed") continue;
-    const comparison = run.comparisonId
-      ? await vault.comparisons.find(run.comparisonId)
-      : undefined;
+    const batch = run.batchId ? await vault.batches.find(run.batchId) : undefined;
     const frozen =
-      comparison?.orgId === owner.orgId && sameScope(comparison.scope, scope)
-        ? comparison.inputs.find((entry) => entry.id === run.id)
+      batch?.orgId === owner.orgId && sameScope(batch.scope, scope)
+        ? batch.inputs.find((entry) => entry.id === run.id)
         : undefined;
     if (
       frozen?.tasks.length &&

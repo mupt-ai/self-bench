@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Org, User } from "../../db/users.js";
-import { unfinished } from "../../evaluation/comparisons.js";
+import { unfinished } from "../../evaluation/run-batches.js";
 import type { EvaluationScope } from "../../evaluation/scope.js";
 import { tenantFor } from "../auth/tenant.js";
 import { sendJson, trustedMutation } from "../http.js";
@@ -41,7 +41,7 @@ export async function unfinishedRuns(
   scope: EvaluationScope,
   noun: string,
 ): Promise<Reply | undefined> {
-  const records = options.vault ? await options.vault.comparisons.listForScope(scope) : [];
+  const records = options.vault ? await options.vault.batches.listForScope(scope) : [];
   const active = await Promise.all(records.map((record) => unfinished(options.artifacts, record)));
   return active.includes(true)
     ? [409, { error: `Cancel this ${noun}'s unfinished runs before removing it` }]

@@ -5,11 +5,11 @@ import { configurationsOf } from "./results-model";
 import { blockedNote } from "./results-presentation";
 
 test("groups runs by release setting, then by run, and counts each task's latest result", () => {
-  const first = run("first", { comparisonId: "c1", createdAt: at(300) }, [
+  const first = run("first", { batchId: "c1", createdAt: at(300) }, [
     passed("task-1"),
     errored("task-2", "Harbor exited with code 137"),
   ]);
-  const rerun = run("rerun", { comparisonId: "c2", createdAt: at(100), startedBy: "sam" }, [
+  const rerun = run("rerun", { batchId: "c2", createdAt: at(100), startedBy: "sam" }, [
     passed("task-2"),
   ]);
   const other = run("other", { thinking: "low" }, [passed("task-1")]);
@@ -129,8 +129,8 @@ test("configurations narrow by facet and sort by any column", () => {
 });
 
 test("a task's latest usable result counts, so a re-run that errors or is running doesn't hide it", () => {
-  const first = run("first", { comparisonId: "c1", createdAt: at(300) }, [passed("task-1")]);
-  const failedAgain = run("again", { comparisonId: "c2", createdAt: at(100), status: "failed" }, [
+  const first = run("first", { batchId: "c1", createdAt: at(300) }, [passed("task-1")]);
+  const failedAgain = run("again", { batchId: "c2", createdAt: at(100), status: "failed" }, [
     errored("task-1", "Worker interrupted or timed out before this trial completed"),
   ]);
   const [errorLater] = configurationsOf([first, failedAgain], credentials, NOW);
@@ -139,11 +139,9 @@ test("a task's latest usable result counts, so a re-run that errors or is runnin
   ]);
   expect(errorLater?.batches[1]?.results[0]?.replacedBy?.run.id).toBe("first");
   expect(errorLater).toMatchObject({ passRate: 100, status: "done" });
-  const runningAgain = run(
-    "running",
-    { comparisonId: "c3", createdAt: at(10), status: "running" },
-    [{ taskId: "task-1", status: "running", startedAt: at(5) }],
-  );
+  const runningAgain = run("running", { batchId: "c3", createdAt: at(10), status: "running" }, [
+    { taskId: "task-1", status: "running", startedAt: at(5) },
+  ]);
   const [rerunning] = configurationsOf([first, runningAgain], credentials, NOW);
   expect(rerunning?.latest[0]?.run.id).toBe("first");
   expect(rerunning?.underway.map((result) => result.run.id)).toEqual(["running"]);

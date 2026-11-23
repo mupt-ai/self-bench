@@ -56,7 +56,7 @@ export const BENCHMARKS: Group = {
         {
           name: "environment",
           summary: "Bash scripts run in every approved task's image, for ablations",
-          long: "A Bash script run in every approved task's image. Run one with\n`comparison create --environment ID`.",
+          long: "A Bash script run in every approved task's image. Run one with\n`run create --environment ID`.",
           verbs: [
             { name: "list", args: R, summary: "List environments and how many tasks are ready" },
             {

@@ -4,9 +4,10 @@ import { credentialCommand } from "./credentials.js";
 import { environmentCommand } from "./environments.js";
 import {
   catalogCommand,
-  comparisonCommand,
   evaluationCommand,
+  evaluationRunCommand,
   resultsCommand,
+  runBatchCommand,
   summaryCommand,
 } from "./evaluations.js";
 import { feedbackCommand } from "./feedback.js";
@@ -45,7 +46,7 @@ const COMMANDS: Record<string, Command> = {
   environment: environmentCommand,
   harness: savedHarnessCommand,
   catalog: catalogCommand,
-  comparison: comparisonCommand,
+  run: evaluationRunCommand,
   evaluation: evaluationCommand,
   results: resultsCommand,
   summary: summaryCommand,
@@ -74,7 +75,6 @@ const ALIASES: Record<string, Command> = {
   tasks: verb(taskCommand, "list"),
   environments: verb(environmentCommand, "list"),
   harnesses: verb(savedHarnessCommand, "list"),
-  comparisons: verb(comparisonCommand, "list"),
   evaluations: verb(evaluationCommand, "list"),
   releases: verb(releaseCommand, "list"),
   // Renamed with Repo, Custom, and Public Benchmarks.
@@ -83,9 +83,7 @@ const ALIASES: Record<string, Command> = {
   generate: verb(batchCommand, "create"),
   benchmarks: verb(publicCommand, "list"),
   benchmark: publicCommand,
-  compare: verb(comparisonCommand, "create"),
   runs: verb(evaluationCommand, "list"),
-  run: evaluationCommand,
   summaries: (args) => summaryCommand(args[0] === "create" ? args : ["show", ...args]),
   conditions: verb(savedHarnessCommand, "list"),
   condition: savedHarnessCommand,
@@ -102,7 +100,7 @@ const NESTED: Record<string, Record<string, Command>> = {
   repo: { pr: prCommand, batch: batchCommand, environment: environmentCommand },
   workspace: { member: memberCommand, credential: credentialCommand },
   task: { feedback: feedbackCommand },
-  comparison: { run: evaluationCommand, models: catalogCommand },
+  run: { batch: runBatchCommand, models: catalogCommand },
   results: { summary: summaryCommand },
 };
 
